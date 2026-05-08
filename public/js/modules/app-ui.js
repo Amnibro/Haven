@@ -57,6 +57,19 @@ _handleAutocompleteKeydown(e) {
     }
     if (e.key === 'Escape') { this._hideChannelDropdown(); return true; }
   }
+  const personaDd = document.getElementById('persona-dropdown');
+  if (personaDd && personaDd.style.display !== 'none') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      this._navigatePersonaDropdown(e.key === 'ArrowDown' ? 1 : -1);
+      return true;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const active = personaDd.querySelector('.mention-item.active');
+      if (active) { e.preventDefault(); active.click(); return true; }
+    }
+    if (e.key === 'Escape') { this._hidePersonaDropdown(); return true; }
+  }
   return false;
 },
 
@@ -136,6 +149,21 @@ _setupUI() {
       if (e.key === 'Escape') { this._hideChannelDropdown(); return; }
     }
 
+    // If persona dropdown is visible, hijack arrow keys and enter (#5349)
+    const personaDd = document.getElementById('persona-dropdown');
+    if (personaDd && personaDd.style.display !== 'none') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        this._navigatePersonaDropdown(e.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        const active = personaDd.querySelector('.mention-item.active');
+        if (active) { e.preventDefault(); active.click(); return; }
+      }
+      if (e.key === 'Escape') { this._hidePersonaDropdown(); return; }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       this._sendMessage();
@@ -175,6 +203,8 @@ _setupUI() {
     this._checkEmojiTrigger();
     // Check for /command trigger
     this._checkSlashTrigger();
+    // Check for >>persona trigger (#86, #5349)
+    this._checkPersonaTrigger();
   });
 
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
@@ -1698,6 +1728,7 @@ _setupUI() {
     this._checkChannelTrigger(dmPipInput);
     this._checkEmojiTrigger(dmPipInput);
     this._checkSlashTrigger(dmPipInput);
+    this._checkPersonaTrigger(dmPipInput);
   });
 
   // Paste images / files into the DM PiP input — queues images for preview
@@ -1861,6 +1892,7 @@ _setupUI() {
       this._checkChannelTrigger(threadInput);
       this._checkEmojiTrigger(threadInput);
       this._checkSlashTrigger(threadInput);
+      this._checkPersonaTrigger(threadInput);
     });
     // Paste images / files into the thread input — upload then send as thread message
     threadInput.addEventListener('paste', (e) => {
@@ -5351,13 +5383,15 @@ _renderMediaGalleryTab(tab) {
     body.innerHTML = `<div class="media-gallery-grid">${items.map(it => `
       <div class="media-grid-item" data-url="${esc(it.url)}" data-msg-id="${it.message_id}" data-action="lightbox" title="${esc(it.username || '')} • ${esc(fmt(it.created_at))}">
         <img src="${esc(it.url)}" loading="lazy" alt="">
+        <button class="media-grid-jump" data-action="jump" data-msg-id="${it.message_id}" title="Jump to message">↗</button>
         <div class="media-grid-date">${esc(fmt(it.created_at))}</div>
       </div>`).join('')}</div>`;
   } else if (tab === 'videos') {
     body.innerHTML = `<div class="media-gallery-grid">${items.map(it => `
-      <div class="media-grid-item" data-url="${esc(it.url)}" data-msg-id="${it.message_id}" data-action="jump" title="${esc(it.username || '')} • ${esc(fmt(it.created_at))}">
+      <div class="media-grid-item" data-url="${esc(it.url)}" data-msg-id="${it.message_id}" data-action="video-lightbox" title="${esc(it.username || '')} • ${esc(fmt(it.created_at))}">
         <video src="${esc(it.url)}" preload="metadata" muted></video>
         <div class="media-grid-play">▶</div>
+        <button class="media-grid-jump" data-action="jump" data-msg-id="${it.message_id}" title="Jump to message">↗</button>
         <div class="media-grid-date">${esc(fmt(it.created_at))}</div>
       </div>`).join('')}</div>`;
   } else if (tab === 'audios') {
@@ -5405,6 +5439,14 @@ _renderMediaGalleryTab(tab) {
       if (url && this._openLightbox) this._openLightbox(url);
     });
   });
+  body.querySelectorAll('[data-action="video-lightbox"]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      // Avoid triggering when the user clicks the inner jump button
+      if (e.target.closest('[data-action="jump"]')) return;
+      const url = el.dataset.url;
+      if (url) this._openVideoLightbox(url);
+    });
+  });
   body.querySelectorAll('[data-action="jump"]').forEach(el => {
     el.addEventListener('click', (e) => {
       e.preventDefault();
@@ -5417,7 +5459,140 @@ _renderMediaGalleryTab(tab) {
   });
 },
 
+// Lightbox-style overlay that plays a video (used by the media gallery
+// videos tab). Mirrors the image lightbox structure so it sits above any
+// modal overlays via the same z-index strategy.
+_openVideoLightbox(src) {
+  // Tear down any existing
+  const old = document.getElementById('video-lightbox');
+  if (old) old.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'video-lightbox';
+  overlay.className = 'image-lightbox';
+  overlay.innerHTML = `
+    <video class="lightbox-video" src="${this._escapeHtml(src)}" controls autoplay playsinline></video>
+  `;
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      const v = overlay.querySelector('video');
+      if (v) { try { v.pause(); } catch {} }
+      overlay.remove();
+    }
+  });
+  const closeOnEsc = (e) => {
+    if (e.key === 'Escape') {
+      const v = overlay.querySelector('video');
+      if (v) { try { v.pause(); } catch {} }
+      overlay.remove();
+      document.removeEventListener('keydown', closeOnEsc);
+    }
+  };
+  document.addEventListener('keydown', closeOnEsc);
+  document.body.appendChild(overlay);
+},
+
 // ── Personas (#86, #5349) ──────────────────────────────
+
+// Persona prefix autocomplete: when the input STARTS with ">>" we suggest
+// the user's own personas. Using ">>" as a deliberate punctuation trigger
+// (matched server-side by the same prefix) means the persona owner can
+// type their persona's name normally in chat without accidentally routing
+// the message through the persona.
+_checkPersonaTrigger(inputEl) {
+  const input = inputEl || document.getElementById('message-input');
+  if (!input) return;
+  this._personaInput = input;
+  const text = input.value;
+  const m = text.match(/^>>\s*([^\s>:]{0,32})$/);
+  if (m) {
+    this._personaTriggerQuery = m[1].toLowerCase();
+    // Lazy load personas the first time the user reaches for them
+    if (!this._personas && !this._personasLoading) {
+      this._personasLoading = true;
+      this._loadPersonas?.().finally(() => {
+        this._personasLoading = false;
+        this._showPersonaDropdown();
+      });
+    }
+    this._showPersonaDropdown();
+  } else {
+    this._hidePersonaDropdown();
+  }
+},
+
+_showPersonaDropdown() {
+  const dropdown = document.getElementById('persona-dropdown');
+  if (!dropdown) return;
+  const host = (this._personaInput && this._personaInput.parentElement) || null;
+  if (host && dropdown.parentElement !== host) host.appendChild(dropdown);
+  const personas = (this._personas || []).slice();
+  const q = this._personaTriggerQuery || '';
+  const filtered = personas.filter(p => (p.name || '').toLowerCase().startsWith(q)).slice(0, 8);
+  if (filtered.length === 0) {
+    if (q.length === 0 && personas.length === 0) {
+      // No personas yet — point the user at the profile UI
+      dropdown.innerHTML = `<div class="mention-item" data-persona-empty="1"><strong>No personas yet</strong> <span class="mention-item-handle">create one in Profile → Personas</span></div>`;
+      dropdown.style.display = 'block';
+      dropdown.querySelectorAll('[data-persona-empty]').forEach(el => {
+        el.addEventListener('click', () => {
+          this._hidePersonaDropdown();
+          document.getElementById('rename-btn')?.click();
+        });
+      });
+      return;
+    }
+    dropdown.style.display = 'none';
+    return;
+  }
+  const esc = (s) => this._escapeHtml(s);
+  dropdown.innerHTML = filtered.map((p, i) => {
+    const avatar = p.avatar
+      ? `<img src="${esc(p.avatar)}" class="persona-dd-avatar" alt="">`
+      : `<span class="persona-dd-avatar persona-dd-avatar-fallback">${esc((p.name || '?').charAt(0).toUpperCase())}</span>`;
+    return `<div class="mention-item${i === 0 ? ' active' : ''}" data-persona-name="${esc(p.name)}">${avatar}<strong>${esc(p.name)}</strong> <span class="mention-item-handle">&gt;&gt;${esc(p.name)} message</span></div>`;
+  }).join('');
+  dropdown.style.display = 'block';
+  dropdown.querySelectorAll('[data-persona-name]').forEach(item => {
+    item.addEventListener('click', () => this._insertPersona(item.dataset.personaName));
+  });
+},
+
+_hidePersonaDropdown() {
+  const dropdown = document.getElementById('persona-dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+  this._personaTriggerQuery = '';
+},
+
+_navigatePersonaDropdown(direction) {
+  const dropdown = document.getElementById('persona-dropdown');
+  if (!dropdown) return;
+  const items = dropdown.querySelectorAll('.mention-item');
+  if (items.length === 0) return;
+  let activeIdx = -1;
+  items.forEach((item, i) => { if (item.classList.contains('active')) activeIdx = i; });
+  items.forEach(item => item.classList.remove('active'));
+  let next = activeIdx + direction;
+  if (next < 0) next = items.length - 1;
+  if (next >= items.length) next = 0;
+  items[next].classList.add('active');
+  items[next].scrollIntoView({ block: 'nearest' });
+},
+
+_insertPersona(name) {
+  const input = this._personaInput || document.getElementById('message-input');
+  if (!input) return;
+  // Replace any leading >>partial with >>FullName + space, then position
+  // cursor after, so the user can immediately type their message body.
+  const text = input.value;
+  const rest = text.replace(/^>>\s*[^\s>:]{0,32}/, '');
+  input.value = `>>${name} ` + rest.replace(/^\s+/, '');
+  const caret = ('>>' + name + ' ').length;
+  input.selectionStart = input.selectionEnd = caret;
+  input.focus();
+  this._hidePersonaDropdown();
+},
+
 async _loadPersonas() {
   try {
     const res = await fetch('/api/personas', {

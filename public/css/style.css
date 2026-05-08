@@ -6278,7 +6278,9 @@ select.cfn-select.cfn-input {
 .image-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  /* Sit above modal overlays (which use z-index: 100001) so opening a
+     lightbox from inside the media gallery actually appears in front. */
+  z-index: 100010;
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
@@ -16402,4 +16404,73 @@ ul.chat-list { list-style-type: disc; }
   color: var(--text-muted);
   margin-left: 4px;
   opacity: .65;
+}
+
+/* Jump button overlaid on photo/video gallery tiles (#5350 follow-up) */
+.media-grid-item .media-grid-jump {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s, background .12s;
+  z-index: 2;
+}
+.media-grid-item:hover .media-grid-jump,
+.media-grid-item:focus-within .media-grid-jump { opacity: 1; }
+.media-grid-item .media-grid-jump:hover { background: rgba(0, 0, 0, 0.85); }
+
+/* Video lightbox player (sits above modals like the image lightbox does) */
+#video-lightbox .lightbox-video {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: 6px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  background: #000;
+  outline: none;
+}
+
+/* -- Header icon-button monochrome / colorful sync (#5350 follow-up) --
+   The "Colorful Emoji" / "Monochrome" toolbar setting controls message
+   action bar icons via data-toolbaricons. Apply the same setting to the
+   emoji-bearing top-bar buttons (search, pinned, gallery, copy, etc.) so
+   the user's choice covers every set of icon buttons in the app. */
+:root[data-toolbaricons="mono"] .header-actions-box .icon-btn,
+html[data-toolbaricons="mono"] .header-actions-box .icon-btn,
+:root:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .header-actions-box .icon-btn,
+html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .header-actions-box .icon-btn {
+  filter: grayscale(1);
+}
+:root[data-toolbaricons="emoji"] .header-actions-box .icon-btn,
+html[data-toolbaricons="emoji"] .header-actions-box .icon-btn,
+:root[data-toolbaricons="color"] .header-actions-box .icon-btn,
+html[data-toolbaricons="color"] .header-actions-box .icon-btn {
+  filter: none;
+}
+
+/* Persona dropdown avatar (>>name autocomplete) */
+.persona-dd-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 6px;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  background: var(--bg-tertiary, var(--bg-secondary));
+  color: var(--text-muted);
+  overflow: hidden;
 }

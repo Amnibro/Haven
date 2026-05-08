@@ -486,6 +486,25 @@ _formatContent(str) {
   }
   const selfLogin = (this.user.username || '').toLowerCase();
   if (selfLogin) validNames.add(selfLogin);
+  // Also include known persona names so @PersonaName lights up as a mention
+  // and pings the persona's owner. (#5349) Personas are tracked in
+  // _channelPersonas (lowercase name → { user_id, name, avatar }) and are
+  // populated as messages from personas are rendered.
+  if (this._channelPersonas instanceof Map) {
+    for (const [low, p] of this._channelPersonas.entries()) {
+      validNames.add(low);
+      if (p && p.user_id) nameToUserId.set(low, p.user_id);
+    }
+  }
+  // Also include the user's own personas so they can self-reference.
+  if (Array.isArray(this._personas)) {
+    for (const p of this._personas) {
+      if (!p || !p.name) continue;
+      const low = p.name.toLowerCase();
+      validNames.add(low);
+      if (this.user && this.user.id) nameToUserId.set(low, this.user.id);
+    }
+  }
   const allNames = [...validNames].sort((a, b) => b.length - a.length);
   const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Build alt list of known names; also keep a generic fallback for any
