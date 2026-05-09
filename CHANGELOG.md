@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.15.5] — 2026-05-09
+
+Long-standing screen-share reliability fixes. The flow had multiple silent-failure paths that left receivers with audio but no video (or no tile at all). This run unblocks the most common ones with a recovery handshake.
+
+### Fixed
+- **Screen share goes live but never appears for some viewers.** `_renegotiate` called `RTCPeerConnection.createOffer()` without checking `signalingState`, so any renegotiation that fired while a previous offer/answer was still pending threw and the catch silently swallowed it. The peer ended up with audio (already on the stable m-section) but no screen video, with no retry. The renegotiate now waits up to ~5s for the connection to reach a stable state before issuing the offer.
+- **Late-joiner renegotiate skipped adding screen tracks if the sharer also had a webcam on.** The sharer's `renegotiate-screen` handler used a generic "any video sender exists" check to decide whether to add the screen tracks, which was true the moment a webcam track was attached. Result: late joiners got the webcam but never the screen. Now matches by track identity so screen tracks are added if and only if they aren't already on the connection.
+- **`screen-share-started` was emitted after the renegotiation completed.** That meant receivers' `ontrack` for the new screen video could fire before `screenSharers.has(sharerId)` was true, so the screen-vs-webcam classifier in voice.js fell through to a default route that misbehaves when stale webcam state is present. The notification is now emitted before the per-peer renegotiation loop starts.
+- **No recovery when the renegotiation offer was dropped or stalled.** Added a `request-screen-renegotiate` server event the receiver fires (a) ~3s after `screen-share-started` if no video receiver appeared on the peer, and (b) once during the existing video tile retry loop if `videoWidth` stays at 0. The server forwards a `renegotiate-screen` to the sharer, which re-issues an offer for that specific peer. This is what unblocks the "saw the indicator, heard the join sound, but the tile is empty / never came up" pattern that's been hitting one specific user in particular for months.
+
+---
+
 ## [3.15.4] — 2026-05-09
 
 Deeper voice presence fix on top of 3.15.3 (#5347). The previous patches cleaned up ghost entries but didn't address the actual reason peers couldn't see or hear each other after long idle periods.

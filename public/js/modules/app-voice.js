@@ -942,6 +942,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
     // WebRTC video tracks often arrive muted (no frames yet). Retry playback
     // until the video actually has dimensions, which means frames are flowing.
     let _retries = 0;
+    let _renegotiateRequested = false;
     const _retryPlay = () => {
       if (!videoEl.srcObject || _retries > 20) return;
       if (videoEl.videoWidth === 0) {
@@ -951,6 +952,20 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
           const s = videoEl.srcObject;
           videoEl.srcObject = null;
           videoEl.srcObject = s;
+        }
+        // After ~3s of no frames, ask the sharer to re-issue the offer.
+        // A hung renegotiation on the sharer side, an ICE restart that
+        // didn't carry video, or simply a dropped voice-offer all leave
+        // the receiver with audio-but-no-video. Asking for a renegotiate
+        // is the only way to recover without a full leave/rejoin.
+        // (#5347 v3.15.5)
+        if (!_renegotiateRequested && _retries >= 6 &&
+            this.voice && this.voice.inVoice && userId && userId !== this.user.id) {
+          _renegotiateRequested = true;
+          this.socket.emit('request-screen-renegotiate', {
+            code: this.voice.currentChannel,
+            sharerId: userId
+          });
         }
         videoEl.play().catch(() => {});
         setTimeout(_retryPlay, 500);

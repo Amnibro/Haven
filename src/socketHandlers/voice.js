@@ -377,7 +377,28 @@ module.exports = function register(socket, ctx) {
     broadcastStreamInfo(data.code);
   });
 
-  // ── Webcam ──────────────────────────────────────────────
+  // ── Screen renegotiate request (recovery handshake) ────
+  // A receiver calls this when their stream tile failed to produce frames
+  // (audio works but video stays black, or no tracks arrived after
+  // screen-share-started fired). The server forwards a renegotiate-screen
+  // to the sharer, which re-issues an offer for that specific peer.
+  socket.on('request-screen-renegotiate', (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (!isString(data.code, 8, 8)) return;
+    if (!isInt(data.sharerId)) return;
+    const voiceRoom = voiceUsers.get(data.code);
+    if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+    const sharers = activeScreenSharers.get(data.code);
+    if (!sharers || !sharers.has(data.sharerId)) return;
+    const sharerInfo = voiceRoom.get(data.sharerId);
+    if (!sharerInfo) return;
+    io.to(sharerInfo.socketId).emit('renegotiate-screen', {
+      targetUserId: socket.user.id,
+      channelCode: data.code
+    });
+  });
+
+  // ── Webcam ─────────────────────────────────────────────────
   socket.on('webcam-started', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8)) return;

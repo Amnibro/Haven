@@ -317,6 +317,31 @@ class VoiceManager {
       // invisible until the local user happened to do something that
       // refreshed the list (e.g. start sharing themselves).
       if (this.onWebcamStatusChange) this.onWebcamStatusChange();
+
+      // Safety net: if screen-share-started fires but the renegotiation
+      // offer carrying the video track never reaches us (dropped event,
+      // sharer's _renegotiate failed silently because of a non-stable
+      // signaling state, etc.), the receiver gets no tile at all. Check
+      // ~3s later whether the peer connection has any video receiver from
+      // the sharer; if not, ask the server to forward a renegotiate-screen
+      // back to the sharer. This is the silent-failure recovery path for
+      // the long-standing \"sharer goes live but nothing appears on my
+      // end\" bug. (#5347 v3.15.5)
+      setTimeout(() => {
+        if (!this.screenSharers.has(data.userId)) return;
+        const peer = this.peers.get(data.userId);
+        if (!peer) return;
+        const hasVideoReceiver = peer.connection.getReceivers().some(r =>
+          r.track && r.track.kind === 'video' && r.track.readyState === 'live'
+        );
+        if (!hasVideoReceiver && this.inVoice && this.currentChannel) {
+          console.warn('[Voice] No video track from screen sharer', data.userId, 'after 3s, requesting renegotiate');
+          this.socket.emit('request-screen-renegotiate', {
+            code: this.currentChannel,
+            sharerId: data.userId
+          });
+        }
+      }, 3000);
     });
 
     // Someone stopped screen sharing
@@ -362,20 +387,24 @@ class VoiceManager {
       if (!peer) return;
       const conn = peer.connection;
 
-      // Add screen share tracks if they weren't negotiated in the initial exchange
+      // Add screen share tracks if they aren't already on this peer.
+      // Match by track identity — the previous "any video sender" check
+      // wrongly considered a webcam sender as proof that the screen tracks
+      // were already attached, leaving late joiners with audio but no
+      // screen video when the sharer also had their webcam on.
+      // (#5347 v3.15.5)
       const senders = conn.getSenders();
-      const hasVideo = senders.some(s => s.track && s.track.kind === 'video');
-      if (!hasVideo) {
-        this.screenStream.getTracks().filter(t => t.readyState === 'live').forEach(track => {
-          conn.addTrack(track, this.screenStream);
-        });
-        // Cap bitrate for this peer
+      const screenTracks = this.screenStream.getTracks().filter(t => t.readyState === 'live');
+      const missing = screenTracks.filter(track => !senders.some(s => s.track === track));
+      if (missing.length) {
+        missing.forEach(track => conn.addTrack(track, this.screenStream));
         const res = this.screenResolution;
         const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
         this._applyScreenBitrate(conn, maxBitrate);
       }
 
-      // Renegotiate to include the video tracks
+      // Renegotiate to include the video tracks (or refresh an existing
+      // screen-share m-section that the receiver lost frames on)
       await this._renegotiate(data.targetUserId, conn);
     });
 
@@ -785,6 +814,16 @@ class VoiceManager {
         screenAudioTrack.onended = () => { this.screenHasAudio = false; };
       }
 
+      // Tell the server we're sharing BEFORE renegotiating with peers, so
+      // every receiver has `screenSharers.has(sharerId) === true` by the
+      // time their ontrack fires for the new video. Otherwise the video
+      // track classifier in _createPeer falls through to a default-screen
+      // route that misbehaves when the receiver has stale webcam state for
+      // the same user (image: tile shown, audio works, video black).
+      const hasAudio = this.screenStream.getAudioTracks().length > 0;
+      this.screenHasAudio = hasAudio;
+      this.socket.emit('screen-share-started', { code: this.currentChannel, hasAudio });
+
       // Add screen tracks to all existing peer connections and cap bitrate
       const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
       for (const [userId, peer] of this.peers) {
@@ -796,11 +835,6 @@ class VoiceManager {
         // Renegotiate with each peer
         await this._renegotiate(userId, peer.connection);
       }
-
-      // Tell the server we're sharing (include audio availability)
-      const hasAudio = this.screenStream.getAudioTracks().length > 0;
-      this.screenHasAudio = hasAudio;
-      this.socket.emit('screen-share-started', { code: this.currentChannel, hasAudio });
 
       return true;
     } catch (err) {
@@ -1064,7 +1098,37 @@ class VoiceManager {
   }
 
   async _renegotiate(userId, connection) {
+    // Wait for the signaling state to be stable before issuing a fresh
+    // offer. RTCPeerConnection.createOffer() throws if called while a
+    // previous local-offer or remote-offer is still pending, and the only
+    // catch handler used to silently swallow the error — leaving the
+    // peer with no video and no retry, which is a leading cause of the
+    // "audio works, video tile is black" screen-share bug. Wait up to ~5s
+    // for the connection to settle, then proceed. (#5347 v3.15.5)
     try {
+      if (connection.signalingState !== 'stable') {
+        const ok = await new Promise((resolve) => {
+          let settled = false;
+          const onChange = () => {
+            if (settled) return;
+            if (connection.signalingState === 'stable') {
+              settled = true;
+              connection.removeEventListener('signalingstatechange', onChange);
+              resolve(true);
+            }
+          };
+          connection.addEventListener('signalingstatechange', onChange);
+          setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            connection.removeEventListener('signalingstatechange', onChange);
+            resolve(connection.signalingState === 'stable');
+          }, 5000);
+        });
+        if (!ok) {
+          console.warn('[Voice] _renegotiate: signaling stayed', connection.signalingState, 'for peer', userId, '— forcing offer anyway');
+        }
+      }
       const offer = await connection.createOffer();
       await connection.setLocalDescription(offer);
       this.socket.emit('voice-offer', {
@@ -1073,7 +1137,7 @@ class VoiceManager {
         offer: offer
       });
     } catch (err) {
-      console.error('Renegotiation failed:', err);
+      console.error('Renegotiation failed for peer', userId, err);
     }
   }
 
