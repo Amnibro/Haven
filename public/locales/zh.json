@@ -928,6 +928,8 @@
       "import_failed": "导入失败",
       "import_success_one": "成功导入1个频道，共 {{messages}} 条消息。",
       "import_success_other": "成功导入 {{count}} 个频道，共 {{messages}} 条消息。",
+      "import_skipped": "已跳过 {{count}} 条重复消息。",
+      "import_reused": "已更新 {{count}} 个现有频道。",
       "import_failed_alert": "导入失败：{{error}}",
       "roles_no_custom": "没有自定义角色",
       "roles_level_invalid": "级别必须在1–99之间",

@@ -929,6 +929,8 @@
       "import_failed": "Ошибка импорта",
       "import_success_one": "1 канал успешно импортирован с {{messages}} сообщениями.",
       "import_success_other": "{{count}} каналов успешно импортировано с {{messages}} сообщениями.",
+      "import_skipped": "{{count}} дубликат(ов) пропущено.",
+      "import_reused": "{{count}} существующий(-их) канал(-ов) обновлён.",
       "import_failed_alert": "Ошибка импорта: {{error}}",
       "roles_no_custom": "Нет пользовательских ролей",
       "roles_level_invalid": "Уровень должен быть от 1 до 99",

@@ -928,6 +928,8 @@
       "import_failed": "Import fehlgeschlagen",
       "import_success_one": "1 Kanal mit {{messages}} Nachrichten erfolgreich importiert.",
       "import_success_other": "{{count}} Kanäle mit {{messages}} Nachrichten erfolgreich importiert.",
+      "import_skipped": "{{count}} Duplikat(e) übersprungen.",
+      "import_reused": "{{count}} vorhandener Kanal (Kanäle) aktualisiert.",
       "import_failed_alert": "Import fehlgeschlagen: {{error}}",
       "roles_no_custom": "Keine benutzerdefinierten Rollen",
       "roles_level_invalid": "Ebene muss 1–99 sein",

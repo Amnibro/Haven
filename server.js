@@ -3153,7 +3153,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
     const db = getDb();
     const { generateChannelCode } = require('./src/auth');
 
-    const stats = { channelsCreated: 0, messagesImported: 0 };
+    const stats = { channelsCreated: 0, channelsReused: 0, messagesImported: 0, messagesSkipped: 0 };
 
     const txn = db.transaction(() => {
       for (const sel of selectedChannels) {
@@ -3167,15 +3167,30 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
         const channelName = [...(sel.name || channelData.name)].slice(0, 50).join('');
         const code = generateChannelCode();
 
-        // Create the Haven channel
-        const chResult = db.prepare(
-          'INSERT INTO channels (name, code, created_by, topic) VALUES (?, ?, ?, ?)'
-        ).run(channelName, code, user.id, channelData.topic || '');
-        const channelId = chResult.lastInsertRowid;
+        // Reuse an existing Haven channel if it was created from the same Discord channel.
+        // This makes re-importing (or importing a second overlapping export) idempotent —
+        // new messages are appended, duplicates are skipped, and native Haven messages are untouched.
+        let channelId;
+        const discordChannelId = channelData.discordId || null;
+        if (discordChannelId) {
+          const existing = db.prepare('SELECT id FROM channels WHERE discord_channel_id = ?').get(discordChannelId);
+          if (existing) {
+            channelId = existing.id;
+            stats.channelsReused++;
+          }
+        }
 
-        // Auto-join the importing admin
-        db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, user.id);
-        stats.channelsCreated++;
+        if (!channelId) {
+          // Create the Haven channel
+          const chResult = db.prepare(
+            'INSERT INTO channels (name, code, created_by, topic, discord_channel_id) VALUES (?, ?, ?, ?, ?)'
+          ).run(channelName, code, user.id, channelData.topic || '', discordChannelId);
+          channelId = chResult.lastInsertRowid;
+
+          // Auto-join the importing admin
+          db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, user.id);
+          stats.channelsCreated++;
+        }
 
         // Sort messages chronologically
         const sorted = channelData.messages.slice().sort(
@@ -3186,9 +3201,10 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
         const idMap = {};
 
         const insertMsg = db.prepare(`
-          INSERT INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, is_webhook, imported_from, reply_to)
-          VALUES (?, ?, ?, ?, ?, ?, 0, 'discord', ?)
+          INSERT OR IGNORE INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, is_webhook, imported_from, reply_to, discord_message_id)
+          VALUES (?, ?, ?, ?, ?, ?, 0, 'discord', ?, ?)
         `);
+        const lookupByDiscordId = db.prepare('SELECT id FROM messages WHERE discord_message_id = ?');
 
         for (const msg of sorted) {
           const content = (msg.content || '').trim();
@@ -3209,8 +3225,18 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
           }
 
           const result = insertMsg.run(
-            channelId, user.id, content, ts, msg.author || 'Unknown', msg.authorAvatar || null, replyTo
+            channelId, user.id, content, ts, msg.author || 'Unknown', msg.authorAvatar || null, replyTo, msg.discordId || null
           );
+
+          if (result.changes === 0) {
+            // Duplicate Discord message — resolve ID for reply threading and skip
+            if (msg.discordId) {
+              const existing = lookupByDiscordId.get(msg.discordId);
+              if (existing) idMap[msg.discordId] = existing.id;
+            }
+            stats.messagesSkipped++;
+            continue;
+          }
 
           if (msg.discordId) {
             idMap[msg.discordId] = result.lastInsertRowid;

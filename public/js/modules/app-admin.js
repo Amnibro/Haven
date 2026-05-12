@@ -2994,6 +2994,12 @@ async _importExecute(importId, selectedChannels) {
     stepPreview.style.display = 'none';
     stepDone.style.display    = '';
     doneMsg.textContent = t(data.channelsCreated === 1 ? 'settings.admin.import_success_one' : 'settings.admin.import_success_other', { count: data.channelsCreated, messages: data.messagesImported.toLocaleString() });
+    if (data.channelsReused > 0) {
+      doneMsg.textContent += ' ' + t('settings.admin.import_reused', { count: data.channelsReused });
+    }
+    if (data.messagesSkipped > 0) {
+      doneMsg.textContent += ' ' + t('settings.admin.import_skipped', { count: data.messagesSkipped.toLocaleString() });
+    }
 
     // Refresh channel list
     if (this.socket) this.socket.emit('get-channels');

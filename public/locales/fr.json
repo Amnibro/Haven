@@ -928,6 +928,8 @@
       "import_failed": "Échec de l'importation",
       "import_success_one": "1 salon importé avec succès avec {{messages}} messages.",
       "import_success_other": "{{count}} salons importés avec succès avec {{messages}} messages.",
+      "import_skipped": "{{count}} doublon(s) ignoré(s).",
+      "import_reused": "{{count}} salon(s) existant(s) mis à jour.",
       "import_failed_alert": "Échec de l'importation : {{error}}",
       "roles_no_custom": "Aucun rôle personnalisé",
       "roles_level_invalid": "Le niveau doit être entre 1 et 99",

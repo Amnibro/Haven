@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.16.0] — 2026-05-12
+
+Discord history import is now fully idempotent. Previously, importing overlapping exports (e.g. two people exporting the same server at different times) would produce duplicate messages and duplicate channels. Now the importer deduplicates everything automatically.
+
+### Added
+- **Idempotent Discord import.** Each imported message now stores its original Discord snowflake ID. Re-importing the same export, or importing a second overlapping export, skips messages that already exist rather than inserting them again. Native Haven messages are completely unaffected.
+- **Channel reuse on re-import.** Imported channels now store their Discord channel ID. If you import a second export that contains the same Discord channel, the new messages are appended to the existing Haven channel instead of creating a second duplicate channel.
+- **Import result details.** The import success message now reports how many duplicate messages were skipped and how many existing channels were updated, in addition to the usual counts.
+
+---
+
 ## [3.15.9] — 2026-05-12
 
 Polish translation update from contributor dvw1xx covering features shipped in 3.15.x.

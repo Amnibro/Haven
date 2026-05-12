@@ -708,6 +708,35 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN webhook_avatar TEXT DEFAULT NULL");
   }
 
+  // ── Migration: discord_message_id for import deduplication ──────────────
+  // Stores the original Discord snowflake ID so re-importing the same export
+  // (or overlapping exports) is idempotent — duplicate snowflakes are skipped.
+  try {
+    db.prepare("SELECT discord_message_id FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN discord_message_id TEXT DEFAULT NULL");
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_discord_id
+      ON messages(discord_message_id)
+      WHERE discord_message_id IS NOT NULL;
+  `);
+
+  // ── Migration: discord_channel_id on channels (import deduplication) ─────
+  // Stores the originating Discord channel snowflake so a second import of the
+  // same Discord channel appends into the existing Haven channel rather than
+  // creating a duplicate.
+  try {
+    db.prepare("SELECT discord_channel_id FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN discord_channel_id TEXT DEFAULT NULL");
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_channels_discord_id
+      ON channels(discord_channel_id)
+      WHERE discord_channel_id IS NOT NULL;
+  `);
+
   // ── Migration: archived / protected messages ────────────
   try {
     db.prepare("SELECT is_archived FROM messages LIMIT 0").get();

@@ -965,6 +965,8 @@
       "import_failed": "Import failed",
       "import_success_one": "Successfully imported 1 channel with {{messages}} messages.",
       "import_success_other": "Successfully imported {{count}} channels with {{messages}} messages.",
+      "import_skipped": "{{count}} duplicate(s) skipped.",
+      "import_reused": "{{count}} existing channel(s) updated.",
       "import_failed_alert": "Import failed: {{error}}",
       "roles_no_custom": "No custom roles",
       "roles_level_invalid": "Level must be 1–99",

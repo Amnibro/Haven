@@ -958,6 +958,8 @@
       "import_failed": "Import nie powiódł się",
       "import_success_one": "Pomyślnie zaimportowano 1 kanał z {{messages}} wiadomościami.",
       "import_success_other": "Pomyślnie zaimportowano {{count}} kanałów z {{messages}} wiadomościami.",
+      "import_skipped": "Pominięto {{count}} duplikat(ów).",
+      "import_reused": "Zaktualizowano {{count}} istniejący(-ch) kanał(ów).",
       "import_failed_alert": "Import nie powiódł się: {{error}}",
       "roles_no_custom": "Brak niestandardowych ról",
       "roles_level_invalid": "Poziom musi wynosić 1–99",
