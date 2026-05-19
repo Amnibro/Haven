@@ -529,6 +529,84 @@ module.exports = function register(socket, ctx) {
         `inAnyOtherVoiceRoom=${inAnyRoom}, currentSocketId=${socket.id}, ` +
         `roomSize=${room ? room.size : 0}`
       );
+
+      // ── SERVER-SIDE PROACTIVE HEAL ──────────────────────
+      // Don't just complain — reattach the user right here so the
+      // infinite watchdog loop ("self ABSENT → poll → still ABSENT")
+      // breaks immediately. The user has already proven (by being
+      // connected with a valid socket and claiming to be in voice on
+      // this channel) that they want to be in voice. We validate they
+      // are actually a member of the channel; if so, we add them back
+      // to voiceUsers, broadcast to peers, and send them a fresh
+      // voice-existing-users so they (re-)negotiate RTCPeerConnections
+      // with anyone who's in the room.
+      try {
+        const vch = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+        if (!vch) {
+          console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — channel ${code} not in DB; signalling client to clean up.`);
+          socket.emit('voice-channel-gone', { code });
+        } else {
+          const vMember = db.prepare(
+            'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+          ).get(vch.id, socket.user.id);
+          if (!vMember) {
+            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — ${socket.user.username} is not a member of channel ${code}; signalling client to clean up.`);
+            socket.emit('voice-channel-gone', { code });
+          } else {
+            // Cancel any pending grace-period eviction for this slot.
+            const pendingKey = `${socket.user.id}:${code}`;
+            const pending = pendingVoiceLeave && pendingVoiceLeave.get(pendingKey);
+            if (pending) {
+              clearTimeout(pending.timer);
+              pendingVoiceLeave.delete(pendingKey);
+              console.log(`[VoiceDiag] PROACTIVE HEAL cancelled pending grace eviction for ${socket.user.username} on ${code}`);
+            }
+            if (!voiceUsers.has(code)) voiceUsers.set(code, new Map());
+            socket.join(`voice:${code}`);
+            voiceUsers.get(code).set(socket.user.id, {
+              id: socket.user.id,
+              username: socket.user.displayName,
+              socketId: socket.id,
+              isMuted: false,
+              isDeafened: false
+            });
+            voiceLastActivity.set(socket.user.id, Date.now());
+            console.log(`[VoiceDiag] PROACTIVE HEAL added ${socket.user.username} (id=${socket.user.id}) to voiceUsers[${code}]. Broadcasting to peers + sending voice-existing-users.`);
+
+            const existingUsers = Array.from(voiceUsers.get(code).values())
+              .filter(u => u.id !== socket.user.id);
+            const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
+            socket.emit('voice-existing-users', {
+              channelCode: code,
+              users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+              voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
+            });
+            // Notify existing peers that we're (back) in the room so
+            // they wait for our offer. (voice-existing-users above tells
+            // us to make the offers.)
+            existingUsers.forEach(u => {
+              io.to(u.socketId).emit('voice-user-joined', {
+                channelCode: code,
+                user: { id: socket.user.id, username: socket.user.displayName }
+              });
+            });
+            broadcastVoiceUsers(code);
+            broadcastStreamInfo(code);
+            // Re-fetch the room so the response below includes us.
+            const healedRoom = voiceUsers.get(code);
+            const healedUsers = healedRoom
+              ? Array.from(healedRoom.values()).map(u => {
+                  const role = getUserHighestRole(u.id, vch.id);
+                  return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
+                })
+              : [];
+            socket.emit('voice-users-update', { channelCode: code, users: healedUsers });
+            return; // We've already sent the update — don't double-send below.
+          }
+        }
+      } catch (e) {
+        console.warn(`[VoiceDiag] PROACTIVE HEAL failed:`, e && e.message);
+      }
     }
     socket.emit('voice-users-update', { channelCode: code, users });
   });
@@ -586,17 +664,33 @@ module.exports = function register(socket, ctx) {
 
   // ── Voice rejoin (after reconnect) ──────────────────────
   socket.on('voice-rejoin', (data) => {
-    if (!data || typeof data !== 'object') return;
+    // VERY top-of-handler log so we can prove the event reached us, and
+    // catch every silent early-return below.
+    console.log(`[VoiceDiag] voice-rejoin RECEIVED from ${socket.user?.username} (id=${socket.user?.id}) socket=${socket.id} data=${JSON.stringify(data)}`);
+    if (!data || typeof data !== 'object') {
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED — bad payload`);
+      return;
+    }
     const code = typeof data.code === 'string' ? data.code.trim() : '';
-    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) {
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED — invalid code "${code}"`);
+      return;
+    }
 
     const vch = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-    if (!vch) return;
+    if (!vch) {
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED — channel ${code} not in DB (user=${socket.user.username}). Telling client channel is gone so it can clean local state.`);
+      // Break the infinite watchdog/self-heal loop — tell the client the
+      // channel no longer exists so it stops thinking it's in voice.
+      socket.emit('voice-channel-gone', { code });
+      return;
+    }
     const vMember = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(vch.id, socket.user.id);
     if (!vMember) {
       console.warn(`[VoiceDiag] voice-rejoin from ${socket.user.username} (id=${socket.user.id}) on ${code} REJECTED — not a channel member`);
+      socket.emit('voice-channel-gone', { code });
       return;
     }
 

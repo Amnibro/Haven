@@ -116,6 +116,17 @@ class VoiceManager {
   // ── Socket event listeners ──────────────────────────────
 
   _setupSocketListeners() {
+    // Server signalled the voice channel no longer exists (DB row gone,
+    // or we were never a member). Stop the watchdog/self-heal loop by
+    // fully tearing down local voice state so the client stops thinking
+    // it's in voice on a dead channel.
+    this.socket.on('voice-channel-gone', (data) => {
+      if (!this.inVoice) return;
+      if (this.currentChannel && data && data.code && data.code !== this.currentChannel) return;
+      console.warn('[Voice] Server says voice channel is gone — leaving locally:', data && data.code);
+      try { this.leave(); } catch (e) { console.warn('[Voice] leave() during voice-channel-gone failed:', e); }
+    });
+
     // We just joined: create peer connections + send offers to all existing users
     this.socket.on('voice-existing-users', async (data) => {
       // Apply audio bitrate cap from channel settings

@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Voice chat: server-side proactive self-heal to break the watchdog/self-heal infinite loop (#5347, continued).** Field logs from v3.16.14 exposed a second failure mode: when the client claimed to be in voice on a channel that the server had no record of, the client's watchdog emitted `voice-rejoin`, but the server's `voice-rejoin` handler silently early-returned (most commonly because the channel's DB row no longer matched or membership had drifted), so the client polled the same dead state every 10 s forever. The symptom users saw: "I appear in the right panel, my friend appears in the left, the third person can't be heard at all, everyone has to leave and rejoin to recover." Three changes:
+  - **Server now actively re-attaches the user inside `request-voice-users`** when it detects the claim/state mismatch (instead of just complaining in the log). If the channel + membership are valid, the server adds the user back into `voiceUsers`, emits `voice-user-joined` to existing peers, sends a fresh `voice-existing-users` to the requesting client, and broadcasts the updated roster in a single tick. The infinite loop ends on the first watchdog poll and audio reconnects automatically.
+  - **`voice-rejoin` now signals `voice-channel-gone`** when the channel is missing from the DB or the user is no longer a member, instead of silently returning. The client tears down its local voice state on receipt, so it can never get stuck "in voice" on a channel that no longer exists.
+  - Verbose `[VoiceDiag]` logs on every `voice-rejoin` early-return path so any remaining edge case is one screenshot away from diagnosis.
+
+---
+
 ## [3.16.14] — 2026-05-19
 
 ### Fixed
