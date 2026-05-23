@@ -4,7 +4,7 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=3.16.12';
+import SocketMethods   from './modules/app-socket.js?v=3.17.1';
 import UIBindMethods   from './modules/app-ui.js?v=3.16.12';
 import MediaMethods    from './modules/app-media.js?v=3.16.12';
 import ContextMethods  from './modules/app-context.js?v=3.16.12';

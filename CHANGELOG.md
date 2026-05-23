@@ -17,8 +17,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [3.17.1] — 2026-05-23
 
+### Added
+- **Show/hide password toggle on every password input.** An eye button now appears inside login, register, SSO, recovery, and settings password fields so you can verify what you typed before submitting. Works on dynamically-injected forms too (transfer admin, delete account, E2E unlock, etc.).
+
 ### Fixed
 - **Server fails to start with `ERR_INVALID_PACKAGE_CONFIG` on newer Node / Docker (#5374).** `package.json` in 3.17.0 contained a stray Windows-1252 em-dash byte (0x97) in the `description` field, producing invalid UTF-8. Newer Node versions (and the official Docker image) refuse to load the package and the container restart-loops. Replaced with plain ASCII so the file parses cleanly everywhere. Affects all 3.17.0 Docker deployments and self-hosted setups on Node 24+.
+- **Expired/invalid tokens now redirect to login instead of stranding users on an empty channel list (#5375).** Previously the client required three consecutive socket auth errors before clearing the token, but transport errors mixed in could prevent the counter from ever tripping. JWT verify failures and `Session expired` are 100% deterministic and never transient, so the client now redirects to `/` on the first one. If your channel list ever went empty with a "Server Error" red dot after a long absence, that's why — and a single relaunch will now bounce you straight to the login screen.
 
 ---
 

@@ -288,20 +288,16 @@ _setupSocketListeners() {
   this.socket.on('connect_error', (err) => {
     // Don't kick during password change — socket will reconnect with fresh token
     if (this._justChangedPassword) return;
+    // These messages come from the socket.io auth middleware and are
+    // 100% deterministic (JWT verify failure / user row mismatch / pwv bump).
+    // They are NEVER transient, so we redirect to /login on the first one
+    // instead of stranding the user on an empty channel list. (#5375)
     if (err.message === 'Invalid token' || err.message === 'Authentication required' || err.message === 'Session expired') {
-      // Require multiple consecutive auth errors before nuking the session.
-      // A single transient error during a server restart (DB not yet ready,
-      // middleware racing init) should not log the user out and wipe their
-      // dismissals/sidebar state. The token only gets cleared if the server
-      // consistently rejects it.
-      this._authErrorStreak = (this._authErrorStreak || 0) + 1;
-      if (this._authErrorStreak >= 3) {
-        localStorage.removeItem('haven_token');
-        localStorage.removeItem('haven_user');
-        localStorage.removeItem('haven_sync_key');
-        window.location.href = '/';
-        return;
-      }
+      localStorage.removeItem('haven_token');
+      localStorage.removeItem('haven_user');
+      localStorage.removeItem('haven_sync_key');
+      window.location.href = '/';
+      return;
     }
     this._setLed('connection-led', 'danger');
     this._setLed('status-server-led', 'danger');
