@@ -511,27 +511,59 @@ _setupUI() {
       if (row.querySelector('.cfn-input')) return;
       const badge = row.querySelector('.cfn-badge');
       if (!badge) return;
+      // #5390 — self-destruct now has two modes: 'delete' (legacy: remove
+      // the whole channel when the timer fires) and 'clear' (wipe messages
+      // only, then rearm the timer at the same interval). We render the
+      // hours input next to a mode select so admins can pick both at once.
+      const wrap = document.createElement('span');
+      wrap.className = 'cfn-input-wrap';
       const input = document.createElement('input');
       input.type = 'number'; input.min = '0'; input.max = '720';
-      input.value = ''; input.placeholder = t('channel_functions.self_destruct_placeholder'); input.className = 'cfn-input';
+      input.value = ''; input.placeholder = t('channel_functions.self_destruct_placeholder'); input.className = 'cfn-input cfn-input-hours';
       input.onclick = e2 => e2.stopPropagation();
-      badge.replaceWith(input);
+      const modeSelect = document.createElement('select');
+      modeSelect.className = 'cfn-input cfn-mode-select';
+      const optDelete = document.createElement('option');
+      optDelete.value = 'delete';
+      optDelete.textContent = t('channel_functions.self_destruct_mode_delete') || 'Delete channel';
+      const optClear = document.createElement('option');
+      optClear.value = 'clear';
+      optClear.textContent = t('channel_functions.self_destruct_mode_clear') || 'Clear messages';
+      modeSelect.appendChild(optDelete);
+      modeSelect.appendChild(optClear);
+      modeSelect.value = ch?.auto_delete_mode === 'clear' ? 'clear' : 'delete';
+      modeSelect.onclick = e2 => e2.stopPropagation();
+      wrap.appendChild(input);
+      wrap.appendChild(modeSelect);
+      badge.replaceWith(wrap);
       input.focus(); input.select();
+      let committed = false;
       const commitExpiry = () => {
+        if (committed) return;
         const hours = parseInt(input.value);
         if (isNaN(hours) || hours < 0) return;
+        committed = true;
+        const mode = modeSelect.value === 'clear' ? 'clear' : 'delete';
         if (hours === 0) {
-          optimistic({ expires_at: null });
-          this.socket.emit('set-channel-expiry', { code, hours: 0 });
+          optimistic({ expires_at: null, auto_delete_mode: 'delete', auto_delete_interval_hours: null });
+          this.socket.emit('set-channel-expiry', { code, hours: 0, mode });
         } else {
           const clamped = Math.max(1, Math.min(720, hours));
           const expiresAt = new Date(Date.now() + clamped * 3600000).toISOString();
-          optimistic({ expires_at: expiresAt });
-          this.socket.emit('set-channel-expiry', { code, hours: clamped });
+          optimistic({ expires_at: expiresAt, auto_delete_mode: mode, auto_delete_interval_hours: clamped });
+          this.socket.emit('set-channel-expiry', { code, hours: clamped, mode });
         }
       };
+      // Delay blur-commit briefly so focus moving between input and select
+      // inside the wrap doesn't fire a premature commit with stale values.
+      const onBlur = () => {
+        setTimeout(() => {
+          if (!wrap.contains(document.activeElement)) commitExpiry();
+        }, 50);
+      };
       input.addEventListener('keydown', e2 => { if (e2.key === 'Enter') { commitExpiry(); input.blur(); } });
-      input.addEventListener('blur', commitExpiry);
+      input.addEventListener('blur', onBlur);
+      modeSelect.addEventListener('blur', onBlur);
     } else if (fn === 'afk-sub') {
       // Show a select dropdown of sub-channels for this parent
       if (row.querySelector('.cfn-select')) return;

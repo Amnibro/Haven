@@ -784,18 +784,28 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
+    // #5390 — second mode: 'clear' wipes messages periodically instead of
+    // deleting the whole channel. Anything other than 'clear' is treated
+    // as the legacy 'delete' behaviour so unknown values fail closed
+    // toward the original semantics.
+    const mode = data.mode === 'clear' ? 'clear' : 'delete';
     let expiresAt = null;
+    let intervalHours = null;
     if (data.hours && data.hours > 0) {
       const hours = Math.max(1, Math.min(720, parseInt(data.hours, 10)));
       if (isNaN(hours)) return socket.emit('error-msg', 'Invalid duration');
       expiresAt = new Date(Date.now() + hours * 3600000).toISOString();
+      intervalHours = hours;
     }
     try {
-      db.prepare('UPDATE channels SET expires_at = ? WHERE id = ?').run(expiresAt, channel.id);
+      db.prepare(
+        'UPDATE channels SET expires_at = ?, auto_delete_mode = ?, auto_delete_interval_hours = ? WHERE id = ?'
+      ).run(expiresAt, mode, intervalHours, channel.id);
       broadcastChannelLists();
       if (expiresAt) {
         const hours = Math.round((new Date(expiresAt) - Date.now()) / 3600000);
-        socket.emit('toast', { message: `⏱️ Channel will self-destruct in ${hours}h`, type: 'success' });
+        const verb = mode === 'clear' ? `clear messages every ${hours}h` : `self-destruct in ${hours}h`;
+        socket.emit('toast', { message: `⏱️ Channel will ${verb}`, type: 'success' });
       } else {
         socket.emit('toast', { message: '⏱️ Self-destruct timer removed', type: 'success' });
       }

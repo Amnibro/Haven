@@ -986,11 +986,20 @@ class VoiceManager {
       renegotiations.push(this._renegotiate(userId, peer.connection).catch(() => {}));
     }
 
-    // Wait for all renegotiations to complete (with a timeout so we don't hang forever)
+    // Wait for ALL renegotiations to actually finish before tearing the
+    // tracks down. The previous Promise.race(..., 3s) here was the cause of
+    // the months-long "black screen on reshare" / "streaming but no tile"
+    // bugs: if any peer's _renegotiate was still in flight when the 3s
+    // expired (perfectly possible since _renegotiate itself can wait up to
+    // 5s for signaling state to settle), this function would return, kill
+    // the tracks, and leave that peer's transceiver mid-direction-change.
+    // On the next startScreenShare the new addTrack would reuse that broken
+    // transceiver and ontrack would never fire on the viewer side — exactly
+    // the symptom users reported. Use allSettled with a generous safety cap.
     try {
       await Promise.race([
-        Promise.all(renegotiations),
-        new Promise(resolve => setTimeout(resolve, 3000))
+        Promise.allSettled(renegotiations),
+        new Promise(resolve => setTimeout(resolve, 8000))
       ]);
     } catch { /* proceed anyway */ }
 
@@ -1348,7 +1357,19 @@ class VoiceManager {
           };
           track.onmute = () => {};
           track.onended = () => {
-            if (this.onScreenStream) this.onScreenStream(userId, null);
+            // Don't tear down the tile if the sharer is in the middle of a
+            // stop+restart cycle. Their old track ends naturally as part of
+            // stopScreenShare, but the screenSharers set (driven by the
+            // server's screen-share-started/stopped events) is still true
+            // until we get screen-share-stopped. If we cleared the tile
+            // here on every onended, the viewer would see the tile vanish
+            // and the next track would have to recreate everything — which
+            // is fine in theory but masked the stuck-transceiver bug for
+            // months by making it look like "the new share never arrived".
+            // Only clear when the server has actually told us they stopped.
+            if (!this.screenSharers.has(userId)) {
+              if (this.onScreenStream) this.onScreenStream(userId, null);
+            }
           };
           // Check if any deferred audio belongs to this screen stream
           for (let i = deferredAudio.length - 1; i >= 0; i--) {

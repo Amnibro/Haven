@@ -1146,6 +1146,18 @@ _setupSocketListeners() {
     }
   });
 
+  // #5390 — sister event of channel-deleted: messages were wiped via the
+  // auto-clear self-destruct mode but the channel itself still exists.
+  // If the user is viewing the affected channel, refetch its messages by
+  // resetting the view. Otherwise nothing visual needs to change.
+  this.socket.on('channel-messages-cleared', (data) => {
+    if (!data || !data.code) return;
+    if (this.currentChannel === data.code) {
+      try { this.switchChannel(data.code); } catch (e) { console.warn('[auto-clear] re-switch failed:', e); }
+      this._showToast('🧹 Channel messages were auto-cleared', 'info');
+    }
+  });
+
   // ── Temporary voice channel events (#163) ──────────────
   this.socket.on('temp-channel-created', (channel) => {
     if (!this.channels.find(c => c.code === channel.code)) {

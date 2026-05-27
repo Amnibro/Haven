@@ -500,7 +500,11 @@ _updateChannelFunctionsPanel(ch) {
   const hasExpiry = !!ch.expires_at;
   if (hasExpiry) {
     const hoursLeft = Math.max(1, Math.round((new Date(ch.expires_at) - Date.now()) / 3600000));
-    this._setCfnBadge('self-destruct', true, `${hoursLeft}h`);
+    // #5390 — distinguish 'clear messages' mode from full channel deletion
+    // so admins can tell at a glance what the timer will do. The ↻ glyph
+    // hints that the clear timer rearms itself.
+    const isClear = ch.auto_delete_mode === 'clear';
+    this._setCfnBadge('self-destruct', true, isClear ? `${hoursLeft}h ↻` : `${hoursLeft}h`);
   } else {
     this._setCfnBadge('self-destruct', false, 'OFF');
   }

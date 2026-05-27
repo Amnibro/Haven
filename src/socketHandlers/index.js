@@ -214,7 +214,7 @@ function setupSocketHandlers(io, db) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours
         FROM channels c WHERE c.is_dm = 0
         UNION
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
@@ -222,7 +222,7 @@ function setupSocketHandlers(io, db) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours
         FROM channels c
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ? AND c.is_dm = 1
@@ -237,7 +237,7 @@ function setupSocketHandlers(io, db) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours
         FROM channels c
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ?
@@ -908,20 +908,44 @@ function setupSocketHandlers(io, db) {
   setInterval(() => {
     try {
       const expired = db.prepare(
-        "SELECT id, code FROM channels WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')"
+        "SELECT id, code, auto_delete_mode, auto_delete_interval_hours FROM channels WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')"
       ).all();
       for (const ch of expired) {
-        db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
-        db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
-        db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
-        db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
-        db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-        io.to(`channel:${ch.code}`).to(`voice:${ch.code}`).emit('channel-deleted', { code: ch.code, reason: 'expired' });
-        channelUsers.delete(ch.code);
-        voiceUsers.delete(ch.code);
-        activeMusic.delete(ch.code);
-        musicQueues.delete(ch.code);
-        console.log(`[Temporary] Channel "${ch.code}" expired and was deleted`);
+        if (ch.auto_delete_mode === 'clear') {
+          // #5390 — clear-messages mode: wipe message-related rows but keep
+          // the channel, its members, permissions, roles, and integrations
+          // intact. Then rearm the timer using the original interval so the
+          // sweep repeats (e.g. daily flood-channel reset) until an admin
+          // disables it. If for some reason the interval wasn't stored,
+          // fall back to disabling the timer to avoid getting stuck firing
+          // a zero-second loop.
+          db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
+          db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
+          db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
+          const interval = ch.auto_delete_interval_hours;
+          if (interval && interval > 0) {
+            const nextExpiry = new Date(Date.now() + interval * 3600000).toISOString();
+            db.prepare('UPDATE channels SET expires_at = ? WHERE id = ?').run(nextExpiry, ch.id);
+          } else {
+            db.prepare('UPDATE channels SET expires_at = NULL WHERE id = ?').run(ch.id);
+          }
+          io.to(`channel:${ch.code}`).emit('channel-messages-cleared', { code: ch.code, reason: 'auto-clear' });
+          // Refresh channel lists so the new expires_at propagates to clients.
+          try { broadcastChannelLists(); } catch {}
+          console.log(`[Temporary] Channel "${ch.code}" messages cleared (auto-clear mode)`);
+        } else {
+          db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
+          db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
+          db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
+          db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
+          db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+          io.to(`channel:${ch.code}`).to(`voice:${ch.code}`).emit('channel-deleted', { code: ch.code, reason: 'expired' });
+          channelUsers.delete(ch.code);
+          voiceUsers.delete(ch.code);
+          activeMusic.delete(ch.code);
+          musicQueues.delete(ch.code);
+          console.log(`[Temporary] Channel "${ch.code}" expired and was deleted`);
+        }
       }
     } catch (err) {
       console.error('Temporary channel cleanup error:', err);

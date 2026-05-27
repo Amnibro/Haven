@@ -999,7 +999,14 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
     const newVideoTrack = stream.getVideoTracks()[0] || null;
     const curStream = videoEl.srcObject;
     const curVideoTrack = curStream ? (curStream.getVideoTracks?.()[0] || null) : null;
-    const sameLiveTrack = newVideoTrack && curVideoTrack &&
+    // If the currently attached track is dead (readyState !== 'live'), we MUST
+    // reassign — even if the new track has the same id, the browser will keep
+    // rendering a black frame from the dead source. This happens on reshare
+    // when the sharer's stopScreenShare ends the track but the viewer's
+    // element still holds a reference to that dead MediaStreamTrack.
+    const curTrackIsDead = !!curVideoTrack && curVideoTrack.readyState !== 'live';
+    const sameLiveTrack = !curTrackIsDead &&
+      newVideoTrack && curVideoTrack &&
       newVideoTrack.id === curVideoTrack.id &&
       newVideoTrack.readyState === 'live' &&
       videoEl.videoWidth > 0;

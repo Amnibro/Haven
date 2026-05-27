@@ -665,6 +665,14 @@ function initDatabase() {
     { name: 'notification_type',  sql: "ALTER TABLE channels ADD COLUMN notification_type TEXT DEFAULT 'default'" },
     { name: 'voice_enabled',     sql: "ALTER TABLE channels ADD COLUMN voice_enabled INTEGER DEFAULT 1" },
     { name: 'text_enabled',      sql: "ALTER TABLE channels ADD COLUMN text_enabled INTEGER DEFAULT 1" },
+    // #5390 — extend the self-destruct timer with a "clear messages only"
+    // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
+    // whole channel) or 'clear' (wipe messages but keep channel, perms,
+    // roles, integrations). `auto_delete_interval_hours` stores the
+    // original interval so a 'clear' timer can rearm itself after firing
+    // (recurring sweep) instead of being a one-shot.
+    { name: 'auto_delete_mode',           sql: "ALTER TABLE channels ADD COLUMN auto_delete_mode TEXT DEFAULT 'delete'" },
+    { name: 'auto_delete_interval_hours', sql: "ALTER TABLE channels ADD COLUMN auto_delete_interval_hours INTEGER DEFAULT NULL" },
   ];
   for (const col of channelQolCols) {
     try { db.prepare(`SELECT ${col.name} FROM channels LIMIT 0`).get(); } catch { db.exec(col.sql); }
