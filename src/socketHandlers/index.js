@@ -1013,7 +1013,11 @@ function setupSocketHandlers(io, db) {
           if (roomSockets) {
             for (const sid of [...roomSockets]) {
               const s = io.sockets.sockets.get(sid);
-              if (s) { s.leave(oldRoom); s.join(newRoom); }
+              if (s) {
+                s.leave(oldRoom);
+                s.join(newRoom);
+                if (s.currentChannel === oldCode) s.currentChannel = newCode;
+              }
             }
           }
           if (channelUsers.has(oldCode)) { channelUsers.set(newCode, channelUsers.get(oldCode)); channelUsers.delete(oldCode); }

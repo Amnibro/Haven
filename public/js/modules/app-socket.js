@@ -1397,11 +1397,13 @@ _setupSocketListeners() {
   this.socket.on('channel-code-rotated', (data) => {
     const ch = this.channels.find(c => c.id === data.channelId);
     if (ch) {
+      const wasViewing = this.currentChannel === data.oldCode;
+      const wasInVoiceHere = !!(this.voice && this.voice.currentChannel === data.oldCode);
       ch.code = data.newCode;
       // Update display_code too (admins see real code, non-admins see masked)
       if (ch.display_code && ch.display_code !== '••••••••') ch.display_code = data.newCode;
       // Update currentChannel BEFORE re-rendering so the active highlight is correct
-      if (this.currentChannel === data.oldCode) {
+      if (wasViewing) {
         this.currentChannel = data.newCode;
       }
       // CRITICAL (#5347): if we're in voice on the rotated channel, the
@@ -1412,7 +1414,7 @@ _setupSocketListeners() {
       // updated), and we get the infinite "server says voice channel is
       // gone" loop. Migrate every voice-side code reference too.
       if (this.voice) {
-        if (this.voice.currentChannel === data.oldCode) {
+        if (wasInVoiceHere) {
           this.voice.currentChannel = data.newCode;
           console.log(`[Voice] channel code rotated mid-call: ${data.oldCode} -> ${data.newCode}`);
         }
@@ -1425,6 +1427,39 @@ _setupSocketListeners() {
       if (this.currentChannel === data.newCode) {
         const codeDisplay = document.getElementById('channel-code-display');
         if (codeDisplay) codeDisplay.textContent = ch.display_code || data.newCode;
+      }
+      // If the code changed while we were actively viewing this channel,
+      // any in-flight old-code history/presence replies are now ignored by
+      // the exact channelCode guards in the listeners below. Re-issue the
+      // active-channel fetches immediately under the new code so the chat
+      // pane and member sidebar don't sit blank until the user manually
+      // switches away and back.
+      if (wasViewing) {
+        this._oldestMsgId = null;
+        this._noMoreHistory = false;
+        this._loadingHistory = false;
+        this._historyBefore = null;
+        this._newestMsgId = null;
+        this._noMoreFuture = true;
+        this._loadingFuture = false;
+        this._historyAfter = null;
+
+        this.socket.emit('enter-channel', { code: data.newCode });
+        this.socket.emit('get-messages', { code: data.newCode });
+        this.socket.emit('get-channel-members', { code: data.newCode });
+        this.socket.emit('request-online-users', { code: data.newCode });
+        this.socket.emit('request-voice-users', { code: data.newCode });
+
+        if (this._switchChannelSafetyTimer) clearTimeout(this._switchChannelSafetyTimer);
+        this._pendingChannelHistoryCode = data.newCode;
+        this._switchChannelSafetyTimer = setTimeout(() => {
+          if (this._pendingChannelHistoryCode === data.newCode && this.currentChannel === data.newCode) {
+            console.warn(`[channel-code-rotated] no message-history for ${data.newCode} within 5s - forcing resync`);
+            this._forceFullResync?.('channel-code-rotated-timeout');
+          }
+        }, 5000);
+      } else if (wasInVoiceHere) {
+        this.socket.emit('request-voice-users', { code: data.newCode });
       }
       if (this.user.isAdmin) {
         this._showToast(t('toasts.channel_code_rotated', { name: ch.name }), 'info');

@@ -343,7 +343,11 @@ module.exports = function register(socket, ctx) {
           if (roomSockets) {
             for (const sid of [...roomSockets]) {
               const s = io.sockets.sockets.get(sid);
-              if (s) { s.leave(oldRoom); s.join(newRoom); }
+              if (s) {
+                s.leave(oldRoom);
+                s.join(newRoom);
+                if (s.currentChannel === code) s.currentChannel = newCode;
+              }
             }
           }
           if (channelUsers.has(code)) {
@@ -1155,7 +1159,11 @@ module.exports = function register(socket, ctx) {
     if (roomSockets) {
       for (const sid of [...roomSockets]) {
         const s = io.sockets.sockets.get(sid);
-        if (s) { s.leave(oldRoom); s.join(newRoom); }
+        if (s) {
+          s.leave(oldRoom);
+          s.join(newRoom);
+          if (s.currentChannel === oldCode) s.currentChannel = newCode;
+        }
       }
     }
     if (channelUsers.has(oldCode)) {
