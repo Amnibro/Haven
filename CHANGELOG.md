@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.20.0] — 2026-05-31
+
+### Added
+- **IP-level bans for moderators (new feature).** Adds a per-server IP ban list, gated on a new `ban_ip` role permission (admins always have it). Three ways to use it:
+  - The `Ban User` modal now shows an "Also ban recent IP address(es)" checkbox when the moderator has the `ban_ip` permission. When checked, up to the 5 most recently observed IPs for that user are added to the ban list as a side effect of the user ban.
+  - A new "Banned IPs" entry under `Settings → Admin → Members` opens a manage modal where any qualifying moderator can directly ban or unban an arbitrary IP address with a free-form reason.
+  - The HTTP layer (Express) and Socket.IO layer both consult the ban list before routing a request — the HTTP path uses a 30-second cache that is invalidated whenever the ban list changes. Live sockets coming from a freshly-banned IP are disconnected immediately.
+  - Two new tables back this: `ip_bans (ip PRIMARY KEY, banned_by, reason, created_at)` and `user_ips (user_id, ip, last_seen)`, the latter populated by the socket auth middleware and capped to 5 most-recent distinct IPs per user.
+  - Caveats: exact-string match only (no CIDR / IPv6 /64 normalization in v1), and IP bans can collateral-affect users behind shared NAT, CGNAT, or large institutional networks — moderators should prefer user-ban + scrub for most cases and reserve IP ban for repeat ban-evaders.
+
+---
+
 ## [3.19.1] — 2026-05-31
 
 ### Fixed

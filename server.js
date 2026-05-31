@@ -87,6 +87,35 @@ const _trustProxy = process.env.TRUST_PROXY !== undefined
   : 1;
 app.set('trust proxy', _trustProxy);
 
+// ── IP ban gate (v3.20.0) ─────────────────────────────────
+// Run before anything else (parsers, helmet, static) so banned addresses
+// can't consume server resources. Cached for 30s so we aren't hitting SQLite
+// on every static asset request from a normal page load. Cache is invalidated
+// from the moderation socket handlers whenever the table changes.
+let _ipBanCache = { set: new Set(), expires: 0 };
+function _refreshIpBanCache() {
+  try {
+    const { getDb } = require('./src/database');
+    const rows = getDb().prepare('SELECT ip FROM ip_bans').all();
+    _ipBanCache = { set: new Set(rows.map(r => r.ip)), expires: Date.now() + 30000 };
+  } catch { _ipBanCache = { set: new Set(), expires: Date.now() + 30000 }; }
+}
+function invalidateIpBanCache() { _ipBanCache.expires = 0; }
+function isIpBanned(ip) {
+  if (!ip) return false;
+  if (Date.now() > _ipBanCache.expires) _refreshIpBanCache();
+  return _ipBanCache.set.has(ip);
+}
+app.use((req, res, next) => {
+  if (isIpBanned(req.ip)) {
+    return res.status(403).type('text/plain').send('Your IP has been banned from this server.');
+  }
+  next();
+});
+// Expose the invalidator on the app so socket handlers can poke it.
+app.set('invalidateIpBanCache', invalidateIpBanCache);
+app.set('isIpBanned', isIpBanned);
+
 // ── Helper: verify admin from DB (don't trust JWT claims alone) ─────
 // JWT isAdmin may be stale if admin was demoted since token was issued.
 function verifyAdminFromDb(user) {
@@ -3535,7 +3564,7 @@ if (process.env.ADMIN_RESET_PASSWORD) {
 
 initFcm(DATA_DIR);
 app.set('io', io);   // expose to auth routes (session invalidation on password change)
-setupSocketHandlers(io, db);
+setupSocketHandlers(io, db, { invalidateIpBanCache });
 registerProcessCleanup();
 
 // ── Auto-cleanup interval (runs every 15 minutes) ───────

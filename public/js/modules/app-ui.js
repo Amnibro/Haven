@@ -2902,7 +2902,9 @@ _setupUI() {
       const purgeInput = document.getElementById('admin-purge-message');
       const purgeMessages = !!(purgeCheckbox && purgeCheckbox.checked);
       const purgeMessage = purgeInput ? purgeInput.value.trim() : '';
-      this.socket.emit('ban-user', { userId, reason, scrubMessages, purgeMessages, purgeMessage });
+      const banIpCheckbox = document.getElementById('admin-ban-ip-checkbox');
+      const banIp = !!(banIpCheckbox && banIpCheckbox.checked);
+      this.socket.emit('ban-user', { userId, reason, scrubMessages, purgeMessages, purgeMessage, banIp });
     } else if (action === 'mute') {
       this.socket.emit('mute-user', { userId, reason, duration });
     } else if (action === 'delete-user') {
@@ -3499,6 +3501,42 @@ _setupUI() {
   document.getElementById('bans-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
+
+  // ── Banned IPs modal (v3.20.0) ─────────────────────
+  const viewIpBansBtn = document.getElementById('view-ip-bans-btn');
+  if (viewIpBansBtn) {
+    viewIpBansBtn.addEventListener('click', () => {
+      this.socket.emit('get-ip-bans');
+      document.getElementById('ip-bans-modal').style.display = 'flex';
+    });
+  }
+  const closeIpBansBtn = document.getElementById('close-ip-bans-btn');
+  if (closeIpBansBtn) {
+    closeIpBansBtn.addEventListener('click', () => {
+      document.getElementById('ip-bans-modal').style.display = 'none';
+    });
+  }
+  const ipBansModal = document.getElementById('ip-bans-modal');
+  if (ipBansModal) {
+    ipBansModal.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+    });
+  }
+  const ipBanAddBtn = document.getElementById('ip-ban-add-btn');
+  if (ipBanAddBtn) {
+    ipBanAddBtn.addEventListener('click', () => {
+      const ipEl = document.getElementById('ip-ban-input');
+      const reasonEl = document.getElementById('ip-ban-reason-input');
+      const ip = (ipEl && ipEl.value || '').trim();
+      const reason = (reasonEl && reasonEl.value || '').trim();
+      if (!ip) return;
+      this.socket.emit('ban-ip', { ip, reason });
+      if (ipEl) ipEl.value = '';
+      if (reasonEl) reasonEl.value = '';
+      // Server refreshes the list after unban; for direct ban, refresh manually.
+      setTimeout(() => this.socket.emit('get-ip-bans'), 150);
+    });
+  }
 
   // View deleted users button
   document.getElementById('view-deleted-users-btn').addEventListener('click', () => {

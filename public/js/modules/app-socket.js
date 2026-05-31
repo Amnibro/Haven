@@ -1832,6 +1832,10 @@ _setupSocketListeners() {
     this._renderBanList(data);
   });
 
+  this.socket.on('ip-ban-list', (data) => {
+    this._renderIpBanList(data);
+  });
+
   this.socket.on('deleted-users-list', (data) => {
     this._renderDeletedUsersList(data);
   });

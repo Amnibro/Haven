@@ -3183,6 +3183,17 @@ _showAdminActionModal(action, userId, username) {
 
   confirmBtn.textContent = labels[action] || t('modals.common.confirm');
 
+  // IP-ban option: visible only for the ban action, and only when the current
+  // user has either admin or the ban_ip permission. Default to unchecked.
+  const banIpGroup = document.getElementById('admin-ban-ip-group');
+  const banIpCheckbox = document.getElementById('admin-ban-ip-checkbox');
+  if (banIpGroup) {
+    const canBanIp = !!(this.user && this.user.isAdmin) ||
+                     !!(this.user && Array.isArray(this.user.permissions) && this.user.permissions.includes('ban_ip'));
+    banIpGroup.style.display = (action === 'ban' && canBanIp) ? 'block' : 'none';
+    if (banIpCheckbox) banIpCheckbox.checked = false;
+  }
+
   document.getElementById('admin-action-reason').value = '';
   document.getElementById('admin-action-duration').value = '10';
   document.getElementById('admin-scrub-scope').value = 'channel';

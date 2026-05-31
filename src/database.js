@@ -114,6 +114,30 @@ function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- IP-level bans (v3.20.0). Independent of bans (user_id) so an admin can
+    -- ban an address without tying it to a specific user row, and a user-ban
+    -- with the "also ban IP" checkbox writes into both tables. Connections
+    -- from these IPs are rejected before auth runs.
+    CREATE TABLE IF NOT EXISTS ip_bans (
+      ip          TEXT PRIMARY KEY,
+      banned_by   INTEGER REFERENCES users(id),
+      reason      TEXT DEFAULT '',
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Recent IPs observed per user. Populated by the socket auth middleware
+    -- after a successful token verify. Used so the "Also ban IP" checkbox
+    -- on the Ban modal can look up the right address(es) to ban without
+    -- the moderator having to type one in. Capped to the last 5 distinct
+    -- IPs per user via a pruning step on insert.
+    CREATE TABLE IF NOT EXISTS user_ips (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      ip         TEXT    NOT NULL,
+      last_seen  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, ip)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_ips_last_seen ON user_ips(user_id, last_seen);
+
     CREATE TABLE IF NOT EXISTS server_settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL

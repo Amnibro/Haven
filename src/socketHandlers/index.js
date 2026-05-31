@@ -28,7 +28,8 @@ const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 // ══════════════════════════════════════════════════════════════
 // setupSocketHandlers — called once from server.js
 // ══════════════════════════════════════════════════════════════
-function setupSocketHandlers(io, db) {
+function setupSocketHandlers(io, db, opts = {}) {
+  const invalidateIpBanCache = (typeof opts.invalidateIpBanCache === 'function') ? opts.invalidateIpBanCache : () => {};
 
   // ── Permission helpers (shared across all connections) ───
   const {
@@ -1083,6 +1084,20 @@ function setupSocketHandlers(io, db) {
     next();
   });
 
+  // IP ban gate — block banned addresses before token verification so they
+  // never see the auth handshake response. Mirrors the HTTP middleware in
+  // server.js. (v3.20.0)
+  io.use((socket, next) => {
+    try {
+      const ip = socket.handshake.address;
+      if (ip) {
+        const row = db.prepare('SELECT 1 FROM ip_bans WHERE ip = ? LIMIT 1').get(ip);
+        if (row) return next(new Error('Your IP has been banned from this server'));
+      }
+    } catch { /* table may not exist on very old DBs — fail open */ }
+    next();
+  });
+
   // Auth middleware
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
@@ -1141,6 +1156,21 @@ function setupSocketHandlers(io, db) {
       socket.user.roles = getUserRoles(user.id);
       socket.user.effectiveLevel = getUserEffectiveLevel(user.id);
     } catch { socket.user.roles = []; socket.user.effectiveLevel = socket.user.isAdmin ? 100 : 0; }
+
+    // Record IP for future "ban IP" lookups. Kept to the 5 most-recent
+    // distinct IPs per user — older entries are pruned to bound storage.
+    try {
+      const ip = socket.handshake.address;
+      if (ip) {
+        db.prepare(`INSERT INTO user_ips (user_id, ip, last_seen) VALUES (?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(user_id, ip) DO UPDATE SET last_seen = CURRENT_TIMESTAMP`)
+          .run(user.id, ip);
+        // Prune to last 5 IPs for this user
+        db.prepare(`DELETE FROM user_ips WHERE user_id = ? AND ip NOT IN (
+                      SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 5
+                    )`).run(user.id, user.id);
+      }
+    } catch { /* table may not exist on very old DBs */ }
 
     next();
   });
@@ -1363,6 +1393,8 @@ function setupSocketHandlers(io, db) {
       transferAdminRef,
       // Audit log
       logAudit,
+      // IP-ban cache invalidator (server.js HTTP-side cache)
+      invalidateIpBanCache,
       // Constants
       HAVEN_VERSION, ADMIN_USERNAME,
       DATA_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR,

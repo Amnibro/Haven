@@ -5,9 +5,11 @@ const { utcStamp, isInt } = require('./helpers');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
-          emitOnlineUsers, broadcastVoiceUsers, getEnrichedChannels, logAudit } = ctx;
+          emitOnlineUsers, broadcastVoiceUsers, getEnrichedChannels, logAudit,
+          invalidateIpBanCache } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
+  const _invalidateIpCache = (typeof invalidateIpBanCache === 'function') ? invalidateIpBanCache : () => {};
 
   // Helper: run an UPDATE only if the target table exists (avoids crash on
   // tables that haven't been created yet, e.g. uploads, channel_emojis).
@@ -196,7 +198,41 @@ module.exports = function register(socket, ctx) {
     socket.emit('error-msg', `Banned ${targetUser.username}`);
     _audit({ actor: socket.user, action: 'user_ban',
       target_type: 'user', target_id: data.userId, target_name: targetUser.username,
-      details: { reason, scrubMessages: !!data.scrubMessages, purgeMessages: !!data.purgeMessages } });
+      details: { reason, scrubMessages: !!data.scrubMessages, purgeMessages: !!data.purgeMessages, banIp: !!data.banIp } });
+
+    // Optional: also ban the user's recently-observed IP addresses. Requires
+    // the separate `ban_ip` permission (so a moderator can ban accounts but
+    // not addresses unless explicitly granted). Admins always have it.
+    if (data.banIp) {
+      const canBanIp = socket.user.isAdmin || userHasPermission(socket.user.id, 'ban_ip');
+      if (!canBanIp) {
+        socket.emit('error-msg', 'IP ban skipped — you don\'t have ban_ip permission');
+      } else {
+        try {
+          const ipRows = db.prepare('SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 5').all(data.userId);
+          const ipReason = reason ? `[Linked to ${targetUser.username}] ${reason}` : `Linked to ${targetUser.username}`;
+          const stmt = db.prepare('INSERT OR REPLACE INTO ip_bans (ip, banned_by, reason) VALUES (?, ?, ?)');
+          let count = 0;
+          for (const r of ipRows) {
+            if (!r.ip) continue;
+            stmt.run(r.ip, socket.user.id, ipReason.slice(0, 200));
+            count++;
+          }
+          if (count > 0) {
+            _invalidateIpCache();
+            socket.emit('error-msg', `Also banned ${count} IP${count === 1 ? '' : 's'} linked to ${targetUser.username}`);
+            _audit({ actor: socket.user, action: 'ip_ban_bulk',
+              target_type: 'user', target_id: data.userId, target_name: targetUser.username,
+              details: { count, reason: ipReason } });
+          } else {
+            socket.emit('error-msg', `No recorded IPs to ban for ${targetUser.username}`);
+          }
+        } catch (err) {
+          console.error('Bulk IP ban error:', err);
+          socket.emit('error-msg', 'Failed to ban linked IPs');
+        }
+      }
+    }
   });
 
   // ── Unban user ──────────────────────────────────────────
@@ -523,5 +559,85 @@ module.exports = function register(socket, ctx) {
     `).all();
     rows.forEach(r => { r.deleted_at = utcStamp(r.deleted_at); });
     socket.emit('deleted-users-list', rows);
+  });
+
+  // ── IP bans (v3.20.0) ───────────────────────────────────
+  // Gated on the separate `ban_ip` permission (admins always have it).
+  function _canBanIp() {
+    return socket.user.isAdmin || userHasPermission(socket.user.id, 'ban_ip');
+  }
+
+  // Very small IP sanity check. Accepts IPv4 and IPv6 (loose). We don't try
+  // to normalize — exact-string match is enough for v1; CIDR/v6-/64 ranges
+  // are a future enhancement.
+  function _looksLikeIp(s) {
+    if (typeof s !== 'string') return false;
+    s = s.trim();
+    if (!s || s.length > 64) return false;
+    // IPv4
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(s)) {
+      return s.split('.').every(o => { const n = Number(o); return n >= 0 && n <= 255; });
+    }
+    // IPv6 (loose — accept anything with a colon and only hex/colon/dot chars)
+    if (s.includes(':') && /^[0-9a-fA-F:.]+$/.test(s)) return true;
+    return false;
+  }
+
+  socket.on('ban-ip', (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (!_canBanIp()) return socket.emit('error-msg', 'You don\'t have permission to ban IPs');
+    const ip = (data.ip || '').trim();
+    if (!_looksLikeIp(ip)) return socket.emit('error-msg', 'Invalid IP address');
+    const reason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : '';
+    try {
+      db.prepare('INSERT OR REPLACE INTO ip_bans (ip, banned_by, reason) VALUES (?, ?, ?)').run(ip, socket.user.id, reason);
+      _invalidateIpCache();
+      // Disconnect any live sockets coming from that IP.
+      for (const [, s] of io.sockets.sockets) {
+        try { if (s.handshake && s.handshake.address === ip) { s.emit('banned', { reason }); s.disconnect(true); } } catch {}
+      }
+      socket.emit('error-msg', `Banned IP ${ip}`);
+      _audit({ actor: socket.user, action: 'ip_ban',
+        target_type: 'ip', target_id: null, target_name: ip,
+        details: { reason } });
+    } catch (err) {
+      console.error('IP ban error:', err);
+      socket.emit('error-msg', 'Failed to ban IP');
+    }
+  });
+
+  socket.on('unban-ip', (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (!_canBanIp()) return socket.emit('error-msg', 'You don\'t have permission to unban IPs');
+    const ip = (data.ip || '').trim();
+    if (!ip) return;
+    try {
+      const info = db.prepare('DELETE FROM ip_bans WHERE ip = ?').run(ip);
+      _invalidateIpCache();
+      if (info.changes > 0) {
+        socket.emit('error-msg', `Unbanned IP ${ip}`);
+        _audit({ actor: socket.user, action: 'ip_unban',
+          target_type: 'ip', target_id: null, target_name: ip });
+      }
+      // Re-emit refreshed list
+      const rows = db.prepare('SELECT b.ip, b.reason, b.created_at, COALESCE(u.display_name, u.username) as banned_by_name FROM ip_bans b LEFT JOIN users u ON b.banned_by = u.id ORDER BY b.created_at DESC').all();
+      rows.forEach(r => { r.created_at = utcStamp(r.created_at); });
+      socket.emit('ip-ban-list', rows);
+    } catch (err) {
+      console.error('IP unban error:', err);
+      socket.emit('error-msg', 'Failed to unban IP');
+    }
+  });
+
+  socket.on('get-ip-bans', () => {
+    if (!_canBanIp()) return socket.emit('ip-ban-list', []);
+    const rows = db.prepare(`
+      SELECT b.ip, b.reason, b.created_at,
+             COALESCE(u.display_name, u.username) as banned_by_name
+      FROM ip_bans b LEFT JOIN users u ON b.banned_by = u.id
+      ORDER BY b.created_at DESC
+    `).all();
+    rows.forEach(r => { r.created_at = utcStamp(r.created_at); });
+    socket.emit('ip-ban-list', rows);
   });
 };

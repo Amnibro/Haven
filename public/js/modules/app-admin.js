@@ -1226,6 +1226,33 @@ _renderBanList(bans) {
   });
 },
 
+_renderIpBanList(bans) {
+  const list = document.getElementById('ip-bans-list');
+  if (!list) return;
+  if (!Array.isArray(bans) || bans.length === 0) {
+    list.innerHTML = `<p class="muted-text">${t('settings.admin.no_banned_ips') || 'No banned IPs.'}</p>`;
+    return;
+  }
+  list.innerHTML = bans.map(b => `
+    <div class="ban-item">
+      <div class="ban-info">
+        <strong>${this._escapeHtml(b.ip)}</strong>
+        <span class="ban-reason">${b.reason ? this._escapeHtml(b.reason) : (t('settings.admin.no_reason') || 'No reason')}</span>
+        <span class="ban-date">${new Date(b.created_at).toLocaleDateString()}${b.banned_by_name ? ` — ${this._escapeHtml(b.banned_by_name)}` : ''}</span>
+      </div>
+      <div class="ban-actions">
+        <button class="btn-sm btn-unban" data-ip="${this._escapeHtml(b.ip)}">${t('settings.admin.unban_btn') || 'Unban'}</button>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.btn-unban').forEach(btn => {
+    btn.addEventListener('click', () => {
+      this.socket.emit('unban-ip', { ip: btn.dataset.ip });
+    });
+  });
+},
+
 _renderDeletedUsersList(entries) {
   const list = document.getElementById('deleted-users-list');
   if (!entries || entries.length === 0) {

@@ -1069,6 +1069,13 @@
         </div>
         <small class="settings-hint" data-i18n="modals.admin_action.purge_hint">Replaces the user's messages with placeholder text instead of deleting them. Default: "User banned."</small>
       </div>
+      <div class="form-group" id="admin-ban-ip-group" style="display:none">
+        <label class="toggle-row">
+          <span data-i18n="modals.admin_action.ban_ip_label">Also ban recent IP address(es)</span>
+          <input type="checkbox" id="admin-ban-ip-checkbox">
+        </label>
+        <small class="settings-hint" data-i18n="modals.admin_action.ban_ip_hint">Bans up to the 5 most recently seen IPs for this user. Warning: an IP ban may affect other users on the same network (CGNAT, VPN, school/work). Requires the "ban_ip" permission.</small>
+      </div>
       <div class="modal-actions">
         <button class="btn-sm" id="cancel-admin-action-btn" data-i18n="modals.common.cancel">Cancel</button>
         <button class="btn-sm btn-accent btn-danger-fill" id="confirm-admin-action-btn" data-i18n="modals.common.confirm">Confirm</button>
@@ -1903,6 +1910,7 @@
           </label>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
             <button class="btn-sm btn-accent" id="view-bans-btn">📋 <span data-i18n="settings.admin.view_bans_btn">View Bans</span></button>
+            <button class="btn-sm btn-accent" id="view-ip-bans-btn">🚫 <span data-i18n="settings.admin.view_ip_bans_btn">View IP Bans</span></button>
             <button class="btn-sm btn-accent" id="view-deleted-users-btn">🗑️ <span data-i18n="settings.admin.view_deleted_btn">View Deleted Users</span></button>
             <button class="btn-sm btn-accent" id="view-all-members-btn">👥 <span data-i18n="settings.admin.view_all_members_btn">View All Members</span></button>
           </div>
@@ -2672,6 +2680,25 @@
       <div class="modal-actions">
         <button class="btn-sm" id="close-bans-btn" data-i18n="modals.common.close">Close</button>
       </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="ip-bans-modal" style="display:none">
+    <div class="modal modal-wide">
+      <h3>🚫 <span data-i18n="modals.ip_bans.title">Banned IPs</span></h3>
+      <div class="modal-flex-body">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <input type="text" id="ip-ban-input" data-i18n-placeholder="modals.ip_bans.ip_placeholder" placeholder="IP address (e.g. 203.0.113.42)" class="settings-text-input" style="flex:1;min-width:160px" maxlength="64">
+          <input type="text" id="ip-ban-reason-input" data-i18n-placeholder="modals.ip_bans.reason_placeholder" placeholder="Reason (optional)" class="settings-text-input" style="flex:1;min-width:160px" maxlength="200">
+          <button class="btn-sm btn-accent btn-danger-fill" id="ip-ban-add-btn" data-i18n="modals.ip_bans.add_btn">Ban IP</button>
+        </div>
+        <div id="ip-bans-list" class="bans-list modal-grow" style="overflow:auto">
+          <p class="muted-text" data-i18n="modals.common.loading">Loading...</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" id="close-ip-bans-btn" data-i18n="modals.common.close">Close</button>
+        </div>
       </div>
     </div>
   </div>
