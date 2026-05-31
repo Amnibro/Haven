@@ -1561,6 +1561,12 @@ _showBotDetail(botId) {
       <label class="settings-label">🔑 Callback Secret <span style="font-size:10px;color:var(--text-muted)">(optional — used to sign payloads via X-Haven-Signature)</span></label>
       <input type="text" id="bot-detail-callback-secret" value="${this._escapeHtml(wh.callback_secret || '')}" placeholder="my-secret-key" class="settings-text-input" style="width:100%;margin-bottom:12px">
 
+      <label class="settings-label">🛡️ Moderation <span style="font-size:10px;color:var(--text-muted)">(admin only — let this bot kick / ban / mute users via REST API)</span></label>
+      <label class="toggle-row" style="margin-bottom:12px">
+        <input type="checkbox" id="bot-detail-can-moderate" ${wh.can_moderate ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
+        <span>Allow this bot to perform moderation actions</span>
+      </label>
+
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn-sm btn-accent" id="bot-detail-save" style="flex:1">💾 ${t('modals.bot_mgmt.save_btn')}</button>
         <button class="btn-sm btn-danger" id="bot-detail-delete">🗑️ ${t('modals.bot_mgmt.delete_btn')}</button>
@@ -1586,7 +1592,10 @@ _showBotDetail(botId) {
     const callbackUrl = panel.querySelector('#bot-detail-callback-url').value.trim();
     const callbackSecret = panel.querySelector('#bot-detail-callback-secret').value.trim();
     if (!name) return this._showToast('Name is required', 'error');
-    this.socket.emit('update-webhook', { id: botId, name, channel_id: channelId, callback_url: callbackUrl, callback_secret: callbackSecret });
+    const payload = { id: botId, name, channel_id: channelId, callback_url: callbackUrl, callback_secret: callbackSecret };
+    const modBox = panel.querySelector('#bot-detail-can-moderate');
+    if (modBox && !modBox.disabled) payload.can_moderate = modBox.checked ? 1 : 0;
+    this.socket.emit('update-webhook', payload);
   });
   panel.querySelector('#bot-detail-toggle').addEventListener('click', () => {
     this.socket.emit('toggle-webhook', { id: botId });

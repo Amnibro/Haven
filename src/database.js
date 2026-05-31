@@ -667,6 +667,9 @@ function initDatabase() {
     { name: 'last_delivery_at',     sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_at DATETIME DEFAULT NULL" },
     { name: 'last_delivery_error',  sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_error TEXT DEFAULT NULL" },
     { name: 'failure_count',        sql: "ALTER TABLE webhooks ADD COLUMN failure_count INTEGER DEFAULT 0" },
+    // 3.18.0 — opt-in moderation actions (kick/ban/mute) for bot webhooks.
+    // Defaults to 0 so existing bots cannot suddenly moderate. Per #5397.
+    { name: 'can_moderate',         sql: "ALTER TABLE webhooks ADD COLUMN can_moderate INTEGER DEFAULT 0" },
   ];
   for (const col of webhookCallbackCols) {
     try { db.prepare(`SELECT ${col.name} FROM webhooks LIMIT 0`).get(); } catch { db.exec(col.sql); }

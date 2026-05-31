@@ -328,7 +328,7 @@ module.exports = function register(socket, ctx) {
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count,
+               w.last_delivery_error, w.failure_count, w.can_moderate,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -351,7 +351,7 @@ module.exports = function register(socket, ctx) {
       if (!channel) return;
 
       const webhooks = db.prepare(
-        'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, callback_url, callback_secret, subscribed_events, last_delivery_status, last_delivery_at, last_delivery_error, failure_count FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
+        'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, callback_url, callback_secret, subscribed_events, last_delivery_status, last_delivery_at, last_delivery_error, failure_count, can_moderate FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
       ).all(channel.id);
       socket.emit('webhooks-list', { channelCode, webhooks });
     } else {
@@ -360,7 +360,7 @@ module.exports = function register(socket, ctx) {
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count,
+               w.last_delivery_error, w.failure_count, w.can_moderate,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -389,7 +389,7 @@ module.exports = function register(socket, ctx) {
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count,
+               w.last_delivery_error, w.failure_count, w.can_moderate,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -421,7 +421,7 @@ module.exports = function register(socket, ctx) {
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count,
+               w.last_delivery_error, w.failure_count, w.can_moderate,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -480,12 +480,21 @@ module.exports = function register(socket, ctx) {
       }
       db.prepare('UPDATE webhooks SET subscribed_events = ? WHERE id = ?').run(value, webhookId);
     }
+    // 3.18.0 — moderation opt-in. Only admins can grant it (manage_webhooks
+    // alone is not enough, since it would let mods escalate their own bots).
+    if (data.can_moderate !== undefined) {
+      if (!socket.user.isAdmin) {
+        return socket.emit('error-msg', 'Only admins can change a bot\'s moderation permission');
+      }
+      const flag = data.can_moderate ? 1 : 0;
+      db.prepare('UPDATE webhooks SET can_moderate = ? WHERE id = ?').run(flag, webhookId);
+    }
 
     const webhooks = db.prepare(`
       SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
              w.callback_url, w.callback_secret,
              w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-             w.last_delivery_error, w.failure_count,
+             w.last_delivery_error, w.failure_count, w.can_moderate,
              c.name as channel_name, c.code as channel_code
       FROM webhooks w JOIN channels c ON w.channel_id = c.id
       ORDER BY w.created_at DESC
