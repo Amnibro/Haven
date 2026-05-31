@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.18.3] — 2026-05-31
+
+### Fixed
+- **Shortcut-recorder toast now tells you what's actually wrong (#184).** Previously every failed PTT/mute/deafen bind showed the same vague "may already be in use, or the desktop app version doesn't support this binding type yet" message regardless of cause. The recorder now reads the structured outcome from the desktop IPC (`{ ok, reason }`, Haven Desktop 1.4.20+) and shows a specific toast: "that combo is already in use" for conflicts, or "the native input hook (uiohook) isn't loaded — launch from a terminal to see install steps, or pick a regular key combo" for Mouse4/5 + bare-modifier binds when `uiohook-napi` failed to load. Falls back to the old toast on older Desktop builds.
+
+---
+
 ## [3.18.2] — 2026-05-31
 
 ### Fixed

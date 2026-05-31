@@ -421,8 +421,33 @@ async _setupDesktopShortcuts() {
         recordBtn.classList.remove('recording');
         recordBtn.textContent = 'Record';
         keyEl.classList.remove('recording-label');
+        // The desktop IPC handler reports per-shortcut outcome:
+        //   new shape: { mute: { ok, reason, accel } }   (Desktop 1.4.20+)
+        //   old shape: { mute: true|false }              (Desktop ≤ 1.4.19)
+        // Plus the call itself can throw if the IPC bridge isn't wired up
+        // (e.g. running in a browser, or a desktop version too old to
+        // even have the shortcuts API).
         try {
-          await window.havenDesktop.shortcuts.setConfig({ [action]: accel });
+          const res = await window.havenDesktop.shortcuts.setConfig({ [action]: accel });
+          const outcome = res && typeof res === 'object' ? res[action] : undefined;
+          const ok = (typeof outcome === 'object')
+            ? !!outcome.ok
+            : (outcome !== false);                // boolean (old shape) or undefined → trust it
+          if (!ok) {
+            await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch(() => {});
+            keyEl.textContent = formatAccel(config[action] || '');
+            const reason = (typeof outcome === 'object' && outcome.reason) || '';
+            let msg;
+            if (reason === 'uiohook-unavailable') {
+              msg = `Couldn't activate "${accel}" — that bind needs the native input hook (uiohook), which isn't loaded on this machine. Launch Haven from a terminal to see install steps, or pick a regular key combo (e.g. Ctrl+Shift+P) instead.`;
+            } else if (reason === 'conflict') {
+              msg = `Couldn't register "${accel}" — that combo is already in use by Windows or another app. Try a different one.`;
+            } else {
+              msg = 'Failed to register shortcut — it may already be in use, or the desktop app version doesn\'t support this binding type yet.';
+            }
+            this._showToast?.(msg, 'error');
+            return;
+          }
           config[action] = accel;
           keyEl.textContent = formatAccel(accel);
         } catch (err) {
