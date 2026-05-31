@@ -44,7 +44,8 @@ module.exports = function register(socket, ctx) {
       'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
       'session_duration_days', 'max_message_chars',
       'default_join_channels', 'registration_token_enabled', // (#5344, #5345), registration_token has its own generate/clear handlers
-      'admin_password_reset_enabled' // (#5300) admin password reset feature gate
+      'admin_password_reset_enabled', // (#5300) admin password reset feature gate
+      'guests_enabled', 'guest_channels' // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
     ];
     if (!allowedKeys.includes(key)) return;
 
@@ -117,6 +118,19 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'registration_token_enabled') {
       if (!['true', 'false'].includes(value)) return;
+    }
+    if (key === 'guests_enabled') {
+      if (!['true', 'false'].includes(value)) return;
+    }
+    if (key === 'guest_channels') {
+      // (#5381) CSV of channel ids guests can see/post in. Empty string =
+      // no channels (guests can log in but have nowhere to go). DMs are
+      // never auto-joined — checked again at auto-join time.
+      if (value !== '') {
+        const parts = value.split(',').map(s => s.trim());
+        if (!parts.every(p => /^\d+$/.test(p) && parseInt(p) > 0)) return;
+        if (parts.length > 500) return;
+      }
     }
     if (key === 'default_join_channels') {
       // (#5345) JSON array of channel IDs (integers). Empty string = "all public".

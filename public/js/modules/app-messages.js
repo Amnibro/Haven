@@ -860,6 +860,12 @@ _createMessageEl(msg, prevMsg) {
     ? `<span class="persona-msg-badge" title="${this._escapeHtml((window.t && t('app.messages.via_persona', { name: msg.real_username || '' })) || `Sent via ${msg.real_username || 'real account'}`)}">persona</span>`
     : '';
 
+  // (#5381) Guest badge — shown next to the username when the author is
+  // an ephemeral guest account.
+  const guestBadge = (onlineUser && onlineUser.isGuest)
+    ? '<span class="guest-msg-badge" style="background:rgba(136,136,136,0.18);color:#aaa;font-size:0.62rem;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:0.04em" title="Temporary guest account">GUEST</span>'
+    : '';
+
   const el = document.createElement('div');
   el.className = 'message'
     + (needsStatusSlot ? ' message-has-status' : '')
@@ -904,6 +910,7 @@ _createMessageEl(msg, prevMsg) {
           ${msgRoleIconAfter}
           ${botBadge}
           ${personaBadge}
+          ${guestBadge}
           ${msgRoleBadge}
           <span class="message-time">${this._formatTime(msg.created_at)}</span>
           ${pinnedTag}

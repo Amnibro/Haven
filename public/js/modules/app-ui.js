@@ -3953,6 +3953,56 @@ _setupUI() {
       : `Invite joiners will land in ${picked.length} channel${picked.length === 1 ? '' : 's'}`,
       'success');
   });
+
+  // ── Guest channel whitelist (#5381) ────────────────
+  const _renderGuestChannels = () => {
+    const host = document.getElementById('guest-channels-list');
+    if (!host) return;
+    const all = (this.channels || []).filter(c =>
+      !c.is_dm && !c.parent_channel_id
+    );
+    if (all.length === 0) {
+      host.innerHTML = '<p class="muted-text" style="margin:4px 0;font-size:0.85rem">No channels yet.</p>';
+      return;
+    }
+    // CSV of channel ids. Empty string = no channels (guests can log in but have nowhere to go).
+    const raw = this.serverSettings?.guest_channels || '';
+    const selected = new Set(
+      raw.split(',').map(s => s.trim()).filter(Boolean).map(s => parseInt(s)).filter(Number.isFinite)
+    );
+    host.innerHTML = all.map(ch => {
+      const checked = selected.has(ch.id);
+      const lockTag = (ch.is_private || ch.code_visibility === 'private')
+        ? ' <small style="color:var(--text-muted)">(private)</small>' : '';
+      return `<label style="display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:0.85rem">
+        <input type="checkbox" class="guest-channel-cb" data-cid="${ch.id}" ${checked ? 'checked' : ''}>
+        <span>#${this._escapeHtml(ch.name || '')}${lockTag}</span>
+      </label>`;
+    }).join('');
+    const toggle = document.getElementById('guests-enabled');
+    if (toggle) toggle.checked = (this.serverSettings?.guests_enabled === 'true');
+  };
+  this._renderGuestChannels = _renderGuestChannels;
+  document.getElementById('guests-enabled')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', { key: 'guests_enabled', value: e.target.checked ? 'true' : 'false' });
+    this._showToast?.(e.target.checked ? 'Guest login enabled' : 'Guest login disabled', 'success');
+  });
+  document.getElementById('guest-channels-all-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.guest-channel-cb').forEach(cb => { cb.checked = true; });
+  });
+  document.getElementById('guest-channels-none-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.guest-channel-cb').forEach(cb => { cb.checked = false; });
+  });
+  document.getElementById('guest-channels-save-btn')?.addEventListener('click', () => {
+    const cbs = Array.from(document.querySelectorAll('.guest-channel-cb'));
+    const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
+    const value = picked.join(',');
+    this.socket.emit('update-server-setting', { key: 'guest_channels', value });
+    this._showToast?.(picked.length === 0
+      ? 'Guests now have access to zero channels'
+      : `Guests can now access ${picked.length} channel${picked.length === 1 ? '' : 's'}`,
+      'success');
+  });
 },
 
 // ═══════════════════════════════════════════════════════
@@ -3989,9 +4039,7 @@ _copyTextFallback(text, onCopied) {
   } catch { /* could not copy */ }
 },
 
-// ═══════════════════════════════════════════════════════
-// SERVER BAR — multi-server with live status
-// ═══════════════════════════════════════════════════════
+_setupServerBar() {
 
 /** Push the current server list to the server-side encrypted backup. */
 _pushServerListToServer() {
@@ -4014,6 +4062,24 @@ _pushServersToDesktopHistory() {
       }
     }
   }).catch(() => {});
+},
+
+// ═══════════════════════════════════════════════════════
+// SERVER BAR — multi-server with live status
+// ═══════════════════════════════════════════════════════
+
+/** (#5381) Lock down the UI for guest accounts:
+ *  hide the DM pane + split handle, hide settings affordances that
+ *  rely on password (E2E, recovery, etc.), and badge their nickname. */
+_applyGuestMode() {
+  if (!this.user || !this.user.isGuest) return;
+  const dmPane = document.getElementById('dm-pane');
+  if (dmPane) dmPane.style.display = 'none';
+  const split = document.getElementById('sidebar-split-handle');
+  if (split) split.style.display = 'none';
+  const dmPip = document.getElementById('dm-pip-panel');
+  if (dmPip) dmPip.style.display = 'none';
+  document.body.classList.add('is-guest');
 },
 
 _setupServerBar() {

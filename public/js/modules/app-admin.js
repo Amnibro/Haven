@@ -434,6 +434,11 @@ _applyServerSettings() {
     try { this._renderDefaultJoinChannels(); } catch { /* non-critical */ }
   }
 
+  // (#5381) Guest channel whitelist — re-render when settings change
+  if (typeof this._renderGuestChannels === 'function') {
+    try { this._renderGuestChannels(); } catch { /* non-critical */ }
+  }
+
   // Apply configurable message length limit to message input and edit textareas
   const _maxMsgChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
   const msgInput = document.getElementById('message-input');

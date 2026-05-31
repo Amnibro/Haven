@@ -169,6 +169,7 @@ class HavenApp {
     this._setupUI();
     this._setupThemes();
     this._setupServerBar();
+    this._applyGuestMode(); // (#5381) hide DM UI / lock down features for guests
     this._setupNotifications();
     this._setupPushNotifications();
     this._resyncDesktopBadgeOnFocus?.();

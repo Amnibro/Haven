@@ -189,6 +189,17 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN temp_password_hash TEXT DEFAULT NULL");
   }
 
+  // ── Migration: is_guest flag on users (#5381) ──────────
+  // 1 = ephemeral guest account created via Join-as-Guest. Guests have no
+  // password, can only see/post in channels the admin whitelisted, and are
+  // deleted from the users table when their last socket disconnects so the
+  // username is freed for the next person who wants it.
+  try {
+    db.prepare("SELECT is_guest FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN is_guest INTEGER DEFAULT 0");
+  }
+
   // ── Migration: edited_at column on messages ───────────
   try {
     db.prepare("SELECT edited_at FROM messages LIMIT 0").get();
@@ -279,6 +290,8 @@ function initDatabase() {
   insertSetting.run('session_duration_days', '7');       // login token lifetime (1–365); admins can extend per #5294
   insertSetting.run('published_themes', '[]');             // JSON array of *.theme.css filenames shown in the theme picker
   insertSetting.run('admin_password_reset_enabled', 'false'); // admin can reset user passwords (#5300), opt-in, defaults off
+  insertSetting.run('guests_enabled', 'false');          // (#5381) allow Join-as-Guest on the login page
+  insertSetting.run('guest_channels', '');               // (#5381) CSV of channel IDs guests are auto-joined to (empty = none)
 
   // Unique server fingerprint — used by the multi-server sidebar to detect "self"
   const crypto = require('crypto');

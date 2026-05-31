@@ -466,8 +466,8 @@ function setupSocketHandlers(io, db) {
 
     const statusMap = {};
     try {
-      const statusRows = db.prepare('SELECT id, status, status_text, avatar, avatar_shape FROM users').all();
-      statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle' }; });
+      const statusRows = db.prepare('SELECT id, status, status_text, avatar, avatar_shape, is_guest FROM users').all();
+      statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle', isGuest: !!r.is_guest }; });
     } catch { /* columns may not exist yet */ }
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
@@ -501,6 +501,7 @@ function setupSocketHandlers(io, db) {
         statusText: statusMap[m.id]?.statusText || '',
         avatar: statusMap[m.id]?.avatar || null,
         avatarShape: statusMap[m.id]?.avatarShape || 'circle',
+        isGuest: statusMap[m.id]?.isGuest || false,
         role: getUserHighestRole(m.id, channel ? channel.id : null)
       }));
     } else {
@@ -514,6 +515,7 @@ function setupSocketHandlers(io, db) {
             statusText: statusMap[s.user.id]?.statusText || '',
             avatar: statusMap[s.user.id]?.avatar || s.user.avatar || null,
             avatarShape: statusMap[s.user.id]?.avatarShape || s.user.avatar_shape || 'circle',
+            isGuest: statusMap[s.user.id]?.isGuest || !!s.user.isGuest,
             role: getUserHighestRole(s.user.id, channel ? channel.id : null)
           });
         }
@@ -1095,7 +1097,7 @@ function setupSocketHandlers(io, db) {
     socket.user = user;
 
     try {
-      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, password_version FROM users WHERE id = ?').get(user.id);
+      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, password_version, is_guest FROM users WHERE id = ?').get(user.id);
       if (!uRow || uRow.username !== user.username) {
         return next(new Error('Session expired'));
       }
@@ -1107,6 +1109,7 @@ function setupSocketHandlers(io, db) {
       socket.user.displayName = uRow.display_name || user.username;
       socket.user.avatar = uRow.avatar || null;
       socket.user.avatar_shape = uRow.avatar_shape || 'circle';
+      socket.user.isGuest = !!uRow.is_guest;
 
       const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
       if (!anyAdmin && uRow.username.toLowerCase() === ADMIN_USERNAME && !uRow.is_admin) {
@@ -1116,6 +1119,7 @@ function setupSocketHandlers(io, db) {
       socket.user.isAdmin = !!uRow.is_admin;
     } catch {
       socket.user.displayName = user.displayName || user.username;
+      socket.user.isGuest = !!user.isGuest;
     }
 
     try {
@@ -1379,6 +1383,29 @@ function setupSocketHandlers(io, db) {
     socket.on('disconnect', () => {
       if (!socket.user) return;
       console.log(`❌ ${socket.user.username} disconnected`);
+
+      // (#5381) Guest cleanup — if this was the last live socket for an
+      // ephemeral guest account, delete the users row so the username is
+      // freed for the next person. Cascade FKs purge their (mostly empty)
+      // chat history. We schedule this slightly after the disconnect so
+      // socket.io reconnect blips don't churn the row.
+      if (socket.user.isGuest) {
+        const guestId = socket.user.id;
+        const guestName = socket.user.username;
+        setTimeout(() => {
+          let stillOnline = false;
+          for (const [, s] of io.of('/').sockets) {
+            if (s.user && s.user.id === guestId) { stillOnline = true; break; }
+          }
+          if (stillOnline) return;
+          try {
+            db.prepare('DELETE FROM users WHERE id = ? AND is_guest = 1').run(guestId);
+            console.log(`👤 guest ${guestName} (id=${guestId}) cleaned up — username freed`);
+          } catch (err) {
+            console.warn(`[guest-cleanup] failed for ${guestName}:`, err.message);
+          }
+        }, 5000);
+      }
 
       const affectedChannels = new Set();
       for (const [code, users] of channelUsers) {

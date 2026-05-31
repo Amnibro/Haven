@@ -270,6 +270,11 @@ _renderUserItem(u, scoreLookup) {
   const roleBadge = u.role
     ? `<span class="user-role-badge" style="color:${this._safeColor(u.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(u.role.name)}">${this._escapeHtml(u.role.name)}</span>`
     : '';
+  // (#5381) Mark guest accounts with a small badge so people know not to
+  // expect long-term presence.
+  const guestBadge = u.isGuest
+    ? `<span class="user-role-badge guest-badge" style="color:#888;border:1px solid #555" title="Temporary guest account">GUEST</span>`
+    : '';
 
   // Build tooltip
   const tooltipRole = u.role ? `<div class="tooltip-role" style="color:${roleColor}">● ${this._escapeHtml(u.role.name)}</div>` : '';
@@ -298,6 +303,7 @@ _renderUserItem(u, scoreLookup) {
       <span class="user-item-name"${nameStyle}${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
       ${roleIconAfter}
       ${roleBadge}
+      ${guestBadge}
       ${statusTextHtml}
       ${scoreBadge}
       ${modBtns}

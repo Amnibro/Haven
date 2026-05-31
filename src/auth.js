@@ -200,6 +200,121 @@ router.get('/registration-info', (req, res) => {
   }
 });
 
+// (#5381) Public endpoint that tells the login page whether the admin
+// has enabled the Join-as-Guest button.
+router.get('/guest-info', (req, res) => {
+  try {
+    const db = getDb();
+    const row = db.prepare("SELECT value FROM server_settings WHERE key = 'guests_enabled'").get();
+    res.json({ guestsEnabled: !!(row && row.value === 'true') });
+  } catch {
+    res.json({ guestsEnabled: false });
+  }
+});
+
+// (#5381) Guest login — ephemeral, no password, no E2E key. Creates
+// a real users row with is_guest=1 so the existing socket auth, member
+// list, role lookup, etc. all just work; the row is deleted when the
+// guest's last socket disconnects (see socketHandlers/index.js).
+//
+// Username collision rules:
+//   - reserved if a non-guest user already owns it → reject
+//   - reserved if a guest user owns it (live or not) → reject (we can't
+//     tell from this layer whether the existing guest row has a live
+//     socket; the disconnect handler is responsible for freeing the row)
+router.post('/guest-login', authLimiter, async (req, res) => {
+  try {
+    const db = getDb();
+    const enabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'guests_enabled'").get();
+    if (!enabledRow || enabledRow.value !== 'true') {
+      return res.status(403).json({ error: 'Guest access is disabled on this server' });
+    }
+
+    const username = sanitizeString(req.body.username, 20);
+    const eulaVersion = typeof req.body.eulaVersion === 'string' ? req.body.eulaVersion.trim() : '';
+    const ageVerified = req.body.ageVerified === true;
+    if (!username) return res.status(400).json({ error: 'Username required' });
+    if (username.length < 3 || username.length > 20) {
+      return res.status(400).json({ error: 'Username must be 3-20 characters' });
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return res.status(400).json({ error: 'Username: letters, numbers, underscores only' });
+    }
+    if (username.toLowerCase() === ADMIN_USERNAME) {
+      return res.status(400).json({ error: 'That username is reserved' });
+    }
+    if (!eulaVersion) {
+      return res.status(400).json({ error: 'You must accept the Terms of Service & Release of Liability Agreement' });
+    }
+    if (!ageVerified) {
+      return res.status(400).json({ error: 'You must confirm that you are 18 years of age or older' });
+    }
+
+    // Ban check by name (so a banned member can't slip back in as a guest).
+    const bannedRow = db.prepare(
+      'SELECT b.id FROM bans b JOIN users u ON b.user_id = u.id WHERE LOWER(u.username) = LOWER(?)'
+    ).get(username);
+    if (bannedRow) {
+      return res.status(403).json({ error: 'That username is banned from this server' });
+    }
+
+    const existing = db.prepare('SELECT id, is_guest FROM users WHERE LOWER(username) = LOWER(?)').get(username);
+    if (existing) {
+      if (!existing.is_guest) {
+        return res.status(409).json({ error: 'That username is taken by a registered member' });
+      }
+      return res.status(409).json({ error: 'That username is currently in use — try another' });
+    }
+
+    // Random unusable hash — the row needs a password_hash but guests
+    // never reach the /login endpoint, so nothing should ever match.
+    const hash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 4);
+    const result = db.prepare(
+      'INSERT INTO users (username, password_hash, is_admin, is_guest) VALUES (?, ?, 0, 1)'
+    ).run(username, hash);
+    const userId = result.lastInsertRowid;
+
+    // Auto-join the admin-whitelisted guest channels.
+    try {
+      const chRow = db.prepare("SELECT value FROM server_settings WHERE key = 'guest_channels'").get();
+      const csv = (chRow && typeof chRow.value === 'string') ? chRow.value.trim() : '';
+      if (csv) {
+        const ids = csv.split(',').map(s => parseInt(s.trim())).filter(n => Number.isInteger(n) && n > 0);
+        const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+        for (const cid of ids) {
+          // Never auto-join DM channels even if a stale id sneaks in.
+          const ch = db.prepare('SELECT id, is_dm FROM channels WHERE id = ?').get(cid);
+          if (ch && !ch.is_dm) insertMember.run(cid, userId);
+        }
+      }
+    } catch (err) {
+      console.warn('[guest-login] channel auto-join failed:', err.message);
+    }
+
+    if (eulaVersion) {
+      try {
+        db.prepare(
+          'INSERT OR IGNORE INTO eula_acceptances (user_id, version, ip_address, age_verified) VALUES (?, ?, ?, ?)'
+        ).run(userId, eulaVersion, req.ip || req.socket.remoteAddress || '', ageVerified ? 1 : 0);
+      } catch { /* non-critical */ }
+    }
+
+    const token = jwt.sign(
+      { id: userId, username, isAdmin: false, isGuest: true, displayName: username, pwv: 1 },
+      JWT_SECRET,
+      { expiresIn: '12h' } // guests get a short session by design
+    );
+
+    res.json({
+      token,
+      user: { id: userId, username, isAdmin: false, isGuest: true, displayName: username }
+    });
+  } catch (err) {
+    console.error('Guest login error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 router.post('/register', authLimiter, async (req, res) => {
   try {
     const username = sanitizeString(req.body.username, 20);

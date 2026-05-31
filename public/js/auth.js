@@ -802,4 +802,70 @@
       showError(t('auth.errors.connection_error'));
     }
   });
+
+  // ── (#5381) Join as Guest ────────────────────────────────
+  // Reveal the guest button only if the server has guests enabled.
+  (async () => {
+    try {
+      const r = await fetch('/api/auth/guest-info');
+      if (!r.ok) return;
+      const info = await r.json();
+      if (info && info.guestsEnabled) {
+        const sec = document.getElementById('guest-login-section');
+        if (sec) sec.style.display = '';
+      }
+    } catch { /* ignore */ }
+  })();
+
+  const guestShowBtn = document.getElementById('guest-login-show-btn');
+  const guestForm = document.getElementById('guest-form');
+  const guestBackBtn = document.getElementById('guest-back-btn');
+  const loginForm = document.getElementById('login-form');
+  if (guestShowBtn && guestForm) {
+    guestShowBtn.addEventListener('click', () => {
+      hideError();
+      if (loginForm) loginForm.style.display = 'none';
+      if (registerForm) registerForm.style.display = 'none';
+      const ssoForm = document.getElementById('sso-form');
+      if (ssoForm) ssoForm.style.display = 'none';
+      guestForm.style.display = '';
+      const u = document.getElementById('guest-username');
+      if (u) u.focus();
+    });
+  }
+  if (guestBackBtn) {
+    guestBackBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      hideError();
+      if (guestForm) guestForm.style.display = 'none';
+      if (loginForm) loginForm.style.display = '';
+    });
+  }
+  if (guestForm) {
+    guestForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+      if (!checkEula()) return;
+      const username = document.getElementById('guest-username').value.trim();
+      if (!username) return showError('Please enter a username');
+      try {
+        const res = await fetch('/api/auth/guest-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, eulaVersion: '2.0', ageVerified: true })
+        });
+        const data = await res.json();
+        if (!res.ok) return showError(data.error || 'Guest login failed');
+        // Guests have no password, so no E2E wrap key. DM tab is hidden
+        // for them on the app side.
+        localStorage.setItem('haven_token', data.token);
+        localStorage.setItem('haven_user', JSON.stringify(data.user));
+        localStorage.setItem('haven_eula_accepted', '2.0');
+        sessionStorage.removeItem('haven_e2e_wrap');
+        window.location.href = _appUrl;
+      } catch {
+        showError(t('auth.errors.connection_error'));
+      }
+    });
+  }
 })();

@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.19.0] — 2026-06-01
+
+### Added
+- **Join as Guest mode (#5381).** New admin setting (Settings → Admin → "Join as Guest") lets self-hosters open the server to drop-in guests. Guests pick a username on the login page (no password, no recovery, no E2E key), get a `GUEST` badge in the member list and in chat, and are auto-joined only to the channels the admin whitelists. Direct messages are off-limits for guests: the DM pane is hidden client-side, and the server rejects `start-dm` socket events for defense-in-depth. The guest's `users` row is deleted ~5 s after their last socket disconnects, freeing the username for the next person.
+
+### Fixed
+- **Bot slash-commands now resolve to the right bot when multiple bots share a command name (#5398).** The slash-command lookup joined `bot_commands` to `webhooks` on command name alone, so a slash command registered in channel A could fire a webhook callback registered to channel B if both used the same command (commonly `/play`, `/help`, etc.). The query now also scopes by `webhook.channel_id`, so each channel's bot owns its own command namespace.
+
+---
+
 ## [3.18.3] — 2026-05-31
 
 ### Fixed

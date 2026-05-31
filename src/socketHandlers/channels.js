@@ -199,6 +199,11 @@ module.exports = function register(socket, ctx) {
   // ── Join channel by code ────────────────────────────────
   socket.on('join-channel', (data) => {
     if (!data || typeof data !== 'object') return;
+    // (#5381) Guests can't widen their own access beyond the admin's
+    // guest_channels whitelist by entering an invite code.
+    if (socket.user.isGuest) {
+      return socket.emit('error-msg', 'Guests cannot join channels by code');
+    }
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code) return socket.emit('error-msg', 'Invalid channel code');
 
@@ -1270,6 +1275,12 @@ module.exports = function register(socket, ctx) {
   // ── Direct Messages ─────────────────────────────────────
   socket.on('start-dm', (data) => {
     if (!data || typeof data !== 'object') return;
+    // (#5381) Guests have no E2E key (no password → no PBKDF2-derived
+    // wrap key), so DMs would be unencryptable. The DM tab is hidden in
+    // the guest UI; this is the server-side enforcement.
+    if (socket.user.isGuest) {
+      return socket.emit('error-msg', 'Guests cannot send direct messages');
+    }
     const targetId = isInt(data.targetUserId) ? data.targetUserId : null;
     if (!targetId) return;
     const isSelfDm = targetId === socket.user.id;

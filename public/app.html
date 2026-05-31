@@ -1973,6 +1973,27 @@
             </div>
           </div>
         </div>
+        <!-- (#5381) Guest mode — password-less drop-in access scoped to a whitelist of channels -->
+        <div class="admin-settings" id="section-guests" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">👤 Join as Guest</h5>
+          <small class="settings-hint">Show a "Join as Guest" button on the login page. Guests pick a username, get a temporary account with no password, and can only see the channels you whitelist below. Guests cannot DM, and their account is deleted when they disconnect (username freed).</small>
+          <label class="toggle-row" style="margin-top:8px">
+            <span>Allow guests</span>
+            <input type="checkbox" id="guests-enabled">
+          </label>
+          <div style="margin-top:10px;">
+            <h6 style="margin:0 0 4px;font-size:0.85rem;font-weight:600">📋 Channels guests can access</h6>
+            <small class="settings-hint">Pick which channels guests can see and post in. Pick none and the Guest button won't be very useful. DMs are never available to guests.</small>
+            <div id="guest-channels-list" style="margin-top:8px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px">
+              <p class="muted-text" style="margin:4px 0;font-size:0.85rem">Loading channels...</p>
+            </div>
+            <div style="display:flex;gap:4px;margin-top:6px">
+              <button class="btn-sm" id="guest-channels-all-btn" type="button">Select all</button>
+              <button class="btn-sm" id="guest-channels-none-btn" type="button">Select none</button>
+              <button class="btn-sm btn-accent" id="guest-channels-save-btn" type="button">Save</button>
+            </div>
+          </div>
+        </div>
         <div class="admin-settings" id="section-cleanup" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🗑️ <span data-i18n="settings.admin.cleanup_title">Auto-Cleanup</span></h5>
           <label class="toggle-row">
