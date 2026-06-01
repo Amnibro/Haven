@@ -59,7 +59,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'max_sound_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
     if (key === 'max_emoji_kb') { const n = parseInt(value); if (isNaN(n) || n < 64 || n > 1024) return; }
     if (key === 'max_sticker_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
-    if (key === 'session_duration_days') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 365) return; }
+    if (key === 'session_duration_days') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 365) return; } // 0 = never expire (#5391)
     if (key === 'auto_backup_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'auto_backup_interval_hours') { const n = parseInt(value); if (isNaN(n) || ![6, 12, 24, 168, 720].includes(n)) return; }
     if (key === 'auto_backup_retention') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 50) return; }

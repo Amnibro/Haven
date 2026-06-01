@@ -358,7 +358,10 @@ _applyServerSettings() {
     }
     const sessionDur = document.getElementById('session-duration-days');
     if (sessionDur) {
-      sessionDur.value = this.serverSettings.session_duration_days || '7';
+      // Default to '0' (never) for new installs. Existing servers seeded with
+      // '7' on older versions report '7' here and keep that value until the
+      // admin picks something else. (#5391)
+      sessionDur.value = this.serverSettings.session_duration_days ?? '0';
     }
     const maxMsgChars = document.getElementById('max-message-chars');
     if (maxMsgChars) {
@@ -775,8 +778,9 @@ _saveAdminSettings() {
     changed = true;
   }
 
-  const sessionDurDays = String(Math.max(1, Math.min(365, parseInt(document.getElementById('session-duration-days')?.value) || 7)));
-  if (sessionDurDays !== (snap.session_duration_days || '7')) {
+  // session_duration_days: 0 means "never expire"; 1–365 days otherwise (#5391)
+  const sessionDurDays = String(Math.max(0, Math.min(365, parseInt(document.getElementById('session-duration-days')?.value) || 0)));
+  if (sessionDurDays !== (snap.session_duration_days ?? '0')) {
     this.socket.emit('update-server-setting', { key: 'session_duration_days', value: sessionDurDays });
     changed = true;
   }
@@ -881,7 +885,7 @@ _cancelAdminSettings() {
     const mpo = document.getElementById('max-poll-options');
     if (mpo) mpo.value = snap.max_poll_options || '10';
     const sdd = document.getElementById('session-duration-days');
-    if (sdd) sdd.value = snap.session_duration_days || '7';
+    if (sdd) sdd.value = snap.session_duration_days ?? '0';
     const mmc = document.getElementById('max-message-chars');
     if (mmc) mmc.value = snap.max_message_chars || '2000';
     const uba = document.getElementById('update-banner-admin-only');

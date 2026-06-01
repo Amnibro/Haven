@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -16,15 +16,28 @@ if (!JWT_SECRET) {
 }
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
-// Admin-configurable session duration (days). Default 7. Bounded 1–365 to
-// match the validator in src/socketHandlers/admin.js. (#5294)
+// Admin-configurable session duration (days). Bounded 0–365 to match the
+// validator in src/socketHandlers/admin.js (#5294, expanded for #5391).
+// A value of 0 means "never expire" — the JWT is signed without an `exp`
+// claim and lives until the user logs out or their password_version bumps.
+// Returns either a string like '7d' OR null (no expiry).
+// For new installs the seeded default is 0 (Never); existing installs that
+// were seeded with '7' keep their previous behavior until the admin changes it.
 function _sessionExpiresIn() {
   try {
     const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'session_duration_days'").get();
     const n = parseInt(row && row.value);
+    if (n === 0) return null;
     if (Number.isFinite(n) && n >= 1 && n <= 365) return `${n}d`;
   } catch {}
-  return '7d';
+  return null;
+}
+
+// Build the options object for jwt.sign() respecting the never-expire setting.
+// jsonwebtoken throws on { expiresIn: null }, so we must omit the field entirely.
+function _sessionSignOptions() {
+  const exp = _sessionExpiresIn();
+  return exp ? { expiresIn: exp } : {};
 }
 
 // ── TOTP helpers ─────────────────────────────────────────
@@ -419,7 +432,7 @@ router.post('/register', authLimiter, async (req, res) => {
     const token = jwt.sign(
       { id: result.lastInsertRowid, username, isAdmin: !!isAdmin, displayName: username, pwv: 1 },
       JWT_SECRET,
-      { expiresIn: _sessionExpiresIn() }
+      _sessionSignOptions()
     );
 
     // Record EULA acceptance
@@ -522,7 +535,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, pwv: user.password_version || 1 },
       JWT_SECRET,
-      { expiresIn: _sessionExpiresIn() }
+      _sessionSignOptions()
     );
 
     // Record EULA acceptance
@@ -601,7 +614,7 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
     const freshToken = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, pwv: newPwv },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      _sessionSignOptions()
     );
     res.json({ token: freshToken, user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName }, preserved });
   } catch (err) {
@@ -700,7 +713,7 @@ router.post('/totp/validate', authLimiter, async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, pwv: user.password_version || 1 },
       JWT_SECRET,
-      { expiresIn: _sessionExpiresIn() }
+      _sessionSignOptions()
     );
 
     res.json({
@@ -812,7 +825,7 @@ router.post('/totp/verify-setup', authLimiter, async (req, res) => {
     const freshToken = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName: user.display_name || user.username, pwv: newPwv },
       JWT_SECRET,
-      { expiresIn: _sessionExpiresIn() }
+      _sessionSignOptions()
     );
 
     // Send the response first so the client can store the fresh token
@@ -961,7 +974,7 @@ router.post('/change-password', authLimiter, async (req, res) => {
     const freshToken = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName: user.display_name || user.username, pwv: newPwv },
       JWT_SECRET,
-      { expiresIn: _sessionExpiresIn() }
+      _sessionSignOptions()
     );
 
     // Send the response FIRST so the client can store the fresh token
@@ -1172,7 +1185,7 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: true, displayName, pwv: user.password_version || 1 },
       JWT_SECRET,
-      { expiresIn: _sessionExpiresIn() }
+      _sessionSignOptions()
     );
 
     console.log(`🔑 Admin recovery used for "${user.username}" from ${req.ip || 'unknown'}`);
@@ -1184,7 +1197,7 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
 });
 
 function generateToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: _sessionExpiresIn() });
+  return jwt.sign(payload, JWT_SECRET, _sessionSignOptions());
 }
 
 function generateChannelCode() {
