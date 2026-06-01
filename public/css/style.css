@@ -6387,7 +6387,11 @@ select.cfn-select.cfn-input {
 /* Image context menu (right-click Save/Copy/Open) */
 .image-context-menu {
   position: fixed;
-  z-index: 10001;
+  /* 3.20.2: must sit above the image lightbox (100010) and the
+     PiP DM panel (99999) so right-clicking an enlarged image OR an
+     image inside a PiP DM shows the menu on top, not buried behind
+     the overlay. Was 10001 which lost to both. */
+  z-index: 100020;
   background: var(--bg-secondary, #23263a);
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   border-radius: 8px;
@@ -6415,7 +6419,9 @@ select.cfn-select.cfn-input {
 /* ── User Context Menu (right-click options) ── */
 .user-context-menu {
   position: fixed;
-  z-index: 10001;
+  /* Same reasoning as .image-context-menu — needs to clear the PiP
+     DM (99999) and image lightbox (100010). */
+  z-index: 100020;
   background: var(--bg-secondary, #23263a);
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   border-radius: 8px;
