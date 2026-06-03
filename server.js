@@ -3007,7 +3007,22 @@ app.get('/api/webhooks/:token/commands', webhookLimiter, (req, res) => {
   if (!webhook) return res.status(404).json({ error: 'Webhook not found or inactive' });
 
   const { getDb } = require('./src/database');
-  const commands = getDb().prepare('SELECT id, command, description FROM bot_commands WHERE webhook_id = ?').all(webhook.id);
+  const rows = getDb().prepare('SELECT id, command, description, subcommands_json FROM bot_commands WHERE webhook_id = ?').all(webhook.id);
+  const commands = rows.map(r => {
+    let subcommands = [];
+    if (r.subcommands_json) {
+      try {
+        const parsed = JSON.parse(r.subcommands_json);
+        if (Array.isArray(parsed)) subcommands = parsed;
+      } catch { /* ignore malformed historic values */ }
+    }
+    return {
+      id: r.id,
+      command: r.command,
+      description: r.description,
+      subcommands
+    };
+  });
   res.json({ commands });
 });
 
@@ -3017,7 +3032,7 @@ app.post('/api/webhooks/:token/commands', webhookLimiter, express.json({ limit: 
   if (!webhook) return res.status(404).json({ error: 'Webhook not found or inactive' });
   if (!webhook.callback_url) return res.status(400).json({ error: 'Webhook must have a callback_url to register commands' });
 
-  const { command, description } = req.body;
+  const { command, description, subcommands } = req.body;
   if (!command || typeof command !== 'string') return res.status(400).json({ error: 'command required (string)' });
 
   const cmd = command.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32);
@@ -3028,11 +3043,33 @@ app.post('/api/webhooks/:token/commands', webhookLimiter, express.json({ limit: 
   if (builtIn.includes(cmd)) return res.status(409).json({ error: `/${cmd} is a built-in command` });
 
   const desc = typeof description === 'string' ? description.trim().slice(0, 100) : '';
+  let cleanSubs = [];
+  if (Array.isArray(subcommands)) {
+    if (subcommands.length > 25) {
+      return res.status(400).json({ error: 'subcommands can contain at most 25 items' });
+    }
+    cleanSubs = subcommands
+      .map(sc => {
+        if (!sc || typeof sc !== 'object') return null;
+        const name = String(sc.name || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32);
+        if (!name) return null;
+        const description = typeof sc.description === 'string' ? sc.description.trim().slice(0, 100) : '';
+        return { name, description };
+      })
+      .filter(Boolean);
+    const seen = new Set();
+    cleanSubs = cleanSubs.filter(sc => {
+      if (seen.has(sc.name)) return false;
+      seen.add(sc.name);
+      return true;
+    });
+  }
+  const subcommandsJson = cleanSubs.length ? JSON.stringify(cleanSubs) : null;
 
   const { getDb } = require('./src/database');
   try {
-    getDb().prepare('INSERT OR REPLACE INTO bot_commands (webhook_id, command, description) VALUES (?, ?, ?)').run(webhook.id, cmd, desc);
-    res.json({ success: true, command: cmd, description: desc });
+    getDb().prepare('INSERT OR REPLACE INTO bot_commands (webhook_id, command, description, subcommands_json) VALUES (?, ?, ?, ?)').run(webhook.id, cmd, desc, subcommandsJson);
+    res.json({ success: true, command: cmd, description: desc, subcommands: cleanSubs });
   } catch (err) {
     res.status(500).json({ error: 'Failed to register command' });
   }
@@ -3055,12 +3092,41 @@ app.delete('/api/webhooks/:token/commands/:command', webhookLimiter, (req, res) 
 // GET /api/bot-commands — list all registered bot commands (for client autocomplete)
 app.get('/api/bot-commands', (req, res) => {
   const { getDb } = require('./src/database');
-  const commands = getDb().prepare(`
-    SELECT bc.command, bc.description, w.name as bot_name
+  const rows = getDb().prepare(`
+    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name
     FROM bot_commands bc
     JOIN webhooks w ON bc.webhook_id = w.id
     WHERE w.is_active = 1
   `).all();
+  const commands = [];
+  for (const row of rows) {
+    let subcommands = [];
+    if (row.subcommands_json) {
+      try {
+        const parsed = JSON.parse(row.subcommands_json);
+        if (Array.isArray(parsed)) subcommands = parsed;
+      } catch { /* ignore malformed historic values */ }
+    }
+    if (subcommands.length) {
+      for (const sc of subcommands) {
+        const subName = String(sc?.name || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32);
+        if (!subName) continue;
+        commands.push({
+          command: `${row.command} ${subName}`,
+          description: typeof sc.description === 'string' && sc.description.trim()
+            ? sc.description.trim()
+            : (row.description || 'Bot command'),
+          bot_name: row.bot_name || 'Bot'
+        });
+      }
+      continue;
+    }
+    commands.push({
+      command: row.command,
+      description: row.description || '',
+      bot_name: row.bot_name || 'Bot'
+    });
+  }
   res.json({ commands });
 });
 

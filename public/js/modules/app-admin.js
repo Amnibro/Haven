@@ -1991,9 +1991,25 @@ _checkSlashTrigger(inputEl) {
   this._slashInput = input;
   const text = input.value;
 
-  // Only activate if text starts with / and cursor is in the first word
-  if (text.startsWith('/') && !text.includes(' ') && text.length < 25) {
-    const query = text.substring(1).toLowerCase();
+  // Show slash suggestions while typing the command token, or a single
+  // subcommand token (e.g. "/rss ad"). Hide once argument typing starts.
+  if (text.startsWith('/') && text.length < 80) {
+    const raw = text.substring(1);
+    const trimmed = raw.trim();
+    let query = '';
+    if (!trimmed) {
+      query = '';
+    } else {
+      const parts = trimmed.split(/\s+/);
+      if (parts.length === 1) {
+        query = parts[0].toLowerCase();
+      } else if (parts.length === 2 && !raw.endsWith(' ')) {
+        query = `${parts[0].toLowerCase()} ${parts[1].toLowerCase()}`;
+      } else {
+        this._hideSlashDropdown();
+        return;
+      }
+    }
     this._showSlashDropdown(query);
   } else {
     this._hideSlashDropdown();

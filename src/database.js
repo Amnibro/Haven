@@ -1019,12 +1019,19 @@ function initDatabase() {
       webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
       command TEXT NOT NULL,
       description TEXT DEFAULT '',
+      subcommands_json TEXT DEFAULT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(webhook_id, command)
     );
     CREATE INDEX IF NOT EXISTS idx_bot_commands_command ON bot_commands(command);
     CREATE INDEX IF NOT EXISTS idx_bot_commands_webhook ON bot_commands(webhook_id);
   `);
+
+  try {
+    db.prepare('SELECT subcommands_json FROM bot_commands LIMIT 0').get();
+  } catch {
+    db.exec('ALTER TABLE bot_commands ADD COLUMN subcommands_json TEXT DEFAULT NULL');
+  }
 
   // ── Migration: chat threads (thread_id on messages) ─────
   try {

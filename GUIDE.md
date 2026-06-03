@@ -809,6 +809,27 @@ Content-Type: application/json
 }
 ```
 
+Optional subcommands can be included to improve autocomplete discoverability:
+
+```
+POST https://your-server.com/api/webhooks/<token>/commands
+Content-Type: application/json
+
+{
+  "command": "rss",
+  "description": "Manage RSS feeds",
+  "subcommands": [
+    { "name": "add", "description": "Add an RSS feed" },
+    { "name": "remove", "description": "Remove an RSS feed" },
+    { "name": "list", "description": "List active feeds" }
+  ]
+}
+```
+
+The callback payload format is unchanged. Haven still sends `command` as the
+base command (`rss`) and the full remaining text in `args` (for example
+`"add https://example.com/feed.xml"`).
+
 **List:**
 ```
 GET https://your-server.com/api/webhooks/<token>/commands
