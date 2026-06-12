@@ -381,21 +381,21 @@ function initDatabase() {
       name TEXT UNIQUE NOT NULL,
       filename TEXT NOT NULL,
       uploaded_by INTEGER REFERENCES users(id),
-        // ── Migration: sound visibility/ordering (for users to hide/reorder/delete sounds) ──
-        db.exec(`
-          CREATE TABLE IF NOT EXISTS sound_preferences (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            sound_name TEXT NOT NULL,
-            hidden INTEGER DEFAULT 0,
-            custom_order INTEGER DEFAULT NULL,
-            UNIQUE(user_id, sound_name)
-          );
-          CREATE INDEX IF NOT EXISTS idx_sound_prefs_user ON sound_preferences(user_id);
-        `);
-
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+  `);
+
+  // ── Migration: sound visibility/ordering (per-user sound preferences) ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sound_preferences (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sound_name TEXT NOT NULL,
+      hidden INTEGER DEFAULT 0,
+      custom_order INTEGER DEFAULT NULL,
+      UNIQUE(user_id, sound_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sound_prefs_user ON sound_preferences(user_id);
   `);
 
   // ── Migration: custom_emojis table (admin-uploaded server emojis) ──

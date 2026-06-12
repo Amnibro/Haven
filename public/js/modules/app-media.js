@@ -369,7 +369,6 @@ _setupSoundManagement() {
   this._showHiddenSounds = false;
   this._soundboardSidebarMode = localStorage.getItem('haven_soundboard_sidebar_mode') === 'true';
   this._loadUserSoundPrefs();
- â†’ timestamp to prevent key-repeat spam
 
   // Open from admin "Manage Sounds" button
   const openBtn = document.getElementById('open-sound-manager-btn');
