@@ -2358,6 +2358,59 @@ app.get('/api/link-preview', async (req, res) => {
       } catch { /* fall through to generic scrape */ }
     }
 
+    // ── Bluesky — HTML is client-rendered (blank OG tags); the public AT Protocol
+    // app view returns structured post data with no auth. Resolve the handle to a
+    // DID when needed, then hydrate the post and pull author / text / media. ──
+    if (!data && /^https?:\/\/bsky\.app\/profile\/[^/]+\/post\/[A-Za-z0-9]+/i.test(url)) {
+      try {
+        const m = url.match(/^https?:\/\/bsky\.app\/profile\/([^/?#]+)\/post\/([A-Za-z0-9]+)/i);
+        let did = m[1];
+        if (!did.startsWith('did:')) {
+          const rh = await fetch(
+            `https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(did)}`,
+            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
+          );
+          if (rh.ok) did = (await rh.json()).did || did;
+        }
+        if (did.startsWith('did:')) {
+          const atUri = `at://${did}/app.bsky.feed.post/${m[2]}`;
+          const pResp = await fetch(
+            `https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(atUri)}`,
+            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
+          );
+          if (pResp.ok) {
+            const post = (await pResp.json())?.posts?.[0];
+            if (post) {
+              const author = post.author || {};
+              const name = author.displayName || author.handle || 'Bluesky';
+              const embed = post.embed || {};
+              // recordWithMedia nests the real media one level down under .media
+              const media = (embed.$type || '').startsWith('app.bsky.embed.recordWithMedia') ? (embed.media || {}) : embed;
+              const mType = media.$type || '';
+              let image = null, images;
+              if (mType.startsWith('app.bsky.embed.images')) {
+                const imgs = (media.images || []).map(i => i.fullsize).filter(Boolean);
+                if (imgs.length >= 2) images = imgs.slice(0, 4);
+                image = imgs[0] || null;
+              } else if (mType.startsWith('app.bsky.embed.video')) {
+                image = media.thumbnail || null;
+              } else if (mType.startsWith('app.bsky.embed.external')) {
+                image = media.external?.thumb || null;
+              }
+              data = {
+                title: `${name} on Bluesky`,
+                description: (post.record?.text || '').slice(0, 280) || null,
+                image,
+                images,
+                siteName: 'Bluesky',
+                url
+              };
+            }
+          }
+        }
+      } catch { /* Bluesky app view failed — continue to generic scrape */ }
+    }
+
     // ── Generic OG scrape (manual redirect following with SSRF checks) ──
     if (!data) {
       let currentUrl = url;
