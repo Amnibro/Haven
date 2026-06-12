@@ -653,6 +653,30 @@ async _loadCustomSounds() {
   } catch { /* ignore */ }
 },
 
+async _loadUserSoundPrefs() {
+  try {
+    const res = await fetch('/api/user-sound-prefs', {
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    this._soundPrefs = data.prefs || {};
+  } catch { /* non-critical – run with empty prefs if endpoint unavailable */ }
+},
+
+async _saveUserSoundPrefs() {
+  try {
+    await fetch('/api/user-sound-prefs', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ prefs: this._soundPrefs })
+    });
+  } catch { /* non-critical */ }
+},
+
 _updateSoundSelects(sounds) {
   // Update ALL 5 notification selects with custom sounds
   const selects = ['notif-msg-sound', 'notif-sent-sound', 'notif-mention-sound', 'notif-join-sound', 'notif-leave-sound'];
@@ -851,7 +875,8 @@ _renderSoundboard(filter = '') {
   if (grids.length === 0) return;
 
   let sounds = (this.customSounds || []).filter(s =>
-    !filter || s.name.toLowerCase().includes(filter.toLowerCase())
+    (!filter || s.name.toLowerCase().includes(filter.toLowerCase())) &&
+    (!this._soundPrefs[s.name]?.hidden || this._showHiddenSounds)
   );
 
   // Reverse lookup: soundName â†’ hotkey
@@ -868,7 +893,7 @@ _renderSoundboard(filter = '') {
                <span class="sb-hotkey-clear" data-sound="${this._escapeHtml(s.name)}" title="Remove hotkey">&times;</span>
              </span>`
           : `<span class="sb-hotkey-set" data-sound="${this._escapeHtml(s.name)}">Set hotkey</span>`;
-        return `<button class="soundboard-btn `${this._soundPrefs[s.name]?.hidden ? ` hidden-sound` : ``}" data-name="${this._escapeHtml(s.name)}" data-url="${this._escapeHtml(s.url)}"><span class="sb-hide-btn" data-sound="${this._escapeHtml(s.name)}" title="${this._soundPrefs[s.name]?.hidden ? `Show` : `Hide`} this sound">👁️</span><span class="sb-name">${this._escapeHtml(s.name)}</span>
+        return `<button class="soundboard-btn${this._soundPrefs[s.name]?.hidden ? ' hidden-sound' : ''}" data-name="${this._escapeHtml(s.name)}" data-url="${this._escapeHtml(s.url)}"><span class="sb-hide-btn" data-sound="${this._escapeHtml(s.name)}" title="${this._soundPrefs[s.name]?.hidden ? 'Show' : 'Hide'} this sound">👁️</span><span class="sb-name">${this._escapeHtml(s.name)}</span>
           ${hotkeyHtml}
         </button>`;
       }).join('');
@@ -917,6 +942,21 @@ _renderSoundboard(filter = '') {
               : (document.getElementById('soundboard-search')?.value?.trim() || '')
           );
         }
+      });
+    });
+
+    // Hide / show button (👁️)
+    grid.querySelectorAll('.sb-hide-btn').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const name = el.dataset.sound;
+        if (!this._soundPrefs[name]) this._soundPrefs[name] = {};
+        this._soundPrefs[name].hidden = !this._soundPrefs[name].hidden;
+        await this._saveUserSoundPrefs();
+        const searchVal = this._soundboardPip
+          ? (document.getElementById('sb-pip-search')?.value?.trim() || '')
+          : (document.getElementById('soundboard-search')?.value?.trim() || '');
+        this._renderSoundboard(searchVal);
       });
     });
 

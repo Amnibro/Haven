@@ -1412,6 +1412,36 @@ app.patch('/api/sounds/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to rename sound' }); }
 });
 
+// -- User sound preferences ---------------------------------------------------
+app.get('/api/user-sound-prefs', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  const { getDb } = require('./src/database');
+  try {
+    const rows = getDb().prepare('SELECT sound_name, hidden, custom_order FROM sound_preferences WHERE user_id = ?').all(user.id);
+    const prefs = {};
+    rows.forEach(r => { prefs[r.sound_name] = { hidden: !!r.hidden, customOrder: r.custom_order }; });
+    res.json({ prefs });
+  } catch { res.json({ prefs: {} }); }
+});
+
+app.post('/api/user-sound-prefs', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  const { prefs } = req.body || {};
+  if (!prefs || typeof prefs !== 'object') return res.status(400).json({ error: 'Invalid prefs' });
+  const { getDb } = require('./src/database');
+  try {
+    const db = getDb();
+    const upsert = db.prepare('INSERT INTO sound_preferences (user_id, sound_name, hidden, custom_order) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, sound_name) DO UPDATE SET hidden = excluded.hidden, custom_order = excluded.custom_order');
+    const runMany = db.transaction(() => { Object.entries(prefs).forEach(([name, pref]) => { upsert.run(user.id, name, pref.hidden ? 1 : 0, pref.customOrder ?? null); }); });
+    runMany();
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Failed to save prefs' }); }
+});
+
 // â”€â”€ Custom emoji upload (admin only, image, configurable max size) â”€â”€
 function createEmojiUpload() {
   const { getDb } = require('./src/database');
