@@ -553,23 +553,27 @@ _setupSoundManagement() {
     }
   });
 
-  // Init: restore sidebar panel state if sidebar mode was ON
+  // Init: show toggle button when sidebar mode is enabled, but keep panel CLOSED until user clicks
   {
     const panel = document.getElementById('sb-sidebar-panel');
     const toggleBtn = document.getElementById('sb-sidebar-toggle-btn');
-    if (this._soundboardSidebarMode && panel) {
-      const wasHidden = localStorage.getItem('haven_sb_sidebar_hidden') === '1';
-      if (!wasHidden) {
-        panel.classList.remove('sb-hidden');
-        if (toggleBtn) { toggleBtn.style.display = ''; toggleBtn.textContent = '\u276E'; }
+    // Always start with panel hidden — user must click to open it
+    if (panel) panel.classList.add('sb-hidden');
+    if (toggleBtn) {
+      // Show the toggle arrow button if sidebar mode is on
+      if (this._soundboardSidebarMode) {
+        toggleBtn.style.display = '';
+        toggleBtn.textContent = '\u276F'; // pointing right = panel is closed
       } else {
-        if (toggleBtn) { toggleBtn.style.display = ''; toggleBtn.textContent = '\u276F'; }
+        toggleBtn.style.display = 'none';
       }
     }
+    // Clear any stale hidden state
+    localStorage.removeItem('haven_sb_sidebar_hidden');
     // Define the helper now (app-ui and app-admin will also call it)
     window._updateSbToggleRight = () => {
       const btn = document.getElementById('sb-sidebar-toggle-btn');
-      if (!btn) return;
+      if (!btn || btn.style.display === 'none') return;
       const rs = document.getElementById('right-sidebar');
       const rw = rs ? (rs.classList.contains('collapsed') ? 0 : (parseInt(rs.style.width) || 260)) : 260;
       btn.style.right = rw + 'px';
@@ -898,29 +902,35 @@ _renderSoundList(sounds) {
   }
 
   const builtinHtml = builtins.length === 0 ? '' : `
-    <p class="muted-text" style="margin:4px 0 2px;font-size:0.78em;text-transform:uppercase;letter-spacing:.06em">${t('modals.sound_manager.group_builtin')}</p>
-    ${builtins.map(s => `
-      <div class="custom-sound-item" data-name="${this._escapeHtml(s.name)}">
-        <span class="custom-sound-name">${this._escapeHtml(s.name)}</span>
-        <button class="btn-xs sound-preview-btn" data-url="${this._escapeHtml(s.url)}" title="${t('modals.sound_manager.preview_btn')}">&#x25B6;</button>
-        <button class="btn-xs sound-delete-btn" data-name="${this._escapeHtml(s.name)}" title="${t('modals.sound_manager.delete_btn')}">&#x1F5D1;</button>
-      </div>
-    `).join('')}
+    <details class="sound-section">
+      <summary class="sound-section-label">${t('modals.sound_manager.group_builtin')}</summary>
+      ${builtins.map(s => `
+        <div class="custom-sound-item" data-name="${this._escapeHtml(s.name)}">
+          <span class="custom-sound-name">${this._escapeHtml(s.name)}</span>
+          <button class="btn-xs sound-preview-btn" data-url="${this._escapeHtml(s.url)}" title="${t('modals.sound_manager.preview_btn')}">&#x25B6;</button>
+          <button class="btn-xs sound-delete-btn" data-name="${this._escapeHtml(s.name)}" title="${t('modals.sound_manager.delete_btn')}">&#x1F5D1;</button>
+        </div>
+      `).join('')}
+    </details>
   `;
 
   const customHtml = custom.length === 0 ? '' : `
-    <p class="muted-text" style="margin:8px 0 2px;font-size:0.78em;text-transform:uppercase;letter-spacing:.06em">${t('modals.sound_manager.group_custom')}</p>
-    ${custom.map(s => `
-      <div class="custom-sound-item" data-name="${this._escapeHtml(s.name)}">
-        <span class="custom-sound-name">${this._escapeHtml(s.name)}</span>
-        <button class="btn-xs sound-preview-btn" data-url="${this._escapeHtml(s.url)}" title="${t('modals.sound_manager.preview_btn')}">▶</button>
-        <button class="btn-xs sound-rename-btn" data-name="${this._escapeHtml(s.name)}" title="${t('modals.sound_manager.rename_btn')}">&#x270F;</button>
-        <button class="btn-xs sound-delete-btn" data-name="${this._escapeHtml(s.name)}" title="${t('modals.sound_manager.delete_btn')}">&#x1F5D1;</button>
-      </div>
-    `).join('')}
+    <details class="sound-section" open>
+      <summary class="sound-section-label">${t('modals.sound_manager.group_custom')}</summary>
+      ${custom.map(s => `
+        <div class="custom-sound-item" data-name="${this._escapeHtml(s.name)}">
+          <span class="custom-sound-name">${this._escapeHtml(s.name)}</span>
+          <button class="btn-xs sound-preview-btn" data-url="${this._escapeHtml(s.url)}" title="${t('modals.sound_manager.preview_btn')}">&#x25B6;</button>
+          <button class="btn-xs sound-rename-btn" data-name="${this._escapeHtml(s.name)}" title="${t('modals.sound_manager.rename_btn')}">&#x270F;</button>
+          <button class="btn-xs sound-delete-btn" data-name="${this._escapeHtml(s.name)}" title="${t('modals.sound_manager.delete_btn')}">&#x1F5D1;</button>
+        </div>
+      `).join('')}
+    </details>
   `;
 
-  list.innerHTML = builtinHtml + customHtml;
+  // Custom first, then built-in
+  list.innerHTML = customHtml + builtinHtml;
+
 
   // Preview buttons
   list.querySelectorAll('.sound-preview-btn').forEach(btn => {

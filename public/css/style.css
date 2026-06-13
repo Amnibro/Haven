@@ -4807,14 +4807,41 @@ select.cfn-select.cfn-input {
 .soundboard-btn.hidden-sound { opacity: 0.4; }
 .soundboard-btn .sb-hide-btn {
   font-size: 11px; color: var(--text-muted); cursor: pointer;
-  padding: 2px 4px; border-radius: 2px; display: none;
+  padding: 2px 4px; border-radius: 2px;
+  visibility: hidden; /* always takes space, no layout shift */
   transition: color 0.15s; margin-left: auto; flex-shrink: 0;
 }
-.soundboard-btn:hover .sb-hide-btn { display: inline; }
+.soundboard-btn:hover .sb-hide-btn { visibility: visible; }
 .soundboard-btn .sb-hide-btn:hover { color: var(--danger); }
  Hotkey recording visual */
 .hotkey-recording { animation: hotkey-pulse 0.6s ease infinite alternate; }
 @keyframes hotkey-pulse { from { box-shadow: 0 0 0 2px var(--accent-glow); } to { box-shadow: 0 0 8px 4px var(--accent-glow); } }
+
+/* Collapsible sections in the Manage tab sound list */
+.sound-section {
+  margin-bottom: 4px;
+}
+.sound-section-label {
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  padding: 4px 0 4px 0;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sound-section-label::before {
+  content: '\25BE'; /* small down triangle */
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+details.sound-section:not([open]) .sound-section-label::before {
+  content: '\25B8'; /* small right triangle */
+}
 
 
 .message-body { flex: 1; min-width: 0; }
