@@ -12148,9 +12148,12 @@ video:-webkit-full-screen {
   cursor: pointer;
   padding: 0;
   z-index: 100;
-  /* `right` is set imperatively in JS when sidebars open/close — animate it
-     so the button slides with the panel rather than popping into place. */
-  transition: right 0.25s ease, color 0.15s, background 0.15s;
+  /* `right` and `top` are set imperatively in JS when sidebars open/close
+     — animate them so the button slides with the panel rather than popping
+     into place. `top` animates because the open-state position (72px,
+     aligned with header) and the closed-state position (114px, staggered
+     below the voice toggle) differ. */
+  transition: right 0.25s ease, top 0.25s ease, color 0.15s, background 0.15s;
 }
 .sb-sidebar-toggle-btn:hover {
   color: var(--text-primary);
@@ -16949,13 +16952,4 @@ ul.chat-list { list-style-type: disc; }
   flex-wrap: wrap;
   align-items: center;
 }
-.persona-edit-row input[type=text] {
-  flex: 1 1 140px;
-  min-width: 140px;
-}
-/* Persona badge on rendered messages */
-.persona-msg-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  background: var(--bg-tertiary,
+.persona-edit-row input[type=tex

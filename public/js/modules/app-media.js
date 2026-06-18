@@ -661,7 +661,17 @@ _setupSoundManagement() {
       const sbWidth    = sbOpen ? (parseInt(sbPanel.style.width) || sbPanel.offsetWidth || 220) : 0;
       const voiceWidth = voiceOpen ? (parseInt(rightSb.style.width) || rightSb.offsetWidth || 240) : 0;
       if (voiceBtn) voiceBtn.style.right = voiceWidth + 'px';
-      if (sbBtn)    sbBtn.style.right    = (voiceWidth + sbWidth) + 'px';
+      if (sbBtn) {
+        sbBtn.style.right = (voiceWidth + sbWidth) + 'px';
+        // When the sb panel is OPEN, the toggle button sits at the panel's
+        // left edge — a horizontal position the voice/users toggle never
+        // occupies. Align it with the voice header (top: 72px) so it stops
+        // visually crowding the first content row, which under the prior
+        // 114px stagger looked like an overlap with the top of the sound
+        // list. When the panel is CLOSED, both toggles can end up at
+        // right:0, so restore the 114px stagger to keep them from stacking.
+        sbBtn.style.top = sbOpen ? '72px' : '114px';
+      }
     };
     window._updateSbToggleRight();
   }
@@ -2667,14 +2677,4 @@ _setupModalExpand() {
   // divs, settings headers, etc) without depending on h3 internal flex.
   const _injectModalControls = () => {
     document.querySelectorAll('.modal').forEach(modal => {
-      // Skip promo/centered popups and the media gallery (which has its own
-      // header close button) — they're not regular modals (#5352)
-      if (modal.classList.contains('android-beta-promo') ||
-          modal.classList.contains('desktop-promo') ||
-          modal.classList.contains('donors-modal-box') ||
-          modal.classList.contains('media-gallery-modal')) return;
-      // Idempotent — skip already-injected
-      if (modal.dataset.modalControlsInjected === '1') return;
-      modal.dataset.modalControlsInjected = '1';
-
-      // Settings/activities headers have their own close button �
+      // Skip promo/cent
