@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.25.2] — 2026-06-18
+
+### Fixed
+- **App loaded completely blank — no servers, channels, users, or DMs, and nothing was clickable (regression in 3.25.x).** Three of the front-end JavaScript modules (`app-messages.js`, `app-media.js`, and `app-ui.js`) had been silently truncated mid-file in an earlier commit, cutting off the end of each file. Because the app bundles these modules together at startup, a single unterminated file is a fatal parse error that stops the entire interface from initializing — so the page connected to the server but rendered nothing and ignored every click. All three files have been restored to their complete form. If you were stuck on a blank Haven screen, update and hard-refresh (Ctrl+Shift+R) and it will load normally again.
+
 ## [3.25.1] — 2026-06-18
 
 ### Fixed
