@@ -242,7 +242,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "âŒ";
+  --theme-logo:    "⌁";
   --msg-glow:      0 0 4px rgba(212, 160, 32, 0.06);
 }
 
@@ -388,7 +388,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "â„";
+  --theme-logo:    "❄";
 }
 
 /* Nord accent splashes — aurora colors */
@@ -662,7 +662,7 @@
   --font-heading:  'Palatino Linotype', Georgia, serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ’";
+  --theme-logo:    "💍";
   --msg-glow:      0 0 4px rgba(212, 168, 50, 0.06);
 }
 
@@ -707,7 +707,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "â›ï¸";
+  --theme-logo:    "⛏️";
 }
 
 [data-theme="minecraft"] .brand-text { color: #55bb55; text-shadow: 2px 2px 0 #2a5a2a; }
@@ -753,7 +753,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "âš”ï¸";
+  --theme-logo:    "⚔️";
   --msg-glow:      0 0 4px rgba(64, 168, 224, 0.06);
 }
 
@@ -798,7 +798,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ—¡ï¸";
+  --theme-logo:    "🗡️";
 }
 
 [data-theme="zelda"] .brand-text { background: linear-gradient(90deg, #44bb44, #e8c030); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
@@ -844,7 +844,7 @@
   --font-heading:  'Share Tech Mono', 'Courier New', monospace;
   --font-mono:     'Share Tech Mono', 'Courier New', monospace;
 
-  --theme-logo:    "â˜¢ï¸";
+  --theme-logo:    "☢️";
   --scanline:      repeating-linear-gradient(
     0deg,
     transparent,
@@ -931,7 +931,7 @@
   --font-heading:  'Georgia', 'Times New Roman', serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "âœï¸";
+  --theme-logo:    "✝️";
 }
 [data-theme="scripture"] .brand-text { color: #c8a84c; text-shadow: 0 0 10px rgba(200, 168, 76, 0.3); font-style: italic; }
 [data-theme="scripture"] .server-icon.home { background: linear-gradient(135deg, #2a2010, #c8a84c); box-shadow: 0 0 8px rgba(200, 168, 76, 0.2); }
@@ -1111,7 +1111,7 @@
   --font-heading:  'Georgia', 'Times New Roman', serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ•Šï¸";
+  --theme-logo:    "🕊️";
 }
 [data-theme="gospel"] .brand-text { color: #8b2032; font-style: italic; }
 [data-theme="gospel"] .server-icon.home { background: linear-gradient(135deg, #8b2032, #c8a84c); color: #fff; }
@@ -1818,7 +1818,7 @@
   --led-off:       #c8c8c8;
   --led-glow:      rgba(47, 138, 94, 0.4);
 
-  --theme-logo:    "â˜";
+  --theme-logo:    "☁";
   --scanline:      none;
 }
 /* Cloudy accent overrides — cool blue-gray tones */
@@ -5033,7 +5033,9 @@ details.sound-section:not([open]) .sound-section-label::before {
   cursor: pointer;
   padding: 0;
   z-index: 100;
-  transition: color 0.15s, background 0.15s;
+  /* `right` is set imperatively in JS when sidebars open/close — animate it
+     so the button slides with the panel rather than popping into place. */
+  transition: right 0.25s ease, color 0.15s, background 0.15s;
 }
 .sidebar-collapse-btn:hover {
   color: var(--text-primary);
@@ -12028,7 +12030,9 @@ video:-webkit-full-screen {
   cursor: pointer;
   padding: 0;
   z-index: 100;
-  transition: color 0.15s, background 0.15s;
+  /* `right` is set imperatively in JS when sidebars open/close — animate it
+     so the button slides with the panel rather than popping into place. */
+  transition: right 0.25s ease, color 0.15s, background 0.15s;
 }
 .sb-sidebar-toggle-btn:hover {
   color: var(--text-primary);
@@ -14129,7 +14133,11 @@ ul.chat-list { list-style-type: disc; }
 #app-body .server-bar[data-panel-pos="left"] { order: 0; }
 #app-body .sidebar[data-panel-pos="left"] { order: 1; }
 #app-body .main { order: 2; }
-#app-body .right-sidebar { order: 3; }
+/* Soundboard sidebar twins the voice/users panel — sits directly LEFT of it.
+   Default flex order with no explicit value is 0, which puts it at the far
+   LEFT of #app-body. Force it between main (2) and right-sidebar (4). */
+#app-body .sb-sidebar-panel { order: 3; }
+#app-body .right-sidebar { order: 4; }
 
 /* Right sidebar — snapped left */
 #app-body .right-sidebar[data-panel-pos="left"] {
@@ -14141,7 +14149,7 @@ ul.chat-list { list-style-type: disc; }
   left: auto; right: -3px;
   cursor: col-resize;
 }
-#app-body .right-sidebar[data-panel-pos="right"] { order: 3; }
+#app-body .right-sidebar[data-panel-pos="right"] { order: 4; }
 
 /* Floating panel (center) — any panel */
 .mod-float {
