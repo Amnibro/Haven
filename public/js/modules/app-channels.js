@@ -398,6 +398,16 @@ _openChannelCtxMenu(code, btnEl) {
     const canCreateSub = isMod || this._hasPerm('manage_sub_channels') || this._hasPerm('create_channel');
     createSubBtn.style.display = (canCreateSub && ch && !ch.parent_channel_id) ? '' : 'none';
   }
+  // (#5424) The Rename action was only shown to moderators (effective level
+  // >= 25), so granting rename_channel / rename_sub_channel had no effect in
+  // the UI even though the server enforces exactly those permissions. Show it
+  // whenever the user actually holds the matching rename permission.
+  const renameCtxBtn = menu.querySelector('[data-action="rename-channel"]');
+  if (renameCtxBtn && ch) {
+    const renamePerm = ch.parent_channel_id ? 'rename_sub_channel' : 'rename_channel';
+    const canRename = isMod || this._hasPerm(renamePerm);
+    renameCtxBtn.style.display = canRename ? '' : 'none';
+  }
   // Hide "Leave Channel" for admins (always in all channels)
   const leaveBtn = menu.querySelector('[data-action="leave-channel"]');
   if (leaveBtn) leaveBtn.style.display = isAdmin ? 'none' : '';
@@ -405,7 +415,10 @@ _openChannelCtxMenu(code, btnEl) {
   const organizeBtn = menu.querySelector('[data-action="organize"]');
   if (organizeBtn) {
     const hasSubs = ch && !ch.parent_channel_id && this.channels.some(c => c.parent_channel_id === ch.id);
-    organizeBtn.style.display = (canManageChannels && hasSubs) ? '' : 'none';
+    // (#5424) Sub-channel managers can organize a parent's sub-channels, not
+    // just users with the server-wide create_channel permission.
+    const canOrganize = canManageChannels || this._hasPerm('manage_sub_channels');
+    organizeBtn.style.display = (canOrganize && hasSubs) ? '' : 'none';
   }
   // Show "Move to…" for channels that can become sub-channels (no children of their own)
   const moveToBtn = menu.querySelector('[data-action="move-to-parent"]');

@@ -61,6 +61,16 @@ module.exports = function register(socket, ctx) {
     }
   };
 
+  // (#5424) Organizing a parent's sub-channels is sub-channel management, not
+  // server administration. A user may do it if they hold manage_sub_channels
+  // for that parent (channel-scoped roles cascade onto the parent), or the
+  // server-wide create_channel permission. parentId === null means top-level /
+  // server structure, which still requires create_channel (or admin).
+  const _canManageSubsOf = (parentId) =>
+    socket.user.isAdmin ||
+    (!!parentId && userHasPermission(socket.user.id, 'manage_sub_channels', parentId)) ||
+    userHasPermission(socket.user.id, 'create_channel');
+
   // ── Get user's channels ─────────────────────────────────
   socket.on('get-channels', () => {
     const channels = getEnrichedChannels(
@@ -1007,9 +1017,22 @@ module.exports = function register(socket, ctx) {
   // ── Channel reordering ──────────────────────────────────
   socket.on('reorder-channels', (data) => {
     if (!data || typeof data !== 'object') return;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'create_channel')) return socket.emit('error-msg', 'You don\'t have permission to reorder channels');
     const order = data.order;
     if (!Array.isArray(order) || order.length > 500) return;
+    // (#5424) If every channel in this reorder is a sub-channel under one
+    // parent, manage_sub_channels on that parent is enough. A top-level (or
+    // mixed-parent) reorder still requires create_channel.
+    let _reorderParent = null;
+    try {
+      const codes = order.map(it => (it && typeof it.code === 'string') ? it.code : null).filter(Boolean);
+      if (codes.length) {
+        const ph = codes.map(() => '?').join(',');
+        const rows = db.prepare(`SELECT parent_channel_id FROM channels WHERE code IN (${ph}) AND is_dm = 0`).all(...codes);
+        const parents = new Set(rows.map(r => r.parent_channel_id));
+        if (parents.size === 1) _reorderParent = [...parents][0];
+      }
+    } catch { /* fall through to create_channel check */ }
+    if (!_canManageSubsOf(_reorderParent)) return socket.emit('error-msg', 'You don\'t have permission to reorder channels');
     try {
       const update = db.prepare('UPDATE channels SET position = ? WHERE code = ?');
       const txn = db.transaction(() => {
@@ -1029,13 +1052,13 @@ module.exports = function register(socket, ctx) {
 
   socket.on('move-channel', (data) => {
     if (!data || typeof data !== 'object') return;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'create_channel')) return socket.emit('error-msg', 'You don\'t have permission to reorder channels');
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const direction = data.direction;
     if (direction !== 'up' && direction !== 'down') return;
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return;
+    if (!_canManageSubsOf(channel.parent_channel_id)) return socket.emit('error-msg', 'You don\'t have permission to reorder channels'); // (#5424)
     try {
       const parentId = channel.parent_channel_id;
       let siblings;
@@ -1067,12 +1090,18 @@ module.exports = function register(socket, ctx) {
   // ── Channel reparenting ─────────────────────────────────
   socket.on('reparent-channel', (data) => {
     if (!data || typeof data !== 'object') return;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'create_channel')) return socket.emit('error-msg', 'You don\'t have permission to move channels');
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const newParentCode = data.newParentCode;
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
+    // (#5424) Promoting a sub to top-level, or demoting a top-level channel,
+    // changes server structure -> create_channel. Re-nesting an existing
+    // sub-channel under a parent is sub-channel management.
+    const _promoting = (newParentCode === null || newParentCode === undefined);
+    if (_promoting || !channel.parent_channel_id) {
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'create_channel')) return socket.emit('error-msg', 'You don\'t have permission to move channels');
+    }
     try {
       if (newParentCode === null || newParentCode === undefined) {
         if (!channel.parent_channel_id) return socket.emit('error-msg', 'Channel is already top-level');
@@ -1091,6 +1120,11 @@ module.exports = function register(socket, ctx) {
         const subCount = db.prepare('SELECT COUNT(*) as cnt FROM channels WHERE parent_channel_id = ?').get(channel.id);
         if (subCount && subCount.cnt > 0) return socket.emit('error-msg', 'Cannot make a channel with sub-channels into a sub-channel. Move or remove its sub-channels first.');
         if (channel.parent_channel_id === newParent.id) return socket.emit('error-msg', 'Channel is already under that parent');
+        // (#5424) A sub-channel manager of the destination parent (or the
+        // channel's current parent) may re-nest an existing sub-channel.
+        if (!_canManageSubsOf(newParent.id) && !_canManageSubsOf(channel.parent_channel_id)) {
+          return socket.emit('error-msg', 'You don\'t have permission to move channels');
+        }
         const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id = ?').get(newParent.id);
         const position = (maxPos && maxPos.mp != null) ? maxPos.mp + 1 : 0;
         db.prepare('UPDATE channels SET parent_channel_id = ?, position = ?, category = NULL WHERE id = ?').run(newParent.id, position, channel.id);
@@ -1106,14 +1140,14 @@ module.exports = function register(socket, ctx) {
   // ── Channel categories ──────────────────────────────────
   socket.on('set-channel-category', (data) => {
     if (!data || typeof data !== 'object') return;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'create_channel')) return socket.emit('error-msg', 'You don\'t have permission to set categories');
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     let category = typeof data.category === 'string' ? data.category.trim() : '';
     if (category.length > 30) category = category.slice(0, 30);
     if (!category) category = null;
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    const channel = db.prepare('SELECT id, parent_channel_id FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
+    if (!_canManageSubsOf(channel.parent_channel_id)) return socket.emit('error-msg', 'You don\'t have permission to set categories'); // (#5424)
     // Case-insensitive dedup: if another channel already uses this tag with
     // different casing, adopt the existing casing so they group together.
     if (category) {
