@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.27.0] — 2026-06-23
+
+### Added
+- **Admin-configurable STUN/TURN voice servers (#5399).** A new **Settings → Voice & Connectivity** section lets server admins point voice and screen share at their own STUN servers (one `stun:` URI per line, or comma-separated) and an optional TURN server with static credentials — without setting environment variables or redeploying. `/api/ice-servers` now resolves in the order admin setting → `STUN_URLS` / `TURN_URL` env → built-in STUN pool, so a server can be fixed live from the admin panel. The TURN password is stored as an admin-only sensitive setting and every value is scheme/length validated before it's saved. Clients that can't reach any STUN server now show a one-time warning toast explaining that calls may only work on the local network until an admin configures STUN/TURN, instead of silently hanging on "ICE: Connecting…".
+
+### Fixed
+- **The stream viewer's "close" (✕) button broke screen sharing.** The viewer header has two different ✕ buttons: the per-tile ✕ safely hides a single stream (restorable), but the header ✕ stopped your own broadcast *and* fully tore down every stream tile. Destroying a tile dropped the only reference to a sharer's still-live video, so the stream couldn't be reopened and even a fresh reshare wouldn't reattach without a full hard-refresh — it also closed streams you were only watching and removed the restore button. The header ✕ now closes streams the same restorable way the per-tile ✕ does (hide + mute, recoverable from the hidden-streams bar or the LIVE badge) and never stops your own share.
+
 ## [3.26.0] — 2026-06-21
 
 ### Added
