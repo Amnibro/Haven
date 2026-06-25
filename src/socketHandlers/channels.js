@@ -342,6 +342,27 @@ module.exports = function register(socket, ctx) {
       'SELECT * FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
 
+    // (#5408) A channel code is not a skeleton key for sub-channels. Access to
+    // a sub-channel is inherited by joining its PARENT (which auto-adds the
+    // parent's public subs); you never join a sub-channel directly by entering
+    // or crafting its code. Without this, a non-member could paste a
+    // sub-channel's code (or open a ?channel=<sub> deep link) and the plain
+    // join below would hand them membership, unlocking its history and the
+    // ability to post. Only gate NEW joins — existing members re-emit
+    // join-channel to refresh (e.g. after a message move) and must still pass.
+    if (!membership && !socket.user.isAdmin && channel.parent_channel_id) {
+      const isPrivateSub = channel.is_private || channel.code_visibility === 'private';
+      const parentMember = db.prepare(
+        'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+      ).get(channel.parent_channel_id, socket.user.id);
+      // Private subs are never granted by code (they need an explicit add,
+      // matching the public-only auto-join rule); public subs require parent
+      // membership. Reuse the generic error so the code's existence stays hidden.
+      if (isPrivateSub || !parentMember) {
+        return socket.emit('error-msg', 'Invalid channel code — double-check it');
+      }
+    }
+
     if (!membership) {
       db.prepare(
         'INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)'
