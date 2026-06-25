@@ -1753,24 +1753,45 @@ class VoiceManager {
   }
 
   // (#5427) Proactive recovery sweep, called after a socket reconnect while
-  // still in voice. Only touches peers whose media path is actually broken
-  // ('failed'/'disconnected') — healthy connections are left completely alone,
-  // so this is safe to call defensively. Catches the case where ICE died
-  // during the socket outage but the connectionstatechange-driven auto-restart
-  // either hasn't fired yet or missed the event while we were disconnected.
+  // still in voice.
+  //
+  // The first cut of this only ICE-restarted peers whose connection reported
+  // 'failed'/'disconnected'. That turned out to be a no-op for the exact
+  // population that hit the bug: web clients on Firefox/Edge, where after a
+  // brief socket flap the RTCPeerConnection to a now-dead relayed path keeps
+  // reporting 'connected'/'completed' even though no media is flowing. The
+  // server's fast-path rejoin keeps everyone's existing peer connections (no
+  // voice-user-left / -joined churn), so the *other* peers also never rebuild
+  // their side — leaving the rejoiner audible to some people and silent to
+  // others, with nothing on either end self-correcting. That's the
+  // "voice activity shows server-side but some people can't hear me" report.
+  //
+  // We can't trust connectionState here, so don't try to be clever: ICE-restart
+  // *every* peer. A single RTCPeerConnection carries both directions, so a
+  // restart initiated from the rejoiner repairs the media path both ways for
+  // that pair (the remote handles our iceRestart offer in 'voice-offer'). On a
+  // genuinely-healthy connection an ICE restart is cheap and near-seamless —
+  // media keeps flowing on the old candidate pair until the new one validates —
+  // so over-restarting is far better than leaving a dead path silent. This only
+  // runs in response to an actual socket reconnect, not routinely, so the cost
+  // is bounded to the rare flap that triggered it. Stagger the restarts so we
+  // don't fire a burst of simultaneous offers through signaling.
   _healPeerConnections() {
     if (!this.inVoice) return;
+    let i = 0;
     for (const [userId, peer] of this.peers) {
       const conn = peer && peer.connection;
-      if (!conn) continue;
-      const state = conn.connectionState;
-      const iceState = conn.iceConnectionState;
-      if (state === 'failed' || state === 'disconnected' ||
-          iceState === 'failed' || iceState === 'disconnected') {
-        console.warn('[Voice] post-reconnect heal: ICE-restarting broken peer', userId,
-          `(conn=${state}, ice=${iceState})`);
+      if (!conn || conn.connectionState === 'closed') continue;
+      const delay = (i++) * 200;
+      setTimeout(() => {
+        const current = this.peers.get(userId);
+        // Bail if the peer was torn down/replaced while we were waiting.
+        if (!this.inVoice || !current || current.connection !== conn) return;
+        if (conn.connectionState === 'closed') return;
+        console.warn('[Voice] post-reconnect heal: ICE-restarting peer', userId,
+          `(conn=${conn.connectionState}, ice=${conn.iceConnectionState})`);
         this._restartIce(userId, conn);
-      }
+      }, delay);
     }
   }
 
