@@ -478,13 +478,32 @@ _setupNotifications() {
       applyUrlVis();
     });
 
-    // Click to copy — works even when URL is hidden
+    // Click to copy — works even when URL is hidden.
+    // navigator.clipboard.writeText() fails silently in Electron's BrowserView,
+    // so fall back to a hidden-textarea execCommand('copy') like the other
+    // copy buttons do. (#182)
+    const _flashCopied = () => {
+      statusUrlEl.textContent = 'Copied!';
+      setTimeout(() => { statusUrlEl.textContent = urlVisible ? origin : '••••••••'; }, 1500);
+    };
+    const _fallbackCopy = (text) => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        _flashCopied();
+      } catch {}
+    };
     statusUrlEl.addEventListener('click', () => {
-      navigator.clipboard.writeText(origin).then(() => {
-        const orig = statusUrlEl.textContent;
-        statusUrlEl.textContent = 'Copied!';
-        setTimeout(() => { statusUrlEl.textContent = urlVisible ? origin : '••••••••'; }, 1500);
-      }).catch(() => {});
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(origin).then(_flashCopied).catch(() => _fallbackCopy(origin));
+      } else {
+        _fallbackCopy(origin);
+      }
     });
   }
 },
