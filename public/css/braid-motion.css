@@ -1,0 +1,24 @@
+/* Braid motion — chat animation layer. Independent of Braid form, so it
+   applies on any theme. Everything here animates only opacity/transform
+   (compositor-friendly) and is disabled outright under prefers-reduced-motion. */
+@keyframes braid-msg-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes braid-pop{from{transform:scale(.82);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes braid-fade{from{opacity:0}to{opacity:1}}
+.message,.message-compact{animation:braid-msg-in .18s cubic-bezier(.16,1,.3,1) both}
+.messages{animation:braid-fade .22s ease-out both}
+.reaction,.message-reactions>*{animation:braid-pop .16s cubic-bezier(.16,1,.3,1) both;transition:transform .12s ease,background .15s ease,border-color .15s ease}
+.reaction:hover,.message-reactions>*:hover{transform:translateY(-1px)}
+.reaction:active,.message-reactions>*:active{transform:scale(.94)}
+.channel-item{transition:background .15s ease,border-color .15s ease,transform .12s ease}
+.channel-item:active{transform:scale(.99)}
+.btn-send,.icon-btn{transition:transform .12s ease,background .15s ease,color .15s ease}
+.btn-send:active,.icon-btn:active{transform:scale(.92)}
+.message-input-area textarea,.message-input-container textarea{transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}
+.typing-indicator,.typing-text{animation:braid-fade .2s ease-out both}
+.msg-toolbar,.context-menu,.dropdown-menu{animation:braid-pop .13s cubic-bezier(.16,1,.3,1) both;transform-origin:top right}
+.theme-popup,.modal-content,.settings-panel{animation:braid-msg-in .2s cubic-bezier(.16,1,.3,1) both}
+@media (prefers-reduced-motion: reduce){
+  .message,.message-compact,.messages,.reaction,.message-reactions>*,.typing-indicator,.typing-text,
+  .msg-toolbar,.context-menu,.dropdown-menu,.theme-popup,.modal-content,.settings-panel{animation:none!important}
+  .channel-item,.btn-send,.icon-btn,.reaction{transition:none!important;transform:none!important}
+}

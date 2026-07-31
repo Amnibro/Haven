@@ -22,14 +22,16 @@
     window.visualViewport.addEventListener('resize', resetDocScroll);
     window.visualViewport.addEventListener('scroll', resetDocScroll);
   }
-  var t = localStorage.getItem('haven_theme');
+  if (!localStorage.getItem('haven_braid_ui_v1')) {
+    if (localStorage.getItem('haven_theme') === 'haven') {
+      localStorage.setItem('haven_theme', 'haven-dark');
+    }
+    localStorage.setItem('haven_braid_ui_v1', '1');
+  }
+  var t = localStorage.getItem('haven_theme') || 'haven';
+  document.documentElement.setAttribute('data-braid', '1');
   if (t) {
     if (t.indexOf('file:') === 0) {
-      // File theme: inject the CSS link immediately so the theme applies on
-      // the login page (where plugin-loader doesn't run) and avoids a FOUC
-      // on the app page while waiting for plugin-loader's 500 ms startup
-      // delay. The data-theme is set to 'haven' as a stable layout base,
-      // matching what applyFileTheme() does when the plugin-loader runs. (#5359)
       var _fl = document.createElement('link');
       _fl.rel = 'stylesheet';
       _fl.href = '/themes/' + t.slice(5);
@@ -39,6 +41,8 @@
     } else {
       document.documentElement.setAttribute('data-theme', t);
     }
+  } else {
+    document.documentElement.setAttribute('data-theme', 'haven');
   }
   // Defensive: if the saved theme is NOT custom/rgb, strip any inline CSS
   // custom properties that may have been left on :root during a prior theme

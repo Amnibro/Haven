@@ -11,7 +11,13 @@
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
   <link rel="stylesheet" href="/css/style.css?v=3.34.0">
-  <script src="/js/theme-init.js?v=3.16.15"></script>
+  <link rel="stylesheet" href="/css/braid-shell.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/braid-layout.css?v=0.5.0">
+  <link rel="stylesheet" href="/css/braid-form.css?v=0.6.2">
+  <link rel="stylesheet" href="/css/braid-motion.css?v=0.6.1">
+  <script src="/js/theme-init.js?v=0.4.0"></script>
+  <script src="/js/braid-layout.js?v=0.5.0"></script>
+  <script src="/js/braid-form.js?v=0.6.2"></script>
 </head>
 <body>
 
@@ -141,10 +147,14 @@
           <div id="theme-popup" class="theme-popup" style="display:none">
             <div class="theme-popup-header">
               <span class="theme-popup-title" data-i18n="app.theme.title">Theme</span>
+              <button id="braid-form-toggle" class="icon-btn small" title="Braid form — merged message cards, dashed seams, rounded chrome" aria-pressed="false">▤</button>
               <button id="theme-popup-close" class="icon-btn small" data-i18n-title="app.theme.close" title="Close">&times;</button>
             </div>
             <div class="theme-selector" id="theme-selector">
-              <button class="theme-btn active" data-theme="haven" title="Haven"><span class="theme-icon">⬡</span></button>
+              <button class="theme-btn active" data-theme="haven" title="Braid Light"><span class="theme-icon">⬡</span></button>
+              <button class="theme-btn" data-theme="haven-dark" title="Braid Dark"><span class="theme-icon">🌙</span></button>
+              <button class="theme-btn" data-theme="braid" title="Braid (mint)"><span class="theme-icon">〰</span></button>
+              <button class="theme-btn" data-theme="braid-light" title="Braid Light (mint)"><span class="theme-icon">◎</span></button>
               <button class="theme-btn" data-theme="discord" title="Discord"><span class="theme-icon">🎮</span></button>
               <button class="theme-btn" data-theme="matrix" title="Matrix"><span class="theme-icon">Ⅿ</span></button>
               <button class="theme-btn" data-theme="tron" title="Tron"><span class="theme-icon">◈</span></button>
@@ -1981,6 +1991,8 @@
               <select id="default-theme-select" style="max-width:160px">
                 <option value="" data-i18n="settings.admin.no_theme">None (user's choice)</option>
                 <option value="haven">Haven</option>
+                <option value="braid">Braid (mint)</option>
+                <option value="braid-light">Braid Light (mint)</option>
                 <option value="discord">Discord</option>
                 <option value="matrix">Matrix</option>
                 <option value="fallout">Fallout</option>

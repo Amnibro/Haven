@@ -1,0 +1,143 @@
+/* Braid form — shape-language layer, desktop/web twin of Haven-Mobile's
+   ThemeManager.braidForm(). Gated on html[data-braid-form="1"]; everything
+   reverts when it is off.
+
+   DOM this rides on: a run of same-author posts is one `.message` (avatar +
+   header) followed by N `.message-compact` siblings. Both carry a
+   `.message-body`, so the card goes on the BODY — the avatar and the
+   hover-timestamp stay outside in the gutter, exactly like mobile.
+
+   `!important` is load-bearing here: this layer sits on top of style.css,
+   braid-shell.css and braid-layout.css, which already use it for the same
+   properties. */
+html[data-braid-form="1"]{
+  --braid-r:14px;
+  --braid-bub:var(--bg-hover,var(--bg-card));
+  --braid-line:var(--border);
+  --braid-seam:color-mix(in srgb,var(--border) 55%,var(--braid-bub));
+  --braid-me:color-mix(in srgb,var(--accent) 12%,var(--bg-secondary));
+  --braid-me-line:color-mix(in srgb,var(--accent) 35%,var(--border));
+  --braid-gutter:58px;
+}
+/* ---- strip the per-post chrome; the card moves to .message-body ---- */
+html[data-braid-form="1"] .message,
+html[data-braid-form="1"] .message-compact{
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  margin:0!important;
+}
+html[data-braid-form="1"] .messages{gap:0!important}
+html[data-braid-form="1"] .message{padding:0 18px 0 10px!important}
+html[data-braid-form="1"] .message-compact{padding:0 18px 0 var(--braid-gutter)!important}
+html[data-braid-form="1"] .message-row{padding:0!important;gap:12px!important;align-items:flex-start}
+/* gutter math must be exact or the run-start card and its compacts misalign:
+   10 (message pad) + 36 (avatar) + 12 (row gap) = 58 = --braid-gutter */
+html[data-braid-form="1"] .message-avatar,
+html[data-braid-form="1"] .message-avatar-img{
+  width:36px!important;height:36px!important;min-width:36px!important;
+  box-sizing:border-box!important;border:0!important;margin:0!important;
+}
+html[data-braid-form="1"] .message:hover,
+html[data-braid-form="1"] .message-compact:hover{background:transparent!important}
+/* ---- the card ---- */
+html[data-braid-form="1"] .message>.message-row>.message-body,
+html[data-braid-form="1"] .message-compact>.message-body{
+  position:relative;
+  flex:1 1 auto;
+  min-width:0;
+  background:var(--braid-bub);
+  border:1px solid var(--braid-line);
+  border-top:0;
+  border-radius:0;
+  padding:5px 13px;
+}
+/* run start: top corners + top hairline.
+   Run position comes from data-braid-run (set by braid-form.js), NOT :has().
+   :has(+ .message-compact) is correct but pathological here — Chromium
+   re-runs :has() invalidation on every sibling insert, so a channel load went
+   quadratic (600 inserts: 622ms with the form on vs 80ms off). */
+html[data-braid-form="1"] .message[data-braid-run="start"]>.message-row>.message-body,
+html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body{
+  border-top:1px solid var(--braid-line);
+  border-top-left-radius:var(--braid-r);
+  border-top-right-radius:var(--braid-r);
+  padding-top:9px;
+  margin-top:8px;
+}
+/* run end: bottom corners */
+html[data-braid-form="1"] .message[data-braid-run="end"]>.message-row>.message-body,
+html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body,
+html[data-braid-form="1"] .message-compact[data-braid-run="end"]>.message-body{
+  border-bottom-left-radius:var(--braid-r);
+  border-bottom-right-radius:var(--braid-r);
+  padding-bottom:9px;
+  margin-bottom:8px;
+}
+/* dashed seam between posts inside a run */
+html[data-braid-form="1"] .message-compact>.message-body::before{
+  content:'';
+  position:absolute;left:13px;right:13px;top:0;
+  border-top:1px dashed var(--braid-seam);
+  pointer-events:none;
+}
+html[data-braid-form="1"] .message>.message-row>.message-body:hover,
+html[data-braid-form="1"] .message-compact>.message-body:hover{
+  background:color-mix(in srgb,var(--bg-active) 40%,var(--braid-bub));
+}
+/* style.css draws its own group separator — the card replaces it */
+html[data-braid-form="1"] .message-user-sep{border-top:0!important;padding-top:0!important}
+/* system/announcement posts stay bare notices, not cards */
+html[data-braid-form="1"] .message.system-message>.message-row>.message-body,
+html[data-braid-form="1"] .message.announcement>.message-row>.message-body{
+  background:transparent;border:0;border-radius:0;
+}
+/* ---- sidebar: a run of channels is one card too ---- */
+html[data-braid-form="1"] .channel-item{
+  position:relative;
+  margin:0 8px!important;
+  border:1px solid var(--braid-line)!important;
+  border-top:0!important;
+  border-radius:0!important;
+  background:var(--braid-bub);
+}
+html[data-braid-form="1"] .channel-item[data-braid-run="start"],
+html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{
+  border-top:1px solid var(--braid-line)!important;
+  border-top-left-radius:12px!important;
+  border-top-right-radius:12px!important;
+  margin-top:4px!important;
+}
+html[data-braid-form="1"] .channel-item[data-braid-run="end"],
+html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{
+  border-bottom-left-radius:12px!important;
+  border-bottom-right-radius:12px!important;
+  margin-bottom:4px!important;
+}
+html[data-braid-form="1"] .channel-item[data-braid-run="mid"]::before,
+html[data-braid-form="1"] .channel-item[data-braid-run="end"]::before{
+  content:'';
+  position:absolute;left:12px;right:12px;top:0;
+  border-top:1px dashed var(--braid-seam);
+  pointer-events:none;
+}
+html[data-braid-form="1"] .channel-item:hover{background:color-mix(in srgb,var(--bg-active) 45%,var(--braid-bub))}
+html[data-braid-form="1"] .channel-item.active{
+  background:color-mix(in srgb,var(--accent) 16%,var(--bg-secondary));
+  border-color:var(--accent)!important;
+}
+html[data-braid-form="1"] .channel-item.active::before,
+html[data-braid-form="1"] .channel-item.active + .channel-item::before{display:none!important}
+/* ---- pills ---- */
+html[data-braid-form="1"] .reaction,
+html[data-braid-form="1"] .reaction-add,
+html[data-braid-form="1"] .message-reactions>*{border-radius:999px!important}
+/* ---- chrome vs canvas ---- */
+html[data-braid-form="1"] .messages-container,
+html[data-braid-form="1"] .chat-area{background:var(--bg-primary)}
+html[data-braid-form="1"] .chat-header,
+html[data-braid-form="1"] .message-input-area,
+html[data-braid-form="1"] .message-input-container{background:var(--bg-secondary)!important}
+html[data-braid-form="1"] .message-input-area textarea,
+html[data-braid-form="1"] .message-input-container textarea{background:var(--bg-primary)!important}
