@@ -1162,6 +1162,7 @@ Type `/` in the message box to see the full list with descriptions. A selection:
 | `/gif <query>` | Search and send a GIF inline |
 | `/play <name or url>` | Search and play music in the voice channel |
 | `/poll [question]` | Open the poll creator |
+| `/time 8pm` | Insert a time everyone reads in their own timezone |
 | `/roll 2d20` | Roll dice (any NdN format) |
 | `/flip` | Flip a coin |
 | `/me does something` | Italic action text |
@@ -1174,6 +1175,43 @@ Type `/` in the message box to see the full list with descriptions. A selection:
 | `/clear` | Clear your own chat view |
 
 Bots can register their own slash commands too, see the developer guide below.
+
+### Timestamps that follow the reader
+
+A message can carry an instant rather than a wall-clock time, so everyone sees
+it on their own clock. Useful when the group is spread across timezones: you say
+one time, nobody does the arithmetic, and nobody turns up an hour late.
+
+`/time 8pm` puts a token like `<t:1780853820:f>` in your message box. Type around
+it and send. Whoever reads it sees their own local time.
+
+What `/time` accepts:
+
+| You type | Means |
+|----------|-------|
+| `/time 8pm` or `/time 20:00` | Today at that time, or tomorrow if it already went by |
+| `/time tomorrow 9am` | Tomorrow at nine |
+| `/time 2026-09-06 20:30` | That exact date and time |
+| `/time 2026-09-06` | Just the date |
+| `/time +2h` | Two hours from now (`m`, `h`, `d`, `w` all work) |
+| `/time 1780853820` | A unix timestamp you already have |
+
+Everything you type is read in **your** timezone. Add a style letter to change
+how it looks, for example `/time 8pm R`:
+
+| Letter | Looks like |
+|--------|-----------|
+| `t` | 8:17 PM |
+| `T` | 8:17:00 PM |
+| `d` | 09/06/2026 |
+| `D` | September 6, 2026 |
+| `f` (default) | September 6, 2026 at 8:17 PM |
+| `F` | Sunday, September 6, 2026 at 8:17 PM |
+| `R` | in 3 hours (counts itself down) |
+
+Hovering any of them shows the full date and time spelled out. This is the same
+syntax Discord uses, so tokens survive the Ferry bridge in both directions and
+the timestamp generators people already use work here too.
 
 ### Keyboard shortcuts
 

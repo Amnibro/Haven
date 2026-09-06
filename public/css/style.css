@@ -9193,6 +9193,15 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
    @MENTION STYLES
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
+/* <t:...> timestamps. Same instant for everyone, each reader's own clock. */
+.chat-timestamp {
+  background: rgba(124, 92, 252, 0.12);
+  border-radius: 0.25rem;
+  padding: 0 0.1875rem;
+  white-space: nowrap;
+  cursor: help;
+}
+
 .mention {
   background: rgba(124, 92, 252, 0.15);
   color: var(--accent);

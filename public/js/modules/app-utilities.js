@@ -453,6 +453,156 @@ _emojiSearchMatch(emoji, keywords, rawQuery) {
   return false;
 },
 
+// ── Timestamps that follow the reader (<t:1780853820:R>) ──
+// One instant in the message, rendered in whatever timezone and locale the
+// person reading it is in, which is the whole point for scheduling across a
+// group. The syntax is deliberately Discord's: tokens survive a round trip
+// through Ferry in both directions, and the generators people already use
+// keep working.
+
+/** Locale for date formatting: the reader's own regional locale when it speaks
+ *  the language Haven is set to (so en-GB keeps day/month order), else the
+ *  Haven language, else whatever the browser prefers. */
+_timeLocale() {
+  const ui = String((typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) || '').toLowerCase();
+  const browser = (typeof navigator !== 'undefined' && Array.isArray(navigator.languages)) ? navigator.languages : [];
+  if (!ui) return browser[0] || undefined;
+  const base = ui.split('-')[0];
+  return browser.find(l => String(l).toLowerCase().split('-')[0] === base) || ui;
+},
+
+/** "in 5 minutes" / "3 hours ago", in the largest unit that still reads well. */
+_relativeTimestamp(ms, locale) {
+  const diff = ms - Date.now();
+  const abs = Math.abs(diff);
+  const MIN = 60000, HOUR = 3600000, DAY = 86400000;
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  if (abs < MIN)       return rtf.format(Math.round(diff / 1000), 'second');
+  if (abs < HOUR)      return rtf.format(Math.round(diff / MIN), 'minute');
+  if (abs < DAY)       return rtf.format(Math.round(diff / HOUR), 'hour');
+  if (abs < 30 * DAY)  return rtf.format(Math.round(diff / DAY), 'day');
+  if (abs < 365 * DAY) return rtf.format(Math.round(diff / (30 * DAY)), 'month');
+  return rtf.format(Math.round(diff / (365 * DAY)), 'year');
+},
+
+/** Render one <t:...> token to HTML, or null when it is not a usable instant
+ *  (in which case the caller leaves the raw text alone). */
+_formatTimestampToken(seconds, style = 'f') {
+  if (!Number.isFinite(seconds)) return null;
+  const date = new Date(seconds * 1000);
+  if (Number.isNaN(date.getTime())) return null;
+  const locale = this._timeLocale();
+  let text;
+  try {
+    switch (style) {
+      case 't': text = date.toLocaleTimeString(locale, { timeStyle: 'short' }); break;
+      case 'T': text = date.toLocaleTimeString(locale, { timeStyle: 'medium' }); break;
+      case 'd': text = date.toLocaleDateString(locale, { dateStyle: 'short' }); break;
+      case 'D': text = date.toLocaleDateString(locale, { dateStyle: 'long' }); break;
+      case 'F': text = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'short' }); break;
+      case 'R': text = this._relativeTimestamp(date.getTime(), locale); break;
+      default:  text = date.toLocaleString(locale, { dateStyle: 'long', timeStyle: 'short' }); break;
+    }
+  } catch { return null; }
+  // The hover title always spells the instant out in full, so a relative or
+  // time-only token can still be pinned down without asking the sender.
+  let title = text;
+  try { title = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'long' }); } catch { /* keep the visible text */ }
+  if (style === 'R') this._startTimestampTicker();
+  return `<time class="chat-timestamp" datetime="${this._escapeHtml(date.toISOString())}" data-ts="${Math.trunc(seconds)}" data-tstyle="${this._escapeHtml(style)}" title="${this._escapeHtml(title)}">${this._escapeHtml(text)}</time>`;
+},
+
+/** Keep rendered relative timestamps honest without re-rendering messages.
+ *  Started on first use, so a server whose chat has none never runs a timer. */
+_startTimestampTicker() {
+  if (this._timestampTicker || typeof document === 'undefined') return;
+  this._timestampTicker = setInterval(() => {
+    const nodes = document.querySelectorAll('time.chat-timestamp[data-tstyle="R"]');
+    if (!nodes.length) return;
+    const locale = this._timeLocale();
+    nodes.forEach(el => {
+      const secs = Number(el.dataset.ts);
+      if (!Number.isFinite(secs)) return;
+      const next = this._relativeTimestamp(secs * 1000, locale);
+      if (next && el.textContent !== next) el.textContent = next;
+    });
+  }, 30000);
+},
+
+/** Turn what someone typed after /time into a token, or null if it makes no
+ *  sense. Everything is read in the sender's own timezone, which is the
+ *  natural thing: you type your time, everyone else sees theirs. */
+_parseTimeExpression(input, now = new Date()) {
+  let text = String(input == null ? '' : input).trim();
+  if (!text) return null;
+
+  // Optional trailing style letter: "8pm R".
+  let style = null;
+  const styled = text.match(/\s+([tTdDfFR])$/);
+  if (styled) { style = styled[1]; text = text.slice(0, styled.index).trim(); }
+  if (!text) return null;
+
+  // Raw unix seconds pass straight through.
+  if (/^\d{9,12}$/.test(text)) return { seconds: Number(text), style: style || 'f' };
+
+  // An offset from now: +90m, 2h, +3d, 1w.
+  const offset = text.match(/^\+?(\d{1,5})\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);
+  if (offset) {
+    const unit = offset[2].toLowerCase();
+    const ms = unit.startsWith('w') ? 604800000 : unit.startsWith('d') ? 86400000 : unit.startsWith('h') ? 3600000 : 60000;
+    return { seconds: Math.round((now.getTime() + Number(offset[1]) * ms) / 1000), style: style || 'f' };
+  }
+
+  // Optional leading day word, then an optional explicit date.
+  let dayShift = null;
+  const dayWord = text.match(/^(today|tomorrow)\b\s*/i);
+  if (dayWord) { dayShift = dayWord[1].toLowerCase() === 'tomorrow' ? 1 : 0; text = text.slice(dayWord[0].length).trim(); }
+  let ymd = null;
+  const dateMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})\b\s*/);
+  if (dateMatch) { ymd = dateMatch; text = text.slice(dateMatch[0].length).trim(); }
+
+  // The remainder, if any, is a clock time: 8, 8:30, 8pm, 8:30 pm, 20:30.
+  let hh = null, mi = 0;
+  if (text) {
+    const tm = text.match(/^(\d{1,2})(?::([0-5]\d))?\s*(?:([ap])\.?m\.?)?$/i);
+    if (!tm) return null;
+    hh = Number(tm[1]);
+    mi = tm[2] ? Number(tm[2]) : 0;
+    const meridiem = tm[3] ? tm[3].toLowerCase() : null;
+    if (meridiem) {
+      if (hh < 1 || hh > 12) return null;
+      hh = (hh % 12) + (meridiem === 'p' ? 12 : 0);
+    } else if (hh > 23) return null;
+  } else if (ymd === null && dayShift === null) {
+    return null;
+  }
+
+  // A date with no clock time is a date, so show it as one unless told otherwise.
+  const resolved = style || (hh === null ? 'D' : 'f');
+  const hour = hh === null ? 0 : hh;
+
+  let when;
+  if (ymd) {
+    const y = Number(ymd[1]), mo = Number(ymd[2]) - 1, d = Number(ymd[3]);
+    when = new Date(y, mo, d, hour, mi, 0, 0);
+    // Reject dates that do not exist (JS rolls 2026-02-31 into March).
+    if (when.getFullYear() !== y || when.getMonth() !== mo || when.getDate() !== d) return null;
+  } else {
+    when = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (dayShift || 0), hour, mi, 0, 0);
+    // A bare time that already went by today means the next one. Someone
+    // saying "8pm" at nine in the evening is scheduling, not reminiscing.
+    if (dayShift === null && when.getTime() <= now.getTime()) when = new Date(when.getTime() + 86400000);
+  }
+  if (Number.isNaN(when.getTime())) return null;
+  return { seconds: Math.round(when.getTime() / 1000), style: resolved };
+},
+
+/** `/time 8pm` → `<t:1780853820:f>` */
+_buildTimeToken(arg, now = new Date()) {
+  const parsed = this._parseTimeExpression(arg, now);
+  return parsed ? `<t:${parsed.seconds}:${parsed.style}>` : null;
+},
+
 _formatContent(str) {
   // Spoiler image: spoiler-img:<payload> where payload is an /uploads URL or
   // an e2e-img: marker. The sender marked this image as a spoiler, so render
@@ -597,7 +747,19 @@ _formatContent(str) {
     return `\x00CODEBLOCK_${idx}\x00`;
   });
 
-  let html = this._escapeHtml(withPlaceholders);
+  // ── Timestamps: <t:1780853820> / <t:1780853820:R> ──
+  // Extracted before escaping (the token has angle brackets) and after the
+  // code fences above, so a token inside ``` stays literal.
+  const timestamps = [];
+  const withTimestamps = withPlaceholders.replace(/<t:(-?\d{1,15})(?::([tTdDfFR]))?>/g, (full, secs, style) => {
+    const rendered = this._formatTimestampToken(Number(secs), style || 'f');
+    if (!rendered) return full;
+    const idx = timestamps.length;
+    timestamps.push(rendered);
+    return `\x00TIMESTAMP_${idx}\x00`;
+  });
+
+  let html = this._escapeHtml(withTimestamps);
 
   // ── Markdown images & links (extract before auto-linking) ──
   const mdLinks = [];
@@ -931,6 +1093,13 @@ _formatContent(str) {
   // ── Restore auto-linked URLs ──
   autoLinks.forEach((link, idx) => {
     html = html.replace(`\x00AUTOLINK_${idx}\x00`, link);
+  });
+
+  // ── Restore timestamps ──
+  // Function replacement, so a formatted date containing $& or $1 cannot
+  // be read as a replacement pattern.
+  timestamps.forEach((el, idx) => {
+    html = html.replace(`\x00TIMESTAMP_${idx}\x00`, () => el);
   });
 
   if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;

@@ -9,10 +9,10 @@ import UIBindMethods   from './modules/app-ui.js?v=3.51.4';
 import MediaMethods    from './modules/app-media.js?v=3.51.1';
 import ContextMethods  from './modules/app-context.js?v=3.44.5';
 import ChannelMethods  from './modules/app-channels.js?v=3.44.4';
-import MessageMethods  from './modules/app-messages.js?v=3.51.1';
+import MessageMethods  from './modules/app-messages.js?v=3.52.0';
 import UserMethods     from './modules/app-users.js?v=3.25.4';
 import VoiceMethods    from './modules/app-voice.js?v=3.34.2';
-import UtilityMethods  from './modules/app-utilities.js?v=4.2.3';
+import UtilityMethods  from './modules/app-utilities.js?v=4.3.0';
 import AdminMethods    from './modules/app-admin.js?v=4.1.2';
 import PlatformMethods from './modules/app-platform.js?v=3.16.13';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
@@ -92,6 +92,7 @@ class HavenApp {
       { cmd: 'play',       args: t('commands.args.name_or_url'),       desc: t('commands.description.play') },
       { cmd: 'gif',        args: t('commands.args.query'),             desc: t('commands.description.gif') },
       { cmd: 'poll',       args: t('commands.args.optional_question'), desc: t('commands.description.poll') },
+      { cmd: 'time',       args: t('commands.args.time'),              desc: t('commands.description.time') },
     ];
 
     // Load bot-registered slash commands for autocomplete

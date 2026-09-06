@@ -11,6 +11,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Timestamps that follow the reader.** A message can carry an instant instead
+  of a wall-clock time, so everyone sees it on their own clock, which is the
+  thing that stops people turning up an hour late when a group is spread across
+  timezones. `/time 8pm` puts a token in your message box, and it accepts
+  `20:00`, `tomorrow 9am`, `2026-09-06 20:30`, `+2h` and a raw unix timestamp.
+  Seven display styles, including a relative one that counts itself down, and
+  hovering any of them spells out the full date. The syntax is Discord's, so
+  tokens survive the Ferry bridge in both directions and existing generators
+  keep working. Requested by test2.
+
+---
+
 ## [4.4.1] - 2026-09-05
 
 One fix, for anyone hosting Haven without a certificate. Update if your friends

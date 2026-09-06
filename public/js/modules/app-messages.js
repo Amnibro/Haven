@@ -99,6 +99,24 @@ async _sendMessage() {
         this._hideSlashDropdown();
         return;
       }
+      if (cmd === 'time') {
+        const token = this._buildTimeToken(arg);
+        if (!token) {
+          this._showToast(t('commands.time_usage'), 'error');
+        } else {
+          // Put the token in the box instead of posting it. The usual
+          // message is "let's meet at <time>", so people need to type
+          // around it, and they get to see what it resolved to first.
+          input.value = token;
+          input.style.height = 'auto';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.focus();
+          try { input.setSelectionRange(token.length, token.length); } catch { /* not a text input */ }
+        }
+        this._hideMentionDropdown();
+        this._hideSlashDropdown();
+        return;
+      }
       if (cmd === 'poll') {
         input.value = '';
         input.style.height = 'auto';

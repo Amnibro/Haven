@@ -422,6 +422,7 @@
   "commands": {
     "play_usage": "Usage: /play <song name> or /play <url>",
     "gif_usage": "Usage: /gif <search query>",
+    "time_usage": "Usage: /time 8pm, /time 20:30, /time 2026-09-06 20:30, /time tomorrow 9am, /time +2h. Add a letter for the style, e.g. /time 8pm R",
     "bot_command": "Bot command",
     "bot": "Bot",
     "args": {
@@ -432,7 +433,8 @@
       "name": "<name>",
       "name_or_url": "<name or URL>",
       "query": "<query>",
-      "optional_question": "[question]"
+      "optional_question": "[question]",
+      "time": "<8pm | tomorrow 9am | +2h>"
     },
     "description": {
       "shrug": "Appends ¯\\_(ツ)_/¯",
@@ -456,7 +458,8 @@
       "wave": "Wave at the chat 👋",
       "play": "Search & play music (e.g. /play Cut Your Teeth Kygo)",
       "gif": "Search & send a GIF inline (e.g. /gif thumbs up)",
-      "poll": "Open the poll creator"
+      "poll": "Open the poll creator",
+      "time": "Insert a time everyone sees in their own timezone"
     },
     "output": {
       "bbs": "🕐 {{name}} will be back soon",
