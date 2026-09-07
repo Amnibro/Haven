@@ -497,6 +497,35 @@ if (!sslCert && !sslKey) {
 }
 
 const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
+
+// No certificate and no wish for plain HTTP: make one. Voice, camera and the
+// mobile app all need HTTPS, and the Windows installer used to skip this step
+// quietly whenever OpenSSL was missing, leaving people on HTTP with no idea
+// why nothing worked. Built with Node's own crypto, so nothing to install.
+// FORCE_HTTP=true is the way to say plain HTTP is on purpose.
+if (!sslCert && !sslKey && !forceHttp) {
+  try {
+    const { generateSelfSignedCert } = require('./src/selfsignedCert');
+    const lanIps = [];
+    try {
+      for (const ifaces of Object.values(require('os').networkInterfaces())) {
+        for (const i of ifaces || []) if (i.family === 'IPv4' && !i.internal) lanIps.push(i.address);
+      }
+    } catch { /* no LAN names in the certificate; still a working certificate */ }
+    const made = generateSelfSignedCert({ commonName: 'Haven', altNames: ['localhost'], ipAddresses: ['127.0.0.1', ...lanIps] });
+    const autoCert = path.join(CERTS_DIR, 'cert.pem');
+    const autoKey  = path.join(CERTS_DIR, 'key.pem');
+    fs.mkdirSync(CERTS_DIR, { recursive: true });
+    fs.writeFileSync(autoKey, made.key, { mode: 0o600 });
+    fs.writeFileSync(autoCert, made.cert);
+    sslCert = autoCert;
+    sslKey  = autoKey;
+    console.log(`\u{1F512} No certificate found, so Haven made a self-signed one in ${CERTS_DIR}. Browsers will warn once. Set FORCE_HTTP=true to run plain HTTP on purpose.`);
+  } catch (err) {
+    console.warn('\u26A0\uFE0F  Could not create a self-signed certificate, running plain HTTP:', err && err.message);
+  }
+}
+
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
 
 app.use(helmet({

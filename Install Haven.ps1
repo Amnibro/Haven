@@ -514,7 +514,7 @@ $ui['btnNext3'].Add_Click({
                 Set-Step 'step4' 'error' "SSL generation failed: $sslOutput"
             }
         } else {
-            Set-Step 'step4' 'done' 'Skipped (OpenSSL not found, will use HTTP)'
+            Set-Step 'step4' 'done' 'Haven will create a self-signed certificate at first start'
         }
     } else {
         Set-Step 'step4' 'done' 'SSL certificate exists'
