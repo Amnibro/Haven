@@ -185,19 +185,13 @@ _setupSocketListeners() {
       this.user.animateProfile = data.animateProfile === 'disabled' ? 'disabled' : 'trigger';
     }
     localStorage.setItem('haven_user', JSON.stringify(this.user));
-    // (#5394) Merge server-stored nicknames. Server is authoritative for any
-    // key it knows about; localStorage keeps anything the server doesn't have yet.
+    // (#5394) Server-stored nicknames are the record. localStorage is only a
+    // cache for the first paint before this event lands. The old merge also
+    // pushed any localStorage-only nickname back up on every connect, so a
+    // nickname cleared from one device came back from any other device that
+    // still had it cached, and could never be removed for good. (#5560)
     if (data.nicknames && typeof data.nicknames === 'object') {
-      const serverNicks = data.nicknames;
-      const localNicks = this._nicknames || {};
-      // Migrate: push localStorage-only nicknames to the server once.
-      const toSync = {};
-      for (const [id, nick] of Object.entries(localNicks)) {
-        if (nick && !serverNicks[id]) toSync[id] = nick;
-      }
-      if (Object.keys(toSync).length) this.socket.emit('set-nicknames-bulk', { nicknames: toSync });
-      // Server wins on conflict.
-      this._nicknames = { ...localNicks, ...serverNicks };
+      this._nicknames = { ...data.nicknames };
       localStorage.setItem('haven_nicknames', JSON.stringify(this._nicknames));
     }
     // Init E2E encryption AFTER socket is fully connected & server handlers registered
