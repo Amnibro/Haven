@@ -2882,8 +2882,19 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
 // THREADS
 // ═══════════════════════════════════════════════════════
 
-_renderThreadPreview(parentId, thread) {
-  if (!thread || !thread.count) return '';
+_renderThreadPreview(parentId, thread, opts = {}) {
+  if (!thread) return '';
+  if (!thread.count) {
+    // A forum topic with no replies yet gets the same button as an
+    // invitation, so a fresh topic reads as a topic rather than a message.
+    if (!opts.forum) return '';
+    return `
+    <button class="thread-preview thread-preview-empty" data-thread-parent="${parentId}">
+      <span class="thread-preview-count">${t('thread_runtime.reply_to_topic')}</span>
+      <span class="thread-preview-arrow">›</span>
+    </button>
+  `;
+  }
   const participantAvatars = (thread.participants || []).map(p => {
     if (p.avatar) {
       return `<img class="thread-participant-avatar" src="${this._escapeHtml(p.avatar)}" alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
@@ -3778,7 +3789,8 @@ _updateThreadPreview(parentId, thread) {
   const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
   if (!msgEl) return;
   const oldPreview = msgEl.querySelector('.thread-preview');
-  const newHtml = this._renderThreadPreview(parentId, thread);
+  const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  const newHtml = this._renderThreadPreview(parentId, thread, { forum: !!(ch && ch.is_forum) });
   if (oldPreview) {
     oldPreview.outerHTML = newHtml;
   } else if (newHtml) {
@@ -3809,6 +3821,15 @@ _renderReplyBanner(replyCtx) {
 },
 
 _setReply(msgEl, msgId) {
+  // In a forum a reply to a topic belongs in the topic's thread: that is what
+  // bumps it, and it keeps the answer under the question instead of posting
+  // a second topic that quotes the first. (#144)
+  const forumCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  if (forumCh && forumCh.is_forum && msgEl && msgEl.closest && msgEl.closest('#messages')) {
+    this._clearReply();
+    this._openThread(msgId);
+    return;
+  }
   // Get message info — works for both full messages and compact messages
   let author = msgEl.querySelector('.message-author')?.textContent;
   if (!author) {

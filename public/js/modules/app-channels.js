@@ -145,6 +145,13 @@ async switchChannel(code) {
   if (_emojiBtn) _emojiBtn.style.display = _textOff ? 'none' : '';
   if (_gifBtn) _gifBtn.style.display = _textOff ? 'none' : '';
   if (_pollBtn) _pollBtn.style.display = _textOff ? 'none' : '';
+  // In a forum the composer starts topics, and says so. (#144)
+  if (_msgInput) {
+    const _forumCh = this.channels && this.channels.find(c => c.code === code);
+    _msgInput.placeholder = (_forumCh && _forumCh.is_forum)
+      ? t('app.messages.placeholder_forum')
+      : t(window.innerWidth <= 480 ? 'app.messages.placeholder_short' : 'header.message_placeholder_commands');
+  }
   const _timeBtn = document.getElementById('time-btn');
   const _timeDivider = document.getElementById('time-divider');
   if (_timeBtn) _timeBtn.style.display = _textOff ? 'none' : '';

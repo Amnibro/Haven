@@ -328,6 +328,16 @@ _renderMessages(messages, lastReadMessageId) {
   }
   const container = document.getElementById('messages');
   container.innerHTML = '';
+  // An empty forum explains itself; an empty channel needs no help. (#144)
+  {
+    const _ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
+    if (_ch && _ch.is_forum && messages.length === 0) {
+      const hint = document.createElement('div');
+      hint.className = 'forum-empty-hint';
+      hint.textContent = t('app.messages.forum_empty_hint');
+      container.appendChild(hint);
+    }
+  }
   // Only render the last MAX_DOM_MESSAGES to prevent OOM on large histories
   const MAX_DOM_MESSAGES = 100;
   const start = messages.length > MAX_DOM_MESSAGES ? messages.length - MAX_DOM_MESSAGES : 0;
@@ -788,7 +798,9 @@ _createMessageEl(msg, prevMsg) {
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
-  const threadHtml = (msg.thread && !isDmContext) ? this._renderThreadPreview(msg.id, msg.thread) : '';
+  const threadHtml = isDmContext ? ''
+    : (msg.thread ? this._renderThreadPreview(msg.id, msg.thread, { forum: isForum })
+      : (isForum ? this._renderThreadPreview(msg.id, { count: 0 }, { forum: true }) : ''));
   const editedHtml = msg.edited_at ? `<span class="edited-tag" title="${t('app.messages.edited_at', { date: new Date(msg.edited_at).toLocaleString() })}">${t('app.messages.edited')}</span>` : '';
   const pinnedTag = msg.pinned ? `<span class="pinned-tag" title="${t('app.messages.pinned')}">📌</span>` : '';
   const archivedTag = msg.is_archived ? `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>` : '';

@@ -262,6 +262,8 @@
       "unknown_user": "Unknown",
       "placeholder": "Type a message...",
       "placeholder_short": "Message...",
+      "placeholder_forum": "Start a new topic... (/ for commands)",
+      "forum_empty_hint": "This is a forum. Every message you send here starts a topic. Reply inside a topic and it moves back to the newest end of the channel, so nothing gets buried.",
       "via_persona": "Sent via {{name}}",
       "spoiler": "Spoiler",
       "e2e_image_alt": "Encrypted image",
@@ -3529,6 +3531,7 @@
   "thread_runtime": {
     "title": "Thread",
     "reply_one": "{{count}} Reply",
+    "reply_to_topic": "Reply to this topic",
     "reply_other": "{{count}} Replies",
     "just_now": "just now",
     "minutes_ago": "{{count}}m ago",
