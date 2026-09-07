@@ -6,8 +6,10 @@
  * re-requested every stylesheet and script over https on a port with nothing
  * listening for TLS: unstyled page, dead buttons. Whoever set it up saw a
  * perfect page, because browsers treat localhost as trustworthy and skip the
- * upgrade. The Windows installer produces exactly this state when OpenSSL is
- * missing, so it reached a self-hoster (2026-09-05).
+ * upgrade. The Windows installer produced exactly this state when OpenSSL was
+ * missing, so it reached a self-hoster (2026-09-05). The server now makes its
+ * own certificate when none exists, so plain HTTP is only reachable through
+ * FORCE_HTTP (reverse-proxy mode), which is what this test sets.
  *
  *   node --test test/httpModeHeaders.test.js
  */
@@ -35,9 +37,8 @@ const head = (p) => new Promise((res, rej) => {
 
 test.before(async () => {
   fs.mkdirSync(DATA, { recursive: true });
-  // No certs in the data dir and no FORCE_HTTP: the accidental plain-HTTP mode.
-  const env = { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin' };
-  delete env.FORCE_HTTP;
+  // No certs in the data dir and FORCE_HTTP set: the reverse-proxy plain-HTTP mode.
+  const env = { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin', FORCE_HTTP: 'true' };
   delete env.SSL_CERT_PATH;
   delete env.SSL_KEY_PATH;
   server = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env, stdio: 'ignore' });

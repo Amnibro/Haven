@@ -48,6 +48,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   keep working. Requested by test2.
 
 ### Fixed
+- **Self-signed certificates no longer need OpenSSL.** Every Windows start and
+  install script shelled out to `openssl.exe`, which Windows does not ship
+  (OpenSSH is a different program), so machines without it never got a
+  certificate, fell back to plain HTTP and then failed to connect over
+  `https://`. The server now generates its own RSA-2048 certificate in Node when
+  the data directory has none, covering localhost, every LAN IPv4 and the
+  hostname, and `Start Haven.bat`, `Install Haven.ps1` and the web installer
+  call the same generator. `FORCE_HTTP=true` still skips it. Reported by
+  MutantRabbit767.
 - **Invite links grant only the channels that were ticked (#5569, #5583).** An
   invite made by someone who could not see every public channel used to drop the
   invitee into all of them anyway, and unticking every box meant the same. Links
