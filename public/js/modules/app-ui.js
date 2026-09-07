@@ -502,6 +502,10 @@ _setupUI() {
       if (code === this.currentChannel) {
         setTimeout(() => this.socket.emit('get-messages', { code }), 400);
       }
+    } else if (fn === 'private') {
+      const newVal = ch && ch.is_private ? 0 : 1;
+      optimistic({ is_private: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'private' });
     } else if (fn === 'slow-mode') {
       const badge = row.querySelector('.cfn-badge');
       if (!badge || badge.tagName === 'INPUT') return;

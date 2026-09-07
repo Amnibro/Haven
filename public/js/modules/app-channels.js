@@ -688,6 +688,8 @@ _updateChannelFunctionsPanel(ch) {
   this._setCfnBadge('read-only', isReadOnly, t(isReadOnly ? 'channel_functions.on' : 'channel_functions.off'));
   const isForum = ch.is_forum === 1;
   this._setCfnBadge('forum', isForum, t(isForum ? 'channel_functions.on' : 'channel_functions.off'));
+  const isPrivate = !!ch.is_private;
+  this._setCfnBadge('private', isPrivate, t(isPrivate ? 'channel_functions.on' : 'channel_functions.off'));
   const interval = ch.slow_mode_interval || 0;
   this._setCfnBadge('slow-mode', interval > 0, interval > 0 ? `${interval}s` : t('channel_functions.off'));
   // (#5467) Cleanup protection and welcome messages are still admin-only on

@@ -3231,6 +3231,8 @@
     "read_only_hint": "Only members with permission can send messages",
     "forum": "Forum",
     "forum_hint": "Each message is a topic. Replies go in its thread and bump the topic back to the newest end of the channel",
+    "private": "Private",
+    "private_hint": "Only members can see this channel. Turning it on keeps everyone who is already in; turning it off opens it to the whole server, history included",
     "default_role": "Default Role",
     "default_role_hint": "Role automatically assigned to channel members",
     "none": "None",
