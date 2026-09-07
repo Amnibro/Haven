@@ -14,6 +14,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Haven makes its own certificate.** When none exists at start and FORCE_HTTP
+  is not set, Haven generates a self-signed certificate with Node's own crypto,
+  no OpenSSL needed, so HTTPS works on a clean Windows install and voice, camera
+  and the mobile app work with it. Anyone who was running plain HTTP without
+  meaning to gets HTTPS on their next start; anyone who means it sets
+  FORCE_HTTP=true. The installer no longer reports a skipped certificate as done.
 - **Role mentions (#5579).** `@Moderators`, or any role name, lights up for
   everyone holding the role and pings them like an @mention. The `@` picker
   offers roles to anyone with the Mention everyone permission, the server disarms
@@ -46,6 +52,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   hovering any of them spells out the full date. The syntax is Discord's, so
   tokens survive the Ferry bridge in both directions and existing generators
   keep working. Requested by test2.
+
+### Changed
+- **Forum feeds run newest first (#144).** The most recently active topic sits at
+  the top of a forum channel, a new topic or a fresh reply moves to the top, and
+  older topics load as you scroll down. Replies inside a topic's thread still read
+  top to bottom.
 
 ### Fixed
 - **Invite links grant only the channels that were ticked (#5569, #5583).** An
