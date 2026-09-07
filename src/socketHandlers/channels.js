@@ -234,7 +234,10 @@ module.exports = function register(socket, ctx) {
         topic: '',
         is_dm: 0,
         is_private: isPrivate,
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        // The creator's sidebar renders from this stub until the enriched
+        // list lands, so a forum has to say so here or it shows up as #.
+        is_forum: data.isForum ? 1 : 0
       };
 
       socket.join(`channel:${code}`);
