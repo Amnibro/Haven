@@ -6039,6 +6039,17 @@ server.on('error', (err) => {
 });
 
 server.listen(PORT, HOST, () => {
+  // Print the machine's LAN address rather than a YOUR_IP placeholder, which
+  // more than one self-hoster has read as a broken config. (#5572)
+  const lanIps = [];
+  try {
+    for (const ifaces of Object.values(require('os').networkInterfaces())) {
+      for (const i of ifaces || []) {
+        if (i.family === 'IPv4' && !i.internal) lanIps.push(i.address);
+      }
+    }
+  } catch { /* leave the placeholder */ }
+  const networkLine = `${protocol}://${lanIps[0] || 'YOUR_IP'}:${PORT}`;
   console.log(`
 â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•╗
 ║       ðŸ   HAVEN is running               ║
@@ -6049,6 +6060,9 @@ server.listen(PORT, HOST, () => {
 ║  Admin:   ${(process.env.ADMIN_USERNAME || 'admin').padEnd(29)}║
 â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   `);
+  if (lanIps.length > 1) {
+    console.log(`  Also reachable on: ${lanIps.slice(1).map(ip => `${protocol}://${ip}:${PORT}`).join(', ')}`);
+  }
   // Tunnel is now started manually via the admin panel button (no auto-start)
   // Dynamic DNS auto-updater (kicks in only if DDNS_PROVIDER is set in .env)
   try { startDdns(); } catch (err) { console.warn('[ddns] failed to start:', err && err.message); }
