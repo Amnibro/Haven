@@ -9,6 +9,7 @@ class NotificationManager {
     this.audioCtx = null;
     this.enabled = this._loadPref('haven_notif_enabled', false);
     this.mentionsEnabled = this._loadPref('haven_notif_mentions_enabled', true);
+    this.roleMentionsEnabled = this._loadPref('haven_notif_role_mentions_enabled', true); // @Role pings (#5579)
     this.repliesEnabled = this._loadPref('haven_notif_replies_enabled', true);
     this.dmEnabled = this._loadPref('haven_notif_dm_enabled', true);
     this.voiceActionCuesEnabled = this._loadPref('haven_notif_voice_action_cues_enabled', true);

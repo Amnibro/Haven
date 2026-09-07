@@ -2530,8 +2530,12 @@ _showMentionDropdown() {
     if ('everyone'.startsWith(query)) everyoneOptions.push({ name: 'everyone', label: '@everyone', desc: t('settings.admin.mention_everyone_desc') });
     if ('here'.startsWith(query)) everyoneOptions.push({ name: 'here', label: '@here', desc: t('settings.admin.mention_here_desc') });
   }
+  // Roles sit behind the same permission, since a role ping fans out the same way. (#5579)
+  const roleOptions = canMentionEveryone
+    ? (this._mentionableRoles || []).filter(r => r && r.name && r.name.toLowerCase().startsWith(query)).slice(0, 5)
+    : [];
 
-  if (filtered.length === 0 && everyoneOptions.length === 0) {
+  if (filtered.length === 0 && everyoneOptions.length === 0 && roleOptions.length === 0) {
     dropdown.style.display = 'none';
     return;
   }
@@ -2545,8 +2549,14 @@ _showMentionDropdown() {
     return `<div class="mention-item${active}" data-username="${opt.name}" data-everyone="1"><strong>${opt.label}</strong> <span class="mention-item-handle">${this._escapeHtml(opt.desc)}</span></div>`;
   }).join('');
 
+  const roleItems = roleOptions.map((r, i) => {
+    const active = (i === 0 && filtered.length === 0 && everyoneOptions.length === 0) ? ' active' : '';
+    const dot = r.color ? `<span class="mention-role-dot" style="background:${this._escapeHtml(r.color)}"></span>` : '';
+    return `<div class="mention-item${active}" data-username="${this._escapeHtml(r.name)}" data-role="1">${dot}<strong>@${this._escapeHtml(r.name)}</strong> <span class="mention-item-handle">${this._escapeHtml(t('settings.admin.mention_role_desc'))}</span></div>`;
+  }).join('');
+
   const memberItems = filtered.map((m, i) => {
-    const isFirstMember = (i === 0 && everyoneOptions.length === 0);
+    const isFirstMember = (i === 0 && everyoneOptions.length === 0 && roleOptions.length === 0);
     const nick = m.id && this._nicknames ? this._nicknames[m.id] : '';
     const display = nick || m.username || m.loginName || '';
     const login = m.loginName || m.username || '';
@@ -2556,7 +2566,7 @@ _showMentionDropdown() {
     return `<div class="mention-item${isFirstMember ? ' active' : ''}" data-username="${this._escapeHtml(login)}">${this._escapeHtml(display)}${suffix}</div>`;
   }).join('');
 
-  dropdown.innerHTML = everyoneItems + memberItems;
+  dropdown.innerHTML = everyoneItems + roleItems + memberItems;
 
   dropdown.style.display = 'block';
 

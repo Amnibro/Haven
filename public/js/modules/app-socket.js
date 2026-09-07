@@ -221,6 +221,7 @@ _setupSocketListeners() {
 
   // Roles updated (from admin assigning/revoking, or editing a role we hold)
   this.socket.on('roles-updated', (data) => {
+    this._refreshMentionableRoles?.();
     // The server also fires this with NO payload as a plain "the server's role
     // list changed" nudge (role edited, roles reset, admin role display
     // changed) for anyone with the Role Management modal open. There's no
@@ -297,6 +298,8 @@ _setupSocketListeners() {
     this.voice?.deferChannelGone?.(6000);
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
+    // Role names for @Role mentions: rendering and the @ picker. (#5579)
+    this._refreshMentionableRoles?.();
 
     // (#5399 follow-up) Reconcile per-channel mute prefs with the server
     // once per session so the server can honor them when fanning out
@@ -1219,7 +1222,7 @@ _setupSocketListeners() {
           const _isAnnouncement = _notifCh && _notifCh.notification_type === 'announcement';
           const _isReplyToMe = data.message.replyContext && data.message.replyContext.user_id === this.user.id;
           const _isDm = _notifCh && _notifCh.is_dm;
-          const _isMention = mentionRegex.test(data.message.content) || everyoneRegex.test(data.message.content);
+          const _isMention = mentionRegex.test(data.message.content) || everyoneRegex.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
           const _notifOpts = _isMention ? { isMention: true } : _isReplyToMe ? { isReply: true } : _isDm ? { isDm: true } : null;
           if (_isMention) {
             this.notifications.play('mention', { isMention: true });
@@ -1282,7 +1285,7 @@ _setupSocketListeners() {
         const _isAnnouncement2 = _notifCh2 && _notifCh2.notification_type === 'announcement';
         const _isReplyToMe2 = data.message.replyContext && data.message.replyContext.user_id === this.user.id;
         const _isDm2 = _notifCh2 && _notifCh2.is_dm;
-        const _isMention2 = mentionRegex.test(data.message.content) || everyoneRegex2.test(data.message.content);
+        const _isMention2 = mentionRegex.test(data.message.content) || everyoneRegex2.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
         const _notifOpts2 = _isMention2 ? { isMention: true } : _isReplyToMe2 ? { isReply: true } : _isDm2 ? { isDm: true } : null;
         if (_isMention2) {
           this.notifications.play('mention', { isMention: true });
@@ -1640,7 +1643,7 @@ _setupSocketListeners() {
       const _meEsc = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const mentionRegex = _meEsc ? new RegExp(`@${_meEsc}(?!\\w)`, 'i') : null;
       const everyoneRegex = /(?<![\w@])@(everyone|here)\b/i;
-      const _isMention = (mentionRegex && mentionRegex.test(msg.content || '')) || everyoneRegex.test(msg.content || '');
+      const _isMention = (mentionRegex && mentionRegex.test(msg.content || '')) || everyoneRegex.test(msg.content || '') || this._mentionsMyRole?.(msg.content || '');
       const _isReplyToMe = msg.replyContext && msg.replyContext.user_id === this.user.id;
       if ((_isMention || _isReplyToMe) && !_isMuted) {
         this._recordThreadMention(data.channelCode, data.parentId, msg);

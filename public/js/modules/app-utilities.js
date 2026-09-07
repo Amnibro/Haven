@@ -453,6 +453,34 @@ _emojiSearchMatch(emoji, keywords, rawQuery) {
   return false;
 },
 
+// ── Role mentions (#5579) ──
+// "@Moderators" lights up for everyone holding the role and pings them,
+// unless they have turned role pings off. Sending one needs the same
+// permission as @everyone, which the server enforces.
+
+/** Fetch the server's roles for rendering and the @ picker. Re-run whenever
+ *  the server says its roles changed. */
+_refreshMentionableRoles() {
+  if (!this.socket) return;
+  try {
+    this.socket.emit('get-roles', null, (res) => {
+      const roles = res && Array.isArray(res.roles) ? res.roles : [];
+      this._mentionableRoles = roles
+        .filter(r => r && r.name)
+        .map(r => ({ id: r.id, name: String(r.name), color: r.color || null, level: r.level }));
+    });
+  } catch { /* offline: keep whatever we had */ }
+},
+
+/** True when `content` pings a role the viewer holds and role pings are on. */
+_mentionsMyRole(content) {
+  if (!content || (this.notifications && this.notifications.roleMentionsEnabled === false)) return false;
+  const mine = (this.user && Array.isArray(this.user.roles)) ? this.user.roles : [];
+  if (!mine.length) return false;
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return mine.some(r => r && r.name && new RegExp(`(?<![\\w@])@${esc(r.name)}(?!\\w)`, 'i').test(content));
+},
+
 // ── Timestamps that follow the reader (<t:1780853820:R>) ──
 // One instant in the message, rendered in whatever timezone and locale the
 // person reading it is in, which is the whole point for scheduling across a
@@ -857,6 +885,16 @@ _formatContent(str) {
       if (this.user && this.user.id) nameToUserId.set(low, this.user.id);
     }
   }
+  // Role mentions (#5579): every role name is a valid @target, styled as a
+  // role and lit up for a viewer who holds it.
+  const roleByName = new Map();
+  const myRoleIds = new Set(((this.user && this.user.roles) || []).map(r => r && r.id));
+  for (const r of (this._mentionableRoles || [])) {
+    if (!r || !r.name) continue;
+    const low = r.name.toLowerCase();
+    roleByName.set(low, { name: r.name, color: r.color, mine: myRoleIds.has(r.id) });
+    validNames.add(low);
+  }
   const allNames = [...validNames].sort((a, b) => b.length - a.length);
   const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Build alt list of known names; also keep a generic fallback for any
@@ -870,6 +908,12 @@ _formatContent(str) {
     const isKnown = validNames.has(lower);
     const isSelf  = lower === selfLogin;
     if (!isKnown && !isSelf) return match;
+    // A role, unless a member shares the name, in which case the person wins.
+    const role = roleByName.get(lower);
+    if (role && !nameToUserId.has(lower) && !isSelf) {
+      const style = role.color ? ` style="--role-color:${this._escapeHtml(role.color)}"` : '';
+      return `<span class="mention mention-role${role.mine ? ' mention-self' : ''}"${style}>@${this._escapeHtml(role.name)}</span>`;
+    }
     // Prefer the viewer's personal nickname for that user, then the
     // server-side display name, then the raw token. (#5290)
     const uid = nameToUserId.get(lower);

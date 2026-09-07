@@ -326,6 +326,8 @@ _setupNotifications() {
     });
   }
   if (mentionsToggle) { mentionsToggle.checked = this.notifications.mentionsEnabled; mentionsToggle.addEventListener('change', () => { this.notifications.mentionsEnabled = mentionsToggle.checked; this.notifications._savePref('haven_notif_mentions_enabled', mentionsToggle.checked); }); }
+  const roleMentionsToggle = document.getElementById('notif-role-mentions-enabled');
+  if (roleMentionsToggle) { roleMentionsToggle.checked = this.notifications.roleMentionsEnabled !== false; roleMentionsToggle.addEventListener('change', () => { this.notifications.roleMentionsEnabled = roleMentionsToggle.checked; this.notifications._savePref('haven_notif_role_mentions_enabled', roleMentionsToggle.checked); }); }
   if (repliesToggle) { repliesToggle.checked = this.notifications.repliesEnabled; repliesToggle.addEventListener('change', () => { this.notifications.repliesEnabled = repliesToggle.checked; this.notifications._savePref('haven_notif_replies_enabled', repliesToggle.checked); }); }
   if (dmToggle) { dmToggle.checked = this.notifications.dmEnabled; dmToggle.addEventListener('change', () => { this.notifications.dmEnabled = dmToggle.checked; this.notifications._savePref('haven_notif_dm_enabled', dmToggle.checked); }); }
 

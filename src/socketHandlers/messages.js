@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext } = require('./helpers');
+const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 
 module.exports = function register(socket, ctx) {
@@ -908,6 +908,10 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mention_everyone', channel.id)) {
       const stripped = content.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
       if (stripped !== content) content = stripped;
+      // @Role pings fan out the same way, so they sit behind the same permission. (#5579)
+      const roleNames = db.prepare('SELECT name FROM roles').all().map(r => r.name);
+      const roleStripped = stripRoleMentions(content, roleNames);
+      if (roleStripped !== content) content = roleStripped;
     }
 
     if (channel.text_enabled === 0) {

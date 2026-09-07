@@ -9361,6 +9361,9 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   cursor: default;
 }
 
+.mention.mention-role { color: var(--role-color, var(--accent)); }
+.mention-role-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; vertical-align: middle; }
+
 .mention.mention-self {
   background: rgba(124, 92, 252, 0.3);
 }
