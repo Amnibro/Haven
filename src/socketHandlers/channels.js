@@ -425,11 +425,16 @@ module.exports = function register(socket, ctx) {
           return socket.emit('error-msg', 'This invite link has reached its use limit.');
         }
       }
-      let chList = [];
-      try {
-        const parsed = JSON.parse(inviteRow.channels || '[]');
-        if (Array.isArray(parsed)) chList = parsed;
-      } catch { /* malformed → empty array → all public */ }
+      // Links saved before 4.4.2 stored '' for "every public channel". Since
+      // #5583 a list is authoritative, an empty one included, so only a real
+      // list is passed along and the old blank keeps meaning what it meant.
+      let chList = null;
+      if (inviteRow.channels) {
+        try {
+          const parsed = JSON.parse(inviteRow.channels);
+          if (Array.isArray(parsed)) chList = parsed;
+        } catch { /* malformed: fall back to the legacy meaning */ }
+      }
       const joinedCount = _doAutoJoin(chList);
       db.prepare(
         'INSERT OR IGNORE INTO invite_code_uses (invite_code_id, user_id) VALUES (?, ?)'
