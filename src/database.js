@@ -1253,6 +1253,18 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN imported_from TEXT DEFAULT NULL");
   }
 
+  // ── Migration: invite_codes.spent (#5562) ──
+  // Redemptions used to be counted from invite_code_uses, whose rows go with
+  // the user (ON DELETE CASCADE), so deleting an account handed its use back
+  // to a single-use link. `spent` only ever goes up. Seeded from the rows
+  // that still exist, which is the best the old data can offer.
+  try {
+    db.prepare("SELECT spent FROM invite_codes LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE invite_codes ADD COLUMN spent INTEGER DEFAULT 0");
+    db.exec("UPDATE invite_codes SET spent = (SELECT COUNT(*) FROM invite_code_uses u WHERE u.invite_code_id = invite_codes.id)");
+  }
+
   // ── Migration: webhook_avatar column on messages (Discord import avatars) ──
   try {
     db.prepare("SELECT webhook_avatar FROM messages LIMIT 0").get();

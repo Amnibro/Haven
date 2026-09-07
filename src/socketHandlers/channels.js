@@ -419,7 +419,7 @@ module.exports = function register(socket, ctx) {
       ).get(inviteRow.id, socket.user.id);
       if (!alreadyUsed && inviteRow.max_uses > 0) {
         const used = db.prepare(
-          'SELECT COUNT(*) AS n FROM invite_code_uses WHERE invite_code_id = ?'
+          'SELECT spent AS n FROM invite_codes WHERE id = ?'
         ).get(inviteRow.id).n;
         if (used >= inviteRow.max_uses) {
           return socket.emit('error-msg', 'This invite link has reached its use limit.');
@@ -436,9 +436,11 @@ module.exports = function register(socket, ctx) {
         } catch { /* malformed: fall back to the legacy meaning */ }
       }
       const joinedCount = _doAutoJoin(chList);
-      db.prepare(
+      const use = db.prepare(
         'INSERT OR IGNORE INTO invite_code_uses (invite_code_id, user_id) VALUES (?, ?)'
       ).run(inviteRow.id, socket.user.id);
+      // A redemption counts on the link itself, so it survives the user (#5562).
+      if (use.changes) db.prepare('UPDATE invite_codes SET spent = spent + 1 WHERE id = ?').run(inviteRow.id);
       socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
       socket.emit('error-msg', `Invite accepted — joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
       return;

@@ -564,7 +564,7 @@ module.exports = function register(socket, ctx) {
     const mineOnly = !_canManageAllInvites();
     const rows = db.prepare(`
       SELECT ic.*,
-        (SELECT COUNT(*) FROM invite_code_uses u WHERE u.invite_code_id = ic.id) AS use_count,
+        ic.spent AS use_count,
         (ic.expires_at IS NOT NULL AND ic.expires_at <= CURRENT_TIMESTAMP) AS is_expired
       FROM invite_codes ic
       ${mineOnly ? 'WHERE ic.created_by = ?' : ''}
