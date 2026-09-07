@@ -14,6 +14,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Role mentions (#5579).** `@Moderators`, or any role name, lights up for
+  everyone holding the role and pings them like an @mention. The `@` picker
+  offers roles to anyone with the Mention everyone permission, the server disarms
+  role pings from anyone without it, and a switch under Settings, Sounds turns
+  role pings off for people who would rather not get them. Requested by
+  Raidenphantom and @birdcrazy.
+- **Private can be switched after creation (#5563).** Channel Functions has a
+  Private toggle. Going private keeps the current members; going public opens
+  the channel to the whole server, history included. Requested by @birdcrazy.
+- **Forums read as forums (#144).** The Reply action on a topic opens its thread
+  instead of quoting it as a new topic, every topic carries a Reply to this topic
+  button, the composer says it starts topics, and an empty forum explains how it
+  works.
 - **A timestamp picker (#5580).** The clock button in the input bar, or `/time` on
   its own, opens a date and time chooser with a 24-hour or AM/PM toggle that
   follows your own clock and every style previewed live, each with its own Insert

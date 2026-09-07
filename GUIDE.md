@@ -162,7 +162,7 @@ Every conversation in Haven happens inside a **channel**. Channels are like room
 
 ### Forum Channels 🗂️
 
-Turn any channel into a forum from **Channel Functions → Forum**, or tick **Forum** when creating it. In a forum channel every message is a topic. Replies go in that message's thread, the topic shows its reply count, and a new reply bumps the topic back to the newest end of the channel, right above the composer, so old topics resurface instead of sinking. Everything else works as usual: topics can be pinned, reacted to, searched, and moved between channels with Move Messages.
+Turn any channel into a forum from **Channel Functions → Forum**, or tick **Forum** when creating it. In a forum channel every message is a topic. Replies go in that message's thread, the topic shows its reply count, and a new reply bumps the topic back to the newest end of the channel, right above the composer, so old topics resurface instead of sinking. Every topic carries a **Reply to this topic** button, and the Reply action on a topic opens its thread rather than quoting it as a new topic. Everything else works as usual: topics can be pinned, reacted to, searched, and moved between channels with Move Messages.
 
 ### Creating Sub-Channels
 
@@ -187,6 +187,8 @@ When creating a sub-channel, check the **🔒 Private** checkbox. Private sub-ch
 - Are invisible to non-members (they won't see it in their channel list)
 
 Use private sub-channels for admin-only discussions, sensitive topics, or small breakout groups within a larger channel.
+
+Any channel can be switched between private and public later from **Channel Functions → Private**. Going private keeps everyone who is already a member. Going public opens the channel to the whole server, history included.
 
 ---
 
@@ -1227,6 +1229,15 @@ the timestamp generators people already use work here too.
 | `/` | Slash command autocomplete |
 | `::` | Persona autocomplete (send as one of your personas) |
 | `Tab` | Accept the highlighted suggestion |
+
+### Mentioning a role
+
+`@Moderators` (or any role name) lights up for everyone who holds that role and
+pings them the way an @mention does. It shows up in the `@` picker for anyone
+with the **Mention everyone** permission, and the server quietly disarms it for
+anyone without, since a role ping reaches a crowd the same way `@everyone` does.
+Anyone who would rather not be pinged by their roles can turn **@Role mentions**
+off under Settings, Sounds.
 
 ---
 
