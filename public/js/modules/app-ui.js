@@ -2067,7 +2067,7 @@ _setupUI() {
     if (this._maybeRevealConcealed(e)) return;
     if (e.target.classList.contains('chat-image')) {
       this._lightboxContainer = document.getElementById('messages');
-      this._openLightbox(e.target.src);
+      this._openLightbox(e.target.src, e.target);
     }
     // Spoiler reveal toggle (text spoilers)
     if (e.target.closest('.spoiler')) {
@@ -2089,7 +2089,7 @@ _setupUI() {
         }
         if (e.target.classList.contains('chat-image')) {
           this._lightboxContainer = el;
-          this._openLightbox(e.target.src);
+          this._openLightbox(e.target.src, e.target);
         }
       });
       el.addEventListener('contextmenu', (e) => {

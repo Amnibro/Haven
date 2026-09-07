@@ -1565,7 +1565,6 @@ _decryptE2EImages(root) {
     img.classList.remove('e2e-img-pending');
     img.classList.add('e2e-img-loading');
     const url = img.dataset.e2eSrc;
-    const mime = img.dataset.e2eMime || 'image/png';
 
     // Only fetch local upload paths to prevent SSRF
     if (!url || !url.startsWith('/uploads/')) {
@@ -1575,11 +1574,8 @@ _decryptE2EImages(root) {
       return;
     }
 
-    fetch(url)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-      .then(buf => this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk))
-      .then(plain => {
-        const blob = new Blob([plain], { type: mime });
+    this._e2eImageBlob(img, partner)
+      .then(blob => {
         // Hand the blob back once the browser has decoded it. Without this the
         // object URL keeps the decrypted bytes alive for the life of the tab,
         // so scrolling a media-heavy DM slowly locks up hundreds of MB. Same
@@ -1596,6 +1592,30 @@ _decryptE2EImages(root) {
         img.classList.add('e2e-img-failed');
       });
   });
+},
+
+/** The DM partner whose key decrypts media under `node`: the PiP's partner
+ *  when the node lives in the PiP, otherwise the open DM's. */
+_e2ePartnerForNode(node) {
+  const inPip = !!(node && node.closest && node.closest('#dm-pip-messages'));
+  return inPip && this._activeDMPip
+    ? this._getE2EPartnerFor(this._activeDMPip)
+    : this._getE2EPartner();
+},
+
+/** Fetch and decrypt one E2E image to a Blob. The feed uses it to paint, and
+ *  the lightbox uses it again on click, because the feed's object URL is
+ *  revoked as soon as the image has painted (#5426) and a second look needs
+ *  a second decrypt rather than the bytes kept alive on every node. (#5568) */
+_e2eImageBlob(img, partner = null) {
+  const url = img && img.dataset ? img.dataset.e2eSrc : '';
+  const mime = (img && img.dataset && img.dataset.e2eMime) || 'image/png';
+  if (!partner) partner = this._e2ePartnerForNode(img);
+  if (!partner || !url || !url.startsWith('/uploads/')) return Promise.reject(new Error('not decryptable here'));
+  return fetch(url)
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(buf => this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk))
+    .then(plain => new Blob([plain], { type: mime }));
 },
 
 };

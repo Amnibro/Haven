@@ -4222,41 +4222,64 @@ _getLightboxImages() {
   // Use whichever container opened the lightbox (main feed, thread panel, DM PiP)
   const container = this._lightboxContainer || document.getElementById('messages');
   if (!container) return [];
-  return Array.from(container.querySelectorAll('.chat-image')).map(img => img.src);
+  return Array.from(container.querySelectorAll('.chat-image'));
+},
+
+/** Point the lightbox at one chat image. A decrypted DM image has no usable
+ *  src any more (the feed revokes its object URL once painted, #5426), so it
+ *  is decrypted again on demand; until then the lightbox shows nothing but
+ *  the backdrop, which is what it used to show forever. (#5568) */
+_lightboxShow(imgEl, fallbackSrc = '') {
+  const lbImg = document.getElementById('lightbox-img');
+  if (!lbImg) return;
+  const seq = (this._lightboxSeq = (this._lightboxSeq || 0) + 1);
+  if (this._lightboxBlobUrl) {
+    try { URL.revokeObjectURL(this._lightboxBlobUrl); } catch { /* already gone */ }
+    this._lightboxBlobUrl = null;
+  }
+  if (imgEl && imgEl.dataset && imgEl.dataset.e2eSrc && this._e2eImageBlob) {
+    lbImg.src = '';
+    this._e2eImageBlob(imgEl).then(blob => {
+      if (seq !== this._lightboxSeq) return; // moved on or closed meanwhile
+      this._lightboxBlobUrl = URL.createObjectURL(blob);
+      lbImg.src = this._lightboxBlobUrl;
+    }).catch(() => { if (seq === this._lightboxSeq) lbImg.src = ''; });
+    return;
+  }
+  lbImg.src = imgEl ? imgEl.src : fallbackSrc;
 },
 
 _lightboxNavigate(dir) {
   const imgs = this._getLightboxImages();
-  const lbImg = document.getElementById('lightbox-img');
-  if (!lbImg || imgs.length < 2) return;
-  const curIdx = imgs.indexOf(lbImg.src);
-  if (curIdx < 0) return;
-  const newIdx = curIdx + dir;
+  if (imgs.length < 2 || !(this._lightboxIndex >= 0)) return;
+  const newIdx = this._lightboxIndex + dir;
   if (newIdx < 0 || newIdx >= imgs.length) return;
-  lbImg.src = imgs[newIdx];
+  this._lightboxIndex = newIdx;
+  this._lightboxShow(imgs[newIdx]);
   this._updateLightboxNav();
 },
 
 _updateLightboxNav() {
   const imgs = this._getLightboxImages();
-  const lbImg = document.getElementById('lightbox-img');
   const prevBtn = document.getElementById('lightbox-prev');
   const nextBtn = document.getElementById('lightbox-next');
-  if (!lbImg || !prevBtn || !nextBtn) return;
-  const curIdx = imgs.indexOf(lbImg.src);
+  if (!prevBtn || !nextBtn) return;
+  const curIdx = this._lightboxIndex >= 0 ? this._lightboxIndex : -1;
   prevBtn.disabled = curIdx <= 0;
   nextBtn.disabled = curIdx < 0 || curIdx >= imgs.length - 1;
-  // Hide nav if only one image
-  const showNav = imgs.length > 1;
+  // Hide nav when there is nothing to step through
+  const showNav = imgs.length > 1 && curIdx >= 0;
   prevBtn.style.display = showNav ? '' : 'none';
   nextBtn.style.display = showNav ? '' : 'none';
 },
 
-_openLightbox(src) {
+_openLightbox(src, imgEl = null) {
   const lb = document.getElementById('image-lightbox');
   const img = document.getElementById('lightbox-img');
   if (!lb || !img) return;
-  img.src = src;
+  const imgs = this._getLightboxImages();
+  this._lightboxIndex = imgEl ? imgs.indexOf(imgEl) : imgs.findIndex(i => i.src === src);
+  this._lightboxShow(imgEl || imgs[this._lightboxIndex] || null, src);
   lb.style.display = 'flex';
   this._updateLightboxNav();
 },
@@ -4266,6 +4289,12 @@ _closeLightbox() {
   if (lb) { lb.style.display = 'none'; }
   const img = document.getElementById('lightbox-img');
   if (img) { img.src = ''; }
+  this._lightboxSeq = (this._lightboxSeq || 0) + 1;
+  if (this._lightboxBlobUrl) {
+    try { URL.revokeObjectURL(this._lightboxBlobUrl); } catch { /* already gone */ }
+    this._lightboxBlobUrl = null;
+  }
+  this._lightboxIndex = -1;
   this._hideImageContextMenu();
 },
 
