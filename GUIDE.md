@@ -485,6 +485,7 @@ Click [here](https://console.tailscale.com/admin/machines) to access the admin p
 ### Step 5: Sharing the link
 - Once you provide a share link to your friend, he will need to make an account on Tailscale, download the client and connect on his machine. Please note, your friend **does not** need to share anything from his end. Only the person hosting Haven will have to share.
 - Once your friend accepts the link, his device will now be able to reach your shared device.
+- Sharing is one way. Your friend's device will not appear in your admin page, and it does not need to. If he can see your machine on his end, the share worked.
 
 ### Step 6: Usage
 - Once everything is wired up, go to your Tailscale admin page, find your device, and notice the **IP Address** listed next to your device. This is your Tailnet IP address. It is not your actual IP address.
@@ -1183,7 +1184,9 @@ it on their own clock. Useful when the group is spread across timezones: you say
 one time, nobody does the arithmetic, and nobody turns up an hour late.
 
 `/time 8pm` puts a token like `<t:1780853820:f>` in your message box. Type around
-it and send. Whoever reads it sees their own local time.
+it and send. Whoever reads it sees their own local time. The clock button next to
+the poll button, or `/time` on its own, opens a picker instead: pick the date and
+time, see every style previewed in your own locale, and insert the one you want.
 
 What `/time` accepts:
 

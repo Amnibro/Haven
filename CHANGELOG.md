@@ -14,6 +14,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **A timestamp picker (#5580).** The clock button in the input bar, or `/time` on
+  its own, opens a date and time chooser with a 24-hour or AM/PM toggle that
+  follows your own clock and every style previewed live, each with its own Insert
+  button. Thanks to @Bo0sted.
+- **Channel Scrolling setting (#5582).** Settings, Layout now offers separate
+  scrollbars for channels and DMs or one for the whole sidebar. Short windows use
+  the combined layout so the channel controls stay reachable. Thanks to @birdcrazy.
+- **Image Display settings live together (#5584).** Image Display Mode, Animated
+  Profile Pictures and Animated Images in Chat are one section now. Thanks to
+  @birdcrazy.
 - **Timestamps that follow the reader.** A message can carry an instant instead
   of a wall-clock time, so everyone sees it on their own clock, which is the
   thing that stops people turning up an hour late when a group is spread across
@@ -23,6 +33,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   hovering any of them spells out the full date. The syntax is Discord's, so
   tokens survive the Ferry bridge in both directions and existing generators
   keep working. Requested by test2.
+
+### Fixed
+- **Invite links grant only the channels that were ticked (#5569, #5583).** An
+  invite made by someone who could not see every public channel used to drop the
+  invitee into all of them anyway, and unticking every box meant the same. Links
+  made before this release keep meaning what they meant. One thing changes for
+  new links: a channel created later is not added to them automatically. Thanks
+  to @birdcrazy.
+- **Deleting an account no longer hands its invite use back (#5562).** Uses are
+  counted on the link itself now, so a single-use link stays used.
+- **A nickname cleared on one device stopped coming back from another (#5560).**
+  Server-stored nicknames are the record; the old per-connect merge re-pushed
+  whatever a device still had cached, ghost self-nicknames included.
+- **Enlarging an image in an encrypted DM showed only the dark backdrop (#5568).**
+  The decrypted preview gives its memory back once painted, so the lightbox
+  decrypts the image again when you open it.
+- **Wide images no longer lose their edges in thumbnails (#5581).** Thanks to
+  @birdcrazy.
+- **A new forum channel showed as a plain # in the creator's sidebar** until the
+  next list refresh.
+- **The startup banner prints your LAN address** instead of a YOUR_IP placeholder
+  that read like a broken config (#5572).
 
 ---
 
