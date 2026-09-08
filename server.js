@@ -482,10 +482,23 @@ let currentReferrerPolicy = DEFAULT_REFERRER_POLICY;
 let sslCert = process.env.SSL_CERT_PATH;
 let sslKey  = process.env.SSL_KEY_PATH;
 
-// If not explicitly configured, check if the startup scripts generated certs
+const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
+
+// If not explicitly configured, use the certs in the data directory, and make
+// them ourselves when they are missing. The startup scripts used to need an
+// openssl.exe for this, which Windows does not ship (OpenSSH is not OpenSSL),
+// so those machines silently fell back to HTTP.
 if (!sslCert && !sslKey) {
   const autoCert = path.join(CERTS_DIR, 'cert.pem');
   const autoKey  = path.join(CERTS_DIR, 'key.pem');
+  if (!forceHttp && !(fs.existsSync(autoCert) && fs.existsSync(autoKey))) {
+    try {
+      const made = require('./src/selfsignedCert').ensureCerts(CERTS_DIR);
+      console.log(`🔒 Generated a self-signed certificate in ${CERTS_DIR} (${made.names.join(', ')})`);
+    } catch (err) {
+      console.warn('⚠️  Could not generate a self-signed certificate:', err.message);
+    }
+  }
   if (fs.existsSync(autoCert) && fs.existsSync(autoKey)) {
     sslCert = autoCert;
     sslKey  = autoKey;
@@ -494,36 +507,6 @@ if (!sslCert && !sslKey) {
   // Resolve relative paths against the data directory
   if (sslCert && !path.isAbsolute(sslCert)) sslCert = path.resolve(DATA_DIR, sslCert);
   if (sslKey  && !path.isAbsolute(sslKey))  sslKey  = path.resolve(DATA_DIR, sslKey);
-}
-
-const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
-
-// No certificate and no wish for plain HTTP: make one. Voice, camera and the
-// mobile app all need HTTPS, and the Windows installer used to skip this step
-// quietly whenever OpenSSL was missing, leaving people on HTTP with no idea
-// why nothing worked. Built with Node's own crypto, so nothing to install.
-// FORCE_HTTP=true is the way to say plain HTTP is on purpose.
-if (!sslCert && !sslKey && !forceHttp) {
-  try {
-    const { generateSelfSignedCert } = require('./src/selfsignedCert');
-    const lanIps = [];
-    try {
-      for (const ifaces of Object.values(require('os').networkInterfaces())) {
-        for (const i of ifaces || []) if (i.family === 'IPv4' && !i.internal) lanIps.push(i.address);
-      }
-    } catch { /* no LAN names in the certificate; still a working certificate */ }
-    const made = generateSelfSignedCert({ commonName: 'Haven', altNames: ['localhost'], ipAddresses: ['127.0.0.1', ...lanIps] });
-    const autoCert = path.join(CERTS_DIR, 'cert.pem');
-    const autoKey  = path.join(CERTS_DIR, 'key.pem');
-    fs.mkdirSync(CERTS_DIR, { recursive: true });
-    fs.writeFileSync(autoKey, made.key, { mode: 0o600 });
-    fs.writeFileSync(autoCert, made.cert);
-    sslCert = autoCert;
-    sslKey  = autoKey;
-    console.log(`\u{1F512} No certificate found, so Haven made a self-signed one in ${CERTS_DIR}. Browsers will warn once. Set FORCE_HTTP=true to run plain HTTP on purpose.`);
-  } catch (err) {
-    console.warn('\u26A0\uFE0F  Could not create a self-signed certificate, running plain HTTP:', err && err.message);
-  }
 }
 
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
@@ -1806,14 +1789,7 @@ function uploadLimiter(req, res, next) {
   const ip = req.ip || req.socket.remoteAddress;
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 minute
-  // One message can carry up to max_attachments files, each its own request,
-  // so the allowance follows that setting (twice it, never under the old 10)
-  // rather than refusing the tail of a single drop. (#5561)
-  let attachmentCap = 10;
-  try {
-    attachmentCap = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_attachments'").get()?.value) || 10;
-  } catch { /* keep the default */ }
-  const maxUploads = Math.max(10, attachmentCap * 2);
+  const maxUploads = 10;
   if (!uploadLimitStore.has(ip)) uploadLimitStore.set(ip, []);
   const stamps = uploadLimitStore.get(ip).filter(t => now - t < windowMs);
   uploadLimitStore.set(ip, stamps);

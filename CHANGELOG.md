@@ -65,6 +65,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   The grid, the pop-out and the sidebar now share the same controls, with a
   finger-sized clear button in row layouts. Reported by Dispencer2, fixed by
   @Amnibro.
+- **Every install path uses Haven's own certificate generator (#5586).**
+  4.5.0 taught the server to make its certificate itself, but `Start Haven.bat`,
+  `Install Haven.ps1` and the web installer still went looking for
+  `openssl.exe` first and reported a skipped certificate as done. They now call
+  the same generator, the certificate carries the CA and server-auth flags that
+  phones expect when you import it, and the guide and support page stop telling
+  people to install OpenSSL. Reported by MutantRabbit767, fixed by @Amnibro.
 
 ---
 
