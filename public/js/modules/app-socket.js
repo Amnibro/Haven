@@ -1024,7 +1024,8 @@ _setupSocketListeners() {
       }
       if (data.messages.length < 80) this._noMoreHistory = true;
       this._oldestMsgId = data.messages[0].id;
-      this._prependMessages(data.messages);
+      if (this._isForumFeed?.()) this._appendOlderForum(data.messages);
+      else this._prependMessages(data.messages);
       // Release lock AFTER DOM manipulation so scroll-triggered re-requests
       // don't fire while _prependMessages is adjusting scroll position.
       this._loadingHistory = false;
@@ -1091,6 +1092,13 @@ _setupSocketListeners() {
       if (this._suppressCoupleCheck) return;
       const st = msgContainer.scrollTop;
       const dist = msgContainer.scrollHeight - msgContainer.clientHeight - st;
+      if (this._isForumFeed?.()) {
+        // Newest first: nothing to couple to at the bottom, and no jump button.
+        this._coupledToBottom = false;
+        if (jumpBtn) jumpBtn.classList.remove('visible');
+        lastScrollTop = st;
+        return;
+      }
       if (dist < 200 && this._noMoreFuture !== false) {
         // Only couple if the DOM contains the actual latest messages.
         // When newer messages have been trimmed, the scroll "bottom" is
@@ -1117,7 +1125,11 @@ _setupSocketListeners() {
     msgContainer.addEventListener('scroll', () => {
       if (this._suppressCoupleCheck) return;
       const now = Date.now();
-      if (msgContainer.scrollTop < 200 && !this._noMoreHistory && !this._loadingHistory && this._oldestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
+      // A forum feed runs newest first, so its older topics load from the bottom.
+      const forumFeed = !!this._isForumFeed?.();
+      const distEnd = msgContainer.scrollHeight - msgContainer.clientHeight - msgContainer.scrollTop;
+      const atOlderEdge = forumFeed ? distEnd < 200 : msgContainer.scrollTop < 200;
+      if (atOlderEdge && !this._noMoreHistory && !this._loadingHistory && this._oldestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
         this._loadingHistory = true;
         this._historyBefore = this._oldestMsgId;
         this._historyDebounce = now;
@@ -1132,7 +1144,7 @@ _setupSocketListeners() {
       // Forward pagination: load newer messages when near the bottom and
       // the DOM window doesn't extend to the latest messages.
       const distBottom = msgContainer.scrollHeight - msgContainer.clientHeight - msgContainer.scrollTop;
-      if (distBottom < 200 && !this._noMoreFuture && !this._loadingFuture && this._newestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
+      if (!forumFeed && distBottom < 200 && !this._noMoreFuture && !this._loadingFuture && this._newestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
         this._loadingFuture = true;
         this._historyAfter = this._newestMsgId;
         this._historyDebounce = now;
@@ -2331,12 +2343,18 @@ _setupSocketListeners() {
   // ── User preferences (persistent theme etc.) ───────
   this.socket.on('preferences', (prefs) => {
     this._userPrefs = prefs || {};
+    // Effects come back from the server like the theme does; restore them
+    // first so applyThemeFromServer() applies the saved pick, not the default.
+    if (prefs.effects && typeof syncEffectsFromServer === 'function') syncEffectsFromServer(prefs.effects);
     if (prefs.theme) {
       // User has a saved personal theme preference — apply it
       applyThemeFromServer(prefs.theme, true, true);
     } else if (this.serverSettings.default_theme) {
       // No personal preference — apply the server's default theme
       applyThemeFromServer(this.serverSettings.default_theme);
+    } else if (prefs.effects && typeof applyEffects === 'function') {
+      // No theme pass to carry them, so the restored effects apply here.
+      applyEffects(_getStoredEffectMode());
     }
     // Sync hide-own-score toggle to the server's stored value so reopening
     // settings on a fresh device shows the correct state.

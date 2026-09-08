@@ -2250,19 +2250,20 @@ _setupUI() {
     if (!items) return;
     const targetCode = this._activeDMPip;
     if (!targetCode) return;
+    let handled = false;
     for (const item of items) {
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        if (!file) continue;
-        e.preventDefault();
-        if (item.type.startsWith('image/')) {
-          this._queueImageForPiP(file, targetCode);
-        } else {
-          this._uploadGeneralFile(file, targetCode);
-        }
-        return;
+      if (item.kind !== 'file') continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+      e.preventDefault();
+      handled = true;
+      if (item.type.startsWith('image/')) {
+        this._queueImageForPiP(file, targetCode);
+      } else {
+        this._uploadGeneralFile(file, targetCode);
       }
     }
+    if (handled) return;
 
     // insert a markdown link when a link is pasted over selected text
     if (this._handleMarkdownLinkPaste(dmPipInput, e)) {
@@ -2422,15 +2423,12 @@ _setupUI() {
       const items = e.clipboardData?.items;
       if (!items) return;
       if (!this._activeThreadParent) return;
-      for (const item of items) {
-        if (item.kind === 'file') {
-          const file = item.getAsFile();
-          if (!file) continue;
-          e.preventDefault();
-          // Hold it, don't post it. Flushed on send. (#thread-paste-instant)
-          this._queueThreadFile(file);
-          return;
-        }
+      // Hold them, don't post them. Flushed on send. (#thread-paste-instant)
+      const files = Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+      if (files.length) {
+        e.preventDefault();
+        this._queueThreadFiles(files);
+        return;
       }
 
       // insert a markdown link when a link is pasted over selected text
@@ -2447,8 +2445,7 @@ _setupUI() {
       e.preventDefault();
       threadArea.classList.remove('drag-over');
       if (!this._activeThreadParent) return;
-      const file = e.dataTransfer?.files[0];
-      if (file) this._queueThreadFile(file);
+      this._queueThreadFiles(e.dataTransfer?.files);
     });
   }
 
@@ -3368,33 +3365,62 @@ _setupUI() {
   });
 
   // ── Settings scroll-spy ──────────────────────────────
-  // (language picker is built above; scroll-spy follows)
-  // The settings body is one long scrolling column, not a tab switcher, so the
-  // nav highlight used to sit on whatever was last clicked (or "Language" by
-  // default) no matter where you'd scrolled to. That made the nav actively
-  // misleading — it would claim you were in Language while you were looking at
-  // Activity. Track the topmost visible section instead.
-  const settingsBody = document.getElementById('settings-body-user');
-  if (settingsBody) {
+  // Settings bodies are long scrolling columns rather than tab switchers.
+  // Keep the corresponding nav item highlighted as the user scrolls.
+  //
+  // User settings:
+  //   #settings-body-user
+  //   .settings-nav-user
+  //
+  // Admin settings:
+  //   #settings-body-admin
+  //   .settings-nav-admin-group
+  //
+  // Each body has its own independent scroll-spy so the user and admin nav
+  // states cannot interfere with each other.
+  const setupSettingsScrollSpy = (settingsBody, navSelector) => {
+    if (!settingsBody) return;
+
     const syncNavHighlight = () => {
       if (Date.now() < (this._settingsSpyMuteUntil || 0)) return;
-      const navItems = Array.from(document.querySelectorAll('.settings-nav-user .settings-nav-item'));
-      if (!navItems.length) return;
-      const bodyTop = settingsBody.getBoundingClientRect().top;
 
-      let current = null;
-      for (const item of navItems) {
+      // Only consider nav items whose corresponding section currently exists
+      // and is visible. This is important for admin settings because many of
+      // the admin nav entries start with display:none.
+      const navItems = Array.from(document.querySelectorAll(`${navSelector} .settings-nav-item`));
+      const visibleNavItems = navItems.filter(item => {
+        if (item.offsetParent === null) return false;
+
         const section = document.getElementById(item.dataset.target);
-        if (!section || section.offsetParent === null) continue;
-        // The last section whose top has passed the viewport top is the one
-        // being read; anything below that hasn't been reached yet.
-        if (section.getBoundingClientRect().top - bodyTop <= 8) current = item;
-        else break;
+        return section && section.offsetParent !== null;
+      });
+
+      if (!visibleNavItems.length) return;
+
+      const bodyTop = settingsBody.getBoundingClientRect().top;
+      let current = null;
+      for (const item of visibleNavItems) {
+        const section = document.getElementById(item.dataset.target);
+        if (!section) continue;
+
+        // The last section whose top has passed the top of the scrolling
+        // body is the section currently being viewed.
+        if (section.getBoundingClientRect().top - bodyTop <= 8) {
+          current = item;
+        } else {
+          break;
+        }
       }
-      if (!current) current = navItems[0];
+
+      // Before the first section reaches the top, highlight the first
+      // visible section.
+      if (!current) current = visibleNavItems[0];
+
+      // Nothing to do if the correct item is already highlighted.
       if (current.classList.contains('active')) return;
 
-      navItems.forEach(n => n.classList.remove('active'));
+      // Only modify nav items belonging to this scroll-spy.
+      visibleNavItems.forEach(item => item.classList.remove('active'));
       current.classList.add('active');
       // Keep the highlighted entry reachable in a long nav list.
       current.scrollIntoView({ block: 'nearest' });
@@ -3406,7 +3432,15 @@ _setupUI() {
       spyQueued = true;
       requestAnimationFrame(() => { spyQueued = false; syncNavHighlight(); });
     }, { passive: true });
-  }
+
+    // Set the correct highlight immediately in case the settings body is
+    // already scrolled when the spy is initialized.
+    syncNavHighlight();
+  };
+  // User settings scroll-spy
+  setupSettingsScrollSpy(document.getElementById('settings-body-user'), '.settings-nav-user');
+  // Admin settings scroll-spy
+  setupSettingsScrollSpy(document.getElementById('settings-body-admin'), '.settings-nav-admin-group');
 
   // ── Language switcher ────────────────────────────────
   document.getElementById('language-select')?.addEventListener('change', (e) => {
@@ -4403,13 +4437,25 @@ _setupUI() {
     if (!confirm(t('settings.admin.registration.clear_confirm'))) return;
     this.socket.emit('clear-registration-token');
   });
-  document.getElementById('copy-registration-token-btn')?.addEventListener('click', () => {
-    const tok = document.getElementById('registration-token-value')?.textContent;
-    if (tok && tok !== '—') {
-      const onCopied = () => this._showToast?.(t('settings.admin.registration.copied'), 'success');
-      (navigator.clipboard?.writeText
-        ? navigator.clipboard.writeText(tok).then(onCopied).catch(() => onCopied())
-        : onCopied());
+  document.getElementById('copy-registration-token-btn')?.addEventListener('click', async () => {
+    const tok = document.getElementById('registration-token-value')?.textContent?.trim();
+    if (!tok || tok === '—') return;
+    const onCopied = () => this._showToast?.(t('settings.admin.registration.copied'), 'success');
+    // The old handler toasted "copied" from the rejection path too, so in the
+    // desktop app (clipboard write refused without a fresh user activation)
+    // the toast lied while the clipboard kept its previous contents.
+    try {
+      const res = await window.havenDesktop?.clipboardWriteText?.(tok);
+      if (res?.ok) return onCopied();
+    } catch {}
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard api');
+      await navigator.clipboard.writeText(tok);
+      return onCopied();
+    } catch {
+      let ok = false;
+      this._copyTextFallback(tok, () => { ok = true; onCopied(); });
+      if (!ok) this._showToast?.(t('settings.admin.registration.copy_failed'), 'error');
     }
   });
 
@@ -5852,14 +5898,11 @@ _setupImageUpload() {
     fileInput.click();
   });
 
+  // The picker, the clipboard and a drop can all hand over several files at
+  // once; every one of them queues, up to the admin's cap. (#5561)
   fileInput.addEventListener('change', () => {
-    if (!fileInput.files[0]) return;
-    const file = fileInput.files[0];
-    if (file.type.startsWith('image/')) {
-      this._queueImage(file);
-    } else {
-      this._queueGeneralFile(file);
-    }
+    if (!fileInput.files.length) return;
+    this._queueComposerFiles(fileInput.files);
     fileInput.value = '';
   });
 
@@ -5868,19 +5911,10 @@ _setupImageUpload() {
   document.getElementById('message-input').addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    for (const item of items) {
-      if (item.kind === 'file' && item.type.startsWith('image/')) {
-        e.preventDefault();
-        this._queueImage(item.getAsFile());
-        return;
-      }
-      if (item.kind === 'file') {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) this._queueGeneralFile(file);
-        return;
-      }
-    }
+    const files = Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+    if (!files.length) return;
+    e.preventDefault();
+    this._queueComposerFiles(files);
   });
 
   // Drag & drop — QUEUE instead of uploading immediately
@@ -5896,13 +5930,7 @@ _setupImageUpload() {
   messageArea.addEventListener('drop', (e) => {
     e.preventDefault();
     messageArea.classList.remove('drag-over');
-    const file = e.dataTransfer?.files[0];
-    if (!file) return;
-    if (file.type.startsWith('image/')) {
-      this._queueImage(file);
-    } else {
-      this._queueGeneralFile(file);
-    }
+    this._queueComposerFiles(e.dataTransfer?.files);
   });
 },
 

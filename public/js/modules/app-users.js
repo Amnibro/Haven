@@ -5,6 +5,7 @@ export default {
 _renderOnlineUsers(users) {
   this._lastOnlineUsers = users;
   this._refreshOpenProfileCard();
+  if (this._activeDMPip) this._refreshDMPipHeader?.();   // (#5574)
   const el = document.getElementById('online-users');
   const searchWrap = document.getElementById('user-search-wrap');
   if (searchWrap) searchWrap.style.display = users.length ? '' : 'none';

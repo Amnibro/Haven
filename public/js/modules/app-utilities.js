@@ -3156,7 +3156,35 @@ _openDMPiP(code) {
   const titleEl = document.getElementById('dm-pip-title');
   if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${t('dm_runtime.self_title', { name: partnerName })}` : `@ ${partnerName}`;
 
-  // Header avatar — pulled from the partner's online presence (best effort)
+  this._refreshDMPipHeader(ch, partnerName);
+
+  // Banner background: use server banner as a subtle backdrop
+  const bannerEl = document.getElementById('dm-pip-banner');
+  const bannerUrl = this.serverSettings && this.serverSettings.server_banner;
+  if (bannerEl) {
+    if (bannerUrl) {
+      bannerEl.style.backgroundImage = `url("${bannerUrl.replace(/"/g, '\\"')}")`;
+      panel.classList.remove('no-banner');
+    } else {
+      bannerEl.style.backgroundImage = '';
+      panel.classList.add('no-banner');
+    }
+  }
+  this._openDMPiPBody(ch, code, panel);
+},
+
+// Header avatar and status dot for the open DM PiP. Runs when the panel opens
+// and again on every presence broadcast (#5574): it used to render once, from
+// whatever the online list held at that moment, so a PiP opened before the
+// list arrived, or whose partner came online later, kept the grey dot and the
+// initial for as long as the panel stayed open.
+_refreshDMPipHeader(ch, partnerName) {
+  if (!ch) {
+    const code = this._activeDMPip;
+    ch = code ? (this.channels || []).find(c => c.code === code) : null;
+    if (!ch) return;
+  }
+  if (!partnerName) partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
   const avatarWrap = document.getElementById('dm-pip-avatar-wrap');
   if (avatarWrap) {
     const partnerId = ch.dm_target && ch.dm_target.id;
@@ -3200,19 +3228,10 @@ _openDMPiP(code) {
       avatarWrap.innerHTML = `<span class="dm-pip-avatar-initial">${this._escapeHtml(initial)}</span>${statusDot}`;
     }
   }
+},
 
-  // Banner background — use server banner as a subtle backdrop
-  const bannerEl = document.getElementById('dm-pip-banner');
-  const bannerUrl = this.serverSettings && this.serverSettings.server_banner;
-  if (bannerEl) {
-    if (bannerUrl) {
-      bannerEl.style.backgroundImage = `url("${bannerUrl.replace(/"/g, '\\"')}")`;
-      panel.classList.remove('no-banner');
-    } else {
-      bannerEl.style.backgroundImage = '';
-      panel.classList.add('no-banner');
-    }
-  }
+// The rest of opening a DM PiP: everything after the header and banner.
+_openDMPiPBody(ch, code, panel) {
 
   // Restore geometry from localStorage
   this._applyDMPiPGeometry(panel);
