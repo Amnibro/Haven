@@ -6862,6 +6862,12 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .chat-image:hover { opacity: 0.85; }
 
+/* Lazy media queue: a quiet block while an inline image waits for its turn. */
+img[data-lazy="pending"],
+img[data-lazy="loading"] { background: var(--bg-tertiary); }
+img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
+@keyframes lazy-media-in { from { opacity: 0.4; } to { opacity: 1; } }
+
 /* E2E encrypted image loading states */
 .e2e-img-pending,
 .e2e-img-loading {

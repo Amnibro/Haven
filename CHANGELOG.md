@@ -14,6 +14,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Inline images load on demand (#5587).** Chat images, stickers and link
+  preview pictures used to fetch the moment a message rendered, and every one
+  of the 100 messages kept on screen held its decoded bitmap, which was most of
+  the memory the desktop app used on a busy channel. They now load only when
+  they come near the viewport, closest first and three at a time, and are let
+  go again once they scroll far away or the window has been hidden for a while,
+  in the main chat, threads, DM pop-outs and search alike. A picture keeps its
+  size while unloaded so history never jumps. Measured by @Amnibro on the
+  desktop app: about 430 MB of a 700 MB process was decoded images.
 - **Attachments per message is an admin setting (#5561).** Uploads & Limits has
   a Max Attachments per Message box (1 to 50, default 10). Dropping, pasting or
   picking several files at once now queues all of them, in the main composer,
