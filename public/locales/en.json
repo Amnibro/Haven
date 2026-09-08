@@ -866,6 +866,7 @@
     "max_images": "Max 5 images at once",
     "max_files": "Max 5 files at once",
     "max_attachments": "Max 5 attachments at once",
+    "max_attachments_n": "Max {{n}} attachments at once",
     "remove": "Remove",
     "clear_all": "Clear All",
     "upload_failed": "Upload failed"
@@ -2103,6 +2104,7 @@
       "cleanup_run_btn": "Run Cleanup Now",
       "uploads_title": "Uploads & Limits",
       "max_upload": "Max Upload Size (MB)",
+      "max_attachments": "Max Attachments per Message",
       "max_sound": "Max Sound File Size (KB)",
       "max_emoji": "Max Emoji File Size (KB)",
       "max_poll_options": "Max Poll Options",
@@ -2164,6 +2166,7 @@
       "cleanup_age_hint": "Delete messages older than N days (0 = off)",
       "cleanup_size_hint": "Trim oldest messages when DB exceeds N MB (0 = off)",
       "max_upload_hint": "Maximum file size users can upload in MB (default 25). No hard cap — limited by available disk space.",
+      "max_attachments_hint": "How many files someone can queue on one message by dropping, pasting or picking them (1 to 50, default 10). Each one still has to fit the size limit above.",
       "max_sound_hint": "Max soundboard upload size (256–10240 KB, default 1024 / 1 MB)",
       "max_emoji_hint": "Max custom emoji upload size (64–1024 KB, default 256)",
       "max_poll_hint": "Maximum answer choices per poll (2–25, default 10)",

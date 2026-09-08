@@ -1806,7 +1806,14 @@ function uploadLimiter(req, res, next) {
   const ip = req.ip || req.socket.remoteAddress;
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 minute
-  const maxUploads = 10;
+  // One message can carry up to max_attachments files, each its own request,
+  // so the allowance follows that setting (twice it, never under the old 10)
+  // rather than refusing the tail of a single drop. (#5561)
+  let attachmentCap = 10;
+  try {
+    attachmentCap = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_attachments'").get()?.value) || 10;
+  } catch { /* keep the default */ }
+  const maxUploads = Math.max(10, attachmentCap * 2);
   if (!uploadLimitStore.has(ip)) uploadLimitStore.set(ip, []);
   const stamps = uploadLimitStore.get(ip).filter(t => now - t < windowMs);
   uploadLimitStore.set(ip, stamps);

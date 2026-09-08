@@ -2250,19 +2250,20 @@ _setupUI() {
     if (!items) return;
     const targetCode = this._activeDMPip;
     if (!targetCode) return;
+    let handled = false;
     for (const item of items) {
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        if (!file) continue;
-        e.preventDefault();
-        if (item.type.startsWith('image/')) {
-          this._queueImageForPiP(file, targetCode);
-        } else {
-          this._uploadGeneralFile(file, targetCode);
-        }
-        return;
+      if (item.kind !== 'file') continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+      e.preventDefault();
+      handled = true;
+      if (item.type.startsWith('image/')) {
+        this._queueImageForPiP(file, targetCode);
+      } else {
+        this._uploadGeneralFile(file, targetCode);
       }
     }
+    if (handled) return;
 
     // insert a markdown link when a link is pasted over selected text
     if (this._handleMarkdownLinkPaste(dmPipInput, e)) {
@@ -2422,15 +2423,12 @@ _setupUI() {
       const items = e.clipboardData?.items;
       if (!items) return;
       if (!this._activeThreadParent) return;
-      for (const item of items) {
-        if (item.kind === 'file') {
-          const file = item.getAsFile();
-          if (!file) continue;
-          e.preventDefault();
-          // Hold it, don't post it. Flushed on send. (#thread-paste-instant)
-          this._queueThreadFile(file);
-          return;
-        }
+      // Hold them, don't post them. Flushed on send. (#thread-paste-instant)
+      const files = Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+      if (files.length) {
+        e.preventDefault();
+        this._queueThreadFiles(files);
+        return;
       }
 
       // insert a markdown link when a link is pasted over selected text
@@ -2447,8 +2445,7 @@ _setupUI() {
       e.preventDefault();
       threadArea.classList.remove('drag-over');
       if (!this._activeThreadParent) return;
-      const file = e.dataTransfer?.files[0];
-      if (file) this._queueThreadFile(file);
+      this._queueThreadFiles(e.dataTransfer?.files);
     });
   }
 
@@ -5852,14 +5849,11 @@ _setupImageUpload() {
     fileInput.click();
   });
 
+  // The picker, the clipboard and a drop can all hand over several files at
+  // once; every one of them queues, up to the admin's cap. (#5561)
   fileInput.addEventListener('change', () => {
-    if (!fileInput.files[0]) return;
-    const file = fileInput.files[0];
-    if (file.type.startsWith('image/')) {
-      this._queueImage(file);
-    } else {
-      this._queueGeneralFile(file);
-    }
+    if (!fileInput.files.length) return;
+    this._queueComposerFiles(fileInput.files);
     fileInput.value = '';
   });
 
@@ -5868,19 +5862,10 @@ _setupImageUpload() {
   document.getElementById('message-input').addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    for (const item of items) {
-      if (item.kind === 'file' && item.type.startsWith('image/')) {
-        e.preventDefault();
-        this._queueImage(item.getAsFile());
-        return;
-      }
-      if (item.kind === 'file') {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) this._queueGeneralFile(file);
-        return;
-      }
-    }
+    const files = Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+    if (!files.length) return;
+    e.preventDefault();
+    this._queueComposerFiles(files);
   });
 
   // Drag & drop — QUEUE instead of uploading immediately
@@ -5896,13 +5881,7 @@ _setupImageUpload() {
   messageArea.addEventListener('drop', (e) => {
     e.preventDefault();
     messageArea.classList.remove('drag-over');
-    const file = e.dataTransfer?.files[0];
-    if (!file) return;
-    if (file.type.startsWith('image/')) {
-      this._queueImage(file);
-    } else {
-      this._queueGeneralFile(file);
-    }
+    this._queueComposerFiles(e.dataTransfer?.files);
   });
 },
 

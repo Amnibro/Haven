@@ -591,7 +591,7 @@
               </svg>
             </button>
           </div>
-          <input type="file" id="file-input" style="display:none">
+          <input type="file" id="file-input" multiple style="display:none">
         </div>
       </main>
 
@@ -2825,6 +2825,11 @@
           </label>
           <small class="settings-hint" data-i18n="settings.admin.max_upload_hint">Maximum file size users can upload in MB (default 25). No hard cap — limited by your server's available disk space.</small>
           <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_attachments">Max Attachments per Message</span>
+            <input type="number" id="max-attachments" min="1" max="50" value="10" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_attachments_hint">How many files someone can queue on one message by dropping, pasting or picking them (1 to 50, default 10). Each one still has to fit the size limit above.</small>
+          <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_message_chars">Max Message Length (characters)</span>
             <input type="number" id="max-message-chars" min="200" max="100000" value="2000" class="settings-number-input">
           </label>
@@ -4314,13 +4319,13 @@
   <script src="/js/theme.js?v=4.1.1"></script>
   <script src="/js/notifications.js?v=3.16.17"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
-  <script src="/js/voice.js?v=3.34.7"></script>
+  <script src="/js/voice.js?v=4.5.1"></script>
   <script src="/js/modmode.js?v=3.16.16"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.1.4"></script>
+  <script type="module" src="/js/app.js?v=4.5.1"></script>
   <script src="/js/plugin-loader.js?v=4.1.2"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

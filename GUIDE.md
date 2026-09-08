@@ -1262,7 +1262,8 @@ be handed to others through the role system, one permission at a time.
   username, get a temporary account with no password, see only the channels you
   whitelist, cannot DM, and are deleted when they disconnect
 - **Uploads & limits**: max upload size (25 MB by default, raise it as far as your
-  disk allows), max message length, per-member storage usage
+  disk allows), attachments per message (10 by default), max message length,
+  per-member storage usage
 - **Auto-cleanup**: automatic deletion of messages past a chosen age
 - **Server updates**: check for a new Haven release and apply it in place. Haven
   takes a pre-update backup and restarts itself

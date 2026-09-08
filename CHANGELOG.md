@@ -11,6 +11,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Attachments per message is an admin setting (#5561).** Uploads & Limits has
+  a Max Attachments per Message box (1 to 50, default 10). Dropping, pasting or
+  picking several files at once now queues all of them, in the main composer,
+  threads and DM PiPs alike, instead of keeping the first and dropping the rest.
+  The per-minute upload allowance follows the setting so a full drop is not cut
+  off part way. Requested by @Sheoji.
+- **Relayed screen share viewers get the gentler profile automatically (#5426).**
+  When a viewer can only be reached through a TURN relay, the share to that
+  viewer uses the encoder settings behind the "Gentler screen share for relay
+  connections" toggle, while viewers on a direct route keep the full-quality
+  one. On by default; a switch under Settings, Debug turns the detection off.
+  Suggested by @RCCore after confirming the profile on two setups.
+
+### Fixed
+- **DM PiP header stuck on a grey dot and an initial (#5574).** The avatar and
+  status dot in the DM PiP header were drawn once when the panel opened, from
+  whatever the online list held at that moment, and never again. They follow
+  presence updates now. Reported by @birdcrazy.
+
+---
+
 ## [4.5.0] - 2026-09-07
 
 Forums finish taking shape, roles can be pinged, and Haven no longer depends on
