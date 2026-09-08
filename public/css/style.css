@@ -13625,6 +13625,10 @@ video:-webkit-full-screen {
   overflow-y: auto;
   flex: 1;
   min-height: 5rem;
+  /* It also carries .soundboard-grid for the list-view styles; that class caps
+     height and pads the Sound Manager grid, neither of which fits the pop-out. */
+  max-height: none;
+  padding: 0;
 }
 @media (max-width: 768px) {
   .sb-pip-overlay {
