@@ -3932,6 +3932,22 @@ _setupDebugSection() {
     });
   }
 
+  // #5426: automatic relay detection for the profile above. On unless the
+  // person switched it off; voice.js reads the flag live on every apply.
+  const relayAutoCb = document.getElementById('pref-debug-screen-relay-auto');
+  if (relayAutoCb) {
+    try { relayAutoCb.checked = localStorage.getItem('haven_screen_relay_auto') !== '0'; } catch {}
+    relayAutoCb.addEventListener('change', () => {
+      try {
+        if (relayAutoCb.checked) localStorage.removeItem('haven_screen_relay_auto');
+        else localStorage.setItem('haven_screen_relay_auto', '0');
+      } catch {}
+      if (this.voice && typeof this.voice.reapplyScreenBitrate === 'function') {
+        this.voice.reapplyScreenBitrate();
+      }
+    });
+  }
+
   // #5444 — opt-in glare/ICE-restart recovery for voice. When two peers
   // reconnect simultaneously their ICE restarts can collide and leave one
   // audio direction dead until a manual rejoin. This re-queues the restart so

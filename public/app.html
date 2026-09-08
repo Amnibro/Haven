@@ -2212,6 +2212,14 @@
           <p class="settings-hint" data-i18n="settings.debug_section.screen_relay_profile_hint">Turn this on if your screen share stutters and drifts out of sync for viewers, but only when the call goes through a TURN server and never on your local network. It lowers the video bitrate back to the pre-3.18.1 values and lets the encoder drop frames when the connection is struggling, instead of holding the framerate and letting the backlog grow. Picture quality will be lower. Only the person sharing needs it on. (#5426)</p>
         </div>
 
+        <div class="settings-group">
+          <label class="toggle-row">
+            <input type="checkbox" id="pref-debug-screen-relay-auto" checked>
+            <span class="toggle-label" data-i18n="settings.debug_section.screen_relay_auto">Soften screen share automatically for relayed viewers</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.debug_section.screen_relay_auto_hint">On by default. When a viewer can only be reached through a TURN relay, your share to that one viewer uses the gentler profile above, while viewers on a direct connection keep the full-quality one. Turn this off if you would rather the toggle above be the only thing that decides. (#5426)</p>
+        </div>
+
         <div class="desktop-pref-row">
           <label class="toggle-row">
             <input type="checkbox" id="pref-debug-voice-glare-ice-fix">
