@@ -14,6 +14,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Attachments per message is an admin setting (#5561).** Uploads & Limits has
+  a Max Attachments per Message box (1 to 50, default 10). Dropping, pasting or
+  picking several files at once now queues all of them, in the main composer,
+  threads and DM PiPs alike, instead of keeping the first and dropping the rest.
+  The per-minute upload allowance follows the setting so a full drop is not cut
+  off part way. Requested by @Sheoji.
+- **Relayed screen share viewers get the gentler profile automatically (#5426).**
+  When a viewer can only be reached through a TURN relay, the share to that
+  viewer uses the encoder settings behind the "Gentler screen share for relay
+  connections" toggle, while viewers on a direct route keep the full-quality
+  one. On by default; a switch under Settings, Debug turns the detection off.
+  Suggested by @RCCore after confirming the profile on two setups.
+
+### Fixed
+- **DM PiP header stuck on a grey dot and an initial (#5574).** The avatar and
+  status dot in the DM PiP header were drawn once when the panel opened, from
+  whatever the online list held at that moment, and never again. They follow
+  presence updates now. Reported by @birdcrazy.
+
+---
+
+## [4.5.0] - 2026-09-07
+
+Forums finish taking shape, roles can be pinged, and Haven no longer depends on
+OpenSSL for its certificate: a fresh install comes up on HTTPS by itself, so voice
+and the mobile app work out of the box on Windows. Also in: timestamps that render
+in every reader's own timezone with a picker to make them, a Private toggle for
+existing channels, and a batch of fixes from the community. No migration steps;
+the one new column is added on first start. If you were running plain HTTP without
+meaning to, your links become https:// on the next start; set FORCE_HTTP=true if
+plain HTTP is on purpose.
+
+### Added
+- **Haven makes its own certificate.** When none exists at start and FORCE_HTTP
+  is not set, Haven generates a self-signed certificate with Node's own crypto,
+  no OpenSSL needed, so HTTPS works on a clean Windows install and voice, camera
+  and the mobile app work with it. Anyone who was running plain HTTP without
+  meaning to gets HTTPS on their next start; anyone who means it sets
+  FORCE_HTTP=true. The installer no longer reports a skipped certificate as done.
 - **Role mentions (#5579).** `@Moderators`, or any role name, lights up for
   everyone holding the role and pings them like an @mention. The `@` picker
   offers roles to anyone with the Mention everyone permission, the server disarms
@@ -46,6 +85,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   hovering any of them spells out the full date. The syntax is Discord's, so
   tokens survive the Ferry bridge in both directions and existing generators
   keep working. Requested by test2.
+
+### Changed
+- **Forum feeds run newest first (#144).** The most recently active topic sits at
+  the top of a forum channel, a new topic or a fresh reply moves to the top, and
+  older topics load as you scroll down. Replies inside a topic's thread still read
+  top to bottom.
 
 ### Fixed
 - **Invite links grant only the channels that were ticked (#5569, #5583).** An
