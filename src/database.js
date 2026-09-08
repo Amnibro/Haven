@@ -434,6 +434,7 @@ function initDatabase() {
   insertSetting.run('registration_rate_limit_per_hour', '20');   // the cap value when enabled
   insertSetting.run('max_invite_uses', '0');            // the maximum uses each non-admin/manage-server invite link can accept
   insertSetting.run('max_upload_mb', '25');             // max file upload size in MB
+  insertSetting.run('max_attachments', '10');           // files one message may queue, images and other files together (1-50) (#5561)
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256–10240)
@@ -1119,22 +1120,6 @@ function initDatabase() {
     // topics pick from, and an NSFW flag users can hide behind a preference.
     { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
     { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
-    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
-    // topics pick from, and an NSFW flag users can hide behind a preference.
-    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
-    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
-    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
-    // topics pick from, and an NSFW flag users can hide behind a preference.
-    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
-    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
-    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
-    // topics pick from, and an NSFW flag users can hide behind a preference.
-    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
-    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
-    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
-    // topics pick from, and an NSFW flag users can hide behind a preference.
-    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
-    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
     // #5390 — extend the self-destruct timer with a "clear messages only"
     // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
     // whole channel) or 'clear' (wipe messages but keep channel, perms,
@@ -1597,34 +1582,6 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN thread_id INTEGER DEFAULT NULL REFERENCES messages(id) ON DELETE CASCADE");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL");
-  // ── Migration: forum topics carry a title and tags ──────
-  for (const col of [
-    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
-    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
-  ]) {
-    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
-  }
-  // ── Migration: forum topics carry a title and tags ──────
-  for (const col of [
-    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
-    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
-  ]) {
-    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
-  }
-  // ── Migration: forum topics carry a title and tags ──────
-  for (const col of [
-    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
-    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
-  ]) {
-    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
-  }
-  // ── Migration: forum topics carry a title and tags ──────
-  for (const col of [
-    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
-    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
-  ]) {
-    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
-  }
   // ── Migration: forum topics carry a title and tags ──────
   for (const col of [
     { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },

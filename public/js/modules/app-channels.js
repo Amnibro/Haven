@@ -2499,6 +2499,40 @@ _renderChannels() {
 
 // ── Drag-and-drop channel reordering ────────────────────
 
+// Chromium's native drag-and-drop only auto-scrolls the document, never a
+// nested overflow container, so a channel dragged to the top or bottom edge
+// of a long sidebar just stopped there. This drives the scroll ourselves from
+// dragover. The element that actually scrolls depends on the channel-scroll
+// mode (#channel-list in "separate", .sidebar-split in "combined" and on
+// short screens), so it is resolved on each call.
+_makeEdgeScroller(listEl, edge = 48, maxSpeed = 18) {
+  let raf = null, vel = 0;
+  const scroller = () => {
+    let el = listEl;
+    while (el && el !== document.body) {
+      const oy = getComputedStyle(el).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+      el = el.parentElement;
+    }
+    return listEl;
+  };
+  const stop = () => { if (raf) cancelAnimationFrame(raf); raf = null; vel = 0; };
+  const step = (sc) => () => {
+    if (!vel) { raf = null; return; }
+    sc.scrollTop += vel;
+    raf = requestAnimationFrame(step(sc));
+  };
+  const onDragOver = (clientY) => {
+    const sc = scroller();
+    const r = sc.getBoundingClientRect();
+    if (clientY < r.top + edge) vel = -maxSpeed * Math.min(1, (r.top + edge - clientY) / edge);
+    else if (clientY > r.bottom - edge) vel = maxSpeed * Math.min(1, (clientY - (r.bottom - edge)) / edge);
+    else { stop(); return; }
+    if (!raf) raf = requestAnimationFrame(step(sc));
+  };
+  return { onDragOver, stop };
+},
+
 _setupChannelDragDrop() {
   const canManage = this.user?.isAdmin || this._hasPerm('manage_server') || this._hasPerm('create_channel');
   const list = document.getElementById('channel-list');
@@ -2518,7 +2552,9 @@ _setupChannelDragDrop() {
   const indicator = document.createElement('div');
   indicator.className = 'ch-drag-indicator';
 
+  const edge = this._makeEdgeScroller(list);
   const cleanUp = () => {
+    edge.stop();
     if (dragSrc) { dragSrc.classList.remove('ch-dragging'); dragSrc = null; }
     indicator.remove();
   };
@@ -2550,6 +2586,7 @@ _setupChannelDragDrop() {
     if (!dragSrc) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    edge.onDragOver(e.clientY);
     const tgt = e.target.closest('.channel-item:not(.temp-channel-create-btn), .category-label');
     if (!tgt || !isCompatible(dragSrc, tgt)) { indicator.remove(); return; }
     const rect = tgt.getBoundingClientRect();
@@ -2566,6 +2603,7 @@ _setupChannelDragDrop() {
 
   list.addEventListener('drop', (e) => {
     e.preventDefault();
+    edge.stop();
     if (!dragSrc || !indicator.parentNode) { cleanUp(); return; }
     indicator.parentNode.insertBefore(dragSrc, indicator);
     indicator.remove();
@@ -2691,6 +2729,7 @@ _setupDmDragDrop() {
   indicator.className = 'ch-drag-indicator';
 
   const cleanUp = () => {
+    edge.stop();
     if (dragSrc) { dragSrc.classList.remove('ch-dragging'); dragSrc = null; }
     indicator.remove();
   };
@@ -2704,10 +2743,12 @@ _setupDmDragDrop() {
     e.dataTransfer.setData('text/plain', el.dataset.code || '');
   });
 
+  const edge = this._makeEdgeScroller(dmList);
   dmList.addEventListener('dragover', (e) => {
     if (!dragSrc) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    edge.onDragOver(e.clientY);
     const tgt = e.target.closest('.dm-item');
     if (!tgt || tgt === dragSrc) { indicator.remove(); return; }
     const rect = tgt.getBoundingClientRect();
@@ -2724,6 +2765,7 @@ _setupDmDragDrop() {
 
   dmList.addEventListener('drop', (e) => {
     e.preventDefault();
+    edge.stop();
     if (!dragSrc || !indicator.parentNode) { cleanUp(); return; }
     indicator.parentNode.insertBefore(dragSrc, indicator);
     indicator.remove();

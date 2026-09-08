@@ -482,10 +482,23 @@ let currentReferrerPolicy = DEFAULT_REFERRER_POLICY;
 let sslCert = process.env.SSL_CERT_PATH;
 let sslKey  = process.env.SSL_KEY_PATH;
 
-// If not explicitly configured, check if the startup scripts generated certs
+const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
+
+// If not explicitly configured, use the certs in the data directory, and make
+// them ourselves when they are missing. The startup scripts used to need an
+// openssl.exe for this, which Windows does not ship (OpenSSH is not OpenSSL),
+// so those machines silently fell back to HTTP.
 if (!sslCert && !sslKey) {
   const autoCert = path.join(CERTS_DIR, 'cert.pem');
   const autoKey  = path.join(CERTS_DIR, 'key.pem');
+  if (!forceHttp && !(fs.existsSync(autoCert) && fs.existsSync(autoKey))) {
+    try {
+      const made = require('./src/selfsignedCert').ensureCerts(CERTS_DIR);
+      console.log(`🔒 Generated a self-signed certificate in ${CERTS_DIR} (${made.names.join(', ')})`);
+    } catch (err) {
+      console.warn('⚠️  Could not generate a self-signed certificate:', err.message);
+    }
+  }
   if (fs.existsSync(autoCert) && fs.existsSync(autoKey)) {
     sslCert = autoCert;
     sslKey  = autoKey;
@@ -496,7 +509,6 @@ if (!sslCert && !sslKey) {
   if (sslKey  && !path.isAbsolute(sslKey))  sslKey  = path.resolve(DATA_DIR, sslKey);
 }
 
-const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
 
 app.use(helmet({

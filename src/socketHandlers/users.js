@@ -557,6 +557,10 @@ module.exports = function register(socket, ctx) {
 
     const allowedKeys = [
       'theme', 'hide_score_badge', 'hide_nsfw',
+      // Visual effects picker (theme.js). Same reason as theme: a desktop app
+      // that lands on a different storage origin (http vs https autodetect)
+      // loses localStorage, and only server-side preferences come back.
+      'effects',
       // Rich presence. share_activity is the master switch and defaults to
       // OFF (absent row = not sharing); the two sub-toggles default ON but
       // only matter once the master is enabled.
@@ -567,7 +571,9 @@ module.exports = function register(socket, ctx) {
       // prior dismissal instead of re-showing the modal on every login.
       'promo_seen_desktop', 'promo_seen_android', 'recovery_notice_seen',
     ];
-    if (!allowedKeys.includes(key) || !value || value.length > 50) return;
+    // 'effects' is a JSON array of effect ids, longer than the other values.
+    const maxLen = key === 'effects' ? 400 : 50;
+    if (!allowedKeys.includes(key) || !value || value.length > maxLen) return;
 
     db.prepare(
       'INSERT OR REPLACE INTO user_preferences (user_id, key, value) VALUES (?, ?, ?)'

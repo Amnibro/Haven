@@ -334,10 +334,12 @@ _renderMessages(messages, lastReadMessageId) {
     this._renderForum(messages);
     return;
   }
+  // A forum feed runs newest first: the most recently active topic sits at
+  // the top, where a forum reader expects it. (#144)
+  const forumFeed = this._isForumFeed();
   // An empty forum explains itself; an empty channel needs no help. (#144)
   {
-    const _ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
-    if (_ch && _ch.is_forum && messages.length === 0) {
+    if (forumFeed && messages.length === 0) {
       const hint = document.createElement('div');
       hint.className = 'forum-empty-hint';
       hint.textContent = t('app.messages.forum_empty_hint');
@@ -354,13 +356,18 @@ _renderMessages(messages, lastReadMessageId) {
   // Only show it when there are actually unread messages and the last message
   // isn't already "read" (i.e. the user isn't fully caught up).
   let newMsgDividerInserted = false;
-  const showDivider = lastReadMessageId && messages.length > 0
+  const showDivider = !forumFeed && lastReadMessageId && messages.length > 0
     && messages[messages.length - 1].id > lastReadMessageId
     // Don't show divider if ALL messages are unread (nothing before the line)
     && messages[start]?.id <= lastReadMessageId;
 
-  for (let i = start; i < messages.length; i++) {
-    const prevMsg = i > start ? messages[i - 1] : null;
+  // Chat feeds render oldest first; a forum feed renders its most recently
+  // active topic first.
+  const order = [];
+  for (let i = start; i < messages.length; i++) order.push(i);
+  if (forumFeed) order.reverse();
+  for (const i of order) {
+    const prevMsg = (!forumFeed && i > start) ? messages[i - 1] : null;
 
     // Insert "NEW MESSAGES" divider before the first unread message
     if (showDivider && !newMsgDividerInserted && messages[i].id > lastReadMessageId
@@ -405,6 +412,11 @@ _renderMessages(messages, lastReadMessageId) {
     // Show jump-to-bottom button since we're not at the bottom
     const jumpBtn = document.getElementById('jump-to-bottom');
     if (jumpBtn) jumpBtn.classList.add('visible');
+  } else if (forumFeed) {
+    // The newest topic is at the top, and that is where a forum opens.
+    this._coupledToBottom = false;
+    container.scrollTop = 0;
+    requestAnimationFrame(() => { container.scrollTop = 0; });
   } else {
     this._scrollToBottom(true);
     // Re-scroll after images load, but only if user hasn't scrolled away.
@@ -659,6 +671,35 @@ _appendMessages(messages) {
 // message would. Topics never compact into each other, so moving the node is
 // safe. A topic that is not loaded (older than the current window) is fetched
 // by reloading the channel, which lands it at the end too.
+/** True while the open channel is a forum, whose feed runs newest first. */
+_isForumFeed() {
+  const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  return !!(ch && ch.is_forum);
+},
+
+/** Older (less recently active) topics arrive oldest first and belong at the
+ *  bottom of a forum feed, the most recent of the batch nearest the top. (#144) */
+_appendOlderForum(messages) {
+  const container = document.getElementById('messages');
+  if (!container) return;
+  this._suppressCoupleCheck = true;
+  const fragment = document.createDocumentFragment();
+  const added = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const el = this._createMessageEl(messages[i], null);
+    fragment.appendChild(el);
+    added.push(el);
+  }
+  container.appendChild(fragment);
+  for (const el of added) {
+    this._fetchLinkPreviews(el);
+    this._setupVideos(el);
+    this._decryptE2EImages(el);
+    this._decryptE2EFiles(el);
+  }
+  requestAnimationFrame(() => { this._suppressCoupleCheck = false; });
+},
+
 _bumpForumTopic(parentId) {
   const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
   if (!ch || !ch.is_forum) return;
@@ -672,14 +713,16 @@ _bumpForumTopic(parentId) {
     }
     return;
   }
-  if (container.lastElementChild === el) return;
-  const wasAtBottom = this._coupledToBottom;
-  container.appendChild(el);
+  if (container.firstElementChild === el) return;
+  const nearTop = container.scrollTop < 40;
+  // Newest activity goes on top. (#144)
+  container.insertBefore(el, container.firstElementChild);
   // The window's least active topic may have just moved; keep the pagination
-  // cursor on whatever is first now.
-  const firstEl = container.querySelector('[data-msg-id]');
-  if (firstEl) this._oldestMsgId = parseInt(firstEl.dataset.msgId);
-  if (wasAtBottom) this._scrollToBottom(true);
+  // cursor on whatever is last now.
+  const all = container.querySelectorAll('[data-msg-id]');
+  const lastEl = all[all.length - 1];
+  if (lastEl) this._oldestMsgId = parseInt(lastEl.dataset.msgId);
+  if (nearTop) container.scrollTop = 0;
 },
 
 _appendMessage(message, forceScroll = false) {
@@ -710,21 +753,30 @@ _appendMessage(message, forceScroll = false) {
     };
   }
 
+  const forumFeed = this._isForumFeed();
   const wasAtBottom = forceScroll || this._coupledToBottom;
-  const msgEl = this._createMessageEl(message, prevMsg);
-  container.appendChild(msgEl);
+  const nearTop = container.scrollTop < 40;
+  const msgEl = this._createMessageEl(message, forumFeed ? null : prevMsg);
+  if (forumFeed) {
+    // A new topic is the newest activity, so it goes on top. (#144)
+    container.querySelector('.forum-empty-hint')?.remove();
+    container.insertBefore(msgEl, container.firstElementChild);
+  } else {
+    container.appendChild(msgEl);
+  }
 
-  // ── DOM trimming: remove oldest messages when the list grows too large ──
-  // This prevents unbounded memory growth that causes OOM crashes.
+  // ── DOM trimming: drop the least recent messages when the list grows too large ──
+  // This prevents unbounded memory growth that causes OOM crashes. The least
+  // recent end is the top of a chat feed and the bottom of a forum feed.
   const MAX_DOM_MESSAGES = 100;
   const trimmed = container.children.length > MAX_DOM_MESSAGES;
   while (container.children.length > MAX_DOM_MESSAGES) {
-    container.removeChild(container.firstElementChild);
+    container.removeChild(forumFeed ? container.lastElementChild : container.firstElementChild);
   }
   // Keep _oldestMsgId in sync with the DOM after trimming
-  const firstEl = container.firstElementChild;
-  if (firstEl && firstEl.dataset && firstEl.dataset.msgId) {
-    this._oldestMsgId = parseInt(firstEl.dataset.msgId);
+  const edgeEl = forumFeed ? container.lastElementChild : container.firstElementChild;
+  if (edgeEl && edgeEl.dataset && edgeEl.dataset.msgId) {
+    this._oldestMsgId = parseInt(edgeEl.dataset.msgId);
   }
   // Re-enable backward pagination since we trimmed old messages
   if (trimmed) this._noMoreHistory = false;
@@ -738,7 +790,9 @@ _appendMessage(message, forceScroll = false) {
   // here, after decryption and before anyone can click. (#5483)
   if (this._isDmContainer((msgEl))) this._enforceDmLinkPolicy((msgEl));
   this._wireBurnMessages?.(msgEl);
-  if (wasAtBottom) {
+  if (forumFeed) {
+    if (forceScroll || nearTop) container.scrollTop = 0;
+  } else if (wasAtBottom) {
     this._scrollToBottom(true);
   }
   // Scroll after images/gifs load, but only if still coupled to bottom.

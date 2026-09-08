@@ -741,12 +741,13 @@ _formatContent(str) {
 
   // Render server-hosted stickers inline at sticker dimensions (CSS-controlled)
   if (/^\/uploads\/stickers\/[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
-    return `<img src="${this._escapeHtml(str.trim())}" class="sticker-img" alt="sticker">`;
+    return `<img ${this._lazySrcAttr(`src="${this._escapeHtml(str.trim())}"`)} class="sticker-img" alt="sticker">`;
   }
 
   // Render server-hosted images inline (early return)
-  // No loading="lazy" — content-visibility:auto on .message already skips off-screen
-  // rendering; lazy loading on top creates 0→real-height jumps when scrolling history.
+  // Inline images go through the lazy media queue (app-media.js): the loader
+  // fetches them near the viewport, closest first, and pins their box so
+  // scrolling history never jumps.
   // SVG is included — browsers render SVGs in <img> tags safely (no script execution). (#5309)
   // Basename allows dots (`photo.edit.jpg`) and one extra path segment so this
   // matches `_isImageUrl` / Haven Mobile. The previous `[\w\-]+` pattern
@@ -754,7 +755,7 @@ _formatContent(str) {
   if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
     const u = str.trim();
     if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
-    return `<img src="${this._escapeHtml(u)}" class="chat-image" alt="image">`;
+    return `<img ${this._lazySrcAttr(`src="${this._escapeHtml(u)}"`)} class="chat-image" alt="image">`;
   }
 
   // Remote image-only messages (Ferry Discord attachments, pasted CDN URLs).
@@ -763,7 +764,7 @@ _formatContent(str) {
     const u = str.trim();
     if (this._isImageUrl(u) && /^https?:\/\//i.test(u)) {
       if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
-      return `<img ${this._imgSrcAttr(u)} class="chat-image" alt="image">`;
+      return `<img ${this._lazySrcAttr(this._imgSrcAttr(u))} class="chat-image" alt="image">`;
     }
   }
 
@@ -3156,7 +3157,35 @@ _openDMPiP(code) {
   const titleEl = document.getElementById('dm-pip-title');
   if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${t('dm_runtime.self_title', { name: partnerName })}` : `@ ${partnerName}`;
 
-  // Header avatar — pulled from the partner's online presence (best effort)
+  this._refreshDMPipHeader(ch, partnerName);
+
+  // Banner background: use server banner as a subtle backdrop
+  const bannerEl = document.getElementById('dm-pip-banner');
+  const bannerUrl = this.serverSettings && this.serverSettings.server_banner;
+  if (bannerEl) {
+    if (bannerUrl) {
+      bannerEl.style.backgroundImage = `url("${bannerUrl.replace(/"/g, '\\"')}")`;
+      panel.classList.remove('no-banner');
+    } else {
+      bannerEl.style.backgroundImage = '';
+      panel.classList.add('no-banner');
+    }
+  }
+  this._openDMPiPBody(ch, code, panel);
+},
+
+// Header avatar and status dot for the open DM PiP. Runs when the panel opens
+// and again on every presence broadcast (#5574): it used to render once, from
+// whatever the online list held at that moment, so a PiP opened before the
+// list arrived, or whose partner came online later, kept the grey dot and the
+// initial for as long as the panel stayed open.
+_refreshDMPipHeader(ch, partnerName) {
+  if (!ch) {
+    const code = this._activeDMPip;
+    ch = code ? (this.channels || []).find(c => c.code === code) : null;
+    if (!ch) return;
+  }
+  if (!partnerName) partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
   const avatarWrap = document.getElementById('dm-pip-avatar-wrap');
   if (avatarWrap) {
     const partnerId = ch.dm_target && ch.dm_target.id;
@@ -3200,19 +3229,10 @@ _openDMPiP(code) {
       avatarWrap.innerHTML = `<span class="dm-pip-avatar-initial">${this._escapeHtml(initial)}</span>${statusDot}`;
     }
   }
+},
 
-  // Banner background — use server banner as a subtle backdrop
-  const bannerEl = document.getElementById('dm-pip-banner');
-  const bannerUrl = this.serverSettings && this.serverSettings.server_banner;
-  if (bannerEl) {
-    if (bannerUrl) {
-      bannerEl.style.backgroundImage = `url("${bannerUrl.replace(/"/g, '\\"')}")`;
-      panel.classList.remove('no-banner');
-    } else {
-      bannerEl.style.backgroundImage = '';
-      panel.classList.add('no-banner');
-    }
-  }
+// The rest of opening a DM PiP: everything after the header and banner.
+_openDMPiPBody(ch, code, panel) {
 
   // Restore geometry from localStorage
   this._applyDMPiPGeometry(panel);

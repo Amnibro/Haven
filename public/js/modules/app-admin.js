@@ -477,6 +477,10 @@ _applyServerSettings() {
     if (maxUpload) {
       maxUpload.value = this.serverSettings.max_upload_mb || '25';
     }
+    const maxAttach = document.getElementById('max-attachments');
+    if (maxAttach) {
+      maxAttach.value = this.serverSettings.max_attachments || '10';
+    }
     const maxSoundKb = document.getElementById('max-sound-kb');
     if (maxSoundKb) {
       maxSoundKb.value = this.serverSettings.max_sound_kb || '1024';
@@ -907,6 +911,7 @@ _snapshotAdminSettings() {
     cleanup_max_size_mb: this.serverSettings.cleanup_max_size_mb || '0',
     whitelist_enabled: this.serverSettings.whitelist_enabled || 'false',
     max_upload_mb: this.serverSettings.max_upload_mb || '25',
+    max_attachments: this.serverSettings.max_attachments || '10',
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_sticker_kb: this.serverSettings.max_sticker_kb || '1024',
@@ -1042,6 +1047,12 @@ _saveAdminSettings() {
   const maxUpload = String(Math.max(1, Math.min(102400, parseInt(document.getElementById('max-upload-mb')?.value) || 25)));
   if (maxUpload !== (snap.max_upload_mb || '25')) {
     this.socket.emit('update-server-setting', { key: 'max_upload_mb', value: maxUpload });
+    changed = true;
+  }
+
+  const maxAttach = String(Math.max(1, Math.min(50, parseInt(document.getElementById('max-attachments')?.value) || 10)));
+  if (maxAttach !== (snap.max_attachments || '10')) {
+    this.socket.emit('update-server-setting', { key: 'max_attachments', value: maxAttach });
     changed = true;
   }
 
@@ -1242,6 +1253,8 @@ _cancelAdminSettings() {
     if (wl) wl.checked = snap.whitelist_enabled === 'true';
     const mu = document.getElementById('max-upload-mb');
     if (mu) mu.value = snap.max_upload_mb || '25';
+    const ma = document.getElementById('max-attachments');
+    if (ma) ma.value = snap.max_attachments || '10';
     const msk = document.getElementById('max-sound-kb');
     if (msk) msk.value = snap.max_sound_kb || '1024';
     const mek = document.getElementById('max-emoji-kb');
