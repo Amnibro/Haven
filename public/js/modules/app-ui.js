@@ -4403,13 +4403,25 @@ _setupUI() {
     if (!confirm(t('settings.admin.registration.clear_confirm'))) return;
     this.socket.emit('clear-registration-token');
   });
-  document.getElementById('copy-registration-token-btn')?.addEventListener('click', () => {
-    const tok = document.getElementById('registration-token-value')?.textContent;
-    if (tok && tok !== '—') {
-      const onCopied = () => this._showToast?.(t('settings.admin.registration.copied'), 'success');
-      (navigator.clipboard?.writeText
-        ? navigator.clipboard.writeText(tok).then(onCopied).catch(() => onCopied())
-        : onCopied());
+  document.getElementById('copy-registration-token-btn')?.addEventListener('click', async () => {
+    const tok = document.getElementById('registration-token-value')?.textContent?.trim();
+    if (!tok || tok === '—') return;
+    const onCopied = () => this._showToast?.(t('settings.admin.registration.copied'), 'success');
+    // The old handler toasted "copied" from the rejection path too, so in the
+    // desktop app (clipboard write refused without a fresh user activation)
+    // the toast lied while the clipboard kept its previous contents.
+    try {
+      const res = await window.havenDesktop?.clipboardWriteText?.(tok);
+      if (res?.ok) return onCopied();
+    } catch {}
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard api');
+      await navigator.clipboard.writeText(tok);
+      return onCopied();
+    } catch {
+      let ok = false;
+      this._copyTextFallback(tok, () => { ok = true; onCopied(); });
+      if (!ok) this._showToast?.(t('settings.admin.registration.copy_failed'), 'error');
     }
   });
 
