@@ -2352,6 +2352,9 @@ _setupSocketListeners() {
     } else if (this.serverSettings.default_theme) {
       // No personal preference — apply the server's default theme
       applyThemeFromServer(this.serverSettings.default_theme);
+    } else if (prefs.effects && typeof applyEffects === 'function') {
+      // No theme pass to carry them, so the restored effects apply here.
+      applyEffects(_getStoredEffectMode());
     }
     // Sync hide-own-score toggle to the server's stored value so reopening
     // settings on a fresh device shows the correct state.
