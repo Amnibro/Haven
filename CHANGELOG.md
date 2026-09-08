@@ -11,7 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.5.0] - 2026-09-07
+
+Forums finish taking shape, roles can be pinged, and Haven no longer depends on
+OpenSSL for its certificate: a fresh install comes up on HTTPS by itself, so voice
+and the mobile app work out of the box on Windows. Also in: timestamps that render
+in every reader's own timezone with a picker to make them, a Private toggle for
+existing channels, and a batch of fixes from the community. No migration steps;
+the one new column is added on first start. If you were running plain HTTP without
+meaning to, your links become https:// on the next start; set FORCE_HTTP=true if
+plain HTTP is on purpose.
 
 ### Added
 - **Haven makes its own certificate.** When none exists at start and FORCE_HTTP
