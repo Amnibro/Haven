@@ -70,6 +70,12 @@ module.exports = function register(socket, ctx) {
     // setting that genuinely has no stored value. (#5489)
     settings.server_name_effective = settings.server_name || (process.env.SERVER_NAME || '').trim() || '';
 
+    // The cap this user's uploads are actually checked against: the server
+    // setting, or a higher one from a role they hold. Admins get the setting.
+    settings.max_upload_mb_effective = String(socket.user.isAdmin
+      ? (parseInt(settings.max_upload_mb, 10) || 25)
+      : ctx.getUserUploadMb(socket.user.id));
+
     // Only the people who can open the admin panel get told what the
     // environment holds, and secrets are reported as present without ever
     // sending the value.
@@ -101,7 +107,7 @@ module.exports = function register(socket, ctx) {
     const allowedKeys = [
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
       'giphy_api_key', 'tenor_api_key', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
-      'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options',
+      'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only',
       'default_theme', 'published_themes', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code', 'default_locale',

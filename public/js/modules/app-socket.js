@@ -962,6 +962,20 @@ _setupSocketListeners() {
     this.switchChannel(channel.code);
   });
 
+  this.socket.on('channel-role-gate-updated', (data) => {
+    const ch = this.channels.find(c => c.code === data.code);
+    if (!ch) return;
+    ch.role_gate = data.roleGate ? JSON.stringify(data.roleGate) : null;
+    if (this._ctxMenuChannel === data.code) this._updateChannelFunctionsPanel?.(ch);
+  });
+
+  // Your own role-menu choice landed (from a click or a reaction); paint every
+  // button for that role, in this channel and any other menu that lists it.
+  this.socket.on('self-role-updated', (data) => {
+    if (!data) return;
+    this._markSelfRole(data.roleId, !!data.held);
+  });
+
   this.socket.on('channel-joined', (channel) => {
     if (!this.channels.find(c => c.code === channel.code)) {
       this.channels.push(channel);
@@ -2314,12 +2328,14 @@ _setupSocketListeners() {
     // so the panel can say which one is actually in effect. (#5489)
     this.serverEnvSettings = envInfo || {};
     this._applyServerSettings();
+    this._renderChannelTemplates();
     this._maybeShowSetupWizard();
   });
 
   this.socket.on('server-setting-changed', (data) => {
     this.serverSettings[data.key] = data.value;
     this._applyServerSettings();
+    if (data.key === 'channel_templates') this._renderChannelTemplates();
   });
 
   // ── Webhooks list ──────────────────────────────────

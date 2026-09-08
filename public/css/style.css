@@ -19497,3 +19497,26 @@ ul.chat-list { list-style-type: disc; }
   margin-right: 6px;
   vertical-align: middle;
 }
+
+/* ── Role tools: templates, gates, self-assign menus ───────────── */
+.tool-modal .tool-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.tool-modal .tool-modal-body { max-height: 60vh; overflow: auto; }
+.tool-modal .settings-text-input { width: 100%; box-sizing: border-box; }
+.role-tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 8px; margin-top: 10px; }
+.role-tpl-card { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: 0.6rem; background: var(--bg-secondary, var(--bg-card)); color: var(--text-primary); cursor: pointer; font: inherit; }
+.role-tpl-card:hover { border-color: var(--accent); background: var(--bg-hover, var(--bg-card)); }
+.role-tpl-card .role-tpl-emoji { font-size: 1.4rem; }
+.role-tpl-card small { color: var(--text-secondary, var(--text-muted)); font-size: 0.72rem; line-height: 1.25; }
+.rg-mode { display: flex; gap: 12px; margin: 8px 0; }
+.rg-mode .toggle-row { flex: 1; }
+.rg-roles, .rm-roles { max-height: 40vh; overflow: auto; border: 1px solid var(--border); border-radius: 0.5rem; padding: 4px 8px; margin-top: 8px; }
+.rm-row { display: flex; align-items: center; gap: 8px; }
+.rm-row .toggle-row { flex: 1; }
+.rm-row .rm-emoji { width: 3.6rem !important; text-align: center; }
+.role-menu-widget { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.role-menu-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--role-c, var(--border-light)); background: color-mix(in srgb, var(--role-c, var(--accent)) 12%, transparent); color: var(--text-primary); cursor: pointer; font: inherit; font-size: 0.8rem; transition: background .15s, transform .1s; }
+.role-menu-btn:hover { background: color-mix(in srgb, var(--role-c, var(--accent)) 24%, transparent); }
+.role-menu-btn:active { transform: scale(0.97); }
+.role-menu-btn.held { background: var(--role-c, var(--accent)); color: #fff; }
+.role-menu-btn .rm-state { opacity: 0.8; font-weight: 700; }
+.role-menu-btn:disabled { opacity: 0.6; cursor: wait; }

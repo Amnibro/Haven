@@ -414,6 +414,21 @@ app.set('isIpBanned', isIpBanned);
 
 // ── Helper: verify admin from DB (don't trust JWT claims alone) ─────
 // JWT isAdmin may be stale if admin was demoted since token was issued.
+// Upload cap for one user: the server setting, or a higher one from a role
+// they hold (roles.max_upload_mb). Admins are checked against the setting.
+function uploadCapMb(user) {
+  const db = require('./src/database').getDb();
+  const base = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get()?.value, 10) || 25;
+  if (verifyAdminFromDb(user)) return base;
+  try {
+    const row = db.prepare(`
+      SELECT MAX(r.max_upload_mb) AS cap FROM roles r JOIN user_roles ur ON ur.role_id = r.id
+      WHERE ur.user_id = ? AND r.max_upload_mb IS NOT NULL
+    `).get(user.id);
+    return Math.max(base, parseInt(row?.cap, 10) || 0);
+  } catch { return base; }
+}
+
 function verifyAdminFromDb(user) {
   if (!user) return false;
   try {
@@ -1848,12 +1863,11 @@ app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    // Enforce DB-configurable max upload size (same setting as general file uploads)
-    const maxMbRow = getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get();
-    const maxBytes = (parseInt(maxMbRow?.value) || 25) * 1024 * 1024;
-    if (req.file.size > maxBytes) {
+    // Enforce the upload cap: the server setting, raised by any role that says so
+    const capMb = uploadCapMb(user);
+    if (req.file.size > capMb * 1024 * 1024) {
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: `Image too large (max ${maxMbRow?.value || 25} MB)` });
+      return res.status(400).json({ error: `Image too large (max ${capMb} MB)` });
     }
 
     // Validate file magic bytes (don't trust MIME type alone)
@@ -1922,12 +1936,11 @@ app.post('/api/upload-file', uploadLimiter, uploadDiskGuard, (req, res) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    // Enforce DB-configurable max upload size
-    const maxMbRow = getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get();
-    const maxBytes = (parseInt(maxMbRow?.value) || 25) * 1024 * 1024;
-    if (req.file.size > maxBytes) {
+    // Enforce the upload cap: the server setting, raised by any role that says so
+    const capMb = uploadCapMb(user);
+    if (req.file.size > capMb * 1024 * 1024) {
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: `File too large (max ${maxMbRow?.value || 25} MB)` });
+      return res.status(400).json({ error: `File too large (max ${capMb} MB)` });
     }
 
     const isImage = /^image\//.test(req.file.mimetype);

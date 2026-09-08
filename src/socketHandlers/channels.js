@@ -191,6 +191,23 @@ module.exports = function register(socket, ctx) {
         'INSERT INTO channels (name, code, created_by, is_private, expires_at, is_forum) VALUES (?, ?, ?, ?, ?, ?)'
       ).run(name.trim(), code, socket.user.id, isPrivate, expiresAt, data.isForum ? 1 : 0);
 
+      // Channel templates send the rest of the setup along with the name, so
+      // an "Announcements" channel comes out read-only and in announcement
+      // mode in one go instead of three trips through Channel Functions.
+      const extras = [];
+      const { sanitizeText } = require('./helpers');
+      const topic = isString(data.topic, 1, 256) ? sanitizeText(data.topic.trim()) : '';
+      if (topic && !enforceAutomod(topic, { surface: 'channel', channelId: result.lastInsertRowid })) extras.push(['topic', topic]);
+      if (data.readOnly) extras.push(['read_only', 1]);
+      if (data.announcement) extras.push(['notification_type', 'announcement']);
+      if (isInt(data.slowMode) && data.slowMode > 0) extras.push(['slow_mode_interval', Math.min(3600, data.slowMode)]);
+      if (data.mediaEnabled === false) extras.push(['media_enabled', 0]);
+      if (data.voiceEnabled === false) extras.push(['voice_enabled', 0]);
+      if (extras.length) {
+        db.prepare(`UPDATE channels SET ${extras.map(([k]) => `${k} = ?`).join(', ')} WHERE id = ?`)
+          .run(...extras.map(([, v]) => v), result.lastInsertRowid);
+      }
+
       db.prepare(
         'INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)'
       ).run(result.lastInsertRowid, socket.user.id);
@@ -1187,6 +1204,45 @@ module.exports = function register(socket, ctx) {
       console.error('Set channel expiry error:', err);
       socket.emit('error-msg', 'Failed to set self-destruct timer');
     }
+  });
+
+  // ── Role gate: who may open this channel, on top of membership ──
+  socket.on('set-channel-role-gate', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    const channel = db.prepare('SELECT id, code FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    if (!channel) return cb({ error: 'Channel not found' });
+    if (!_canManageSettingsOf(channel.id)) return cb({ error: 'You don\'t have permission to change who can open this channel' });
+    const gate = ctx.parseRoleGate({ mode: data.mode, roles: Array.isArray(data.roles) ? data.roles.slice(0, 50) : [] });
+    if (gate) {
+      const ph = gate.roles.map(() => '?').join(',');
+      const known = new Set(db.prepare(`SELECT id FROM roles WHERE id IN (${ph})`).all(...gate.roles).map(r => r.id));
+      gate.roles = gate.roles.filter(id => known.has(id));
+    }
+    const stored = gate && gate.roles.length ? JSON.stringify(gate) : null;
+    try {
+      db.prepare('UPDATE channels SET role_gate = ? WHERE id = ?').run(stored, channel.id);
+    } catch (err) {
+      console.error('Set role gate error:', err);
+      return cb({ error: 'Failed to save the role gate' });
+    }
+    // Anyone who no longer qualifies leaves the room now; broadcastChannelLists
+    // rebuilds every list, so their sidebar entry goes with it.
+    if (stored) {
+      const fresh = db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id);
+      for (const [, s] of io.sockets.sockets) {
+        if (!s.user || s.user.isAdmin) continue;
+        if (!ctx.roleGateAllows(s.user.id, fresh)) s.leave(`channel:${channel.code}`);
+      }
+    }
+    broadcastChannelLists();
+    io.to(`channel:${code}`).emit('channel-role-gate-updated', { code, roleGate: stored ? JSON.parse(stored) : null });
+    cb({ success: true, roleGate: stored ? JSON.parse(stored) : null });
+    _audit({ actor: socket.user, action: 'channel_role_gate',
+      target_type: 'channel', target_id: channel.id, target_name: code,
+      details: { roleGate: stored ? JSON.parse(stored) : null } });
   });
 
   socket.on('set-notification-type', (data) => {

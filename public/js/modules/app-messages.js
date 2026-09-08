@@ -852,6 +852,7 @@ _createMessageEl(msg, prevMsg) {
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
+  const roleMenuHtml = msg.roleMenu ? this._renderRoleMenu(msg.id, msg.roleMenu) : '';
   const threadHtml = isDmContext ? ''
     : (msg.thread ? this._renderThreadPreview(msg.id, msg.thread, { forum: isForum })
       : (isForum ? this._renderThreadPreview(msg.id, { count: 0 }, { forum: true }) : ''));
@@ -992,7 +993,7 @@ _createMessageEl(msg, prevMsg) {
       <span class="compact-time">${new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
       <div class="message-body">
         <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(msg.content)}${editedHtml}${statusSlotHtml}</div>
-        ${pollHtml}
+        ${pollHtml}${roleMenuHtml}
         ${reactionsHtml}
         ${threadHtml}
       </div>
@@ -1129,7 +1130,7 @@ _createMessageEl(msg, prevMsg) {
           <span class="message-header-spacer"></span>
         </div>
         <div class="message-content">${this._formatContent(msg.content)}${editedHtml}</div>
-        ${pollHtml}
+        ${pollHtml}${roleMenuHtml}
         ${reactionsHtml}
         ${threadHtml}
       </div>

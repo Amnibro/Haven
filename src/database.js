@@ -1124,6 +1124,10 @@ function initDatabase() {
     // (recurring sweep) instead of being a one-shot.
     { name: 'auto_delete_mode',           sql: "ALTER TABLE channels ADD COLUMN auto_delete_mode TEXT DEFAULT 'delete'" },
     { name: 'auto_delete_interval_hours', sql: "ALTER TABLE channels ADD COLUMN auto_delete_interval_hours INTEGER DEFAULT NULL" },
+    // Role gate: JSON {"mode":"any"|"all","roles":[id,...]}. Membership still
+    // decides who is IN the channel; the gate decides who may open it, on top
+    // of that, so a channel can ask for one of several roles or all of them.
+    { name: 'role_gate',                  sql: "ALTER TABLE channels ADD COLUMN role_gate TEXT DEFAULT NULL" },
   ];
   for (const col of channelQolCols) {
     try { db.prepare(`SELECT ${col.name} FROM channels LIMIT 0`).get(); } catch { db.exec(col.sql); }
@@ -1482,6 +1486,27 @@ function initDatabase() {
   } catch {
     db.exec('ALTER TABLE bot_commands ADD COLUMN subcommands_json TEXT DEFAULT NULL');
   }
+
+  // ── Migration: per-role upload cap ──────────────────────
+  // NULL means the role says nothing and the server-wide max_upload_mb applies.
+  // A user's cap is the highest one among the roles they hold.
+  try {
+    db.prepare('SELECT max_upload_mb FROM roles LIMIT 0').get();
+  } catch {
+    db.exec('ALTER TABLE roles ADD COLUMN max_upload_mb INTEGER DEFAULT NULL');
+  }
+
+  // ── Role menus: a message people react to, or click, to give themselves a role ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS role_menus (
+      message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL,
+      created_by INTEGER,
+      title TEXT DEFAULT '',
+      data TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 
   // ── Migration: split manage_channel_settings out of create_channel (#5467) ──
   // Editing an existing channel's settings used to ride on create_channel, so

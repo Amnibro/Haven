@@ -690,6 +690,11 @@ _updateChannelFunctionsPanel(ch) {
   this._setCfnBadge('forum', isForum, t(isForum ? 'channel_functions.on' : 'channel_functions.off'));
   const isPrivate = !!ch.is_private;
   this._setCfnBadge('private', isPrivate, t(isPrivate ? 'channel_functions.on' : 'channel_functions.off'));
+  const gateBadge = this._roleGateBadge(ch);
+  this._setCfnBadge('role-gate', gateBadge.on, gateBadge.text);
+  // Saving a template writes a server setting, so only manage_server holders see the row.
+  const tplRow = document.querySelector('.cfn-row[data-fn="save-template"]');
+  if (tplRow) tplRow.style.display = (!ch.is_dm && this._canSaveChannelTemplates()) ? '' : 'none';
   const interval = ch.slow_mode_interval || 0;
   this._setCfnBadge('slow-mode', interval > 0, interval > 0 ? `${interval}s` : t('channel_functions.off'));
   // (#5467) Cleanup protection and welcome messages are still admin-only on

@@ -273,7 +273,8 @@ _setupUI() {
       const addAllMembers = document.getElementById('new-channel-add-all')?.checked || false;
       const isForum = document.getElementById('new-channel-forum')?.checked || false;
       if (name) {
-        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum });
+        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, ...this._channelTemplateExtras() });
+        this._resetChannelTemplate();
         nameInput.value = '';
         const pvt = document.getElementById('new-channel-private');
         if (pvt) pvt.checked = false;
@@ -549,6 +550,10 @@ _setupUI() {
       const newType = isAnnouncement ? 'default' : 'announcement';
       optimistic({ notification_type: newType });
       this.socket.emit('set-notification-type', { code, type: newType });
+    } else if (fn === 'role-gate') {
+      this._openRoleGateModal(code);
+    } else if (fn === 'save-template') {
+      this._saveChannelAsTemplate(code);
     } else if (fn === 'default-role') {
       // (#5389) Dropdown of available server roles. Selecting one fires
       // set-channel-default-role; selecting "None" clears the default.
@@ -2929,6 +2934,22 @@ _setupUI() {
   }
 
   // ── Poll vote click (delegated from messages container) ──
+  // Role menu buttons: one click gives you the role, another takes it back.
+  document.getElementById('messages').addEventListener('click', (e) => {
+    const btn = e.target.closest('.role-menu-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    const messageId = parseInt(btn.dataset.msgId, 10);
+    const roleId = parseInt(btn.dataset.roleId, 10);
+    if (!messageId || !roleId) return;
+    btn.disabled = true;
+    this.socket.emit('toggle-self-role', { messageId, roleId, held: !btn.classList.contains('held') }, (res) => {
+      btn.disabled = false;
+      if (res?.error) return this._showToast(res.error, 'error');
+      this._markSelfRole(roleId, !!res?.held);
+    });
+  });
+
   document.getElementById('messages').addEventListener('click', (e) => {
     const optBtn = e.target.closest('.poll-option');
     if (!optBtn) return;
@@ -6841,7 +6862,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
   // Capture the target channel NOW (before any await) so a mid-upload channel
   // switch doesn't send the image to the wrong channel.
   const targetChannel = targetCode || this.currentChannel;
-  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const _maxMb = this._uploadCapMb();
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('toasts.image_too_large', { max: _maxMb }), 'error');
   }

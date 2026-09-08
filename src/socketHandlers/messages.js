@@ -112,13 +112,14 @@ module.exports = function register(socket, ctx) {
     const around = isInt(data.around) ? data.around : null;
     const limit = isInt(data.limit) && data.limit > 0 && data.limit <= 100 ? data.limit : 80;
 
-    const channel = db.prepare('SELECT id, is_forum FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_forum, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
     if (!member && !socket.user.isAdmin) return socket.emit('error-msg', 'Not a member of this channel');
+    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
 
     let messages;
     if (channel.is_forum) {
@@ -193,6 +194,7 @@ module.exports = function register(socket, ctx) {
 
     const reactionMap = new Map();
     const pollVoteMap = new Map();
+    const roleMenuMap = new Map();
     let pinnedSet = null;
     if (msgIds.length > 0) {
       const ph = msgIds.map(() => '?').join(',');
@@ -209,6 +211,9 @@ module.exports = function register(socket, ctx) {
         db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id IN (${ph})`)
           .all(...msgIds).map(r => r.message_id)
       );
+
+      db.prepare(`SELECT message_id, title, data FROM role_menus WHERE message_id IN (${ph})`).all(...msgIds)
+        .forEach(r => { const menu = ctx.buildRoleMenu?.(r, socket.user.id); if (menu) roleMenuMap.set(r.message_id, menu); });
 
       db.prepare(`
         SELECT pv.message_id, pv.option_index, pv.user_id, COALESCE(u.display_name, u.username) as username
@@ -282,6 +287,7 @@ module.exports = function register(socket, ctx) {
       if (obj.edited_at && !obj.edited_at.endsWith('Z')) obj.edited_at = utcStamp(obj.edited_at);
       obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
       obj.reactions = reactionMap.get(m.id) || [];
+      if (roleMenuMap.has(m.id)) obj.roleMenu = roleMenuMap.get(m.id);
       obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
       obj.is_archived = !!m.is_archived;
       obj.thread = threadMap.get(m.id) || null;
@@ -883,13 +889,14 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
     }
 
-    const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
 
     const member = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
     if (!member) return socket.emit('error-msg', 'Not a member of this channel');
+    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
 
     // ── Auto-mod link policy (v3.42.0) ────────────────────
     // Runs before the message is persisted or broadcast. A blocked message
@@ -1660,6 +1667,7 @@ module.exports = function register(socket, ctx) {
       db.prepare(
         'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
       ).run(data.messageId, socket.user.id, data.emoji);
+      ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, true);
 
       const reactions = db.prepare(`
         SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
@@ -1705,6 +1713,7 @@ module.exports = function register(socket, ctx) {
       db.prepare(
         'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
       ).run(data.messageId, socket.user.id, data.emoji);
+      ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, false);
 
       const reactions = db.prepare(`
         SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
