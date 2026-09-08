@@ -14,6 +14,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Forums read like forums.** A forum channel now opens as a list of topic
+  cards, newest activity on top, each with its title, tags, author, reply
+  count and first image, and a Gallery view of square tiles for art and
+  character sheets. The toolbar sorts by Recently active or Date posted,
+  filters by the channel's tags (match some or all), and a New Post button
+  opens a composer with title, body and tags. Replies still live in the
+  topic's thread and bump it. Admins keep the tag list in Channel Functions
+  (one per line, an emoji first if you like), and the author or a moderator
+  can retitle or retag a topic from its card. Requested by test2 and the RP
+  crowd.
+- **NSFW channels.** Channel Functions has an NSFW switch, and Settings has
+  "Hide NSFW channels" for a phone in public. Requested by Dispencer2.
+- **Search inside Settings.** A search box at the top of the Settings nav
+  (or Ctrl+F while Settings is open) hides every section that does not
+  mention the word. Requested by Dispencer2.
+- **One way to create a channel.** The sidebar's Create Temp Channel opens the
+  same create form with Temporary already ticked instead of its own prompt.
+  Requested by Dispencer2.
+- **& and + in channel names.** Requested by Dispencer2.
+
 - **Role mentions (#5579).** `@Moderators`, or any role name, lights up for
   everyone holding the role and pings them like an @mention. The `@` picker
   offers roles to anyone with the Mention everyone permission, the server disarms

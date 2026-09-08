@@ -206,7 +206,7 @@ async switchChannel(code) {
       console.warn('[Haven] DM partner key fetch failed, continuing unencrypted:', err);
     }
   }
-  this.socket.emit('get-messages', { code });
+  this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(code) : { code });
   // Belt-and-braces mark-read: if the server already told us the latest
   // message id for this channel (channels-list snapshot), fire a
   // mark-read IMMEDIATELY (not via the debounced _markRead path) so that
@@ -689,6 +689,12 @@ _updateChannelFunctionsPanel(ch) {
   const isForum = ch.is_forum === 1;
   this._setCfnBadge('forum', isForum, t(isForum ? 'channel_functions.on' : 'channel_functions.off'));
   const isPrivate = !!ch.is_private;
+  {
+    const _cfnPanel = document.getElementById('channel-functions-panel'); const nsfwRow = _cfnPanel?.querySelector('.cfn-row[data-fn="nsfw"] .cfn-badge');
+    if (nsfwRow) { nsfwRow.textContent = ch.is_nsfw ? t('channel_functions.on') : t('channel_functions.off'); nsfwRow.className = 'cfn-badge ' + (ch.is_nsfw ? 'cfn-on' : 'cfn-off'); }
+    const tagsRow = _cfnPanel?.querySelector('.cfn-row[data-fn="forum-tags"]');
+    if (tagsRow) { tagsRow.style.display = ch.is_forum ? '' : 'none'; const b = tagsRow.querySelector('.cfn-badge'); if (b) b.textContent = String(this._forumTagsOf ? this._forumTagsOf(ch.code).length : 0); }
+  }
   this._setCfnBadge('private', isPrivate, t(isPrivate ? 'channel_functions.on' : 'channel_functions.off'));
   const interval = ch.slow_mode_interval || 0;
   this._setCfnBadge('slow-mode', interval > 0, interval > 0 ? `${interval}s` : t('channel_functions.off'));
@@ -1900,7 +1906,10 @@ _renderChannels() {
     const isAnnouncement = ch.notification_type === 'announcement';
     const isTemporary = !!ch.expires_at;
     const isTempVoice = !!ch.is_temp_voice;
-    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_forum ? '🗂️' : '#'))));
+    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : '#')))));
+    // NSFW channels stay out of sight when the user asked for that (phone in
+    // public), except the one they are actually in.
+    if (ch.is_nsfw && this._hideNsfw && this._hideNsfw() && ch.code !== this.currentChannel) el.style.display = 'none';
 
     // Build small status indicators for channel features
     const _badges = [];
@@ -2226,6 +2235,21 @@ _renderChannels() {
     tempBtn.innerHTML = `<span style="font-size:0.9rem">➕</span><span>${t('channels.create_temp_channel')}</span>`;
     tempBtn.title = t('channels.create_temp_channel_title');
     tempBtn.addEventListener('click', async () => {
+      // One create form for every kind of channel: open it with Temporary
+      // ticked instead of a second prompt that only made a temp channel.
+      const form = document.getElementById('create-section-body');
+      const nameInput = document.getElementById('new-channel-name');
+      const tmp = document.getElementById('new-channel-temporary');
+      if (form && nameInput && tmp) {
+        form.style.display = '';
+        const arrow = document.getElementById('create-section-arrow');
+        if (arrow) arrow.textContent = '▾';
+        tmp.checked = true;
+        tmp.dispatchEvent(new Event('change'));
+        nameInput.focus();
+        nameInput.scrollIntoView({ block: 'center' });
+        return;
+      }
       const name = await this._showPromptModal(
         t('channels.create_temp_channel_title'),
         t('channels.create_temp_channel_hint')

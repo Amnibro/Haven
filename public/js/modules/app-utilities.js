@@ -3832,6 +3832,7 @@ _promoteThreadCompactToFull(compactEl) {
 _updateThreadPreview(parentId, thread) {
   const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
   if (!msgEl) return;
+  if (msgEl.classList.contains('forum-topic')) { this._forumBump && this._forumBump(parentId, thread); return; }
   const oldPreview = msgEl.querySelector('.thread-preview');
   const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
   const newHtml = this._renderThreadPreview(parentId, thread, { forum: !!(ch && ch.is_forum) });
