@@ -14,14 +14,94 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
-- **Inline images load on demand.** Chat images, stickers and link-preview
-  pictures used to fetch the moment a message rendered, and every one of the
-  100 messages kept on screen held its decoded bitmap, which was most of the
-  memory the desktop app used on a busy channel. They now load only when they
-  come near the viewport, closest first and three at a time in idle slices,
-  and are dropped again once they scroll far away or the window has been
-  hidden for a while. Their box is pinned so history never jumps. In a
-  80-image test, jumping through the channel fetched 28 images instead of 80.
+- **Inline images load on demand (#5587).** Chat images, stickers and link
+  preview pictures used to fetch the moment a message rendered, and every one
+  of the 100 messages kept on screen held its decoded bitmap, which was most of
+  the memory the desktop app used on a busy channel. They now load only when
+  they come near the viewport, closest first and three at a time, and are let
+  go again once they scroll far away or the window has been hidden for a while,
+  in the main chat, threads, DM pop-outs and search alike. A picture keeps its
+  size while unloaded so history never jumps. Measured by @Amnibro on the
+  desktop app: about 430 MB of a 700 MB process was decoded images.
+- **Attachments per message is an admin setting (#5561).** Uploads & Limits has
+  a Max Attachments per Message box (1 to 50, default 10). Dropping, pasting or
+  picking several files at once now queues all of them, in the main composer,
+  threads and DM PiPs alike, instead of keeping the first and dropping the rest.
+  The per-minute upload allowance follows the setting so a full drop is not cut
+  off part way. Requested by @Sheoji.
+- **Relayed screen share viewers get the gentler profile automatically (#5426).**
+  When a viewer can only be reached through a TURN relay, the share to that
+  viewer uses the encoder settings behind the "Gentler screen share for relay
+  connections" toggle, while viewers on a direct route keep the full-quality
+  one. On by default; a switch under Settings, Debug turns the detection off.
+  Suggested by @RCCore after confirming the profile on two setups.
+- **Visual effects follow you between desktop launches (#5589).** The effects
+  pick used to live only in the browser's local storage, so a desktop relaunch
+  that landed on a different storage origin came back with the theme's default
+  effects while the theme itself survived. The pick now syncs through your
+  server preferences the way the theme does. Reported by Dispencer2, fixed by
+  @Amnibro.
+
+### Changed
+- **Settings sections follow the nav order (#5596).** On both the user and
+  admin panels the sections now sit in the same order as the nav, so clicking
+  down the list scrolls one way instead of jumping around. The admin panel gets
+  the same scroll highlight the user panel had, plus a Terms of Service entry.
+  Reported and fixed by @birdcrazy (#5576).
+- **CRT theme text reads the same size as every other theme (#5590).** VT323's
+  glyphs sit small in their box, so the CRT theme always read a size smaller.
+  The face is scaled to match without touching spacing or avatars. Reported by
+  Dispencer2, fixed by @Amnibro.
+
+### Fixed
+- **DM PiP header stuck on a grey dot and an initial (#5574).** The avatar and
+  status dot in the DM PiP header were drawn once when the panel opened, from
+  whatever the online list held at that moment, and never again. They follow
+  presence updates now. Reported by @birdcrazy.
+- **Layout density buttons work again (#5585).** A picker helper change in 4.5.0
+  left the Compact, Cozy and Spacious buttons unresponsive. Fixed by @birdcrazy.
+- **Channel and DM lists scroll while you drag near the edges (#5591).**
+  Dragging a channel to the top or bottom of a long sidebar used to stop there;
+  the list now scrolls along, faster the closer you hold to the edge. Reported
+  by Dispencer2, fixed by @Amnibro.
+- **Copy token copies the token, or says it could not (#5592).** The Copy
+  button under Require invite token reported success even when the desktop app
+  refused the clipboard write. It now goes through the desktop clipboard first
+  and shows an error with a hint if every route fails. Reported by Dispencer2,
+  fixed by @Amnibro.
+- **Soundboard hotkeys can be set and cleared from every layout (#5593).** The
+  sidebar soundboard showed a hotkey but gave no way to clear it or set one.
+  The grid, the pop-out and the sidebar now share the same controls, with a
+  finger-sized clear button in row layouts. Reported by Dispencer2, fixed by
+  @Amnibro.
+- **Every install path uses Haven's own certificate generator (#5586).**
+  4.5.0 taught the server to make its certificate itself, but `Start Haven.bat`,
+  `Install Haven.ps1` and the web installer still went looking for
+  `openssl.exe` first and reported a skipped certificate as done. They now call
+  the same generator, the certificate carries the CA and server-auth flags that
+  phones expect when you import it, and the guide and support page stop telling
+  people to install OpenSSL. Reported by MutantRabbit767, fixed by @Amnibro.
+
+---
+
+## [4.5.0] - 2026-09-07
+
+Forums finish taking shape, roles can be pinged, and Haven no longer depends on
+OpenSSL for its certificate: a fresh install comes up on HTTPS by itself, so voice
+and the mobile app work out of the box on Windows. Also in: timestamps that render
+in every reader's own timezone with a picker to make them, a Private toggle for
+existing channels, and a batch of fixes from the community. No migration steps;
+the one new column is added on first start. If you were running plain HTTP without
+meaning to, your links become https:// on the next start; set FORCE_HTTP=true if
+plain HTTP is on purpose.
+
+### Added
+- **Haven makes its own certificate.** When none exists at start and FORCE_HTTP
+  is not set, Haven generates a self-signed certificate with Node's own crypto,
+  no OpenSSL needed, so HTTPS works on a clean Windows install and voice, camera
+  and the mobile app work with it. Anyone who was running plain HTTP without
+  meaning to gets HTTPS on their next start; anyone who means it sets
+  FORCE_HTTP=true. The installer no longer reports a skipped certificate as done.
 - **Role mentions (#5579).** `@Moderators`, or any role name, lights up for
   everyone holding the role and pings them like an @mention. The `@` picker
   offers roles to anyone with the Mention everyone permission, the server disarms
@@ -54,6 +134,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   hovering any of them spells out the full date. The syntax is Discord's, so
   tokens survive the Ferry bridge in both directions and existing generators
   keep working. Requested by test2.
+
+### Changed
+- **Forum feeds run newest first (#144).** The most recently active topic sits at
+  the top of a forum channel, a new topic or a fresh reply moves to the top, and
+  older topics load as you scroll down. Replies inside a topic's thread still read
+  top to bottom.
 
 ### Fixed
 - **Invite links grant only the channels that were ticked (#5569, #5583).** An

@@ -12,9 +12,11 @@ const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 
 const modulePath = path.join(__dirname, '..', 'public', 'js', 'modules', 'app-media.js');
-let M;
+let MOD, M;
 test.before(async () => {
-  M = (await import(pathToFileURL(modulePath).href)).default;
+  MOD = (await import(pathToFileURL(modulePath).href)).default;
+  // The wrapper only defers while the loader is running.
+  M = Object.assign({}, MOD, { _lazyMedia: {} });
 });
 
 test('a src attribute becomes a blank placeholder plus data-lazy-src', () => {
@@ -23,6 +25,13 @@ test('a src attribute becomes a blank placeholder plus data-lazy-src', () => {
   const proxied = M._lazySrcAttr('src="/api/media-proxy?u=x" data-mp-origin="https://x"');
   assert.match(proxied, /data-lazy-src="\/api\/media-proxy\?u=x" data-mp-origin="https:\/\/x"$/);
   assert.equal(M._lazySrcAttr('data-mp-src="https://x"'), 'data-mp-src="https://x"', 'no src, nothing to defer');
+  assert.equal(MOD._lazySrcAttr('src="/uploads/a.png"'), 'src="/uploads/a.png"', 'loader not running, nothing deferred');
+});
+
+test('the unloaded blank carries the picture\'s own size', () => {
+  const blank = M._lazySizedBlank(640, 480);
+  assert.match(blank, /^data:image\/svg\+xml,/);
+  assert.match(decodeURIComponent(blank), /width='640' height='480'/);
 });
 
 test('distance is zero on screen and grows with the gap above or below', () => {
