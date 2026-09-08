@@ -26,12 +26,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   connections" toggle, while viewers on a direct route keep the full-quality
   one. On by default; a switch under Settings, Debug turns the detection off.
   Suggested by @RCCore after confirming the profile on two setups.
+- **Visual effects follow you between desktop launches (#5589).** The effects
+  pick used to live only in the browser's local storage, so a desktop relaunch
+  that landed on a different storage origin came back with the theme's default
+  effects while the theme itself survived. The pick now syncs through your
+  server preferences the way the theme does. Reported by Dispencer2, fixed by
+  @Amnibro.
+
+### Changed
+- **Settings sections follow the nav order (#5596).** On both the user and
+  admin panels the sections now sit in the same order as the nav, so clicking
+  down the list scrolls one way instead of jumping around. The admin panel gets
+  the same scroll highlight the user panel had, plus a Terms of Service entry.
+  Reported and fixed by @birdcrazy (#5576).
+- **CRT theme text reads the same size as every other theme (#5590).** VT323's
+  glyphs sit small in their box, so the CRT theme always read a size smaller.
+  The face is scaled to match without touching spacing or avatars. Reported by
+  Dispencer2, fixed by @Amnibro.
 
 ### Fixed
 - **DM PiP header stuck on a grey dot and an initial (#5574).** The avatar and
   status dot in the DM PiP header were drawn once when the panel opened, from
   whatever the online list held at that moment, and never again. They follow
   presence updates now. Reported by @birdcrazy.
+- **Layout density buttons work again (#5585).** A picker helper change in 4.5.0
+  left the Compact, Cozy and Spacious buttons unresponsive. Fixed by @birdcrazy.
+- **Channel and DM lists scroll while you drag near the edges (#5591).**
+  Dragging a channel to the top or bottom of a long sidebar used to stop there;
+  the list now scrolls along, faster the closer you hold to the edge. Reported
+  by Dispencer2, fixed by @Amnibro.
+- **Copy token copies the token, or says it could not (#5592).** The Copy
+  button under Require invite token reported success even when the desktop app
+  refused the clipboard write. It now goes through the desktop clipboard first
+  and shows an error with a hint if every route fails. Reported by Dispencer2,
+  fixed by @Amnibro.
+- **Soundboard hotkeys can be set and cleared from every layout (#5593).** The
+  sidebar soundboard showed a hotkey but gave no way to clear it or set one.
+  The grid, the pop-out and the sidebar now share the same controls, with a
+  finger-sized clear button in row layouts. Reported by Dispencer2, fixed by
+  @Amnibro.
 
 ---
 
