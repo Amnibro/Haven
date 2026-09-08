@@ -556,7 +556,7 @@ module.exports = function register(socket, ctx) {
     const value = typeof data.value === 'string' ? data.value.trim() : '';
 
     const allowedKeys = [
-      'theme', 'hide_score_badge',
+      'theme', 'hide_score_badge', 'hide_nsfw',
       // Rich presence. share_activity is the master switch and defaults to
       // OFF (absent row = not sharing); the two sub-toggles default ON but
       // only matter once the master is enabled.

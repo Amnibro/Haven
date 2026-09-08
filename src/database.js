@@ -1115,6 +1115,26 @@ function initDatabase() {
     // Forum mode (#144): each top-level message is a topic, and the channel
     // lists topics by their latest thread activity instead of creation time.
     { name: 'is_forum',          sql: "ALTER TABLE channels ADD COLUMN is_forum INTEGER DEFAULT 0" },
+    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
+    // topics pick from, and an NSFW flag users can hide behind a preference.
+    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
+    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
+    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
+    // topics pick from, and an NSFW flag users can hide behind a preference.
+    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
+    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
+    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
+    // topics pick from, and an NSFW flag users can hide behind a preference.
+    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
+    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
+    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
+    // topics pick from, and an NSFW flag users can hide behind a preference.
+    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
+    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
+    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
+    // topics pick from, and an NSFW flag users can hide behind a preference.
+    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
+    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
     // #5390 — extend the self-destruct timer with a "clear messages only"
     // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
     // whole channel) or 'clear' (wipe messages but keep channel, perms,
@@ -1577,6 +1597,41 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN thread_id INTEGER DEFAULT NULL REFERENCES messages(id) ON DELETE CASCADE");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL");
+  // ── Migration: forum topics carry a title and tags ──────
+  for (const col of [
+    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
+    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
+  ]) {
+    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
+  }
+  // ── Migration: forum topics carry a title and tags ──────
+  for (const col of [
+    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
+    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
+  ]) {
+    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
+  }
+  // ── Migration: forum topics carry a title and tags ──────
+  for (const col of [
+    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
+    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
+  ]) {
+    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
+  }
+  // ── Migration: forum topics carry a title and tags ──────
+  for (const col of [
+    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
+    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
+  ]) {
+    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
+  }
+  // ── Migration: forum topics carry a title and tags ──────
+  for (const col of [
+    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
+    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
+  ]) {
+    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
+  }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to) WHERE reply_to IS NOT NULL");
 
   // ── Audit log ───────────────────────────────────────────
