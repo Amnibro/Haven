@@ -2037,7 +2037,8 @@
       "import_fetch_failed": "Fetch failed",
       "registration": {
         "clear_confirm": "Clear the registration token? People will no longer be able to register with it.",
-        "copied": "Token copied"
+        "copied": "Token copied",
+        "copy_failed": "Could not copy the token. Select it and press Ctrl+C."
       },
       "default_join": {
         "all": "Invite joiners will land in every public channel",
