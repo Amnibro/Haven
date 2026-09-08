@@ -5144,6 +5144,11 @@ select.cfn-select.cfn-input {
   padding: 0 0.125rem; border-radius: 0.1875rem; transition: color 0.15s, background 0.15s;
 }
 .sb-hotkey-clear:hover { color: var(--danger); background: rgba(240,71,71,0.15); }
+/* Row layouts (list mode, sidebar) get a finger-sized clear target. */
+.soundboard-grid.list-mode .sb-hotkey-clear,
+#sb-sidebar-grid .sb-hotkey-clear { font-size: 1rem; padding: 0 0.375rem; }
+#sb-sidebar-grid .soundboard-btn { justify-content: space-between; }
+#sb-sidebar-grid .sb-hotkey-row, #sb-sidebar-grid .sb-hotkey-set { flex-shrink: 0; margin-left: 0.5rem; }
 .sb-hotkey-set {
   font-size: 0.5625rem; color: var(--accent); cursor: pointer; opacity: 0.7;
   transition: opacity 0.15s;
