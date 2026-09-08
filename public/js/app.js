@@ -5,14 +5,14 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=3.51.5';
-import UIBindMethods   from './modules/app-ui.js?v=3.51.6';
-import MediaMethods    from './modules/app-media.js?v=3.51.2';
+import UIBindMethods   from './modules/app-ui.js?v=3.53.0';
+import MediaMethods    from './modules/app-media.js?v=3.53.0';
 import ContextMethods  from './modules/app-context.js?v=3.44.6';
 import ChannelMethods  from './modules/app-channels.js?v=3.44.6';
 import MessageMethods  from './modules/app-messages.js?v=3.52.2';
 import UserMethods     from './modules/app-users.js?v=3.25.4';
 import VoiceMethods    from './modules/app-voice.js?v=3.34.2';
-import UtilityMethods  from './modules/app-utilities.js?v=4.3.1';
+import UtilityMethods  from './modules/app-utilities.js?v=4.5.0';
 import AdminMethods    from './modules/app-admin.js?v=4.1.3';
 import PlatformMethods from './modules/app-platform.js?v=3.16.14';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
@@ -334,6 +334,7 @@ class HavenApp {
     this._setupZoomSlider();
     this._setupEmojiSizePicker();
     this._setupImageModePicker();
+    this._setupLazyMedia();
     this._setupEmbedSizePicker();
     this._setupRoleDisplayPicker();
     this._setupToolbarIconPicker();

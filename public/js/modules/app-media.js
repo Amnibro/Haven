@@ -4694,4 +4694,151 @@ _hideImageContextMenu() {
   if (existing) existing.remove();
 },
 
+
+// ── Lazy media queue ──
+//
+// Chat images, stickers, GIFs and link-preview pictures used to load the
+// moment a message rendered, and every one of the 100 messages kept in the
+// DOM held its decoded bitmap. On a busy channel that was most of the
+// renderer's memory (about 430 MB on the desktop app). Now an image only
+// fetches when it comes within LAZY_NEAR px of the viewport, a few at a
+// time with the closest first, and it is unloaded again once it scrolls
+// LAZY_FAR px away or the window has been hidden for a while. Sizes are
+// pinned across unload/reload so nothing jumps.
+
+_lazyBlank() {
+  return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+},
+
+// Wrap an emitted `src="…"` attribute so the loader owns the fetch. Attributes
+// without a src (media-proxy placeholders) pass through untouched.
+_lazySrcAttr(attrs) {
+  return String(attrs || '').replace(/(^|\s)src="/, `$1src="${this._lazyBlank()}" data-lazy-src="`);
+},
+
+// The URL a lazy image shows or will show, for the lightbox and copy actions.
+_lazyRealSrc(img) {
+  return (img && (img.dataset?.lazySrc || img.getAttribute?.('src'))) || '';
+},
+
+// Distance from the viewport centre, in px. Zero for anything on screen.
+_lazyDistance(rect, viewportHeight) {
+  const top = rect.top, bottom = rect.bottom;
+  if (bottom >= 0 && top <= viewportHeight) return 0;
+  return top > viewportHeight ? top - viewportHeight : -bottom;
+},
+
+// Which pending images to start now: closest first, never more than
+// maxParallel in flight. Pure, so the test can drive it.
+_lazyPickNext(pending, inFlight, maxParallel) {
+  const room = Math.max(0, maxParallel - inFlight);
+  return [...pending].sort((a, b) => a.distance - b.distance).slice(0, room).map(p => p.img);
+},
+
+_lazySelector() {
+  return 'img.chat-image, img.sticker-img, img.lp-image, img.link-preview-gallery-img';
+},
+
+_setupLazyMedia() {
+  if (this._lazyMedia || typeof IntersectionObserver !== 'function' || typeof MutationObserver !== 'function') return;
+  const container = document.getElementById('messages');
+  if (!container) return;
+  const L = this._lazyMedia = {
+    NEAR: 800, FAR: 2400, MAX_PARALLEL: 3, HIDDEN_UNLOAD_MS: 20000,
+    near: new Set(), inFlight: 0, hiddenTimer: null,
+  };
+  L.nearObs = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) L.near.add(e.target); else L.near.delete(e.target);
+    }
+    this._lazyPump();
+  }, { rootMargin: `${L.NEAR}px 0px` });
+  L.farObs = new IntersectionObserver((entries) => {
+    for (const e of entries) if (!e.isIntersecting) this._lazyUnload(e.target);
+  }, { rootMargin: `${L.FAR}px 0px` });
+  const sel = this._lazySelector();
+  const adopt = (root) => {
+    if (!root || root.nodeType !== 1) return;
+    if (root.matches(sel)) this._lazyAdopt(root);
+    root.querySelectorAll(sel).forEach((img) => this._lazyAdopt(img));
+  };
+  adopt(container);
+  L.mo = new MutationObserver((muts) => {
+    for (const m of muts) m.addedNodes.forEach(adopt);
+  });
+  L.mo.observe(container, { childList: true, subtree: true });
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(L.hiddenTimer);
+    if (document.hidden) L.hiddenTimer = setTimeout(() => this._lazyUnloadAll(), L.HIDDEN_UNLOAD_MS);
+    else this._lazyPump();
+  });
+},
+
+_lazyAdopt(img) {
+  const L = this._lazyMedia;
+  if (!L || img.dataset.lazy) return;
+  if (img.closest('.lightbox, .image-lightbox, [data-no-lazy]')) return;
+  let src = img.dataset.lazySrc || img.getAttribute('src') || '';
+  if (!src || src.startsWith('data:') || src.startsWith('blob:')) return;
+  img.dataset.lazySrc = src;
+  img.dataset.lazy = 'pending';
+  img.decoding = 'async';
+  if (img.getAttribute('src') !== this._lazyBlank()) img.src = this._lazyBlank();
+  L.nearObs.observe(img);
+  L.farObs.observe(img);
+},
+
+_lazyPump() {
+  const L = this._lazyMedia;
+  if (!L) return;
+  const vh = window.innerHeight || 800;
+  const pending = [];
+  for (const img of L.near) {
+    if (!img.isConnected) { L.near.delete(img); continue; }
+    if (img.dataset.lazy !== 'pending') continue;
+    pending.push({ img, distance: this._lazyDistance(img.getBoundingClientRect(), vh) });
+  }
+  for (const img of this._lazyPickNext(pending, L.inFlight, L.MAX_PARALLEL)) {
+    const onScreen = this._lazyDistance(img.getBoundingClientRect(), vh) === 0;
+    img.dataset.lazy = 'loading';
+    L.inFlight++;
+    const start = () => this._lazyLoad(img);
+    // Visible images start now; the ones just below the fold wait for an idle
+    // slice so a fast scroll never fights the fetches for the main thread.
+    onScreen || typeof requestIdleCallback !== 'function' ? start() : requestIdleCallback(start, { timeout: 250 });
+  }
+},
+
+_lazyLoad(img) {
+  const L = this._lazyMedia;
+  const done = (ok) => {
+    img.onload = img.onerror = null;
+    L.inFlight = Math.max(0, L.inFlight - 1);
+    if (!img.isConnected) return this._lazyPump();
+    img.dataset.lazy = ok ? 'loaded' : 'error';
+    if (ok && !img.style.width) {
+      // Remember the rendered box so an unload/reload never moves the chat.
+      const r = img.getBoundingClientRect();
+      if (r.width && r.height) { img.style.width = `${Math.round(r.width)}px`; img.style.height = `${Math.round(r.height)}px`; }
+    }
+    this._lazyPump();
+  };
+  img.onload = () => done(true);
+  img.onerror = () => done(false);
+  img.src = img.dataset.lazySrc;
+},
+
+_lazyUnload(img) {
+  const L = this._lazyMedia;
+  if (!L || img.dataset.lazy !== 'loaded') return;
+  img.dataset.lazy = 'pending';
+  img.src = this._lazyBlank();
+},
+
+_lazyUnloadAll() {
+  const L = this._lazyMedia;
+  if (!L) return;
+  document.querySelectorAll('img[data-lazy="loaded"]').forEach((img) => this._lazyUnload(img));
+},
+
 };

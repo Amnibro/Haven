@@ -14,6 +14,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Inline images load on demand.** Chat images, stickers and link-preview
+  pictures used to fetch the moment a message rendered, and every one of the
+  100 messages kept on screen held its decoded bitmap, which was most of the
+  memory the desktop app used on a busy channel. They now load only when they
+  come near the viewport, closest first and three at a time in idle slices,
+  and are dropped again once they scroll far away or the window has been
+  hidden for a while. Their box is pinned so history never jumps. In a
+  80-image test, jumping through the channel fetched 28 images instead of 80.
 - **Role mentions (#5579).** `@Moderators`, or any role name, lights up for
   everyone holding the role and pings them like an @mention. The `@` picker
   offers roles to anyone with the Mention everyone permission, the server disarms
