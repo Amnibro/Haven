@@ -2331,6 +2331,9 @@ _setupSocketListeners() {
   // ── User preferences (persistent theme etc.) ───────
   this.socket.on('preferences', (prefs) => {
     this._userPrefs = prefs || {};
+    // Effects come back from the server like the theme does; restore them
+    // first so applyThemeFromServer() applies the saved pick, not the default.
+    if (prefs.effects && typeof syncEffectsFromServer === 'function') syncEffectsFromServer(prefs.effects);
     if (prefs.theme) {
       // User has a saved personal theme preference — apply it
       applyThemeFromServer(prefs.theme, true, true);
