@@ -1172,8 +1172,8 @@
     },
     "flash_not_installed": "Flash games not installed (~37 MB download)",
     "flash_download_btn": "Download Flash Games",
-      "flash_downloading": "Downloading…",
-      "flash_download_failed": "Download failed",
+    "flash_downloading": "Downloading…",
+    "flash_download_failed": "Download failed",
     "flash_install_result": "Flash games: {{installed}} installed, {{already}} already had, {{errors}} failed",
     "flash_not_installed_label": "Not installed",
     "hide_server_address": "Hide server address",
@@ -2398,7 +2398,12 @@
       "ferry_hint": "Relay messages between Haven channels and Discord channels. Needs your own Discord bot, which takes about two minutes to create.",
       "manage_ferry_btn": "Set up Ferry",
       "ferry_not_configured": "Not configured"
-    }
+    },
+    "nsfw": {
+      "hide": "Hide NSFW channels",
+      "hide_hint": "Channels an admin marked 🔞 leave your sidebar until you turn this off. Handy on a phone in public."
+    },
+    "search_placeholder": "Search settings (Ctrl+F)"
   },
   "modals": {
     "common": {
@@ -3251,7 +3256,11 @@
     "none_disabled": "None (disabled)",
     "afk_timeout_placeholder": "1–1440 (0=off)",
     "self_destruct_mode_delete": "Delete channel",
-    "self_destruct_mode_clear": "Clear messages"
+    "self_destruct_mode_clear": "Clear messages",
+    "forum_tags": "Forum tags",
+    "forum_tags_hint": "The tags topics in this forum can carry, one per line",
+    "nsfw": "NSFW",
+    "nsfw_hint": "Mark this channel NSFW. Members can hide NSFW channels from their sidebar in Settings"
   },
   "confirm": {
     "delete_channel": "Delete this channel?\nAll messages will be permanently lost.",
@@ -3584,5 +3593,37 @@
     "reply_one": "1 reply",
     "reply_other": "{{count}} replies",
     "unavailable_in_dm": "Threads are not available in DMs"
+  },
+  "forum": {
+    "new_post": "New Post",
+    "post": "Post",
+    "title": "Title",
+    "title_placeholder": "What is this topic about?",
+    "body": "Body",
+    "body_placeholder": "Write the first message of the topic…",
+    "tags": "Tags",
+    "tags_hint": "(up to 5)",
+    "attach_hint": "To attach an image or a file, paste or drop it into the message box below the topics instead.",
+    "sort": "Sort",
+    "sort_active": "Recently active",
+    "sort_created": "Date posted",
+    "view_list": "List",
+    "view_gallery": "Gallery",
+    "tag_matching": "Tag matching",
+    "match_some": "Match some",
+    "match_all": "Match all",
+    "clear_tags": "Clear",
+    "pinned": "Pinned",
+    "replies": "{{count}} replies",
+    "edit_topic": "Edit title and tags",
+    "image_topic": "Image",
+    "load_more": "Load more topics",
+    "no_topics_for_tags": "No topics carry those tags.",
+    "just_now": "just now",
+    "minutes_ago": "{{n}}m ago",
+    "hours_ago": "{{n}}h ago",
+    "days_ago": "{{n}}d ago",
+    "tags_editor_title": "Forum tags",
+    "tags_editor_hint": "One tag per line. Put an emoji first if you want one, like \"🎨 Art\". Up to 20."
   }
 }

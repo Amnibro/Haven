@@ -328,6 +328,12 @@ _renderMessages(messages, lastReadMessageId) {
   }
   const container = document.getElementById('messages');
   container.innerHTML = '';
+  container.classList.remove('forum-view', 'forum-gallery');
+  this._forumActive = false;
+  if (this._isForumChannel && this._isForumChannel(this.currentChannel)) {
+    this._renderForum(messages);
+    return;
+  }
   // A forum feed runs newest first: the most recently active topic sits at
   // the top, where a forum reader expects it. (#144)
   const forumFeed = this._isForumFeed();
@@ -697,12 +703,13 @@ _appendOlderForum(messages) {
 _bumpForumTopic(parentId) {
   const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
   if (!ch || !ch.is_forum) return;
+  if (this._forumActive && this._forumBump) { this._forumBump(parentId); return; }
   const container = document.getElementById('messages');
   if (!container) return;
   const el = container.querySelector(`[data-msg-id="${parentId}"]`);
   if (!el) {
     if (!this._loadingHistory && !this._historyBefore && !this._historyAfter) {
-      this.socket.emit('get-messages', { code: this.currentChannel });
+      this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
     }
     return;
   }
@@ -720,6 +727,7 @@ _bumpForumTopic(parentId) {
 
 _appendMessage(message, forceScroll = false) {
   const container = document.getElementById('messages');
+  if (this._forumActive && this._forumInsertTopic) { this._forumInsertTopic(message); return; }
   const lastMsg = container.lastElementChild;
 
   // Track persona name for @PersonaName mention resolution. (#5349)

@@ -14,6 +14,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Forums read like forums (#5595).** A forum channel now opens as a list of
+  topic cards, newest activity on top, each with its title, tags, author, reply
+  count and first image, and a Gallery view of square tiles for art and
+  character sheets. The toolbar sorts by Recently active or Date posted,
+  filters by the channel's tags (match some or all), and a New Post button
+  opens a composer with title, body and tags. Replies still live in the
+  topic's thread and bump it. Admins keep the tag list in Channel Functions
+  (one per line, an emoji first if you like), and the author or a moderator
+  can retitle or retag a topic from its card. Requested by test2 and the RP
+  crowd, built by @Amnibro.
+- **NSFW channels (#5595).** Channel Functions has an NSFW switch, and Settings
+  has "Hide NSFW channels" for a phone in public. Requested by Dispencer2.
+- **Search inside Settings (#5595).** A search box at the top of the Settings
+  nav (or Ctrl+F while Settings is open) hides every section that does not
+  mention the word. Requested by Dispencer2.
+- **One way to create a channel (#5595).** The sidebar's Create Temp Channel
+  opens the same create form with Temporary already ticked instead of its own
+  prompt. Requested by Dispencer2.
+- **& and + in channel names (#5595).** Requested by Dispencer2.
 - **Inline images load on demand (#5587).** Chat images, stickers and link
   preview pictures used to fetch the moment a message rendered, and every one
   of the 100 messages kept on screen held its decoded bitmap, which was most of

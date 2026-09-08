@@ -539,6 +539,12 @@ _setupNotifications() {
       if (this._lastOnlineUsers) this._renderOnlineUsers(this._lastOnlineUsers);
     });
   }
+  const hideNsfwToggle = document.getElementById('hide-nsfw-channels');
+  if (hideNsfwToggle) {
+    hideNsfwToggle.checked = localStorage.getItem('haven_hide_nsfw') === 'true';
+    hideNsfwToggle.addEventListener('change', () => this._setHideNsfw?.(hideNsfwToggle.checked));
+  }
+  this._setupSettingsSearch?.();
   const hideOwnScoreToggle = document.getElementById('hide-own-score');
   if (hideOwnScoreToggle) {
     // Initial value comes from the server-synced preferences cache, falling

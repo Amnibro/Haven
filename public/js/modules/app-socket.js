@@ -1014,6 +1014,11 @@ _setupSocketListeners() {
       }
     }
 
+    if (this._forumLoadingMore && this._forumActive) {
+      this._forumLoadingMore = false;
+      this._forumAppendOlder(data.messages);
+      return;
+    }
     if (this._historyBefore) {
       // Pagination request — prepend older messages
       this._historyBefore = null;
@@ -1129,7 +1134,7 @@ _setupSocketListeners() {
       const forumFeed = !!this._isForumFeed?.();
       const distEnd = msgContainer.scrollHeight - msgContainer.clientHeight - msgContainer.scrollTop;
       const atOlderEdge = forumFeed ? distEnd < 200 : msgContainer.scrollTop < 200;
-      if (atOlderEdge && !this._noMoreHistory && !this._loadingHistory && this._oldestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
+      if (atOlderEdge && !this._forumActive && !this._noMoreHistory && !this._loadingHistory && this._oldestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
         this._loadingHistory = true;
         this._historyBefore = this._oldestMsgId;
         this._historyDebounce = now;
@@ -1683,7 +1688,18 @@ _setupSocketListeners() {
   this.socket.on('thread-updated', (data) => {
     if (data.channelCode !== this.currentChannel) return;
     this._updateThreadPreview(data.parentId, data.thread);
-    this._bumpForumTopic?.(data.parentId);
+    if (!this._forumActive) this._bumpForumTopic?.(data.parentId);
+  });
+
+  // Forum topics: retitled or retagged, and the channel's tag list changed.
+  this.socket.on('topic-updated', (data) => {
+    if (data.channelCode !== this.currentChannel) return;
+    this._forumApplyTopicUpdate?.(data);
+  });
+  this.socket.on('forum-tags-updated', (data) => {
+    const ch = this.channels && this.channels.find(c => c.code === data.code);
+    if (ch) ch.forum_tags = JSON.stringify(data.tags || []);
+    if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
   });
 
   // ── Polls ─────────────────────────────────────────
@@ -2358,6 +2374,11 @@ _setupSocketListeners() {
     }
     // Sync hide-own-score toggle to the server's stored value so reopening
     // settings on a fresh device shows the correct state.
+    if (prefs.hide_nsfw != null) {
+      try { localStorage.setItem('haven_hide_nsfw', prefs.hide_nsfw); } catch {}
+      const nsfwToggle = document.getElementById('hide-nsfw-channels');
+      if (nsfwToggle) nsfwToggle.checked = prefs.hide_nsfw === 'true';
+    }
     if (prefs.hide_score_badge != null) {
       try { localStorage.setItem('haven_hide_own_score', prefs.hide_score_badge); } catch {}
       const ownToggle = document.getElementById('hide-own-score');

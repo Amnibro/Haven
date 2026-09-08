@@ -556,7 +556,7 @@ module.exports = function register(socket, ctx) {
     const value = typeof data.value === 'string' ? data.value.trim() : '';
 
     const allowedKeys = [
-      'theme', 'hide_score_badge',
+      'theme', 'hide_score_badge', 'hide_nsfw',
       // Visual effects picker (theme.js). Same reason as theme: a desktop app
       // that lands on a different storage origin (http vs https autodetect)
       // loses localStorage, and only server-side preferences come back.

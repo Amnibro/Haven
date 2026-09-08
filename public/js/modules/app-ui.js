@@ -500,12 +500,19 @@ _setupUI() {
       // The ordering rule just changed under the open channel; reload it so
       // the topics re-sort now instead of on the next visit.
       if (code === this.currentChannel) {
-        setTimeout(() => this.socket.emit('get-messages', { code }), 400);
+        setTimeout(() => this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(code) : { code }), 400);
       }
     } else if (fn === 'private') {
       const newVal = ch && ch.is_private ? 0 : 1;
       optimistic({ is_private: newVal });
       this.socket.emit('toggle-channel-permission', { code, permission: 'private' });
+    } else if (fn === 'nsfw') {
+      const newVal = ch && ch.is_nsfw ? 0 : 1;
+      optimistic({ is_nsfw: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'nsfw' });
+    } else if (fn === 'forum-tags') {
+      document.getElementById('channel-functions-panel').style.display = 'none';
+      this._forumEditTags?.(code);
     } else if (fn === 'slow-mode') {
       const badge = row.querySelector('.cfn-badge');
       if (!badge || badge.tagName === 'INPUT') return;
