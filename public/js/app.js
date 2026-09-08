@@ -5,10 +5,10 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.5.2';
-import UIBindMethods   from './modules/app-ui.js?v=4.5.1';
-import MediaMethods    from './modules/app-media.js?v=4.5.1';
+import UIBindMethods   from './modules/app-ui.js?v=4.5.2';
+import MediaMethods    from './modules/app-media.js?v=4.5.2';
 import ContextMethods  from './modules/app-context.js?v=3.44.6';
-import ChannelMethods  from './modules/app-channels.js?v=3.44.6';
+import ChannelMethods  from './modules/app-channels.js?v=4.5.2';
 import MessageMethods  from './modules/app-messages.js?v=3.52.3';
 import UserMethods     from './modules/app-users.js?v=4.5.1';
 import VoiceMethods    from './modules/app-voice.js?v=3.34.2';
