@@ -1515,12 +1515,12 @@
       </div>
 
       <div class="download-card fade-in">
-        <h2>&#x2B21; Haven Server v4.4.1</h2>
+        <h2>&#x2B21; Haven Server v4.5.0</h2>
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
-          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.4.1.zip" class="btn btn-primary download-main">
-            <span class="icon">&#x2B07;</span> Download v4.4.1 (.zip)
+          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.5.0.zip" class="btn btn-primary download-main">
+            <span class="icon">&#x2B07;</span> Download v4.5.0 (.zip)
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
@@ -1537,7 +1537,11 @@
           <div class="version-list">
             <div class="version-list-inner">
               <div class="version-item">
-                <div><span class="v-name">v4.4.1</span><span class="v-tag latest">Latest</span> <strong>Fixes a broken page for visitors when Haven runs without a certificate.</strong> With no certificate present Haven falls back to plain HTTP, but it still sent the header telling browsers to load every stylesheet and script over HTTPS, which nothing was answering. Visitors got an unstyled page whose buttons did nothing, while the person hosting saw a perfect page, because browsers exempt localhost from that upgrade. The headers that assume HTTPS are now sent only when Haven is actually serving it. Microphone and camera still need HTTPS on any address other than localhost, so voice needs a certificate or a tunnel.</div>
+                <div><span class="v-name">v4.5.0</span><span class="v-tag latest">Latest</span> <strong>Forums that read as forums, role mentions, and a certificate Haven makes itself.</strong> Forum channels now run newest first with the most recently active topic on top, a Reply button on every topic, and replies that go into the topic's thread. @RoleName pings everyone holding the role, behind the same permission as @everyone, with a per-person switch to opt out. Haven generates its own self-signed certificate when none exists, no OpenSSL needed, so a clean Windows install comes up on HTTPS and voice works; set FORCE_HTTP=true for plain HTTP on purpose. Messages can carry a timestamp that renders in each reader's own timezone, typed with /time or picked from a clock button. Channels can be switched between private and public after creation, the sidebar gets a Channel Scrolling setting, and the image settings live together. Fixed: invite links granting channels the inviter never saw, a deleted account handing back its invite use, nicknames coming back from another device, enlarged images in encrypted DMs, cropped wide thumbnails, and a startup banner that printed YOUR_IP. No migration steps. Thanks to @birdcrazy, @Bo0sted, @bernardokcosta, @delenda-delenda and @Amnibro.</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.5.0.zip">Download &rarr;</a>
+              </div>
+              <div class="version-item">
+                <div><span class="v-name">v4.4.1</span> <strong>Fixes a broken page for visitors when Haven runs without a certificate.</strong> With no certificate present Haven falls back to plain HTTP, but it still sent the header telling browsers to load every stylesheet and script over HTTPS, which nothing was answering. Visitors got an unstyled page whose buttons did nothing, while the person hosting saw a perfect page, because browsers exempt localhost from that upgrade. The headers that assume HTTPS are now sent only when Haven is actually serving it. Microphone and camera still need HTTPS on any address other than localhost, so voice needs a certificate or a tunnel.</div>
                 <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.4.1.zip">Download &rarr;</a>
               </div>
               <div class="version-item">

@@ -162,7 +162,7 @@ Every conversation in Haven happens inside a **channel**. Channels are like room
 
 ### Forum Channels 🗂️
 
-Turn any channel into a forum from **Channel Functions → Forum**, or tick **Forum** when creating it. In a forum channel every message is a topic. Replies go in that message's thread, the topic shows its reply count, and a new reply bumps the topic back to the newest end of the channel, right above the composer, so old topics resurface instead of sinking. Every topic carries a **Reply to this topic** button, and the Reply action on a topic opens its thread rather than quoting it as a new topic. Everything else works as usual: topics can be pinned, reacted to, searched, and moved between channels with Move Messages.
+Turn any channel into a forum from **Channel Functions → Forum**, or tick **Forum** when creating it. In a forum channel every message is a topic, and the feed runs newest first: the most recently active topic sits at the top. Replies go in that message's thread, the topic shows its reply count, and a new reply moves the topic back to the top, so old topics resurface instead of sinking. Inside a topic's thread, replies read top to bottom as usual. Every topic carries a **Reply to this topic** button, and the Reply action on a topic opens its thread rather than quoting it as a new topic. Everything else works as usual: topics can be pinned, reacted to, searched, and moved between channels with Move Messages.
 
 ### Creating Sub-Channels
 
@@ -406,6 +406,8 @@ https://YOUR_PUBLIC_IP:3000
 ```
 
 > ⚠️ **Certificate Warning:** Your friends' browsers will show a security warning because Haven uses a self-signed certificate. This is normal and expected. Tell them to click **"Advanced"** → **"Proceed to site"**. The connection is still encrypted.
+
+> **No OpenSSL? No problem.** If there is no certificate when Haven starts, it makes one itself, so HTTPS works on a clean Windows install. To run plain HTTP on purpose (behind a reverse proxy that handles TLS, or LAN only), set `FORCE_HTTP=true` in your `.env`. Voice, camera and the mobile app need HTTPS on any address other than localhost.
 
 ---
 
@@ -1260,7 +1262,8 @@ be handed to others through the role system, one permission at a time.
   username, get a temporary account with no password, see only the channels you
   whitelist, cannot DM, and are deleted when they disconnect
 - **Uploads & limits**: max upload size (25 MB by default, raise it as far as your
-  disk allows), max message length, per-member storage usage
+  disk allows), attachments per message (10 by default), max message length,
+  per-member storage usage
 - **Auto-cleanup**: automatic deletion of messages past a chosen age
 - **Server updates**: check for a new Haven release and apply it in place. Haven
   takes a pre-update backup and restarts itself
