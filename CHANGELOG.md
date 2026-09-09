@@ -25,6 +25,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   twitch of the mouse opened it again. It now stays while the pointer rests on
   the name and closes when it leaves. Reported by @quakeman00, traced by
   @birdcrazy.
+- **Collapse works on a role card with pending changes (#5607).** In Role
+  Assignment, Collapse only folded a card whose settings were unchanged, so a
+  pending add or an edited level ignored the button. It now folds the editor
+  and keeps the pending change for Save. Reported by @quakeman00.
 
 ## [4.6.0] - 2026-09-09
 
