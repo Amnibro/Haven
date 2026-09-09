@@ -79,6 +79,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   the voice UI check treated a hidden button as a fault and put it back. Both
   now follow the channel: no channel, voice off, or no voice permission means
   no button. Reported by @birdcrazy.
+- **The Android banner stays dismissed (#5594).** Closing it, or ticking "Don't
+  show this again" on the Android promo, now keeps it gone on that account,
+  across reloads and devices. Nothing was writing the permanent flag before, so
+  it came back on every page load. Reported by @Nosirus.
 - **DM PiP header stuck on a grey dot and an initial (#5574).** The avatar and
   status dot in the DM PiP header were drawn once when the panel opened, from
   whatever the online list held at that moment, and never again. They follow

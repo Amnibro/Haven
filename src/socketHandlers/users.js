@@ -570,6 +570,8 @@ module.exports = function register(socket, ctx) {
       // hardened browsers that wipe local storage every session still honour a
       // prior dismissal instead of re-showing the modal on every login.
       'promo_seen_desktop', 'promo_seen_android', 'recovery_notice_seen',
+      // The top-bar Android banner, closed once (#5594).
+      'android_banner_seen',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
     const maxLen = key === 'effects' ? 400 : 50;
