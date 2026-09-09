@@ -966,20 +966,37 @@ _formatContent(str) {
   // ## headings or message IDs (#1234) don't get linkified spuriously.
   if (Array.isArray(this.channels) && this.channels.length) {
     const chanByName = new Map();
+    const nameByCode = new Map();
+    // Names a channel used to have, so a #old-name typed before a rename
+    // still points at it and reads as the name it has now (#5602). A current
+    // name always wins over another channel's former one.
+    const formerByName = new Map();
     for (const c of this.channels) {
       if (c && c.name && c.code && !c.is_dm) {
         chanByName.set(String(c.name).toLowerCase(), c.code);
+        nameByCode.set(c.code, String(c.name));
+        let former = [];
+        try { former = typeof c.former_names === 'string' ? JSON.parse(c.former_names) : (c.former_names || []); } catch { former = []; }
+        if (Array.isArray(former)) for (const old of former) {
+          if (typeof old === 'string' && old) formerByName.set(old.toLowerCase(), c.code);
+        }
       }
     }
     if (chanByName.size > 0) {
+      // Names with spaces are typed as #foo_bar — try the literal form
+      // first, then fall back to a space-substituted lookup so spaced
+      // channel names resolve too.
+      const lookup = (map, lower) => map.get(lower) || map.get(lower.replace(/_/g, ' '));
       html = html.replace(/(?<![\w#&])#([\p{L}\p{N}\p{Emoji_Presentation}_-][\p{L}\p{N}\p{Emoji_Presentation}_-]{0,49})/gu, (match, name) => {
         const lower = name.toLowerCase();
-        // Names with spaces are typed as #foo_bar — try the literal form
-        // first, then fall back to a space-substituted lookup so spaced
-        // channel names resolve too.
-        let code = chanByName.get(lower) || chanByName.get(lower.replace(/_/g, ' '));
-        if (!code) return match;
-        return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(name)}</span>`;
+        let code = lookup(chanByName, lower);
+        let label = name;
+        if (!code) {
+          code = lookup(formerByName, lower);
+          if (!code) return match;
+          label = (nameByCode.get(code) || name).replace(/\s+/g, '_');
+        }
+        return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(label)}</span>`;
       });
     }
   }

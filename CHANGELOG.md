@@ -29,6 +29,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   Assignment, Collapse only folded a card whose settings were unchanged, so a
   pending add or an edited level ignored the button. It now folds the editor
   and keeps the pending change for Save. Reported by @quakeman00.
+- **#channel links survive a rename (#5602).** A `#old-name` typed before a
+  channel was renamed stopped rendering as a link. Channels now remember their
+  former names, so the old reference still opens the channel and reads as its
+  current name. Reported by @birdcrazy.
 
 ## [4.6.0] - 2026-09-09
 
