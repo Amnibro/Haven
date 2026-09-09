@@ -36,6 +36,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Link cards in threads (#5620).** A link posted as a reply in a forum
   topic, or in any other thread, now gets the same preview card as it does in
   the channel. Reported by @quakeman00.
+- **Forum topic cards show the protection shield (#5622).** A protected topic
+  now carries the shield on its card, and its right-click menu offers Unprotect
+  instead of Protect a second time. Reported by @quakeman00.
 
 ## [4.6.0] - 2026-09-09
 

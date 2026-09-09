@@ -4,7 +4,7 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.5.5';
+import SocketMethods   from './modules/app-socket.js?v=4.6.1';
 import UIBindMethods   from './modules/app-ui.js?v=4.6.1';
 import MediaMethods    from './modules/app-media.js?v=4.5.4';
 import ContextMethods  from './modules/app-context.js?v=3.44.6';
@@ -17,7 +17,7 @@ import AdminMethods    from './modules/app-admin.js?v=4.6.1';
 import PlatformMethods from './modules/app-platform.js?v=4.5.1';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
-import ForumMethods    from './modules/app-forum.js?v=4.5.0';
+import ForumMethods    from './modules/app-forum.js?v=4.6.1';
 
 class HavenApp {
   constructor() {

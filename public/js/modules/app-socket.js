@@ -2240,12 +2240,20 @@ _setupSocketListeners() {
         if (msgEl.classList.contains('message-compact') && content && !content.querySelector('.archived-tag')) {
           content.insertAdjacentHTML('afterbegin', `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
         }
+        // A forum topic card shows the shield with its tags (#5622).
+        const forumTags = msgEl.classList.contains('forum-topic') ? msgEl.querySelector('.forum-topic-tags') : null;
+        if (forumTags && !forumTags.querySelector('.archived-tag')) {
+          forumTags.insertAdjacentHTML('afterbegin', `<span class="forum-tag forum-tag-protected archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
+        }
         // Update toolbar: swap archive → unarchive
         const archBtn = msgEl.querySelector('[data-action="archive"]');
         if (archBtn) { archBtn.dataset.action = 'unarchive'; archBtn.title = t('app.messages.unprotect_btn'); }
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.protected_by', { name: data.archivedBy })}`);
     }
+    // Keep the cached topic in step so a re-rendered card keeps its shield.
+    const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+    if (topic) topic.is_archived = 1;
   });
 
   this.socket.on('message-unarchived', (data) => {
@@ -2265,6 +2273,8 @@ _setupSocketListeners() {
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.message_unprotected')}`);
     }
+    const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+    if (topic) topic.is_archived = 0;
   });
 
   // ── Admin moderation events ────────────────────────
