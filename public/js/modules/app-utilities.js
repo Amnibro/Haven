@@ -3848,6 +3848,8 @@ _appendThreadMessage(msg) {
     `;
   }
   container.appendChild(el);
+  // Link cards in threads, the same as in the channel (#5620).
+  this._fetchLinkPreviews(el);
   try { this._decryptE2EImages?.(el); } catch {}
   try { this._decryptE2EFiles?.(el); } catch {}
   try { if (this._isDmContainer(el)) this._enforceDmLinkPolicy?.(el); } catch {}

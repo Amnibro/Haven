@@ -33,6 +33,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   channel was renamed stopped rendering as a link. Channels now remember their
   former names, so the old reference still opens the channel and reads as its
   current name. Reported by @birdcrazy.
+- **Link cards in threads (#5620).** A link posted as a reply in a forum
+  topic, or in any other thread, now gets the same preview card as it does in
+  the channel. Reported by @quakeman00.
 
 ## [4.6.0] - 2026-09-09
 
