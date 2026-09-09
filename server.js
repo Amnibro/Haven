@@ -4287,6 +4287,8 @@ function detectInstallMethod() {
   const inDocker = fs.existsSync('/.dockerenv') || process.env.HAVEN_IN_DOCKER === 'true';
   if (inDocker) return 'docker';
   if (fs.existsSync(path.join(cwd, '.git'))) return 'git';
+  // Haven Desktop sets HAVEN_DESKTOP when it hosts the server; it restarts the
+  // process after an update, so the git path stays runnable there.
   if (process.platform === 'win32' && fs.existsSync(path.join(cwd, 'Install Haven.bat'))) return 'windows-installer';
   if (fs.existsSync(path.join(cwd, 'install.sh'))) return 'shell-installer';
   return 'manual';
@@ -4304,15 +4306,20 @@ function getUpdateInstructions(method) {
       command: 'git pull --ff-only && npm install --omit=dev',
       message: 'Pull latest from GitHub and reinstall dependencies. The server will exit after the update so your supervisor (systemd / Docker / installer service) restarts it on the new code.',
     };
+    // The zip installs have no update mode: "Install Haven.bat" and install.sh are
+    // first-time setup. Running them again from here opened the GUI installer over a
+    // live server, re-ran npm install and let the admin password be reset, and left
+    // the server exited with nothing to restart it (#5267 follow-up). Until the
+    // installer can update in place, hand the admin the manual steps instead.
     case 'windows-installer': return {
-      runnable: true,
-      command: '"Install Haven.bat" /update',
-      message: 'Re-run the Windows installer in update mode. The server will exit so the installer can replace files and restart the service.',
+      runnable: false,
+      command: 'Download the latest release zip, unzip it over this folder, then restart Haven (or quit and relaunch Haven Desktop if it hosts the server).',
+      message: 'Zip install. Do not run "Install Haven.bat" again: it is the first-time setup, not an updater. Your data stays in %APPDATA%\\Haven.',
     };
     case 'shell-installer': return {
-      runnable: true,
-      command: 'bash install.sh --update',
-      message: 'Re-run the install script in update mode. The server will exit so the installer can refresh files and restart the service.',
+      runnable: false,
+      command: 'Download the latest release zip, unzip it over this folder, then restart Haven (or quit and relaunch Haven Desktop if it hosts the server).',
+      message: 'Zip install. Do not run install.sh again: it is the first-time setup, not an updater. Your data stays in ~/.haven.',
     };
     default: return {
       runnable: false,
