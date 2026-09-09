@@ -11,7 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.6.0] - 2026-09-09
+
+Forums turn into proper forums, with topic cards, a gallery view, tags and a New
+Post button. Chat images now load only when they come near the screen, which
+cuts the desktop app's memory on a busy channel by a large margin. Channels can
+be marked NSFW and hidden, Settings has a search box, members can be kicked while
+they are offline, and the website has been rebuilt from scratch. No migration
+steps; the new columns are added on first start.
 
 ### Added
 - **Forums read like forums (#5595).** A forum channel now opens as a list of
