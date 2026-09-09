@@ -73,6 +73,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   Dispencer2, fixed by @Amnibro.
 
 ### Fixed
+- **Join Voice only shows where you can join (#5598).** The header and sidebar
+  buttons stayed up on the welcome screen and in channels with voice turned
+  off, and came back a few seconds after switching to such a channel because
+  the voice UI check treated a hidden button as a fault and put it back. Both
+  now follow the channel: no channel, voice off, or no voice permission means
+  no button. Reported by @birdcrazy.
 - **DM PiP header stuck on a grey dot and an initial (#5574).** The avatar and
   status dot in the DM PiP header were drawn once when the panel opened, from
   whatever the online list held at that moment, and never again. They follow

@@ -62,30 +62,30 @@ async switchChannel(code) {
     this._updateVoiceButtons(true);
     // If viewing a different channel from the one we're in voice in, show "Join Voice" instead of "Voice Active"
     if (this.voice.currentChannel !== code) {
-      const _canVoice = this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice');
       const indic = document.getElementById('voice-active-indicator');
       if (indic) indic.style.display = 'none';
+      const _showJoin = this._voiceJoinAvailable();
       const _scJoinBtn = document.getElementById('voice-join-btn');
-      if (_scJoinBtn) _scJoinBtn.style.display = (channel && channel.voice_enabled === 0) || !_canVoice ? 'none' : 'inline-flex';
+      if (_scJoinBtn) _scJoinBtn.style.display = _showJoin ? 'inline-flex' : 'none';
       const mobileJoin = document.getElementById('voice-join-mobile');
       if (mobileJoin) {
-        if ((channel && channel.voice_enabled === 0) || !_canVoice) mobileJoin.style.setProperty('display', 'none', 'important');
-        else mobileJoin.style.removeProperty('display');
+        if (_showJoin) mobileJoin.style.removeProperty('display');
+        else mobileJoin.style.setProperty('display', 'none', 'important');
       }
     }
   } else {
     // Show just the join button (not the indicator), but hide it for text-only channels or users without voice permission
+    const _showJoin = this._voiceJoinAvailable();
     const _scJoinBtn = document.getElementById('voice-join-btn');
-    const _canVoice = this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice');
-    if (_scJoinBtn) _scJoinBtn.style.display = (channel && channel.voice_enabled === 0) || !_canVoice ? 'none' : 'inline-flex';
+    if (_scJoinBtn) _scJoinBtn.style.display = _showJoin ? 'inline-flex' : 'none';
     const indic = document.getElementById('voice-active-indicator');
     if (indic) indic.style.display = 'none';
     const vp = document.getElementById('voice-panel');
     if (vp) vp.style.display = 'none';
     const mobileJoin = document.getElementById('voice-join-mobile');
     if (mobileJoin) {
-      if ((channel && channel.voice_enabled === 0) || !_canVoice) mobileJoin.style.setProperty('display', 'none', 'important');
-      else mobileJoin.style.removeProperty('display');
+      if (_showJoin) mobileJoin.style.removeProperty('display');
+      else mobileJoin.style.setProperty('display', 'none', 'important');
     }
   }
   document.getElementById('search-toggle-btn').style.display = '';
