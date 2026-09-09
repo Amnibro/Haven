@@ -37,7 +37,7 @@ const { clearChannelRuntimeState } = require('../channelRotation');
 module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
-    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
+    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
     applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
     rotateChannelCode, botAudioManager
@@ -118,6 +118,8 @@ module.exports = function register(socket, ctx) {
       (room) => socket.join(room)
     );
     socket.emit('channels-list', channels);
+    // Now in every DM room: let partners know this user is here (#5574).
+    if (emitDmPresence) emitDmPresence(socket.user.id);
   });
 
   // ── Create channel (permission-based) ─────────────────

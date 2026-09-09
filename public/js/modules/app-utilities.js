@@ -3208,6 +3208,9 @@ _openDMPiP(code) {
   if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${t('dm_runtime.self_title', { name: partnerName })}` : `@ ${partnerName}`;
 
   this._refreshDMPipHeader(ch, partnerName);
+  // Ask for the DM's own online list so the header is right straight away,
+  // not only after the next presence change (#5574).
+  this.socket.emit('request-online-users', { code });
 
   // Banner background: use server banner as a subtle backdrop
   const bannerEl = document.getElementById('dm-pip-banner');
@@ -3239,8 +3242,13 @@ _refreshDMPipHeader(ch, partnerName) {
   const avatarWrap = document.getElementById('dm-pip-avatar-wrap');
   if (avatarWrap) {
     const partnerId = ch.dm_target && ch.dm_target.id;
-    const onlinePartner = partnerId && this._lastOnlineUsers
-      ? this._lastOnlineUsers.find(u => u.id === partnerId)
+    // The DM's own list first: the list for the channel on screen only has
+    // the partner in it when they happen to share that channel (#5574).
+    const dmList = this._onlineByChannel && this._onlineByChannel.get(ch.code);
+    const onlinePartner = partnerId
+      ? ((dmList && dmList.find(u => u.id === partnerId))
+        || (this._lastOnlineUsers ? this._lastOnlineUsers.find(u => u.id === partnerId) : null)
+        || null)
       : null;
     const avatarUrl = (onlinePartner && onlinePartner.avatar) || (ch.dm_target && ch.dm_target.avatar);
     const shape = (onlinePartner && onlinePartner.avatarShape)

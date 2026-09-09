@@ -39,6 +39,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Forum topic cards show the protection shield (#5622).** A protected topic
   now carries the shield on its card, and its right-click menu offers Unprotect
   instead of Protect a second time. Reported by @quakeman00.
+- **The DM PiP shows the partner's avatar and live status (#5574, #5600).**
+  The PiP header only knew about people in whatever channel was on screen, so
+  a partner who was not in that channel showed as a grey dot with an initial
+  until the DM was opened full screen. The DM now carries its partner's avatar,
+  and presence for a DM is refreshed whenever either side connects, disconnects
+  or changes status, with the DM not on screen. Reported by @birdcrazy and
+  @TianLaiEric.
 
 ## [4.6.0] - 2026-09-09
 

@@ -1335,6 +1335,12 @@ _setupSocketListeners() {
   });
 
   this.socket.on('online-users', (data) => {
+    // Every list is kept by channel (the socket sits in every room it
+    // belongs to), so a DM PiP can read its own partner's presence instead
+    // of the list for whatever channel is on screen (#5574).
+    if (!this._onlineByChannel) this._onlineByChannel = new Map();
+    this._onlineByChannel.set(data.channelCode, data.users || []);
+    if (this._activeDMPip && data.channelCode === this._activeDMPip) this._refreshDMPipHeader?.();
     if (data.channelCode === this.currentChannel) {
       // In 'all' mode the list includes offline members too; only count truly online users
       const trueOnlineCount = data.visibilityMode === 'all'

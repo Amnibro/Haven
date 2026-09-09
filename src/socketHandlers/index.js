@@ -558,7 +558,9 @@ function setupSocketHandlers(io, db, opts = {}) {
 
         if (ch.is_dm) {
           const otherUser = db.prepare(`
-            SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u
+            SELECT u.id, COALESCE(u.display_name, u.username) as username,
+                   u.avatar, u.avatar_shape AS avatarShape
+            FROM users u
             JOIN channel_members cm ON u.id = cm.user_id
             WHERE cm.channel_id = ? AND u.id != ?
           `).get(ch.id, userId);
@@ -567,7 +569,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           } else {
             // Self-DM: only one channel_members row, no "other" user. Use self as the partner.
             const self = db.prepare(
-              'SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?'
+              'SELECT id, COALESCE(display_name, username) as username, avatar, avatar_shape AS avatarShape FROM users WHERE id = ?'
             ).get(userId);
             ch.dm_target = self || null;
             ch.is_self_dm = 1;
@@ -790,6 +792,21 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // ── emitOnlineUsers ─────────────────────────────────────
+  // A DM room only got a fresh online list while somebody was looking at it,
+  // so a DM PiP opened from another channel showed its partner as away and
+  // never caught them coming online (#5574). Every presence change now also
+  // refreshes the user's DM rooms. A DM has two members, so each list is tiny.
+  function emitDmPresence(userId) {
+    try {
+      const rows = db.prepare(`
+        SELECT c.code FROM channels c
+        JOIN channel_members cm ON cm.channel_id = c.id
+        WHERE c.is_dm = 1 AND cm.user_id = ?
+      `).all(userId);
+      for (const r of rows) emitOnlineUsers(r.code);
+    } catch { /* presence is best-effort */ }
+  }
+
   function emitOnlineUsers(code) {
     const room = channelUsers.get(code);
 
@@ -2188,7 +2205,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
       userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
       // Broadcast helpers
-      broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers,
+      broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers, emitDmPresence,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode,
       // Push / webhooks
@@ -2317,6 +2334,14 @@ function setupSocketHandlers(io, db, opts = {}) {
       for (const code of affectedChannels) {
         emitOnlineUsers(code);
       }
+
+      // Gone for good (no other tab or device still connected): tell DM
+      // partners, whether or not either side was looking at the DM (#5574).
+      let stillConnected = false;
+      for (const [, s] of io.of('/').sockets) {
+        if (s.user && s.user.id === socket.user.id && s.id !== socket.id) { stillConnected = true; break; }
+      }
+      if (!stillConnected) emitDmPresence(socket.user.id);
 
       for (const code of Array.from(voiceUsers.keys())) {
         const room = voiceUsers.get(code);
