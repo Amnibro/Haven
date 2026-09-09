@@ -200,6 +200,12 @@
   .gallery figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
   @media (max-width: 700px) { .gallery { grid-template-columns: 1fr; } }
 
+  /* ── Lightbox ────────────────────────────────────── */
+  .zoomable { cursor: zoom-in; }
+  .lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(10, 8, 16, 0.92); display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out; }
+  .lightbox[hidden] { display: none; }
+  .lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+
   /* ── Facts ───────────────────────────────────────── */
   .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; border-top: 1px solid var(--rule-strong); border-bottom: 1px solid var(--rule-strong); }
   .facts div { padding: 18px 16px 18px 0; border-bottom: 1px solid var(--rule); }
@@ -294,8 +300,7 @@
         </div>
       </div>
       <figure class="shot">
-        <img src="img/haven-4-5-default.jpg" width="1600" height="760" alt="Haven's default theme with a voice call going, channels on the left and the member list on the right">
-        <figcaption>The default theme, with a voice call going.</figcaption>
+        <img class="zoomable" src="img/haven-4-5-default.jpg" width="1600" height="760" alt="Haven's default theme with a voice call going, channels on the left and the member list on the right">
       </figure>
     </div>
   </section>
@@ -309,9 +314,11 @@
           </div>
           <p>Haven works like a Discord server, but you host it yourself. Download the zip, run it, and it gives you a link your friends can use from a browser, the desktop app or the Android app.</p>
           <p>There's no company in the middle. No account with us, no email or phone number, and nothing to pay for. Your messages, files and voice calls stay on your own server.</p>
+          <p>Haven has been in development since February 2026. It's a spare-time project and it'll always be free.</p>
+          <p>Many helpful people with a shared passion for free, unfiltered and private chat have come together to improve it. Every change is public, with a <a href="https://github.com/ancsemi/Haven/blob/main/CHANGELOG.md">changelog</a> updated every release.</p>
         </div>
         <figure class="fig">
-          <img src="img/haven-phone-welcome.jpg" width="480" height="1040" alt="Haven's welcome screen in a phone browser">
+          <img class="zoomable" src="img/haven-phone-welcome.jpg" width="480" height="1040" alt="Haven's welcome screen in a phone browser">
           <figcaption>Joining from a phone browser. No app needed.</figcaption>
         </figure>
       </div>
@@ -411,18 +418,6 @@
         <li><strong>Send the link to your friends.</strong> They can use a browser, the desktop app or the Android app.</li>
       </ol>
       <p class="prose muted" style="margin-top: 26px;">To reach friends outside your home network you'll need to open a port or use a tunnel. The guide covers both, and there's a one-click tunnel in the admin settings.</p>
-    </div>
-  </section>
-
-  <section id="who">
-    <div class="wrap">
-      <div class="prose">
-        <div class="section-head">
-          <h2>About the project</h2>
-        </div>
-        <p>Haven has been in development since February 2026. It's a spare-time project and it'll always be free.</p>
-        <p>Many helpful people with a shared passion for free, unfiltered and private chat have come together to improve it. Every change is public, with a <a href="https://github.com/ancsemi/Haven/blob/main/CHANGELOG.md">changelog</a> updated every release.</p>
-      </div>
     </div>
   </section>
 
@@ -540,14 +535,34 @@
         <h2>More screenshots</h2>
       </div>
       <div class="gallery">
-        <figure><img src="img/haven-screen-share.jpg" width="1200" height="591" alt="Screen sharing with voice chat and more than one stream"><figcaption>Screen sharing, with a voice call going.</figcaption></figure>
-        <figure><img src="img/haven-theme-chat.jpg" width="1200" height="593" alt="A chat channel in one of the built-in themes"><figcaption>One of the built-in themes.</figcaption></figure>
-        <figure><img src="img/haven-games.jpg" width="1200" height="568" alt="A channel in another theme with a video playing"><figcaption>Another theme, with a video playing.</figcaption></figure>
-        <figure><img src="img/haven-login.jpg" width="1200" height="593" alt="The login screen with the theme picker"><figcaption>The login screen, with the theme picker.</figcaption></figure>
+        <figure><img class="zoomable" src="img/haven-screen-share.jpg" width="1200" height="591" alt="Screen sharing with voice chat and more than one stream"></figure>
+        <figure><img class="zoomable" src="img/haven-theme-chat.jpg" width="1200" height="593" alt="A chat channel in one of the built-in themes"></figure>
+        <figure><img class="zoomable" src="img/haven-games.jpg" width="1200" height="568" alt="A channel in another theme with a video playing"></figure>
+        <figure><img class="zoomable" src="img/haven-login.jpg" width="1200" height="593" alt="The login screen with the theme picker"></figure>
       </div>
     </div>
   </section>
 </main>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" tabindex="-1" hidden><img alt=""></div>
+
+<script>
+// Screenshots open full size; click anywhere or press Escape to close.
+(() => {
+  const box = document.getElementById('lightbox');
+  if (!box) return;
+  const big = box.querySelector('img');
+  const open = (img) => { big.src = img.currentSrc || img.src; big.alt = img.alt; box.hidden = false; document.body.style.overflow = 'hidden'; box.focus(); };
+  const close = () => { box.hidden = true; big.removeAttribute('src'); document.body.style.overflow = ''; };
+  document.querySelectorAll('img.zoomable').forEach((img) => {
+    img.tabIndex = 0; img.setAttribute('role', 'button'); img.setAttribute('aria-label', 'Enlarge screenshot');
+    img.addEventListener('click', () => open(img));
+    img.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(img); } });
+  });
+  box.addEventListener('click', close);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) close(); });
+})();
+</script>
 
 <script>
 // "Try it now" in the bar: back to the top, then light up the community server button.
