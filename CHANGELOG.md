@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Discord emotes show as pictures on both sides of the bridge.** A custom
+  emote relayed from Discord arrived as its bare `:name:` shortcode, and one
+  typed in Haven so it would show on the Discord side stayed as text here.
+  Haven now draws `<:name:id>` inline, fetching the picture once through the
+  server so nobody's browser talks to Discord's CDN, and a Haven `:name:` goes
+  out as the paired server's own emote of that name. Reported by Raidenphantom.
+
 ## [4.6.0] - 2026-09-09
 
 Forums turn into proper forums, with topic cards, a gallery view, tags and a New

@@ -386,6 +386,9 @@ _highlightSearch(escapedHtml, query) {
 // Capped at 27 to avoid jumbo-sizing a wall of emoji.
 _isEmojiOnly(str) {
   if (!str || !str.trim()) return false;
+  // A Discord emote token counts as one emoji, like a resolved :name: does.
+  const discordEmotes = (str.match(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g) || []).length;
+  str = str.replace(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g, ' ');
   const customMatches = str.match(/:([a-zA-Z0-9_-]+):/g) || [];
   // Only expand custom tokens that actually exist as loaded emojis
   const resolvedCustom = customMatches.filter(m => {
@@ -404,8 +407,19 @@ _isEmojiOnly(str) {
   if (s.trim().length > 0) return false;
   let unicodeCount = 0;
   try { unicodeCount = (str.match(/[\p{Extended_Pictographic}]/gu) || []).length; } catch {}
-  const total = resolvedCustom.length + unicodeCount;
+  const total = resolvedCustom.length + unicodeCount + discordEmotes;
   return total >= 1 && total <= 27;
+},
+
+// Markup for one Discord emote token. Haven's own emoji of that name is
+// preferred so a server carrying the same set shows its copy; the fallback is
+// the server-side emote cache, and a failed load turns back into the :name:
+// text (the capture-phase error listener in app-ui.js does that).
+_discordEmoteHtml(name, id, animated) {
+  const label = this._escapeHtml(`:${name}:`);
+  const own = this._findNamedEmoji(name);
+  if (own) return `<img src="${this._escapeHtml(own.url)}" alt="${label}" title="${label}" class="custom-emoji">`;
+  return `<img src="/api/ferry/emote/${id}.${animated ? 'gif' : 'png'}" alt="${label}" title="${label}" class="custom-emoji discord-emote">`;
 },
 
 // Resolve a `:name:` shortcode to an image emoji — checks the bundled
@@ -788,7 +802,21 @@ _formatContent(str) {
     return `\x00TIMESTAMP_${idx}\x00`;
   });
 
-  let html = this._escapeHtml(withTimestamps);
+  // ── Discord custom emotes: <:name:id> / <a:name:id> ──
+  // Relayed by Ferry, or typed by someone who wants the emote to show on the
+  // Discord side of a bridge. Pulled out before escaping like the timestamps,
+  // and before the :name: pass below so the shortcode inside the token is not
+  // resolved on its own. A Haven emoji of the same name wins; otherwise the
+  // picture comes from the server's emote cache (/api/ferry/emote/), which
+  // answers 404 on a server without the bridge, and the :name: text stays.
+  const emotes = [];
+  const withEmotes = withTimestamps.replace(/<(a?):([A-Za-z0-9_]{2,32}):(\d{15,25})>/g, (full, anim, name, id) => {
+    const idx = emotes.length;
+    emotes.push(this._discordEmoteHtml(name, id, !!anim));
+    return `\x00DEMOTE_${idx}\x00`;
+  });
+
+  let html = this._escapeHtml(withEmotes);
 
   // ── Markdown images & links (extract before auto-linking) ──
   const mdLinks = [];
@@ -1145,6 +1173,11 @@ _formatContent(str) {
   // be read as a replacement pattern.
   timestamps.forEach((el, idx) => {
     html = html.replace(`\x00TIMESTAMP_${idx}\x00`, () => el);
+  });
+
+  // ── Restore Discord emotes ──
+  emotes.forEach((el, idx) => {
+    html = html.replace(`\x00DEMOTE_${idx}\x00`, () => el);
   });
 
   if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;
