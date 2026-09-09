@@ -73,6 +73,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   Dispencer2, fixed by @Amnibro.
 
 ### Fixed
+- **Members can be kicked while they are offline.** Kick refused anyone who was
+  not connected to the channel at that moment ("use ban instead"), so a member
+  who had gone offline could not be removed. Kicking is a membership change, so
+  it now works on anyone who is a member, online or not; the kicked notice and
+  the online list only update when there is a live connection to tell. The
+  confirmation is a green toast now instead of a red one. Reported by
+  Dispencer2.
 - **Join Voice only shows where you can join (#5598).** The header and sidebar
   buttons stayed up on the welcome screen and in channels with voice turned
   off, and came back a few seconds after switching to such a channel because
