@@ -20,6 +20,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   Haven now draws `<:name:id>` inline, fetching the picture once through the
   server so nobody's browser talks to Discord's CDN, and a Haven `:name:` goes
   out as the paired server's own emote of that name. Reported by Raidenphantom.
+- **The hover profile card stays put (#5608).** It closed itself three
+  seconds after opening even with the mouse still on the name, and the next
+  twitch of the mouse opened it again. It now stays while the pointer rests on
+  the name and closes when it leaves. Reported by @quakeman00, traced by
+  @birdcrazy.
 
 ## [4.6.0] - 2026-09-09
 
