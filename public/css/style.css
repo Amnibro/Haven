@@ -3826,6 +3826,9 @@ html.rgb-cycling *::after {
   border: none;
   border-radius: 0.375rem;
   padding: 0 0.625rem;
+  /* Same height as a one-line input so the two line up in every theme (#5600). */
+  height: 2.125rem;
+  flex-shrink: 0;
   cursor: pointer;
   display: flex;
   align-items: center;

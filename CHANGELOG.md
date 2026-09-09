@@ -46,6 +46,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   and presence for a DM is refreshed whenever either side connects, disconnects
   or changes status, with the DM not on screen. Reported by @birdcrazy and
   @TianLaiEric.
+- **The DM PiP send button lines up with the reply box (#5600).** It now has
+  the same height as a one-line reply box in every theme. Reported by
+  @TianLaiEric.
 
 ## [4.6.0] - 2026-09-09
 
