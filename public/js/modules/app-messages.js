@@ -328,6 +328,12 @@ _renderMessages(messages, lastReadMessageId) {
   }
   const container = document.getElementById('messages');
   container.innerHTML = '';
+  container.classList.remove('forum-view', 'forum-gallery');
+  this._forumActive = false;
+  if (this._isForumChannel && this._isForumChannel(this.currentChannel)) {
+    this._renderForum(messages);
+    return;
+  }
   // A forum feed runs newest first: the most recently active topic sits at
   // the top, where a forum reader expects it. (#144)
   const forumFeed = this._isForumFeed();
@@ -697,12 +703,13 @@ _appendOlderForum(messages) {
 _bumpForumTopic(parentId) {
   const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
   if (!ch || !ch.is_forum) return;
+  if (this._forumActive && this._forumBump) { this._forumBump(parentId); return; }
   const container = document.getElementById('messages');
   if (!container) return;
   const el = container.querySelector(`[data-msg-id="${parentId}"]`);
   if (!el) {
     if (!this._loadingHistory && !this._historyBefore && !this._historyAfter) {
-      this.socket.emit('get-messages', { code: this.currentChannel });
+      this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
     }
     return;
   }
@@ -720,6 +727,7 @@ _bumpForumTopic(parentId) {
 
 _appendMessage(message, forceScroll = false) {
   const container = document.getElementById('messages');
+  if (this._forumActive && this._forumInsertTopic) { this._forumInsertTopic(message); return; }
   const lastMsg = container.lastElementChild;
 
   // Track persona name for @PersonaName mention resolution. (#5349)
@@ -1652,7 +1660,9 @@ _fetchLinkPreviews(containerEl) {
   if (!/\bembed-size-/.test(document.body.className)) this._applyEmbedSize(this._embedSize());
   const PREVIEW_CLIENT_TTL = 10 * 60 * 1000;
 
-  const links = containerEl.querySelectorAll('.message-content a[href]');
+  // Thread replies keep their body in .thread-msg-content, and until now no
+  // preview card was ever drawn there (#5620).
+  const links = containerEl.querySelectorAll('.message-content a[href], .thread-msg-content a[href]');
   const seen = new Set();
   links.forEach(link => {
     const url = link.href;
@@ -1672,7 +1682,7 @@ _fetchLinkPreviews(containerEl) {
     // ── Inline YouTube embed (wrapped in the shared embed chrome) ──
     const ytVideoId = this._extractYouTubeVideoId(url);
     if (ytVideoId) {
-      const msgContent = link.closest('.message-content');
+      const msgContent = link.closest('.message-content, .thread-msg-content');
       if (!msgContent) return;
       if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
       const ytCollapsed = this._collapsedEmbeds.has(url);
@@ -1731,7 +1741,7 @@ _fetchLinkPreviews(containerEl) {
     dataPromise
       .then(data => {
         if (!data || (!data.title && !data.description && !data.text)) return;
-        const msgContent = link.closest('.message-content');
+        const msgContent = link.closest('.message-content, .thread-msg-content');
         if (!msgContent) return;
 
         // Don't add duplicate previews
