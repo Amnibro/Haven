@@ -52,7 +52,7 @@ _queueThreadFiles(files) {
 
 _queueImage(file) {
   if (!file || !file.type.startsWith('image/')) return;
-  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const _maxMb = this._uploadCapMb();
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('media.image_too_large', { maxMb: _maxMb }), 'error');
   }
@@ -195,7 +195,7 @@ _queueGeneralFile(file) {
   if (_ch && _ch.media_enabled === 0) {
     return this._showToast(t('media.uploads_disabled'), 'error');
   }
-  const maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const maxMb = this._uploadCapMb();
   if (file.size > maxMb * 1024 * 1024) {
     return this._showToast(t('media.file_too_large', { maxMb }), 'error');
   }
@@ -226,7 +226,7 @@ async _flushFileQueue() {
 
 _queueImageForPiP(file, targetCode) {
   if (!file || !file.type.startsWith('image/')) return;
-  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const _maxMb = this._uploadCapMb();
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('media.image_too_large', { maxMb: _maxMb }), 'error');
   }
@@ -304,7 +304,7 @@ async _flushPiPImageQueue(bundled = false) {
 // the reply is actually sent, matching the main and DM composers.
 _queueThreadFile(file) {
   if (!file) return;
-  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const _maxMb = this._uploadCapMb();
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('media.file_too_large', { maxMb: _maxMb }), 'error');
   }

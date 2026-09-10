@@ -22,6 +22,35 @@ away. The homepage has full-size screenshots and a gallery. No migration
 steps; the one new column is added on first start.
 
 ### Added
+## [Unreleased]
+
+### Added
+- **Roles start from a template.** New Role in Role Management opens a picker:
+  Moderator, Helper, Trusted member, Event host, Media poster, Group, or Blank.
+  Each comes with a level, a colour and a permission set already ticked, and
+  everything stays editable afterwards. Requested by Dispencer2.
+- **Required roles on a channel (any of them, or all of them).** Channel
+  Functions has a Required roles row. Pick roles and choose Any or All: only
+  people holding them can see or open the channel, on top of membership, so a
+  channel can ask for "Verified AND Adult" instead of just one role. Losing a
+  role closes the channel live; admins are never gated; deleting a role drops
+  it from every gate. Requested by Dispencer2.
+- **Per-role upload cap.** A role can carry its own Upload cap (MB). The
+  server-wide Max Upload Size stays the floor for everyone, a role raises it for
+  its holders, and the highest cap among someone's roles wins. The composer's
+  size check and the upload routes agree on the same number. Requested by
+  Dispencer2.
+- **Channel templates.** The Create Channel section has a template picker:
+  Chat, Announcements (read-only, announcement mode, everyone added), Forum,
+  Private team, Event (temporary, 24 h), Slow chat, Text only. Any channel can
+  be kept as a template from Channel Functions, Save as template, for the whole
+  server. Requested by Dispencer2.
+- **Self-assign roles from a role menu.** Post a role menu from Settings, Roles:
+  a message that lists roles with an emoji each. Reacting with the emoji, or
+  clicking the button under the message, gives the reader the role, and undoing
+  either takes it back. Level-0 Groups are made for this. Requested by
+  Dispencer2.
+
 - **The topic bar folds away (#5625).** A small arrow at its right folds the
   bar to a thin strip, so "Click to set a topic" stops taking a line for
   people who never will. It is per browser, and the fold survives channel

@@ -3313,7 +3313,7 @@ _uploadGeneralFile(file, targetCode) {
   if (_ugCh && _ugCh.media_enabled === 0) {
     return this._showToast(t('media.uploads_disabled'), 'error');
   }
-  const maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const maxMb = this._uploadCapMb();
   if (file.size > maxMb * 1024 * 1024) {
     this._showToast(t('media.file_too_large', { maxMb }), 'error');
     return;
@@ -4160,19 +4160,10 @@ _initRoleManagement() {
   document.getElementById('close-role-modal-btn')?.addEventListener('click', () => {
     document.getElementById('role-modal').style.display = 'none';
   });
-  document.getElementById('create-role-btn')?.addEventListener('click', async () => {
-    const name = await this._showPromptModal(t('settings.admin.roles_create_title'), t('settings.admin.roles_create_hint'));
-    if (!name || !name.trim()) return;
-    const levelStr = await this._showPromptModal(t('settings.admin.roles_level_title'), t('settings.admin.roles_level_hint'), '25');
-    if (levelStr === null) return;
-    const level = parseInt(levelStr, 10);
-    if (isNaN(level) || level < 0 || level > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
-    this._roleEmit('create-role', { name: name.trim(), level, color: '#aaaaaa' }, (res) => {
-      if (res.error) { this._showToast(res.error, 'error'); return; }
-      this._showToast(t('settings.admin.roles_created'), 'success');
-      this._loadRoles();
-    });
-  });
+  // New roles start from a template (moderator, helper, group...) so the
+  // permission set does not have to be ticked box by box every time.
+  document.getElementById('create-role-btn')?.addEventListener('click', () => this._openRoleTemplatePicker());
+  document.getElementById('post-role-menu-btn')?.addEventListener('click', () => this._openRoleMenuBuilder());
 
   // Assign role modal handlers
   document.getElementById('cancel-assign-role-btn')?.addEventListener('click', () => {
@@ -4524,6 +4515,9 @@ _renderRoleDetail() {
       <input type="number" class="settings-number-input" id="role-edit-level" value="${role.level}" min="0" max="99">
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.color')}</label>
       <input type="color" id="role-edit-color" value="${role.color || '#aaaaaa'}" style="width:50px;height:30px;border:none;cursor:pointer">
+      <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.upload_cap')}</label>
+      <input type="number" class="settings-number-input" id="role-edit-upload-mb" value="${role.max_upload_mb || ''}" min="1" max="102400" placeholder="${this._escapeHtml(t('settings.admin.role_form.upload_cap_placeholder', { mb: parseInt(this.serverSettings?.max_upload_mb, 10) || 25 }))}">
+      <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.upload_cap_hint')}</small>
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.icon')}</label>
       <div class="role-icon-upload-row">
         ${role.icon ? `<img class="role-icon-preview" src="${this._escapeHtml(role.icon)}" alt="${t('settings.admin.role_form.icon')}">` : `<div class="role-icon-preview" style="display:flex;align-items:center;justify-content:center;font-size:0.6875rem;color:var(--text-muted)">${t('settings.admin.role_form.icon_none')}</div>`}
@@ -4665,6 +4659,7 @@ _renderRoleDetail() {
       icon: this._pendingRoleIcon !== undefined ? this._pendingRoleIcon : role.icon,
       autoAssign: document.getElementById('role-edit-auto-assign').checked,
       linkChannelAccess: linkEnabled,
+      maxUploadMb: parseInt(document.getElementById('role-edit-upload-mb')?.value, 10) || null,
       permissions: perms
     }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); freshSaveBtn.disabled = false; freshSaveBtn.textContent = t('settings.admin.roles_save'); return; }
@@ -4738,6 +4733,7 @@ _renderRoleDetail() {
       color: role.color || '#aaaaaa',
       icon: role.icon || null,
       autoAssign: false,
+      maxUploadMb: role.max_upload_mb || null,
       permissions: role.permissions || []
     }, (res) => {
       if (res && res.error) { this._showToast(res.error, 'error'); return; }

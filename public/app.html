@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.6.1">
+  <link rel="stylesheet" href="/css/style.css?v=4.6.2">
   <script src="/js/theme-compat.js?v=4.1.1"></script>
   <script src="/js/theme-init.js?v=4.1.3"></script>
 </head>
@@ -97,6 +97,10 @@
               <span class="section-label-text" style="flex:1" data-i18n="app.sidebar.create_channel">Create Channel</span>
             </h5>
             <div class="collapsible-section-body" id="create-section-body">
+              <div class="input-row" id="new-channel-template-row" style="gap:6px;margin-bottom:4px">
+                <select id="new-channel-template" data-i18n-title="app.sidebar.templates.hint" title="Start from a template: it ticks the boxes and sets topic, read-only, announcement and slow mode for you" style="flex:1;font-size:0.8rem"></select>
+                <button id="new-channel-template-del" class="btn-sm" type="button" data-i18n-title="app.sidebar.templates.delete_title" title="Delete this saved template" style="display:none">🗑</button>
+              </div>
               <div class="input-row">
                 <input type="text" id="new-channel-name"
                        data-i18n-placeholder="app.sidebar.channel_name_placeholder" placeholder="Channel name..." maxlength="50">
@@ -2488,6 +2492,7 @@
           <small class="settings-hint" data-i18n="settings.admin.roles_hint">Create and manage roles. Assign roles to users from the user list context menu.</small>
           <div style="margin-top:8px;display:flex;gap:6px">
             <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Manage Roles</span></button>
+            <button class="btn-sm" id="post-role-menu-btn" data-i18n-title="settings.admin.role_menu.hint" title="Post a message people react to, or click, to give themselves a role">🎭 <span data-i18n="settings.admin.role_menu.post">Post a role menu</span></button>
             <button class="btn-sm" id="reset-roles-btn" data-i18n-title="settings.admin.reset_roles_title" title="Reset all roles to deployment defaults">🔄 <span data-i18n="settings.admin.reset_roles_btn">Reset to Default</span></button>
           </div>
           <div class="settings-group" style="margin-top:12px">
@@ -3776,6 +3781,14 @@
         <span class="cfn-label">🔒 <span data-i18n="channel_functions.private">Private</span></span>
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
       </div>
+      <div class="cfn-row" data-fn="role-gate" data-i18n-title="channel_functions.role_gate_hint" title="Only people holding the chosen roles can open this channel: any one of them, or all of them">
+        <span class="cfn-label">🎟️ <span data-i18n="channel_functions.role_gate">Required roles</span></span>
+        <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
+      </div>
+      <div class="cfn-row" data-fn="save-template" data-i18n-title="channel_functions.save_template_hint" title="Keep this channel's setup as a template in the Create Channel picker">
+        <span class="cfn-label">💾 <span data-i18n="channel_functions.save_template">Save as template</span></span>
+        <span class="cfn-badge cfn-off">→</span>
+      </div>
       <div class="cfn-divider"></div>
       <div class="cfn-row" data-fn="slow-mode" data-i18n-title="channel_functions.slow_mode_hint" title="Require a cooldown between messages (0 = off)">
         <span class="cfn-label">🐢 <span data-i18n="channel_functions.slow_mode">Slow Mode</span></span>
@@ -4374,7 +4387,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.6.1"></script>
+  <script type="module" src="/js/app.js?v=4.6.2"></script>
   <script src="/js/plugin-loader.js?v=4.1.2"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
