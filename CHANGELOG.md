@@ -25,6 +25,10 @@ steps; the one new column is added on first start.
 ## [Unreleased]
 
 ### Added
+- **Gallery tile size slider.** Files & Media photos/videos and the forum
+  gallery both have a size slider, from a tight mosaic up to poster tiles.
+- **Forum feed view.** A third layout next to List and Gallery: avatar,
+  text, then a full-width photo, like a Twitter timeline.
 - **Closed forum topics (#5624).** Edit title and tags on a topic has a Closed
   box. A closed topic greys out, carries a Closed tag and sits below the open
   ones, and reopening it puts it back. The author, admins and anyone with

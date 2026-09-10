@@ -1735,6 +1735,7 @@ _setupUI() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#media-gallery-modal .media-tab').forEach(b => b.classList.toggle('active', b === btn));
       this._mediaGalleryActiveTab = btn.dataset.tab;
+      this._applyMediaTileSize();
       if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab);
       // Switching tabs clears selection — selecting items across tabs and
       // hitting Delete would be confusing since each tab has its own scope.
@@ -1756,6 +1757,17 @@ _setupUI() {
       this._mediaGallerySort = sortSel.value || 'date-desc';
       try { localStorage.setItem('mediaGallerySort', this._mediaGallerySort); } catch {}
       if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+    });
+  }
+
+  const tileSlider = document.getElementById('media-gallery-tile');
+  if (tileSlider) {
+    tileSlider.value = String(this._mediaTilePx());
+    this._applyMediaTileSize();
+    tileSlider.addEventListener('input', () => {
+      const px = this._mediaTilePx(tileSlider.value);
+      try { localStorage.setItem('mediaGalleryTile', String(px)); } catch {}
+      this._applyMediaTileSize(px);
     });
   }
 
@@ -7060,7 +7072,25 @@ _renderMediaGallery(data) {
   this._mediaGallerySelected = new Map();
   this._mediaGallerySelectMode = false;
   this._refreshMediaGalleryToolbar();
+  this._applyMediaTileSize();
   this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+},
+
+_mediaTilePx(raw) {
+  const n = parseInt(raw != null ? raw : (() => { try { return localStorage.getItem('mediaGalleryTile'); } catch { return ''; } })(), 10);
+  if (!Number.isFinite(n)) return 150;
+  return Math.min(360, Math.max(72, n));
+},
+
+_applyMediaTileSize(px) {
+  const size = px != null ? this._mediaTilePx(px) : this._mediaTilePx();
+  const modal = document.getElementById('media-gallery-modal');
+  if (modal) modal.style.setProperty('--media-tile', `${size}px`);
+  const slider = document.getElementById('media-gallery-tile');
+  if (slider && slider.value !== String(size)) slider.value = String(size);
+  const wrap = document.getElementById('media-gallery-tile-wrap');
+  const tab = this._mediaGalleryActiveTab || 'photos';
+  if (wrap) wrap.hidden = tab !== 'photos' && tab !== 'videos';
 },
 
 // Build a stable key for a gallery row so the same attachment shared
