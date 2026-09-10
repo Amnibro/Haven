@@ -85,6 +85,9 @@ steps; the one new column is added on first start.
 - **Homepage.** The logo leads the page, the screenshots are full size with a
   Gallery you can step through with the arrow keys, the phone shot sits beside
   Security and privacy, and a community channel shot follows the feature list.
+  The download section leads with the app, since most people need that and
+  not the server, and the Download button at the top takes you there instead
+  of grabbing the server zip.
 
 ### Fixed
 - **CRT text reads bigger (#5606).** The theme's VT323 face is scaled up a
