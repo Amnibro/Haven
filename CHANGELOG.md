@@ -11,7 +11,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.6.1] - 2026-09-09
+
+A round of fixes from the issue tracker and the community server. Discord
+emotes show as pictures on both sides of the Ferry bridge, the DM PiP shows
+who is actually online, #channel links survive a rename, thread replies get
+link cards, forum cards show the protection shield, the hover card and the
+role Collapse button behave, CRT text reads bigger, and the topic bar folds
+away. The homepage has full-size screenshots and a gallery. No migration
+steps; the one new column is added on first start.
 
 ### Added
 - **The topic bar folds away (#5625).** A small arrow at its right folds the
