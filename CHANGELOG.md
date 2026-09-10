@@ -25,6 +25,11 @@ steps; the one new column is added on first start.
 ## [Unreleased]
 
 ### Added
+- **Underlined text (#5621).** Wrap text in `__double underscores__`, or select
+  it and press Ctrl+U. Thanks to @birdcrazy.
+- **Coloured text (#5623).** Wrap text as `c#RRGGBB...#c` or `c#(R,G,B)...#c`
+  to colour it; Ctrl+Shift+F wraps a selection and leaves the cursor on the
+  colour. Thanks to @birdcrazy.
 - **Roles start from a template.** New Role in Role Management opens a picker:
   Moderator, Helper, Trusted member, Event host, Media poster, Group, or Blank.
   Each comes with a level, a colour and a permission set already ticked, and
@@ -55,6 +60,10 @@ steps; the one new column is added on first start.
   bar to a thin strip, so "Click to set a topic" stops taking a line for
   people who never will. It is per browser, and the fold survives channel
   switches and reloads. Requested by @quakeman00.
+
+### Fixed
+- **The DM PiP send button is a square that matches the thread panel's (#5601).**
+  Thanks to @birdcrazy.
 
 ### Changed
 - **Homepage.** The logo leads the page, the screenshots are full size with a
