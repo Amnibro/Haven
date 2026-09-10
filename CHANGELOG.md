@@ -13,6 +13,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Added
+- **The topic bar folds away (#5625).** A small arrow at its right folds the
+  bar to a thin strip, so "Click to set a topic" stops taking a line for
+  people who never will. It is per browser, and the fold survives channel
+  switches and reloads. Requested by @quakeman00.
+
 ### Fixed
 - **CRT text reads bigger (#5606).** The theme's VT323 face is scaled up a
   further notch, so sub-channel names and other fine print no longer read a
