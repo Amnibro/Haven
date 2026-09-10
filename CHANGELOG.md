@@ -74,6 +74,12 @@ steps; the one new column is added on first start.
   switches and reloads. Requested by @quakeman00.
 
 ### Fixed
+- **Other streams no longer vanish when the focused one ends (#5609).** With
+  several people sharing, double-clicking one stream to focus it hides the
+  rest. If that sharer then stopped, the viewer stayed in focus mode with
+  nothing left to show, so the remaining streams sat invisible in a blank box
+  until something reset it. Focus mode now drops back to the grid the moment
+  the focused stream ends, or is closed or minimised. Reported by @quakeman00.
 - **The text box no longer gets squeezed out by the toolbar (#5626).** In a
   narrow message column, such as a half-screen browser window with both
   sidebars open, the upload, emoji, GIF and poll buttons left only a few
