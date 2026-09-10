@@ -74,6 +74,11 @@ steps; the one new column is added on first start.
   switches and reloads. Requested by @quakeman00.
 
 ### Fixed
+- **The text box no longer gets squeezed out by the toolbar (#5626).** In a
+  narrow message column, such as a half-screen browser window with both
+  sidebars open, the upload, emoji, GIF and poll buttons left only a few
+  characters of room to type. The toolbar now moves onto its own row when
+  there is not enough width. Reported by @quakeman00.
 - **Pinned forum topics stay on top.** A reply to another topic could push a
   pinned one down the list, and a pinned topic with old activity could be
   missing from the first page altogether. Pinned topics now load with the
