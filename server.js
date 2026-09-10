@@ -423,7 +423,7 @@ function uploadCapMb(user) {
   try {
     const row = db.prepare(`
       SELECT MAX(r.max_upload_mb) AS cap FROM roles r JOIN user_roles ur ON ur.role_id = r.id
-      WHERE ur.user_id = ? AND r.max_upload_mb IS NOT NULL
+      WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.max_upload_mb IS NOT NULL
     `).get(user.id);
     return Math.max(base, parseInt(row?.cap, 10) || 0);
   } catch { return base; }

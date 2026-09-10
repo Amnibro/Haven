@@ -2050,6 +2050,8 @@ module.exports = function register(socket, ctx) {
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
     if (!member && !socket.user.isAdmin) return;
+    // A role gate on the channel covers its threads too (#5597).
+    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
 
     const messages = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
@@ -2136,6 +2138,8 @@ module.exports = function register(socket, ctx) {
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
     if (!tMember && !socket.user.isAdmin) return;
+    // A role gate on the channel covers its threads too (#5597).
+    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
 
     // ── Moderation controls (#5483) ───────────────────────
     // This handler grew up alongside send-message but never picked up the
