@@ -1749,7 +1749,13 @@
               <option value="60000" data-i18n="settings.sounds_section.popup_1m">At most 1 per minute</option>
               <option value="300000" data-i18n="settings.sounds_section.popup_5m">At most 1 every 5 min</option>
               <option value="900000" data-i18n="settings.sounds_section.popup_15m">At most 1 every 15 min</option>
+              <option value="-1" data-i18n="settings.sounds_section.popup_never">Never (sounds and badges still work)</option>
+              <option value="custom" data-i18n="settings.sounds_section.popup_custom">Custom…</option>
             </select>
+          </label>
+          <label class="select-row" id="notif-popup-custom-row" style="display:none">
+            <span data-i18n="settings.sounds_section.popup_custom_minutes">Minutes between pop-ups</span>
+            <input type="number" id="notif-popup-custom-minutes" min="1" max="1440" step="1" class="settings-number-input" style="width:5.5rem">
           </label>
           <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.sounds_section.popup_limit_hint">Throttle how often desktop/browser notification pop-ups appear, so a burst of messages or a flaky connection can't keep popping the app up. Notification sounds and unread badges are unaffected.</small>
           <label class="toggle-row">
@@ -4384,7 +4390,7 @@
     </div>
   </div>
   <script src="/js/theme.js?v=4.5.1"></script>
-  <script src="/js/notifications.js?v=3.16.17"></script>
+  <script src="/js/notifications.js?v=4.6.2"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
   <script src="/js/voice.js?v=4.5.1"></script>
   <script src="/js/modmode.js?v=3.16.16"></script>

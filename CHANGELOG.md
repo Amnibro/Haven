@@ -25,6 +25,10 @@ steps; the one new column is added on first start.
 ## [Unreleased]
 
 ### Added
+- **Pop-up notifications: a custom gap, and Never (#5619).** The limit on
+  desktop and browser pop-ups takes a number of minutes of your own now, and a
+  Never option stops the pop-ups altogether while sounds and unread badges keep
+  working. Requested by @quakeman00.
 - **Hide the crossed-out channel icons (#5615).** An admin setting hides the
   small screen-share-off and music-off icons in the channel list for everyone,
   for servers where most channels have those off and the icons were only

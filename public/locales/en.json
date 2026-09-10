@@ -1582,6 +1582,9 @@
       "popup_1m": "At most 1 per minute",
       "popup_5m": "At most 1 every 5 min",
       "popup_15m": "At most 1 every 15 min",
+      "popup_never": "Never (sounds and badges still work)",
+      "popup_custom": "Custom…",
+      "popup_custom_minutes": "Minutes between pop-ups",
       "popup_limit_hint": "Throttle how often desktop/browser notification pop-ups appear, so a burst of messages or a flaky connection can't keep popping the app up. Notification sounds and unread badges are unaffected.",
       "join_vol": "Join Vol",
       "leave_vol": "Leave Vol"
