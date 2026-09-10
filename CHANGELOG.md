@@ -74,6 +74,10 @@ steps; the one new column is added on first start.
   switches and reloads. Requested by @quakeman00.
 
 ### Fixed
+- **Pinned forum topics stay on top.** A reply to another topic could push a
+  pinned one down the list, and a pinned topic with old activity could be
+  missing from the first page altogether. Pinned topics now load with the
+  first page and keep the top of the list, in the cards and in the feed.
 - **The DM PiP send button is a square that matches the thread panel's (#5601).**
   Thanks to @birdcrazy.
 

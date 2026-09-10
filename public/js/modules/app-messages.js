@@ -366,6 +366,8 @@ _renderMessages(messages, lastReadMessageId) {
   const order = [];
   for (let i = start; i < messages.length; i++) order.push(i);
   if (forumFeed) order.reverse();
+  // Pinned topics head a forum feed whatever their activity. (#144)
+  if (forumFeed) order.sort((a, b) => (messages[b].pinned ? 1 : 0) - (messages[a].pinned ? 1 : 0));
   for (const i of order) {
     const prevMsg = (!forumFeed && i > start) ? messages[i - 1] : null;
 
@@ -713,16 +715,29 @@ _bumpForumTopic(parentId) {
     }
     return;
   }
-  if (container.firstElementChild === el) return;
+  const slot = this._forumFeedTopSlot(container, el);
+  if (slot === el) return;
   const nearTop = container.scrollTop < 40;
-  // Newest activity goes on top. (#144)
-  container.insertBefore(el, container.firstElementChild);
+  // Newest activity goes on top, under the pinned block: a reply must never
+  // push a pinned topic down. (#144)
+  container.insertBefore(el, slot);
   // The window's least active topic may have just moved; keep the pagination
   // cursor on whatever is last now.
   const all = container.querySelectorAll('[data-msg-id]');
   const lastEl = all[all.length - 1];
   if (lastEl) this._oldestMsgId = parseInt(lastEl.dataset.msgId);
   if (nearTop) container.scrollTop = 0;
+},
+
+// Where a topic that just became the newest activity goes in a forum feed:
+// the very top when it is pinned itself, otherwise right under the pinned
+// block. Returns the node to insert before (null means the end).
+_forumFeedTopSlot(container, el) {
+  const isPinned = (n) => !!n && (n.classList.contains('pinned') || n.dataset.pinned === '1');
+  if (isPinned(el)) return container.firstElementChild;
+  let node = container.firstElementChild;
+  while (node && isPinned(node)) node = node.nextElementSibling;
+  return node;
 },
 
 _appendMessage(message, forceScroll = false) {
@@ -758,9 +773,10 @@ _appendMessage(message, forceScroll = false) {
   const nearTop = container.scrollTop < 40;
   const msgEl = this._createMessageEl(message, forumFeed ? null : prevMsg);
   if (forumFeed) {
-    // A new topic is the newest activity, so it goes on top. (#144)
+    // A new topic is the newest activity, so it goes on top, under the pinned
+    // block. (#144)
     container.querySelector('.forum-empty-hint')?.remove();
-    container.insertBefore(msgEl, container.firstElementChild);
+    container.insertBefore(msgEl, this._forumFeedTopSlot(container, msgEl));
   } else {
     container.appendChild(msgEl);
   }

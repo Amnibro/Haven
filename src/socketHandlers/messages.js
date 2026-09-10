@@ -112,10 +112,20 @@ module.exports = function register(socket, ctx) {
       return [...forumOlder(channelId, around, half, opts).reverse(), ...target, ...forumNewer(channelId, around, half, opts)];
     }
     const key = forumKeyCol(sort); const tag = forumTagSql(tags, tagMode);
-    return db.prepare(`
+    // Pinned topics ride on the first page whatever their last activity, so
+    // they are on top from the start rather than only once they happen to
+    // load. Later pages may hand one back again; the client skips repeats.
+    const pinned = db.prepare(`
+      SELECT * FROM (${FORUM_SELECT}${tag.sql})
+      WHERE id IN (SELECT message_id FROM pinned_messages WHERE channel_id = ?)
+      ORDER BY ${key} DESC, id DESC
+    `).all(channelId, ...tag.params, channelId);
+    const page = db.prepare(`
       SELECT * FROM (${FORUM_SELECT}${tag.sql})
       ORDER BY ${key} DESC, id DESC LIMIT ?
     `).all(channelId, ...tag.params, limit);
+    const seen = new Set(pinned.map(r => r.id));
+    return [...pinned, ...page.filter(r => !seen.has(r.id))];
   }
   function parseTags(raw) {
     if (!raw) return [];
