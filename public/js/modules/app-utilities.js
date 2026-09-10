@@ -1011,6 +1011,9 @@ _formatContent(str) {
     return match;
   });
 
+  // Render __underline__
+  html = html.replace(/__(.+?)__/g, '<u>$1</u>');
+
   // Render /me action text (italic)
   if (html.startsWith('_') && html.endsWith('_') && html.length > 2) {
     html = `<em class="action-text">${html.slice(1, -1)}</em>`;
