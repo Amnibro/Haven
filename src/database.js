@@ -1618,6 +1618,8 @@ function initDatabase() {
   for (const col of [
     { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
     { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
+    // Closed topics grey out and sit below the open ones (#5624).
+    { name: 'closed', sql: "ALTER TABLE messages ADD COLUMN closed INTEGER DEFAULT 0" },
   ]) {
     try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
   }

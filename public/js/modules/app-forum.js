@@ -83,7 +83,8 @@ _forumThumbOf(msg) {
 _forumSortTopics(list) {
   const p = this._forumPrefs();
   const key = p.sort === 'created' ? (m) => new Date(m.created_at).getTime() || 0 : (m) => this._forumActivityOf(m);
-  return [...list].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || key(b) - key(a) || b.id - a.id);
+  // Pinned first, then open topics, then closed ones (#5624), each by the chosen order.
+  return [...list].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (a.closed ? 1 : 0) - (b.closed ? 1 : 0) || key(b) - key(a) || b.id - a.id);
 },
 
 // ── Rendering ──────────────────────────────────────────────
@@ -177,7 +178,7 @@ _forumToolbarEl(code) {
 
 _createForumTopicEl(msg) {
   const el = document.createElement('div');
-  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '');
+  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '');
   el.dataset.msgId = msg.id;
   el.dataset.userId = msg.user_id;
   el.dataset.time = msg.created_at;
@@ -194,7 +195,7 @@ _createForumTopicEl(msg) {
   el.innerHTML = `
     ${thumb ? `<div class="forum-topic-thumb"><img ${this._lazySrcAttr ? this._lazySrcAttr(`src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"><span>⬡</span></div>`}
     <div class="forum-topic-body">
-      <div class="forum-topic-tags">${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
+      <div class="forum-topic-tags">${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
       <div class="forum-topic-title">${this._escapeHtml(this._forumTitleOf(msg))}</div>
       <div class="forum-topic-snippet message-content">${this._escapeHtml(this._forumSnippetOf(msg))}</div>
       <div class="forum-topic-meta">
@@ -252,7 +253,7 @@ _forumBump(parentId, thread) {
   else topic.thread = { ...(topic.thread || {}), count: ((topic.thread && topic.thread.count) || 0) + 1, lastReplyAt: new Date().toISOString() };
   const fresh = this._createForumTopicEl(topic);
   el.replaceWith(fresh);
-  if (this._forumPrefs().sort === 'active' && !topic.pinned) {
+  if (this._forumPrefs().sort === 'active' && !topic.pinned && !topic.closed) {
     const firstUnpinned = [...grid.children].find(c => !c.classList.contains('forum-topic-pinned'));
     if (firstUnpinned && firstUnpinned !== fresh) grid.insertBefore(fresh, firstUnpinned);
   }
@@ -264,6 +265,11 @@ _forumApplyTopicUpdate(data) {
   if (!topic) return;
   topic.title = data.title || null;
   topic.tags = Array.isArray(data.tags) ? data.tags : [];
+  const wasClosed = !!topic.closed;
+  if (typeof data.closed === 'boolean') topic.closed = data.closed;
+  // Closing or reopening moves the card between the open and closed groups,
+  // so the list is rebuilt rather than the card swapped in place (#5624).
+  if (!!topic.closed !== wasClosed) { this._forumReload(); return; }
   const el = document.querySelector(`#forum-topics [data-msg-id="${data.messageId}"]`);
   if (el) el.replaceWith(this._createForumTopicEl(topic));
 },
@@ -311,7 +317,7 @@ _openForumComposer(existing = null) {
         <label class="forum-field"><span>${t('forum.title')}</span><input type="text" id="forum-post-title" maxlength="120" placeholder="${t('forum.title_placeholder')}" value="${existing ? this._escapeHtml(existing.title || '') : ''}"></label>
         ${existing ? '' : `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}"></textarea></label>`}
         ${tags.length ? `<div class="forum-field"><span>${t('forum.tags')} <small>${t('forum.tags_hint')}</small></span><div class="forum-tag-picker">${tags.map(tg => `<button type="button" class="forum-tag-chip${picked.has(tg.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tg.name)}">${tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(tg.name)}</button>`).join('')}</div></div>` : ''}
-        ${existing ? '' : `<small class="settings-hint">${t('forum.attach_hint')}</small>`}
+        ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : `<small class="settings-hint">${t('forum.attach_hint')}</small>`}
       </div>
       <div class="modal-footer"><button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
     </div>`;
@@ -330,7 +336,8 @@ _openForumComposer(existing = null) {
   overlay.querySelector('#forum-post-go').addEventListener('click', () => {
     const title = titleEl.value.trim();
     if (existing) {
-      this.socket.emit('set-topic-meta', { messageId: existing.id, title, tags: [...picked] });
+      const closedBox = overlay.querySelector('#forum-post-closed');
+      this.socket.emit('set-topic-meta', { messageId: existing.id, title, tags: [...picked], closed: closedBox ? closedBox.checked : undefined });
       close();
       return;
     }

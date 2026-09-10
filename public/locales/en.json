@@ -3683,6 +3683,8 @@
     "pinned": "Pinned",
     "replies": "{{count}} replies",
     "edit_topic": "Edit title and tags",
+    "closed": "Closed",
+    "mark_closed": "Closed: grey it out and keep it below the open topics",
     "image_topic": "Image",
     "load_more": "Load more topics",
     "no_topics_for_tags": "No topics carry those tags.",

@@ -25,6 +25,10 @@ steps; the one new column is added on first start.
 ## [Unreleased]
 
 ### Added
+- **Closed forum topics (#5624).** Edit title and tags on a topic has a Closed
+  box. A closed topic greys out, carries a Closed tag and sits below the open
+  ones, and reopening it puts it back. The author, admins and anyone with
+  manage messages in the channel can flip it. Requested by @birdcrazy.
 - **Pop-up notifications: a custom gap, and Never (#5619).** The limit on
   desktop and browser pop-ups takes a number of minutes of your own now, and a
   Never option stops the pop-ups altogether while sounds and unread badges keep

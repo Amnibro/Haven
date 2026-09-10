@@ -17,7 +17,7 @@ import AdminMethods    from './modules/app-admin.js?v=4.6.2';
 import PlatformMethods from './modules/app-platform.js?v=4.5.1';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
-import ForumMethods    from './modules/app-forum.js?v=4.6.1';
+import ForumMethods    from './modules/app-forum.js?v=4.6.2';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.6.2';
 
 class HavenApp {
