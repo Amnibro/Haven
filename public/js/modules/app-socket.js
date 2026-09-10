@@ -2368,6 +2368,7 @@ _setupSocketListeners() {
     this.serverSettings[data.key] = data.value;
     this._applyServerSettings();
     if (data.key === 'channel_templates') this._renderChannelTemplates();
+    if (data.key === 'hide_disabled_channel_badges') this._renderChannels?.();
   });
 
   // ── Webhooks list ──────────────────────────────────

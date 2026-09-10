@@ -25,6 +25,10 @@ steps; the one new column is added on first start.
 ## [Unreleased]
 
 ### Added
+- **Hide the crossed-out channel icons (#5615).** An admin setting hides the
+  small screen-share-off and music-off icons in the channel list for everyone,
+  for servers where most channels have those off and the icons were only
+  clutter. Requested by @quakeman00.
 - **Underlined text (#5621).** Wrap text in `__double underscores__`, or select
   it and press Ctrl+U. Thanks to @birdcrazy.
 - **Coloured text (#5623).** Wrap text as `c#RRGGBB...#c` or `c#(R,G,B)...#c`

@@ -2178,6 +2178,8 @@
       "no_locale": "Auto-detect (browser)",
       "default_locale_hint": "New users see Haven in this language on first visit. They can still pick their own.",
       "update_banner_hint": "When enabled, the \"update available\" banner is only shown to admins",
+      "hide_disabled_badges_label": "Hide the crossed-out icons in the channel list",
+      "hide_disabled_badges_hint": "Channels with screen share or music turned off show small crossed-out icons next to their name. Turn this on to hide those icons for everyone.",
       "whitelist_hint": "When enabled, only pre-approved usernames can register",
       "invite_hint": "A single code that adds people to every channel & sub-channel on the server",
       "copy_code_title": "Copy code",

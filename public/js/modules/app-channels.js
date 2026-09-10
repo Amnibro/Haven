@@ -1952,8 +1952,11 @@ _renderChannels() {
     // Build small status indicators for channel features
     const _badges = [];
     if (!isSub) {
-      if (ch.streams_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.screen_share_not_allowed')}">🖥️</span>`);
-      if (ch.music_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.music_not_allowed')}">🎵</span>`);
+      // An admin can hide the crossed-out icons for everyone (#5615): on a
+      // server where most channels have these off they were only clutter.
+      const showOff = !this.serverSettings || this.serverSettings.hide_disabled_channel_badges !== 'true';
+      if (showOff && ch.streams_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.screen_share_not_allowed')}">🖥️</span>`);
+      if (showOff && ch.music_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.music_not_allowed')}">🎵</span>`);
       if (ch.slow_mode_interval > 0) _badges.push(`<span title="${t('channels.slow_mode_title', { seconds: ch.slow_mode_interval })}" style="opacity:0.5;font-size:0.65rem">🐢</span>`);
       if (ch.cleanup_exempt === 1) _badges.push(`<span title="${t('channels.cleanup_exempt_title')}" style="opacity:0.5;font-size:0.65rem">🛡️</span>`);
     }
