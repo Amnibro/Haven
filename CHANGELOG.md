@@ -25,6 +25,10 @@ steps; the one new column is added on first start.
 ## [Unreleased]
 
 ### Added
+- **Theme palettes stay exclusive.** Braid, Braid Light, and Compact file
+  themes no longer stack on Matrix (or any built-in) when their Settings
+  toggles are on. Layout lives in Theme → Layout (Braid and Compact) and
+  keeps the picker colors.
 - **Closed forum topics (#5624).** Edit title and tags on a topic has a Closed
   box. A closed topic greys out, carries a Closed tag and sits below the open
   ones, and reopening it puts it back. The author, admins and anyone with
