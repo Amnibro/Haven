@@ -3330,6 +3330,9 @@
   "confirm": {
     "delete_channel": "Delete this channel?\nAll messages will be permanently lost.",
     "delete_channel_sure": "Are you ABSOLUTELY sure?\nThis action cannot be undone!",
+    "delete_channel_subs_title": "Its sub-channels go too",
+    "delete_channel_subs": "Deleting this channel also deletes everything inside it: {{names}}.\nWant to keep any of them? Cancel, then move them to another channel or promote them to top level, and delete this one afterwards.",
+    "delete_channel_subs_btn": "Delete all of it",
     "leave_channel": "Leave channel \"{{name}}\"?\nYou'll need the channel code to rejoin.",
     "promote_channel": "Promote \"{{name}}\" to a top-level channel?",
     "delete_message": "Delete this message?",

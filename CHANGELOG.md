@@ -74,6 +74,11 @@ steps; the one new column is added on first start.
   switches and reloads. Requested by @quakeman00.
 
 ### Fixed
+- **Deleting a parent channel deletes its sub-channels too.** They used to be
+  cut loose instead and turned up as top-level channels nobody had created.
+  Delete now asks a second time when there are sub-channels, names them, and
+  suggests moving any worth keeping to another channel or promoting them to
+  top level first.
 - **Other streams no longer vanish when the focused one ends (#5609).** With
   several people sharing, double-clicking one stream to focus it hides the
   rest. If that sharer then stopped, the viewer stayed in focus mode with

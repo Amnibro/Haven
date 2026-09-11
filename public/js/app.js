@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.6.2';
-import UIBindMethods   from './modules/app-ui.js?v=4.6.2';
+import UIBindMethods   from './modules/app-ui.js?v=4.6.2b';
 import MediaMethods    from './modules/app-media.js?v=4.6.2';
 import ContextMethods  from './modules/app-context.js?v=4.6.2';
 import ChannelMethods  from './modules/app-channels.js?v=4.6.2';
