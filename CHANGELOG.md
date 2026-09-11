@@ -29,6 +29,16 @@ steps; the one new column is added on first start.
   themes no longer stack on Matrix (or any built-in) when their Settings
   toggles are on. Layout lives in Theme → Layout (Braid and Compact) and
   keeps the picker colors.
+- **Gallery tile size slider.** Files & Media photos/videos and the forum
+  gallery both have a size slider, from a tight mosaic up to poster tiles.
+- **Forum feed view.** A third layout next to List and Gallery: avatar,
+  text, then a full-width photo, like a Twitter timeline.
+- **KLIPY as a GIF provider.** GIF search now supports KLIPY alongside GIPHY
+  and Tenor. Set `KLIPY_API_KEY`, and use `PREFERRED_GIF_SEARCH` (klipy, giphy
+  or tenor) to pick which provider serves the picker when more than one key is
+  set. If the preference is unset or invalid it falls back to whatever is
+  configured — GIPHY first, then KLIPY, then Tenor last, since Tenor is
+  deprecated. Supplemental; existing GIPHY/Tenor setups are unchanged.
 - **Closed forum topics (#5624).** Edit title and tags on a topic has a Closed
   box. A closed topic greys out, carries a Closed tag and sits below the open
   ones, and reopening it puts it back. The author, admins and anyone with

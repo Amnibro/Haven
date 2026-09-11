@@ -3246,6 +3246,7 @@
     "sort_smallest": "Menores primeiro",
     "sort_name_az": "Nome A→Z",
     "sort_name_za": "Nome Z→A",
+    "tile_size": "Tamanho",
     "select": "Selecionar",
     "cancel_select": "Cancelar",
     "selected": "{{count}} selecionado(s)",
