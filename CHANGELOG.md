@@ -99,6 +99,13 @@ steps; the one new column is added on first start.
   The download section leads with the app, since most people need that and
   not the server, and the Download button at the top takes you there instead
   of grabbing the server zip.
+- **Deleted files no longer sit around forever.** Attachments from deleted
+  messages and channels are parked in a deleted-attachments folder, which was
+  only ever emptied when auto-cleanup was on with a max age set, and even then
+  only its top level. They now expire a week after deletion by default,
+  whether cleanup is on or not, and the window is a setting under
+  Auto-Cleanup. Files parked before this release count as expired on the
+  first run after updating.
 
 ### Fixed
 - **CRT text reads bigger (#5606).** The theme's VT323 face is scaled up a
