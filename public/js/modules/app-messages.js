@@ -328,7 +328,9 @@ _renderMessages(messages, lastReadMessageId) {
   }
   const container = document.getElementById('messages');
   container.innerHTML = '';
-  container.classList.remove('forum-view', 'forum-gallery');
+  container.classList.remove('forum-view', 'forum-gallery', 'forum-feed');
+  container.style.removeProperty('--forum-tile');
+  delete container.dataset.forumTile;
   this._forumActive = false;
   if (this._isForumChannel && this._isForumChannel(this.currentChannel)) {
     this._renderForum(messages);

@@ -6,7 +6,7 @@
 // forums: newest activity on top, a card per topic with its title, tags,
 // author, reply count and first image, a toolbar to sort by recent
 // activity or date posted, filter by tags (match some or all), switch
-// between a list and a gallery of square tiles, and a New Post composer
+// between a list, a tile gallery, or a Twitter-style feed, and a New Post composer
 // with title, body and tags. Replies still live in the topic's thread.
 // ═══════════════════════════════════════════════════════════
 
@@ -28,9 +28,43 @@ _forumPrefs(code) {
   const key = `haven_forum_prefs:${code || this.currentChannel}`;
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch {}
-  return { sort: saved.sort === 'created' ? 'created' : 'active', view: saved.view === 'gallery' ? 'gallery' : 'list', tags: Array.isArray(saved.tags) ? saved.tags : [], tagMode: saved.tagMode === 'all' ? 'all' : 'some' };
+  return {
+    sort: saved.sort === 'created' ? 'created' : 'active',
+    view: this._forumParseView(saved.view),
+    tile: this._forumParseTile(saved.tile),
+    tags: Array.isArray(saved.tags) ? saved.tags : [],
+    tagMode: saved.tagMode === 'all' ? 'all' : 'some',
+  };
 },
 
+_forumParseView(v) { return v === 'gallery' || v === 'feed' ? v : 'list'; },
+_forumParseTile(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 11;
+  return Math.min(28, Math.max(7, Math.round(n * 2) / 2));
+},
+_applyForumChrome(container, prefs) {
+  const p = prefs || this._forumPrefs();
+  const el = container || document.getElementById('messages');
+  if (!el) return p;
+  el.classList.toggle('forum-gallery', p.view === 'gallery');
+  el.classList.toggle('forum-feed', p.view === 'feed');
+  el.style.setProperty('--forum-tile', `${p.tile}rem`);
+  el.dataset.forumTile = p.tile <= 9 ? 'small' : p.tile >= 20 ? 'large' : 'medium';
+  const sliderWrap = document.querySelector('#forum-toolbar .forum-tile-size');
+  if (sliderWrap) sliderWrap.hidden = p.view !== 'gallery';
+  return p;
+},
+_forumAvatarHtml(msg) {
+  const name = String(msg && msg.username || '?');
+  const initial = this._escapeHtml(name.charAt(0).toUpperCase() || '?');
+  const color = this._getUserColor ? this._getUserColor(name) : 'var(--accent)';
+  const shape = msg && msg.avatar_shape ? ` avatar-${this._escapeHtml(String(msg.avatar_shape))}` : '';
+  if (msg && msg.avatar) {
+    return `<div class="forum-topic-avatar${shape}"><img src="${this._escapeHtml(msg.avatar)}" alt=""></div>`;
+  }
+  return `<div class="forum-topic-avatar${shape}" style="background:${color}">${initial}</div>`;
+},
 _setForumPrefs(code, patch) {
   const next = { ...this._forumPrefs(code), ...patch };
   try { localStorage.setItem(`haven_forum_prefs:${code || this.currentChannel}`, JSON.stringify(next)); } catch {}
@@ -97,9 +131,10 @@ _renderForum(messages) {
   this._forumActive = true;
   this._forumTopics = new Map();
   container.classList.add('forum-view');
-  container.classList.toggle('forum-gallery', p.view === 'gallery');
+  this._applyForumChrome(container, p);
   container.innerHTML = '';
   container.appendChild(this._forumToolbarEl(code));
+  this._applyForumChrome(container, p);
   const grid = document.createElement('div');
   grid.className = 'forum-topics';
   grid.id = 'forum-topics';
@@ -146,7 +181,12 @@ _forumToolbarEl(code) {
         <div class="forum-view-toggle" role="group">
           <button type="button" class="forum-view-btn${p.view === 'list' ? ' active' : ''}" data-view="list" title="${t('forum.view_list')}">☰</button>
           <button type="button" class="forum-view-btn${p.view === 'gallery' ? ' active' : ''}" data-view="gallery" title="${t('forum.view_gallery')}">▦</button>
+          <button type="button" class="forum-view-btn${p.view === 'feed' ? ' active' : ''}" data-view="feed" title="${t('forum.view_feed')}">▤</button>
         </div>
+        <label class="forum-tile-size"${p.view === 'gallery' ? '' : ' hidden'}>
+          <span>${t('forum.tile_size')}</span>
+          <input type="range" id="forum-tile-size" min="7" max="28" step="0.5" value="${p.tile}" aria-label="${t('forum.tile_size')}">
+        </label>
       </div>
     </div>
     ${tags.length ? `<div class="forum-toolbar-row forum-tags-row">
@@ -160,11 +200,14 @@ _forumToolbarEl(code) {
   bar.querySelector('#forum-new-post').addEventListener('click', () => this._openForumComposer());
   bar.querySelector('#forum-sort').addEventListener('change', (e) => { this._setForumPrefs(code, { sort: e.target.value }); this._forumReload(); });
   bar.querySelectorAll('.forum-view-btn').forEach(b => b.addEventListener('click', () => {
-    this._setForumPrefs(code, { view: b.dataset.view });
+    const next = this._setForumPrefs(code, { view: this._forumParseView(b.dataset.view) });
     bar.querySelectorAll('.forum-view-btn').forEach(x => x.classList.toggle('active', x === b));
-    document.getElementById('messages')?.classList.toggle('forum-gallery', b.dataset.view === 'gallery');
+    this._applyForumChrome(document.getElementById('messages'), next);
     this._lazyMedia && this._lazyPump && this._lazyPump();
   }));
+  bar.querySelector('#forum-tile-size')?.addEventListener('input', (e) => {
+    this._applyForumChrome(document.getElementById('messages'), this._setForumPrefs(code, { tile: this._forumParseTile(e.target.value) }));
+  });
   bar.querySelectorAll('.forum-tag-chip').forEach(c => c.addEventListener('click', () => {
     const cur = this._forumPrefs(code).tags;
     const name = c.dataset.tag;
@@ -193,6 +236,7 @@ _createForumTopicEl(msg) {
   const when = this._forumPrefs().sort === 'created' ? new Date(msg.created_at) : new Date(this._forumActivityOf(msg));
   const canEdit = this.user && (msg.user_id === this.user.id || this.user.isAdmin || (this._hasPerm && this._hasPerm('manage_messages')));
   el.innerHTML = `
+    ${this._forumAvatarHtml(msg)}
     ${thumb ? `<div class="forum-topic-thumb"><img ${this._lazySrcAttr ? this._lazySrcAttr(`src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"><span>⬡</span></div>`}
     <div class="forum-topic-body">
       <div class="forum-topic-tags">${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>

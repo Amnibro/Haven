@@ -25,6 +25,10 @@ steps; the one new column is added on first start.
 ## [Unreleased]
 
 ### Added
+- **Gallery tile size slider.** Files & Media photos/videos and the forum
+  gallery both have a size slider, from a tight mosaic up to poster tiles.
+- **Forum feed view.** A third layout next to List and Gallery: avatar,
+  text, then a full-width photo, like a Twitter timeline.
 - **KLIPY as a GIF provider.** GIF search now supports KLIPY alongside GIPHY
   and Tenor. Set `KLIPY_API_KEY`, and use `PREFERRED_GIF_SEARCH` (klipy, giphy
   or tenor) to pick which provider serves the picker when more than one key is
