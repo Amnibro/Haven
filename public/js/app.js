@@ -407,14 +407,17 @@ class HavenApp {
         if (!cmd) continue;
         const key = cmd.toLowerCase();
         const channelCode = bc.channel_code || null;
+        const desc = `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`;
         const existing = known.get(key);
         if (existing) {
           // The same command registered by a second bot in another channel
           // keeps the one menu entry and adds its channel to it, so the
-          // suggestions show in every channel that has a bot for it. A
-          // built-in command of the same name stays as it is (#5635).
+          // suggestions show in every channel that has a bot for it, each
+          // naming its own bot. A built-in command of the same name stays as
+          // it is (#5635).
           if (channelCode && Array.isArray(existing.channelCodes) && !existing.channelCodes.includes(channelCode)) {
             existing.channelCodes.push(channelCode);
+            existing.descByChannel[channelCode] = desc;
           }
           continue;
         }
@@ -423,9 +426,10 @@ class HavenApp {
           // Bot commands can have arbitrary args; a hardcoded "<...>" makes
           // subcommand entries look broken and encourages base-command clicks.
           args: '',
-          desc: `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`,
+          desc,
           // A bot lives in one channel, so its commands are only offered there (#5635).
-          channelCodes: channelCode ? [channelCode] : null
+          channelCodes: channelCode ? [channelCode] : null,
+          descByChannel: channelCode ? { [channelCode]: desc } : {}
         };
         known.set(key, entry);
         this.slashCommands.push(entry);

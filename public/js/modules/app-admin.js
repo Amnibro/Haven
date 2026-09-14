@@ -2988,7 +2988,7 @@ _showSlashDropdown(query) {
     `<div class="slash-item${i === 0 ? ' active' : ''}" data-cmd="${c.cmd}">
       <span class="slash-cmd">/${c.cmd}</span>
       ${c.args ? `<span class="slash-args">${this._escapeHtml(c.args)}</span>` : ''}
-      <span class="slash-desc">${this._escapeHtml(c.desc)}</span>
+      <span class="slash-desc">${this._escapeHtml((c.descByChannel && c.descByChannel[this.currentChannel]) || c.desc)}</span>
     </div>`
   ).join('');
 
