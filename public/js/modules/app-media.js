@@ -4531,6 +4531,31 @@ _revealHiddenImage(ph) {
   ph.replaceWith(img);
 },
 
+// A picture in an encrypted DM is decrypted in the browser, and the feed lets
+// go of the decrypted bytes once it has painted them, so the <img> src is a
+// dead object URL: opening or saving it gave a blank page. A fresh copy is
+// decrypted for the new tab or the download and released a minute later
+// (#5663).
+_freshImageUrl(img) {
+  if (img && img.dataset && img.dataset.e2eSrc && this._e2eImageBlob) {
+    return this._e2eImageBlob(img).then(blob => {
+      const url = URL.createObjectURL(blob);
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 60000);
+      return { url, blob, ephemeral: true };
+    });
+  }
+  return Promise.resolve({ url: this._lazyRealSrc ? this._lazyRealSrc(img) : (img && img.src) || '', blob: null, ephemeral: false });
+},
+
+_openImageInNewTab(img) {
+  this._freshImageUrl(img).then(({ url, ephemeral }) => {
+    if (!url) return;
+    // An object URL only resolves for a tab that shares this page's session,
+    // so the decrypted copy opens without noopener; a plain link keeps it.
+    if (ephemeral) window.open(url, '_blank'); else window.open(url, '_blank', 'noopener,noreferrer');
+  }).catch(() => this._showToast?.(t('media_runtime.image.open_failed'), 'error'));
+},
+
 _showImageContextMenu(e, src, opts = {}) {
   this._hideImageContextMenu();
   const menu = document.createElement('div');
@@ -4538,6 +4563,9 @@ _showImageContextMenu(e, src, opts = {}) {
   menu.className = 'image-context-menu';
   // opts.viewImage: the <img> to open in the lightbox from a View entry, for
   // places where a left click does something else, like a forum card (#5646).
+  // opts.sourceImg: the <img> the menu was opened on, so an encrypted DM
+  // picture can be decrypted again for Open and Save (#5663).
+  const sourceImg = opts.sourceImg || opts.viewImage || null;
   menu.innerHTML = `
     ${opts.viewImage ? `<button data-action="view">🔍 ${t('media_runtime.image.view')}</button>` : ''}
     <button data-action="save">💾 ${t('media_runtime.image.save')}</button>
@@ -4576,13 +4604,21 @@ _showImageContextMenu(e, src, opts = {}) {
   menu.addEventListener('click', async (ev) => {
     const action = ev.target.dataset.action;
     if (action === 'save') {
-      const a = document.createElement('a');
-      a.href = src;
-      a.download = src.split('/').pop().split('?')[0] || 'image';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      this._hideImageContextMenu();
+      this._freshImageUrl(sourceImg).then(({ url, blob }) => {
+        const href = url || src;
+        const a = document.createElement('a');
+        a.href = href;
+        const mime = blob && blob.type ? blob.type.split('/')[1] : '';
+        a.download = (sourceImg && sourceImg.dataset && sourceImg.dataset.e2eSrc)
+          ? `image.${(mime || 'png').replace('jpeg', 'jpg')}`
+          : (src.split('/').pop().split('?')[0] || 'image');
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }).catch(() => this._showToast?.(t('media_runtime.image.open_failed'), 'error'));
+      return;
     } else if (action === 'copy') {
       // Hide the menu immediately so it doesn't sit on screen during
       // the async fetch + clipboard write. We still control the toast.
@@ -4741,7 +4777,8 @@ _showImageContextMenu(e, src, opts = {}) {
       this._openLightbox(src, opts.viewImage);
       return;
     } else if (action === 'open') {
-      window.open(src, '_blank', 'noopener,noreferrer');
+      if (sourceImg) this._openImageInNewTab(sourceImg);
+      else window.open(src, '_blank', 'noopener,noreferrer');
     } else if (action === 'hide') {
       this._hideImage(src);
       // Collapse every live copy of this image to a placeholder right away.

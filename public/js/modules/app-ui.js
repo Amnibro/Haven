@@ -2187,11 +2187,26 @@ _setupUI() {
       el.addEventListener('contextmenu', (e) => {
         if (e.target.classList.contains('chat-image')) {
           e.preventDefault();
-          this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src);
+          this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, { sourceImg: e.target });
         }
+      });
+      // Middle click on a picture opens it in a new tab, like a link (#5663).
+      el.addEventListener('auxclick', (e) => {
+        if (e.button !== 1) return;
+        const img = e.target.closest('img.chat-image');
+        if (!img) return;
+        e.preventDefault();
+        this._openImageInNewTab(img);
       });
     }
   }
+  document.getElementById('messages').addEventListener('auxclick', (e) => {
+    if (e.button !== 1) return;
+    const img = e.target.closest('img.chat-image');
+    if (!img) return;
+    e.preventDefault();
+    this._openImageInNewTab(img);
+  });
 
   // Image right-click — custom context menu for chat thumbnails. Forum cards
   // open their own menus, so both menus no longer stack up there (#5650).
@@ -2199,7 +2214,7 @@ _setupUI() {
     if (e.target.closest('.forum-topic')) return;
     if (e.target.classList.contains('chat-image')) {
       e.preventDefault();
-      this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src);
+      this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, { sourceImg: e.target });
     }
   });
 

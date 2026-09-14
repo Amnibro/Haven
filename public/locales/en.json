@@ -1150,6 +1150,7 @@
       "save": "Save Image",
       "copy": "Copy Image",
       "view": "View image",
+      "open_failed": "Could not open that image",
       "open_new_tab": "Open in New Tab",
       "copied": "Image copied to clipboard",
       "url_copied_bytes_unavailable": "Copied image URL (image bytes unavailable)",
