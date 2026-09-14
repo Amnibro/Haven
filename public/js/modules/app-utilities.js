@@ -4092,7 +4092,14 @@ _startEditMessage(msgEl, msgId) {
   textarea.value = rawText;
   textarea.rows = 1;
   textarea.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  // The same drag bar the composer has, so a long message can be pulled
+  // open while editing it (#5662).
+  const grip = document.createElement('div');
+  grip.className = 'pip-input-resizer edit-resizer';
+  grip.setAttribute('aria-hidden', 'true');
+  contentEl.appendChild(grip);
   contentEl.appendChild(textarea);
+  this._bindInputResizer?.(grip);
 
   // Track active edit textarea for emoji picker redirection
   this._activeEditTextarea = textarea;

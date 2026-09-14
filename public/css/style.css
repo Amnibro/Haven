@@ -3907,6 +3907,8 @@ html.rgb-cycling *::after {
   opacity: 1;
   background: var(--accent, #5865f2);
 }
+/* The same bar on the message edit box (#5662) */
+.message.editing .message-content, .message-compact.editing .message-content { position: relative; padding-top: 0.875rem; }
 
 /* Emoji picker trigger button shared by DM PiP and thread input areas */
 .pip-input-emoji-btn {

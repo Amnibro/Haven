@@ -2700,40 +2700,7 @@ _setupUI() {
   // We set both `height` and `min-height` inline so the auto-grow `input`
   // handler (which sets `height = 'auto'` then caps at a small default) can't
   // collapse the textarea back down after the user has manually expanded it.
-  document.querySelectorAll('.pip-input-resizer').forEach(handle => {
-    let startY = 0;
-    let startHeight = 0;
-    let ta = null;
-    let cap = 600;
-
-    const onMove = (e) => {
-      if (!ta) return;
-      const delta = startY - e.clientY; // positive when dragging up
-      const newHeight = Math.max(34, Math.min(cap, startHeight + delta));
-      ta.style.height = `${newHeight}px`;
-      ta.style.minHeight = `${newHeight}px`;
-      ta.style.maxHeight = `${cap}px`;
-    };
-
-    const onUp = () => {
-      ta = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-
-    handle.addEventListener('mousedown', (e) => {
-      ta = handle.parentElement?.querySelector('textarea');
-      if (!ta) return;
-      startY = e.clientY;
-      startHeight = ta.getBoundingClientRect().height;
-      // Cap manual expansion at ~60% of viewport so the textarea can never
-      // swallow the entire chat pane. Min 200px on tiny windows.
-      cap = Math.max(200, Math.floor(window.innerHeight * 0.6));
-      e.preventDefault();
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  });
+  document.querySelectorAll('.pip-input-resizer').forEach(handle => this._bindInputResizer(handle));
 
   // Emoji picker toggle
   document.getElementById('emoji-btn').addEventListener('click', () => {
@@ -6515,9 +6482,50 @@ _submitPoll() {
   const images = rows.map(r => r.image);
   const multiVote = document.getElementById('poll-multi-vote').checked;
   const anonymous = document.getElementById('poll-anonymous').checked;
+  const hasImages = images.some(Boolean);
+  const columns = hasImages ? (parseInt(document.getElementById('poll-columns')?.value, 10) || 0) : 0;
 
-  this.socket.emit('create-poll', { question, options, multiVote, anonymous, ...(images.some(Boolean) && { images }) });
+  this.socket.emit('create-poll', { question, options, multiVote, anonymous, ...(hasImages && { images }), ...(columns > 1 && { columns }) });
   document.getElementById('poll-modal').style.display = 'none';
+},
+
+// The drag bar above a text box. Bound once per handle; the edit box makes
+// its own handle on the fly (#5662).
+_bindInputResizer(handle) {
+  if (!handle || handle._resizerBound) return;
+  handle._resizerBound = true;
+  let startY = 0;
+  let startHeight = 0;
+  let ta = null;
+  let cap = 600;
+
+  const onMove = (e) => {
+    if (!ta) return;
+    const delta = startY - e.clientY; // positive when dragging up
+    const newHeight = Math.max(34, Math.min(cap, startHeight + delta));
+    ta.style.height = `${newHeight}px`;
+    ta.style.minHeight = `${newHeight}px`;
+    ta.style.maxHeight = `${cap}px`;
+  };
+
+  const onUp = () => {
+    ta = null;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  };
+
+  handle.addEventListener('mousedown', (e) => {
+    ta = handle.parentElement?.querySelector('textarea');
+    if (!ta) return;
+    startY = e.clientY;
+    startHeight = ta.getBoundingClientRect().height;
+    // Cap manual expansion at ~60% of viewport so the textarea can never
+    // swallow the entire chat pane. Min 200px on tiny windows.
+    cap = Math.max(200, Math.floor(window.innerHeight * 0.6));
+    e.preventDefault();
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 },
 
 /* ── Send later (#5638) ─────────────────────────────── */
