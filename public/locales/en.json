@@ -1888,7 +1888,7 @@
       "backup_modes_hint": "Pick what to include. Messages and uploaded files can make the backup very large; channels / users / settings alone are usually small. User passwords, 2FA secrets, and emails are never exported.",
       "backup_restore_label": "Restore From Backup",
       "backup_restore_btn": "Restore",
-      "backup_restore_full_note": "Only full backups can be restored here, which means the backup must have had both Messages and Uploaded files checked when it was made. Smaller channels/users/settings backups have to be re-imported by hand.",
+      "backup_restore_full_note": "A backup can be restored here when it was made with Messages ticked: that is the whole database. Uploaded files is optional; when the backup has none, the uploads folder is left as it is. A channels/users/settings-only backup has no database to restore from.",
       "backup_restore_warning": "<strong>Warning:</strong> Restoring overwrites the current server data. The server will restart automatically — your hosting setup must support auto-restart (Docker, systemd, the Haven installer service, etc.). The previous database is preserved as <code>haven.db.pre-restore</code> for one cycle.",
       "auto_backup_label": "Automatic Backups",
       "auto_backup_enable": "Enable scheduled backups",

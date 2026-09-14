@@ -2868,9 +2868,13 @@ function extractFullBackup(zipPath, stagedDb, stagedUploads, onProgress) {
           try { manifest = JSON.parse((await readEntryBuffer(zipfile, manifestEntry)).toString('utf8')); }
           catch { throw bad('Invalid backup: corrupt manifest.json'); }
           if (manifest.app !== 'haven') throw bad('Not a Haven backup file');
-          if (manifest.mode !== 'full') throw bad('Only full backups can be restored automatically. Structure-only backups must be re-imported manually.');
+          // A backup made with Messages ticked carries the whole database and
+          // can be restored whether or not Uploaded files was ticked too: the
+          // database is swapped in, and the uploads folder is only replaced
+          // when the backup has one. A channels/users/settings-only backup
+          // has no database to restore from (#5660).
           const dbEntry = find('haven.db');
-          if (!dbEntry) throw bad('Invalid full backup: missing haven.db');
+          if (!dbEntry) throw bad('This backup has no database in it (Messages was unticked when it was made), so it cannot be restored here. Make the backup with Messages ticked; Uploaded files is optional.');
 
           // Progress accounting: total = the DB clone + every upload file
           // (uncompressed bytes). Emitted (throttled to ~400ms) via onProgress
