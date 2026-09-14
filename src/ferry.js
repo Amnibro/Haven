@@ -621,6 +621,10 @@ function buildHavenContent(msg) {
   for (const att of msg.attachments || []) {
     if (att.url) media.push(att.url);
   }
+  // Discord's own client now sends a post with two or more pictures as a
+  // media gallery component and leaves `attachments` empty, so walking the
+  // attachments alone relayed those posts as nothing. Amnibro spotted this.
+  collectComponentMedia(msg.components, media);
   for (const sticker of msg.sticker_items || []) {
     media.push(`https://media.discordapp.net/stickers/${sticker.id}.png`);
   }
@@ -706,7 +710,31 @@ function buildHavenContent(msg) {
     if (authoredText && automod.checkText(authoredText, { surface: 'message' }).ok === false) return '';
   } catch { /* an automod fault must never take the bridge down */ }
 
-  return cleanOf([...authored, ...media].join('\n').slice(0, 4000));
+  // A picture referenced from both a component and an attachment goes once.
+  const uniqueMedia = [...new Set(media.filter(Boolean))];
+  return cleanOf([...authored, ...uniqueMedia].join('\n').slice(0, 4000));
+}
+
+function discordHttpUrl(obj) {
+  if (!obj || typeof obj !== 'object') return '';
+  const u = obj.url || obj.proxy_url || '';
+  return /^https?:\/\//i.test(u) ? u : '';
+}
+
+// Walk a message's components (containers, sections, media galleries, file
+// blocks) and collect every picture or file URL in them.
+function collectComponentMedia(node, into, depth = 0) {
+  if (!node || depth > 8) return;
+  if (Array.isArray(node)) {
+    for (const child of node) collectComponentMedia(child, into, depth + 1);
+    return;
+  }
+  if (typeof node !== 'object') return;
+  const url = discordHttpUrl(node.media) || discordHttpUrl(node.file);
+  if (url) into.push(url);
+  collectComponentMedia(node.items, into, depth + 1);
+  collectComponentMedia(node.components, into, depth + 1);
+  collectComponentMedia(node.accessory, into, depth + 1);
 }
 
 /**

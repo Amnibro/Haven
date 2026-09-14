@@ -293,7 +293,9 @@ _isImageUrl(str) {
   // basename. Must stay in lockstep with the early-return regex in
   // `_formatContent` or classified-as-image messages render as empty.
   if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
-  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
+  // The query part stops at whitespace: two Discord CDN links on separate
+  // lines used to match as one URL, which drew one broken image for the pair.
+  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>\s]*)?$/i.test(trimmed)) return true;
   // GIPHY / Tenor GIF URLs (may not have file extensions)
   if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
   if (/^https:\/\/(media|c)\.tenor\.com\/.+/i.test(trimmed)) return true;
