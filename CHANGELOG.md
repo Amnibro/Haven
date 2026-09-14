@@ -11,6 +11,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Send later shortcuts (#5657).** Ctrl+Enter in the message box opens Send
+  later with your text, and the Send later box takes the same formatting
+  shortcuts and link paste as the composer. Thanks to @birdcrazy.
+- **Lock a forum's layout (#5656).** Next to Set as default there is a lock:
+  once on, only people who can change the channel's settings can switch the
+  view or tile shape, and everyone else sees the forum the way it was set.
+  The size slider stays for everyone. Requested by @quakeman00.
+- **Picture polls in columns (#5648).** Once an option has a picture, the
+  poll creator offers a Columns choice (2 to 5), with square thumbnails, so
+  a sixteen-way picture vote fits on a screen instead of one tall scroll.
+  Requested by @quakeman00.
+- **Middle-click opens a picture in a new tab (#5663).** Same as a link.
+  Requested by @quakeman00.
+- **The edit box has the composer's drag bar (#5662).** Pull it up to see
+  the whole message while editing. Reported by @quakeman00.
+
+### Changed
+- **Links are underlined in chat (#5661).** A thin underline, so a link reads
+  as one on any palette rather than by colour alone; a colour span around a
+  link leaves the link its own colour. Asked for by @quakeman00 and
+  @birdcrazy.
+- **Chrome's local-network prompt no longer appears on opening chat.** The
+  voice module probed its STUN servers on page load, which gathers LAN
+  candidates, and Chrome now asks every visitor of a public site for
+  local-network access the moment that happens. The probe waits for the
+  first voice join. Traced by @Amnibro.
+
+### Fixed
+- **A Discord post with two or more pictures arrived blank.** Discord's own
+  client now sends those as a media gallery with an empty attachment list,
+  so the bridge relayed nothing; and when two picture links did come
+  through, the image check ran them together into one broken image. Both
+  fixed. Reported by Raidenphantom; the gallery cause was found by @Amnibro.
+- **Colour markdown around a link, in a quote, and in a spoiler (#5661).**
+  A link before the closing `#c` swallowed it into the address; text inside
+  a quote never took a colour at all; a list right after a quote lost its
+  first bullet; and coloured text or a link inside a spoiler showed straight
+  through the box. Reported by @quakeman00 and @birdcrazy.
+- **Open in New Tab and Save on a picture in an encrypted DM gave a blank
+  page (#5663).** The picture is decrypted in the browser and the feed lets
+  go of the decrypted copy once painted, so the address was dead. A fresh
+  copy is decrypted for the tab or the download. Reported by @quakeman00.
+- **The same slash command from two bots named the same bot in both channels
+  (#5635).** Each channel's suggestion now names its own bot. Reported by
+  @josolanes.
+- **A backup made without uploaded files could not be restored (#5660).**
+  Any backup with Messages ticked carries the whole database and restores
+  now; the uploads folder is only replaced when the backup has one.
+  Reported by @birdcrazy.
+- **Forum modal header and toolbar styling (#5652).** Thanks to @birdcrazy.
+
 ## [4.8.0] - 2026-09-12
 
 Channel access moves to one place: a channel's Required roles now decide
