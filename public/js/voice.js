@@ -142,10 +142,14 @@ class VoiceManager {
     // Fetch server-provided ICE config (may include TURN)
     this._fetchIceServers();
 
-    // Probe the default pool in the background and prune dead servers so
-    // future RTCPeerConnections don't waste gathering time on them. Only
-    // applies if the admin hasn't configured their own ICE servers.
-    this._probeDefaultStun();
+    // The STUN probe (prune dead servers so later peer connections do not
+    // wait on them) used to run on page load. It opens an RTCPeerConnection,
+    // which gathers LAN candidates, and Chrome now asks every visitor of a
+    // public site for local-network access the moment that happens, so
+    // opening chat at all raised the prompt. It waits for the first voice
+    // join instead. Amnibro traced it.
+    this._stunProbeStarted = false;
+    this._pendingConfiguredStun = null;
 
     this._setupSocketListeners();
     this._setupNativeScreenBridge();
@@ -200,10 +204,25 @@ class VoiceManager {
         // srflx candidates, which relay-only discards on purpose, so running it
         // any earlier reports every server dead on a perfectly healthy setup.
         // Fire and forget; a dead entry here used to fail completely silently.
-        if (this._adminIceServersLoaded) this._probeConfiguredStun(data.iceServers);
+        if (this._adminIceServersLoaded) {
+          if (this._stunProbeStarted) this._probeConfiguredStun(data.iceServers);
+          else this._pendingConfiguredStun = data.iceServers;
+        }
       }
     } catch (err) {
       console.warn('Could not fetch ICE servers, using defaults:', err && err.message);
+    }
+  }
+
+  // Run the STUN probes once, on the first voice join (see the constructor).
+  _ensureStunProbed() {
+    if (this._stunProbeStarted) return;
+    this._stunProbeStarted = true;
+    try { this._probeDefaultStun(); } catch { /* fire and forget */ }
+    if (this._pendingConfiguredStun) {
+      const list = this._pendingConfiguredStun;
+      this._pendingConfiguredStun = null;
+      try { this._probeConfiguredStun(list); } catch { /* fire and forget */ }
     }
   }
 
@@ -1938,6 +1957,7 @@ class VoiceManager {
     if (this._joinInFlight) return false;
     this._joinInFlight = true;
     this._joiningChannelCode = channelCode;
+    this._ensureStunProbed();
     try {
       const preservedMuteState = this.isMuted;
       const preservedDeafenState = this.isDeafened;
