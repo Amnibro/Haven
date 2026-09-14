@@ -820,6 +820,23 @@ _formatContent(str) {
 
   let html = this._escapeHtml(withEmotes);
 
+  // ── Colour spans: c#RRGGBB…#c and c#(R,G,B)…#c ──
+  // Marked out before the link pass, so a closing #c is never swallowed into
+  // the URL in front of it, and restored last, so the colour reaches text
+  // inside a quote or a spoiler as well (#5661).
+  const colorOpens = [];
+  html = html.replace(/c#([0-9a-fA-F]{6})([\s\S]+?)#c/g, (full, hex, inner) => {
+    const idx = colorOpens.length;
+    colorOpens.push(`<span style="color:#${hex}">`);
+    return `\x00COLOR_${idx}\x00${inner}\x00ENDCOLOR\x00`;
+  });
+  html = html.replace(/c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)([\s\S]+?)#c/g, (full, r, g, b, inner) => {
+    const [rr, gg, bb] = [r, g, b].map(v => Math.min(255, parseInt(v, 10)));
+    const idx = colorOpens.length;
+    colorOpens.push(`<span style="color:rgb(${rr},${gg},${bb})">`);
+    return `\x00COLOR_${idx}\x00${inner}\x00ENDCOLOR\x00`;
+  });
+
   // ── Markdown images & links (extract before auto-linking) ──
   const mdLinks = [];
   // ![alt](url)
@@ -1051,18 +1068,15 @@ _formatContent(str) {
     }
     const textHtml = lines.join('<br>');
     const idx = blockquotes.length;
-    blockquotes.push(`${pre}<blockquote class="chat-blockquote">${authorHtml}<div class="chat-blockquote-body">${textHtml}</div></blockquote>`);
-    return `\x00BLOCKQUOTE_${idx}\x00`;
+    blockquotes.push(`<blockquote class="chat-blockquote">${authorHtml}<div class="chat-blockquote-body">${textHtml}</div></blockquote>`);
+    // The line break after the quote stays in the text, so a list that
+    // follows still starts on its own line; the <br> it turns into is
+    // dropped again when the quote is put back (#5661).
+    return `${pre}\x00BLOCKQUOTE_${idx}\x00${block.endsWith('\n') ? '\n' : ''}`;
   });
 
-  // Render c#RRGGBB...#c color spans (HEX color code)
-  html = html.replace(/c#([0-9a-fA-F]{6})([\s\S]+?)#c/g, '<span style="color:#$1">$2</span>');
-
-  // Render c#(R,G,B)...#c color spans (RGB color code)
-  html = html.replace(/c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)([\s\S]+?)#c/g, (_, r, g, b, text) => {
-    if (r > 255 || g > 255 || b > 255) return _;
-    return `<span style="color:rgb(${r},${g},${b})">${text}</span>`;
-  });
+  // (Colour spans were marked out before the link pass and are put back at
+  // the very end.)
 
   // ── Headings: # H1, ## H2, ### H3 at start of line ──
   html = html.replace(/(^|\n)(#{1,3})\s+(.+)/g, (_, pre, hashes, text) => {
@@ -1182,7 +1196,7 @@ _formatContent(str) {
   });
 
   blockquotes.forEach((block, idx) => {
-    html = html.replace(`\x00BLOCKQUOTE_${idx}\x00`, block);
+    html = html.replace(new RegExp(`(?:<br>)?\\x00BLOCKQUOTE_${idx}\\x00(?:<br>)?`), () => block);
   });
 
   // ── Restore fenced code blocks ──
@@ -1215,6 +1229,12 @@ _formatContent(str) {
   emotes.forEach((el, idx) => {
     html = html.replace(`\x00DEMOTE_${idx}\x00`, () => el);
   });
+
+  // ── Colour spans go back last, around whatever was rendered inside them ──
+  colorOpens.forEach((open, idx) => {
+    html = html.replace(`\x00COLOR_${idx}\x00`, () => open);
+  });
+  html = html.replace(/\x00ENDCOLOR\x00/g, '</span>');
 
   if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;
 

@@ -5332,6 +5332,9 @@ details.sound-section:not([open]) .sound-section-label::before {
 }
 
 .message-content a { color: var(--text-link); }
+/* A thin underline so a link reads as one on any palette, not only by its
+   colour; a coloured span around it cannot repaint it (#5661). */
+.message-content a:not(.file-download-link) { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
 
 .message-compact {
   display: flex;
@@ -10483,6 +10486,9 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .spoiler:not(.revealed) .custom-emoji {
   visibility: hidden;
 }
+/* Coloured text and links set their own colour, which showed straight
+   through the spoiler box (#5661). */
+.spoiler:not(.revealed) * { color: transparent !important; }
 
 /* Inline code sets its own color and background, so `color: transparent`
    can't hide it and it would show through an unrevealed spoiler. It's a
