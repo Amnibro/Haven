@@ -2429,9 +2429,11 @@ _renderPollWidget(msgId, poll) {
   if (poll.anonymous) settings.push(t('poll.anonymous'));
   const settingsHtml = settings.length ? `<div class="poll-settings-info">${settings.join(' · ')}</div>` : '';
 
+  // A picture poll can sit in columns (#5648).
+  const cols = Number(poll.columns) > 1 ? Math.min(5, Math.floor(Number(poll.columns))) : 0;
   return `<div class="poll-widget" data-msg-id="${msgId}">
     <div class="poll-question">${this._escapeHtml(poll.question)}</div>
-    <div class="poll-options">${optionsHtml}</div>
+    <div class="poll-options${cols ? ' poll-grid' : ''}"${cols ? ` style="--poll-cols:${cols}"` : ''}>${optionsHtml}</div>
     <div class="poll-footer">${t(totalVotes === 1 ? 'poll.votes_one' : 'poll.votes_other', { count: totalVotes })}${settingsHtml ? ' · ' : ''}${settingsHtml}</div>
   </div>`;
 },

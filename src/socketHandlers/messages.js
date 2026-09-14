@@ -1994,6 +1994,8 @@ module.exports = function register(socket, ctx) {
         return UPLOAD_PATH_EXACT_RE.test(u) ? u : null;
       }).filter((_, i) => options[i] && typeof options[i] === 'string' && options[i].trim());
       const hasImages = images.some(Boolean);
+      // A picture poll can be laid out in columns (#5648).
+      const columns = hasImages ? Math.min(5, Math.max(0, parseInt(data.columns, 10) || 0)) : 0;
 
       if (floodCheck('message')) {
         return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
@@ -2018,7 +2020,7 @@ module.exports = function register(socket, ctx) {
       const safeQuestion = sanitizeText(question);
       if (!safeQuestion) return;
 
-      const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }) });
+      const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }), ...(columns > 1 && { columns }) });
       const content = `📊 Poll: ${safeQuestion}`;
       const result = db.prepare(
         'INSERT INTO messages (channel_id, user_id, content, poll_data) VALUES (?, ?, ?, ?)'
@@ -2040,7 +2042,7 @@ module.exports = function register(socket, ctx) {
         reactions: [],
         edited_at: null,
         thread: null,
-        poll: { question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }), votes: {}, totalVotes: 0 }
+        poll: { question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }), ...(columns > 1 && { columns }), votes: {}, totalVotes: 0 }
       };
       cleanOptions.forEach((_, i) => { message.poll.votes[i] = []; });
 

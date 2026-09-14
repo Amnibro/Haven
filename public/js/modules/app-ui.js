@@ -6380,6 +6380,9 @@ _openPollModal() {
   document.getElementById('poll-question-input').value = '';
   document.getElementById('poll-multi-vote').checked = false;
   document.getElementById('poll-anonymous').checked = false;
+  const colSel = document.getElementById('poll-columns');
+  if (colSel) colSel.value = '0';
+  this._updatePollColumnsVis();
   const list = document.getElementById('poll-options-list');
   list.innerHTML = '';
   for (let i = 0; i < 2; i++) {
@@ -6424,6 +6427,7 @@ _addPollOptionRow(list, index) {
       imgBtn.classList.remove('has-image');
       imgBtn.style.backgroundImage = '';
       imgBtn.title = t('modals.poll.add_image');
+      this._updatePollColumnsVis();
       return;
     }
     file.click();
@@ -6444,6 +6448,7 @@ _addPollOptionRow(list, index) {
       imgBtn.classList.add('has-image');
       imgBtn.style.backgroundImage = `url("${data.url}")`;
       imgBtn.title = t('modals.poll.remove_image');
+      this._updatePollColumnsVis();
     } catch (err) {
       if (!err?.aborted) this._showToast(err?.message || t('toasts.upload_failed'), 'error');
     }
@@ -6469,6 +6474,15 @@ _updatePollRemoveButtons() {
   const list = document.getElementById('poll-options-list');
   const btns = list.querySelectorAll('.poll-option-remove');
   btns.forEach(b => { b.style.display = list.children.length > 2 ? '' : 'none'; });
+  this._updatePollColumnsVis();
+},
+
+// The Columns choice only matters for a picture poll (#5648).
+_updatePollColumnsVis() {
+  const wrap = document.getElementById('poll-columns-wrap');
+  if (!wrap) return;
+  const any = [...document.querySelectorAll('#poll-options-list .poll-option-row')].some(r => r.dataset.image);
+  wrap.style.display = any ? '' : 'none';
 },
 
 _submitPoll() {

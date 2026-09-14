@@ -16976,6 +16976,13 @@ ul.chat-list { list-style-type: disc; }
   cursor: pointer; font-size: 0.9rem; line-height: 1;
 }
 .poll-option-imgbtn.has-image { color: transparent; border-color: var(--accent); }
+/* A big picture poll in columns, square thumbnails, so 16 options fit on a
+   screen instead of one tall scroll (#5648) */
+.poll-options.poll-grid { display: grid; grid-template-columns: repeat(var(--poll-cols, 2), minmax(0, 1fr)); gap: 0.4rem; }
+.poll-grid .poll-option { flex-direction: column; align-items: stretch; }
+.poll-grid .poll-option-img { aspect-ratio: 1 / 1; height: auto; max-height: none; }
+.poll-grid .poll-option-text { white-space: normal; }
+.poll-grid .poll-option-count { margin-left: 0; }
 .poll-option.poll-voted {
   border-color: var(--accent, #5865f2);
 }

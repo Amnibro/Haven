@@ -4006,6 +4006,12 @@
       <div class="form-group poll-settings-row" style="margin-top:10px">
         <label class="poll-checkbox-label"><input type="checkbox" id="poll-multi-vote"> <span data-i18n="modals.poll.multi_vote">Allow multiple votes</span></label>
         <label class="poll-checkbox-label"><input type="checkbox" id="poll-anonymous"> <span data-i18n="modals.poll.anonymous">Anonymous votes</span></label>
+        <label class="poll-checkbox-label" id="poll-columns-wrap" style="display:none"><span data-i18n="modals.poll.columns">Columns</span>
+          <select id="poll-columns" class="settings-select" style="margin-left:6px;max-width:90px">
+            <option value="0" data-i18n="modals.poll.columns_auto">One per row</option>
+            <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+          </select>
+        </label>
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="poll-cancel-btn" data-i18n="modals.common.cancel">Cancel</button>

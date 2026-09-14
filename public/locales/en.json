@@ -2821,6 +2821,8 @@
       "option_placeholder": "Option {{number}}",
       "add_image": "Add a picture to this option",
       "remove_image": "Remove the picture",
+      "columns": "Columns",
+      "columns_auto": "One per row",
       "option_1": "Option 1",
       "option_2": "Option 2"
     },
