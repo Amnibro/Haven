@@ -20,6 +20,27 @@ function decodeHtmlEntities(str) {
 }
 
 const IMAGE_RE = /\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i;
+const SINGLE_REMOTE = /^https?:\/\/\S+\.(jpg|jpeg|png|gif|webp|svg)(\?\S*)?$/i;
+const DISCORD_CDN = /^https?:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/(?:attachments|ephemeral-attachments)\/\S+$/i;
+
+function isImageUrl(str) {
+  const trimmed = String(str || '').trim();
+  if (!trimmed || /\s/.test(trimmed)) return false;
+  return SINGLE_REMOTE.test(trimmed) || DISCORD_CDN.test(trimmed);
+}
+
+function pullImageUrls(str) {
+  const out = [];
+  const seen = new Set();
+  const add = (u) => { if (u && !seen.has(u)) { seen.add(u); out.push(u); } };
+  const text = String(str || '');
+  const re = /(?:https?:\/\/[^\s<>"']+?|\/uploads\/(?:[\w\-]+\/)?[\w\-.]+)\.(?:jpg|jpeg|png|gif|webp|svg)(?:\?[^\s<>"']*)?/gi;
+  let m;
+  while ((m = re.exec(text))) add(m[0]);
+  const discord = /https?:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/(?:attachments|ephemeral-attachments)\/[^\s<>"']+/gi;
+  while ((m = discord.exec(text))) add(m[0]);
+  return out;
+}
 const LOCAL_UPLOAD_RE = /^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i;
 const OLD_LOCAL_RE = /^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp|svg)$/i;
 
@@ -40,6 +61,22 @@ test('local upload regex allows dots in the basename and one extra path segment'
   assert.match('/uploads/images/cat.webp', LOCAL_UPLOAD_RE);
   assert.match('/uploads/stickers/wave.png', LOCAL_UPLOAD_RE);
   assert.doesNotMatch('/uploads/photo.edit.jpg', OLD_LOCAL_RE);
+});
+
+test('two Discord pictures in one message stay two URLs, not one broken src', () => {
+  const a = 'https://cdn.discordapp.com/attachments/1178/8830/image.png?ex=68b0&is=68af&hm=abcd&';
+  const b = 'https://cdn.discordapp.com/attachments/1178/8831/image.png?ex=68b1&is=68b0&hm=ef01&';
+  assert.equal(isImageUrl(a), true);
+  assert.equal(isImageUrl(`${a} ${b}`), false);
+  assert.equal(isImageUrl(`${a}\n${b}`), false);
+  assert.deepEqual(pullImageUrls(`${a}\n${b}`), [a, b]);
+  assert.deepEqual(pullImageUrls(`${a} ${b}`), [a, b]);
+});
+
+test('a Discord attachment URL without a file extension still counts as an image', () => {
+  const raw = 'https://media.discordapp.net/attachments/1178/8830/IMAGE?ex=68b0&is=68af&hm=abcd&';
+  assert.equal(isImageUrl(raw), true);
+  assert.deepEqual(pullImageUrls(`look\n${raw}`), [raw]);
 });
 
 test('sniffImageType recognises raster magic bytes when the CDN lies about Content-Type', () => {

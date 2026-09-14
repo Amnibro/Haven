@@ -280,6 +280,35 @@ test('inbound Discord messages flatten text, attachments and stickers', () => {
     'https://cdn.discordapp.com/b.png'
   );
 
+  // Two pictures stay two links, one per line, so the client can render both.
+  assert.equal(
+    buildHavenContent({
+      content: '',
+      attachments: [
+        { url: 'https://cdn.discordapp.com/a.png' },
+        { proxy_url: 'https://media.discordapp.net/b.png' },
+      ],
+    }),
+    'https://cdn.discordapp.com/a.png\nhttps://media.discordapp.net/b.png'
+  );
+
+  // Discord's own client parks extra pictures in a Media Gallery component
+  // and leaves attachments empty.
+  assert.equal(
+    buildHavenContent({
+      content: '',
+      attachments: [],
+      components: [{
+        type: 12,
+        items: [
+          { media: { url: 'https://cdn.discordapp.com/gallery-1.png' } },
+          { media: { url: 'https://cdn.discordapp.com/gallery-2.png' } },
+        ],
+      }],
+    }),
+    'https://cdn.discordapp.com/gallery-1.png\nhttps://cdn.discordapp.com/gallery-2.png'
+  );
+
   // A link-only message arrives with an empty body and one embed.
   assert.match(
     buildHavenContent({ content: '', embeds: [{ title: 'A page', url: 'https://example.com' }] }),

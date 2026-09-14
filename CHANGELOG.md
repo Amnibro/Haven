@@ -28,6 +28,11 @@ and the image / Chrome local-network fixes.
   on the threads icon.
 
 ### Fixed
+- **Two or more pictures posted on Discord no longer land as a blank frame.**
+  Ferry reads Media Gallery components, and the client splits each URL onto
+  its own image instead of stuffing both into one `src`.
+- **Permissions expand and close no longer sit on the Roles / Users pill.**
+  Those buttons live in the header row now.
 - **Chrome no longer asks for local-network access on every chat load.** Voice
   STUN probes wait until someone joins a call.
 - **Save Image opens a folder picker** in browsers that have

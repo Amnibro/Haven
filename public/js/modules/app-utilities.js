@@ -282,9 +282,18 @@ _replaceBurnedMessage(el) {
   el.classList.add('message-burned');
 },
 
+_isDiscordCdnMedia(str) {
+  return /^https?:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/(?:attachments|ephemeral-attachments)\/\S+$/i.test(str || '');
+},
+
 _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
+  // Two pictures in one message (Ferry, a paste, a Discord gallery) used to
+  // match as one URL because `.+` ate the space or the second link. The
+  // bubble then got a single <img> whose src was both addresses, so it
+  // painted blank.
+  if (/\s/.test(trimmed)) return false;
   // Spoiler-wrapped image (sender marked it as a spoiler) — unwrap and test
   // the payload so the message still gets image layout treatment.
   if (trimmed.startsWith('spoiler-img:')) return this._isImageUrl(trimmed.slice(12));
@@ -293,10 +302,11 @@ _isImageUrl(str) {
   // basename. Must stay in lockstep with the early-return regex in
   // `_formatContent` or classified-as-image messages render as empty.
   if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
-  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
+  if (/^https?:\/\/\S+\.(jpg|jpeg|png|gif|webp|svg)(\?\S*)?$/i.test(trimmed)) return true;
+  if (this._isDiscordCdnMedia(trimmed)) return true;
   // GIPHY / Tenor GIF URLs (may not have file extensions)
-  if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
-  if (/^https:\/\/(media|c)\.tenor\.com\/.+/i.test(trimmed)) return true;
+  if (/^https:\/\/media\d*\.giphy\.com\/\S+$/i.test(trimmed)) return true;
+  if (/^https:\/\/(media|c)\.tenor\.com\/\S+$/i.test(trimmed)) return true;
   return false;
 },
 
@@ -312,6 +322,8 @@ _pullImageUrls(str) {
   const re = /(?:https?:\/\/[^\s<>"']+?|\/uploads\/(?:[\w\-]+\/)?[\w\-.]+)\.(?:jpg|jpeg|png|gif|webp|svg)(?:\?[^\s<>"']*)?/gi;
   let m;
   while ((m = re.exec(text))) add(m[0]);
+  const discord = /https?:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/(?:attachments|ephemeral-attachments)\/[^\s<>"']+/gi;
+  while ((m = discord.exec(text))) add(m[0]);
   const md = /!\[[^\]]*\]\((https?:\/\/[^)\s]+|\/uploads\/[^)\s]+)\)/gi;
   while ((m = md.exec(text))) add(m[1]);
   return out;
@@ -331,6 +343,7 @@ _rawHttpUrl(escapedOrRaw) {
 _isRemoteImageUrl(url) {
   if (typeof url !== 'string' || !url) return false;
   return /\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(url) ||
+    this._isDiscordCdnMedia(url) ||
     /^https:\/\/media\d*\.giphy\.com\//i.test(url) ||
     /^https:\/\/(media|c)\.tenor\.com\//i.test(url);
 },

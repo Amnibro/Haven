@@ -4434,11 +4434,33 @@ _setupModalExpand() {
 
       // When a settings-style header is present, slot the expand button
       // directly next to its close button so the two stay aligned on
-      // every viewport size. Otherwise drop both controls into a floating
-      // group at the top-right of the modal.
+      // every viewport size. The permissions header has a Roles / Users
+      // pill on that same edge, so the pair goes in the header row
+      // instead of the floating group. Otherwise drop both controls
+      // into a floating group at the top-right of the modal.
       if (settingsClose) {
         expandBtn.classList.add('modal-expand-btn-inline');
         settingsClose.parentElement.insertBefore(expandBtn, settingsClose);
+      } else if (modal.querySelector('.perm-matrix-header')) {
+        const header = modal.querySelector('.perm-matrix-header');
+        expandBtn.classList.add('modal-expand-btn-inline');
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'modal-expand-btn modal-expand-btn-inline';
+        closeBtn.title = t('modals.common.close');
+        closeBtn.textContent = '✕';
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const overlay = modal.closest('.modal-overlay');
+          if (overlay) overlay.style.display = 'none';
+          if (modal.classList.contains('modal-maximized')) {
+            modal.classList.remove('modal-maximized');
+            expandBtn.textContent = '⛶';
+            expandBtn.title = t('media_runtime.modal.expand_restore');
+          }
+        });
+        header.appendChild(expandBtn);
+        header.appendChild(closeBtn);
       } else {
         const group = document.createElement('div');
         group.className = 'modal-controls';

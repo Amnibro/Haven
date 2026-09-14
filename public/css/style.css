@@ -6547,10 +6547,12 @@ html[data-haven-original-layout] #people-dock-btn { display: none !important; }
   top: 10px;
   right: 12px;
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.35rem;
   z-index: 5;
 }
+.modal-controls .modal-expand-btn { margin-left: 0; }
 
 /* Modals containing an .organize-list, .audit-log-list, or other primary
    scroll region need flex layout so the body fills available space when
@@ -20232,11 +20234,14 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 .perm-matrix-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
-.perm-matrix-header h3 { margin: 0; }
+.perm-matrix-header h3 { margin: 0; flex: 0 0 auto; }
+.perm-matrix-header .perm-view-toggle { flex: 0 0 auto; }
+.perm-matrix-header > .perm-view-toggle + .modal-expand-btn-inline { margin-left: auto; }
 .perm-matrix-lead { margin: 6px 0 10px; font-size: 0.8rem; }
 .perm-view-toggle {
   display: inline-flex;

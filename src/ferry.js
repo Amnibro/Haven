@@ -619,8 +619,10 @@ function buildHavenContent(msg) {
   if (text) authored.push(text);
 
   for (const att of msg.attachments || []) {
-    if (att.url) media.push(att.url);
+    const url = discordHttpUrl(att);
+    if (url) media.push(url);
   }
+  collectComponentMedia(msg.components, media);
   for (const sticker of msg.sticker_items || []) {
     media.push(`https://media.discordapp.net/stickers/${sticker.id}.png`);
   }
@@ -706,7 +708,39 @@ function buildHavenContent(msg) {
     if (authoredText && automod.checkText(authoredText, { surface: 'message' }).ok === false) return '';
   } catch { /* an automod fault must never take the bridge down */ }
 
-  return cleanOf([...authored, ...media].join('\n').slice(0, 4000));
+  const uniqueMedia = [];
+  const seen = new Set();
+  for (const url of media) {
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    uniqueMedia.push(url);
+  }
+
+  return cleanOf([...authored, ...uniqueMedia].join('\n').slice(0, 4000));
+}
+
+function discordHttpUrl(obj) {
+  if (!obj || typeof obj !== 'object') return '';
+  const u = obj.url || obj.proxy_url || '';
+  return /^https?:\/\//i.test(u) ? u : '';
+}
+
+// Discord's own client now puts two-or-more pictures in a Media Gallery
+// (component type 12) and leaves `attachments` empty, because those files
+// are referenced from the component. Walking only attachments meant a
+// multi-image Discord post arrived in Haven as nothing, or as a blank frame.
+function collectComponentMedia(node, into) {
+  if (!node) return;
+  if (Array.isArray(node)) {
+    for (const child of node) collectComponentMedia(child, into);
+    return;
+  }
+  if (typeof node !== 'object') return;
+  const url = discordHttpUrl(node.media) || discordHttpUrl(node.file);
+  if (url) into.push(url);
+  collectComponentMedia(node.items, into);
+  collectComponentMedia(node.components, into);
+  collectComponentMedia(node.accessory, into);
 }
 
 /**
