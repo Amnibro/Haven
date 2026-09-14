@@ -41,17 +41,24 @@ _forumPrefs(code) {
   // from it again (#5656).
   const def = this._forumLayoutOf(code) || {};
   const own = (Number(saved.at) || 0) >= (Number(def.at) || 0);
+  // A locked layout keeps everyone but the channel's managers on the
+  // default view and shape; the size slider is still theirs (#5656).
+  const locked = !!def.locked && !this._forumCanManage();
   return {
     sort: saved.sort === 'created' ? 'created' : 'active',
-    view: this._forumParseView(own && saved.view ? saved.view : def.view),
+    view: this._forumParseView(!locked && own && saved.view ? saved.view : def.view),
     tile: this._forumParseTile(own && saved.tile != null ? saved.tile : def.tile),
-    shape: this._forumParseShape(own && saved.shape ? saved.shape : def.shape),
+    shape: this._forumParseShape(!locked && own && saved.shape ? saved.shape : def.shape),
     tags: Array.isArray(saved.tags) ? saved.tags : [],
     tagMode: saved.tagMode === 'all' ? 'all' : 'some',
   };
 },
 
 _forumParseView(v) { return v === 'gallery' || v === 'feed' ? v : 'list'; },
+// Whoever can change the channel's settings can set and lock its layout.
+_forumCanManage() {
+  return !!(this.user?.isAdmin || (this._hasPerm && this._hasPerm('manage_channel_settings')));
+},
 // Tile shapes for the galleries: square, or a landscape/portrait pair at
 // 4:3, 3:2 and 16:9 (#5645). Shared with Files & Media.
 _tileShapes() {
@@ -194,8 +201,11 @@ _forumToolbarEl(code) {
   bar.id = 'forum-toolbar';
   const tags = this._forumTagsOf(code);
   // Whoever can change the channel's settings can make the current view and
-  // tile size the layout everyone opens the forum in (#5656).
-  const canSetDefault = !!(this.user?.isAdmin || (this._hasPerm && this._hasPerm('manage_channel_settings')));
+  // tile size the layout everyone opens the forum in, and lock it so nobody
+  // else switches the view or shape (#5656).
+  const canSetDefault = this._forumCanManage();
+  const layoutLocked = !!(this._forumLayoutOf(code) || {}).locked;
+  const showViewControls = canSetDefault || !layoutLocked;
   const chip = (tag) => `<button type="button" class="forum-tag-chip${p.tags.includes(tag.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tag.name)}">${tag.emoji ? this._escapeHtml(tag.emoji) + ' ' : ''}${this._escapeHtml(tag.name)}</button>`;
   bar.innerHTML = `
     <div class="forum-toolbar-row">
@@ -205,21 +215,22 @@ _forumToolbarEl(code) {
           <option value="active"${p.sort === 'active' ? ' selected' : ''}>${t('forum.sort_active')}</option>
           <option value="created"${p.sort === 'created' ? ' selected' : ''}>${t('forum.sort_created')}</option>
         </select>
-        <div class="forum-view-toggle" role="group">
+        ${showViewControls ? `<div class="forum-view-toggle" role="group">
           <button type="button" class="forum-view-btn${p.view === 'list' ? ' active' : ''}" data-view="list" title="${t('forum.view_list')}">☰</button>
           <button type="button" class="forum-view-btn${p.view === 'gallery' ? ' active' : ''}" data-view="gallery" title="${t('forum.view_gallery')}">▦</button>
           <button type="button" class="forum-view-btn${p.view === 'feed' ? ' active' : ''}" data-view="feed" title="${t('forum.view_feed')}">▤</button>
-        </div>
+        </div>` : ''}
         <label class="forum-tile-size"${p.view === 'gallery' ? '' : ' hidden'}>
           <span>${t('forum.tile_size')}</span>
           <input type="range" id="forum-tile-size" min="7" max="28" step="0.5" value="${p.tile}" aria-label="${t('forum.tile_size')}">
         </label>
-        <label class="forum-tile-size forum-tile-shape"${p.view === 'gallery' ? '' : ' hidden'}>
+        ${showViewControls ? `<label class="forum-tile-size forum-tile-shape"${p.view === 'gallery' ? '' : ' hidden'}>
           <span>${t('forum.shape')}</span>
           <select id="forum-shape" class="forum-select forum-select-small" aria-label="${t('forum.shape')}">${this._tileShapeOptionsHtml(p.shape)}</select>
-        </label>
+        </label>` : ''}
         <button type="button" class="btn-sm forum-mark-read" id="forum-mark-read" title="${t('forum.mark_all_read_title')}">${t('forum.mark_all_read')}</button>
-        ${canSetDefault ? `<button type="button" class="btn-sm forum-set-default" id="forum-set-default" title="${t('forum.set_default_title')}">${t('forum.set_default')}</button>` : ''}
+        ${canSetDefault ? `<button type="button" class="btn-sm forum-set-default" id="forum-set-default" title="${t('forum.set_default_title')}">${t('forum.set_default')}</button>
+        <button type="button" class="btn-sm forum-lock-layout" id="forum-lock-layout" title="${t(layoutLocked ? 'forum.unlock_layout_title' : 'forum.lock_layout_title')}">${layoutLocked ? '🔒' : '🔓'}</button>` : ''}
       </div>
     </div>
     ${tags.length ? `<div class="forum-toolbar-row forum-tags-row">
@@ -244,9 +255,21 @@ _forumToolbarEl(code) {
   });
   bar.querySelector('#forum-set-default')?.addEventListener('click', () => {
     const cur = this._forumPrefs(code);
-    this.socket.emit('set-forum-layout', { code, view: cur.view, tile: cur.tile, shape: cur.shape }, (r) => {
+    this.socket.emit('set-forum-layout', { code, view: cur.view, tile: cur.tile, shape: cur.shape, locked: layoutLocked }, (r) => {
       if (r?.error) return this._showToast(r.error, 'error');
       this._showToast(t('forum.default_saved'), 'success');
+    });
+  });
+  bar.querySelector('#forum-lock-layout')?.addEventListener('click', () => {
+    const cur = this._forumPrefs(code);
+    const def = this._forumLayoutOf(code) || {};
+    // Locking takes the default as it stands, or the manager's current view
+    // when no default was ever set.
+    this.socket.emit('set-forum-layout', {
+      code, view: def.view || cur.view, tile: def.tile != null ? def.tile : cur.tile, shape: def.shape || cur.shape, locked: !layoutLocked
+    }, (r) => {
+      if (r?.error) return this._showToast(r.error, 'error');
+      this._showToast(t(layoutLocked ? 'forum.layout_unlocked' : 'forum.layout_locked'), 'success');
     });
   });
   bar.querySelector('#forum-shape')?.addEventListener('change', (e) => {
