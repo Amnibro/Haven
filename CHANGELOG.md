@@ -25,6 +25,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Send later shortcuts (#5657).** Ctrl+Enter in the message box opens Send
   later with your text, and the Send later box takes the same formatting
   shortcuts and link paste as the composer. Thanks to @birdcrazy.
+- **A theme preview page for theme authors (#5631).** `public/theme-preview.html`
+  is a static copy of the app with sample content: markdown of every kind, a
+  picture, a poll, reactions, the member list, a profile card, the Settings
+  modal and a forum. Open it from a checkout in a live CSS editor, point its
+  toolbar at a .theme.css file, and see the theme applied to the real markup
+  with no server running. Requested by @quakeman00.
 - **Voice messages (#5665).** A mic button in the message box records
   from your microphone; click it again, or Send, to post the recording as a
   small player with its length, or Cancel to throw it away. Five minutes
