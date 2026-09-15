@@ -578,6 +578,13 @@ module.exports = function register(socket, ctx) {
       'promo_seen_desktop', 'promo_seen_android', 'recovery_notice_seen',
       // The top-bar Android banner, closed once (#5594).
       'android_banner_seen',
+      // Persisted localization. timezone is an IANA zone id (e.g.
+      // "America/New_York") so DST is resolved per-instant by Intl, never a
+      // frozen offset. time_format is '12' or '24'. tz_prompt records that the
+      // user dismissed the first-run modal with Skip ('skipped') so it is never
+      // auto-shown again; "Remind later" persists nothing, so the modal returns
+      // on the next launch until they confirm or skip.
+      'timezone', 'time_format', 'tz_prompt',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
     const maxLen = key === 'effects' ? 400 : 50;
@@ -598,6 +605,19 @@ module.exports = function register(socket, ctx) {
     if ((key === 'hide_score_badge' || ACTIVITY_KEYS.includes(key)) && socket.currentChannel) {
       emitOnlineUsers(socket.currentChannel);
     }
+  });
+
+  // Clear a preference back to unset. Only the localization keys are erasable
+  // (the Erase button in the timezone modal), which returns the account to the
+  // browser-default behaviour. set-preference never writes empty values, so a
+  // dedicated delete is the way to remove a row.
+  socket.on('delete-preference', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const key = typeof data.key === 'string' ? data.key.trim() : '';
+    const deletableKeys = ['timezone', 'time_format'];
+    if (!deletableKeys.includes(key)) return;
+    db.prepare('DELETE FROM user_preferences WHERE user_id = ? AND key = ?').run(socket.user.id, key);
+    socket.emit('preference-deleted', { key });
   });
 
   // ── Recovery-codes notice gating ────────────────────────

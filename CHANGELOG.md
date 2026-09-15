@@ -14,6 +14,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Persisted timezone and time format.** Settings has a new Localization
+  section (the old Language section, renamed) with a Configure Time button. It
+  opens a modal where you pick your timezone from the full IANA list and choose
+  12 or 24 hour time, with a live preview. The choice is saved to your account,
+  so every device shows times your way, and it is never shown to other users.
+  Timezones are stored as IANA zone ids, so daylight saving is always applied
+  correctly for each timestamp. On the first login after the update the modal
+  offers Skip (never ask again), Remind later (ask again next launch), or
+  Confirm. Anyone who skips or has not chosen keeps the old behaviour, where
+  times follow the browser. Guests are not prompted. Once a timezone is saved,
+  reopening the modal from settings offers Erase, which clears it and returns
+  to the browser default.
 - **Send later shortcuts (#5657).** Ctrl+Enter in the message box opens Send
   later with your text, and the Send later box takes the same formatting
   shortcuts and link paste as the composer. Thanks to @birdcrazy.
@@ -31,6 +43,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   the whole message while editing. Reported by @quakeman00.
 
 ### Changed
+- **Send later reads the time in your configured timezone.** The Send at
+  field now uses the same wall-clock picker as the /time command instead of a
+  native datetime-local input, so the moment you pick is anchored to your
+  configured timezone rather than whatever the browser reports. A hardened
+  browser that reports a false zone no longer schedules the message at the
+  wrong real-world time. With no timezone configured it falls back to the
+  browser as before.
 - **Links are underlined in chat (#5661).** A thin underline, so a link reads
   as one on any palette rather than by colour alone; a colour span around a
   link leaves the link its own colour. Asked for by @quakeman00 and

@@ -515,6 +515,109 @@ _timeLocale() {
   return browser.find(l => String(l).toLowerCase().split('-')[0] === base) || ui;
 },
 
+/** The reader's confirmed IANA timezone, or undefined to let the browser use
+ *  the device zone. Only a value the user actively confirmed counts; Skip and
+ *  "Remind later" leave this unset so nothing changes from Haven's old
+ *  browser-default behaviour. Passing an IANA id to Intl means DST and any
+ *  historical offset change are resolved per-instant — never a frozen offset. */
+_userTimeZone() {
+  const tz = this._userPrefs && this._userPrefs.timezone;
+  return (typeof tz === 'string' && tz) ? tz : undefined;
+},
+
+/** The reader's confirmed hour cycle as an Intl `hour12` value: true for 12h,
+ *  false for 24h, undefined to keep the locale's own default. */
+_userHour12() {
+  const f = this._userPrefs && this._userPrefs.time_format;
+  if (f === '12') return true;
+  if (f === '24') return false;
+  return undefined;
+},
+
+/** Merge the reader's persisted timezone + hour cycle into a set of
+ *  Intl.DateTimeFormat options. Both `timeZone` and `hour12` are legal
+ *  alongside dateStyle/timeStyle as well as explicit component options, so
+ *  every existing call site can route through here unchanged. */
+_dtOpts(opts) {
+  const out = Object.assign({}, opts);
+  const tz = this._userTimeZone();
+  if (tz && out.timeZone === undefined) out.timeZone = tz;
+  const h12 = this._userHour12();
+  if (h12 !== undefined && out.hour12 === undefined && out.hourCycle === undefined) out.hour12 = h12;
+  return out;
+},
+
+/** Central time/date formatters. All timestamp rendering across the app goes
+ *  through these so a confirmed timezone/format applies everywhere at once and
+ *  an unset preference falls back to exactly what the browser did before.
+ *  `locale` defaults to the browser default (what every call site used before);
+ *  the <t:> token formatter passes _timeLocale() to keep its own behaviour. */
+_fmtTime(value, opts = { hour: '2-digit', minute: '2-digit' }, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleTimeString(locale, this._dtOpts(opts));
+},
+_fmtDate(value, opts = {}, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleDateString(locale, this._dtOpts(opts));
+},
+_fmtDateTime(value, opts = {}, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleString(locale, this._dtOpts(opts));
+},
+
+// ── Wall-clock <-> instant in the reader's confirmed zone ───────────────
+// The formatters above render an instant; these go the other way, for the
+// features that let someone type a wall-clock time (the /time command and its
+// modal). With no timezone confirmed they fall back to the device zone, so the
+// behaviour is unchanged; with one set the entered time is anchored to that
+// zone instead of whatever the browser reports, which is the whole point on a
+// privacy browser that lies about the system clock.
+
+/** The wall-clock parts of an instant in the confirmed zone (or the device
+ *  zone when none is set). monthIndex is 0-based to match the Date API. */
+_zonedParts(date, tz = this._userTimeZone()) {
+  const d = (date instanceof Date) ? date : new Date(date);
+  if (!tz) {
+    return { year: d.getFullYear(), monthIndex: d.getMonth(), day: d.getDate(),
+             hour: d.getHours(), minute: d.getMinutes(), second: d.getSeconds() };
+  }
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const m = {};
+  for (const p of parts) if (p.type !== 'literal') m[p.type] = p.value;
+  let hour = Number(m.hour);
+  if (hour === 24) hour = 0; // some engines report midnight as 24
+  return { year: Number(m.year), monthIndex: Number(m.month) - 1, day: Number(m.day),
+           hour, minute: Number(m.minute), second: Number(m.second) };
+},
+
+/** Milliseconds that `tz` is ahead of UTC at instant `ts` (negative if behind). */
+_zoneOffsetMs(tz, ts) {
+  const p = this._zonedParts(new Date(ts), tz);
+  const asUTC = Date.UTC(p.year, p.monthIndex, p.day, p.hour, p.minute, p.second);
+  return asUTC - ts;
+},
+
+/** Turn a wall-clock (year, 0-based month, day, hour, minute, second) read in
+ *  the confirmed zone into the matching instant. With no zone set this is
+ *  exactly new Date(y, mo, d, ...) in the device zone, so the fallback path is
+ *  byte-for-byte the old behaviour. */
+_wallToInstant(y, moIndex, d, h, mi, s, tz = this._userTimeZone()) {
+  if (!tz) return new Date(y, moIndex, d, h, mi, s, 0);
+  const naive = Date.UTC(y, moIndex, d, h, mi, s);
+  // One correction, then a second pass so a DST boundary resolves correctly.
+  let inst = naive - this._zoneOffsetMs(tz, naive);
+  inst = naive - this._zoneOffsetMs(tz, inst);
+  return new Date(inst);
+},
+
+/** "Now" decomposed into the confirmed zone's wall-clock, for seeding pickers. */
+_nowZonedParts() {
+  return this._zonedParts(new Date());
+},
+
 /** "in 5 minutes" / "3 hours ago", in the largest unit that still reads well. */
 _relativeTimestamp(ms, locale) {
   const diff = ms - Date.now();
@@ -539,19 +642,19 @@ _formatTimestampToken(seconds, style = 'f') {
   let text;
   try {
     switch (style) {
-      case 't': text = date.toLocaleTimeString(locale, { timeStyle: 'short' }); break;
-      case 'T': text = date.toLocaleTimeString(locale, { timeStyle: 'medium' }); break;
-      case 'd': text = date.toLocaleDateString(locale, { dateStyle: 'short' }); break;
-      case 'D': text = date.toLocaleDateString(locale, { dateStyle: 'long' }); break;
-      case 'F': text = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'short' }); break;
+      case 't': text = this._fmtTime(date, { timeStyle: 'short' }, locale); break;
+      case 'T': text = this._fmtTime(date, { timeStyle: 'medium' }, locale); break;
+      case 'd': text = this._fmtDate(date, { dateStyle: 'short' }, locale); break;
+      case 'D': text = this._fmtDate(date, { dateStyle: 'long' }, locale); break;
+      case 'F': text = this._fmtDateTime(date, { dateStyle: 'full', timeStyle: 'short' }, locale); break;
       case 'R': text = this._relativeTimestamp(date.getTime(), locale); break;
-      default:  text = date.toLocaleString(locale, { dateStyle: 'long', timeStyle: 'short' }); break;
+      default:  text = this._fmtDateTime(date, { dateStyle: 'long', timeStyle: 'short' }, locale); break;
     }
   } catch { return null; }
   // The hover title always spells the instant out in full, so a relative or
   // time-only token can still be pinned down without asking the sender.
   let title = text;
-  try { title = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'long' }); } catch { /* keep the visible text */ }
+  try { title = this._fmtDateTime(date, { dateStyle: 'full', timeStyle: 'long' }, locale); } catch { /* keep the visible text */ }
   if (style === 'R') this._startTimestampTicker();
   return `<time class="chat-timestamp" datetime="${this._escapeHtml(date.toISOString())}" data-ts="${Math.trunc(seconds)}" data-tstyle="${this._escapeHtml(style)}" title="${this._escapeHtml(title)}">${this._escapeHtml(text)}</time>`;
 },
@@ -628,11 +731,14 @@ _parseTimeExpression(input, now = new Date()) {
   let when;
   if (ymd) {
     const y = Number(ymd[1]), mo = Number(ymd[2]) - 1, d = Number(ymd[3]);
-    when = new Date(y, mo, d, hour, mi, 0, 0);
-    // Reject dates that do not exist (JS rolls 2026-02-31 into March).
-    if (when.getFullYear() !== y || when.getMonth() !== mo || when.getDate() !== d) return null;
+    when = this._wallToInstant(y, mo, d, hour, mi, 0);
+    // Reject dates that do not exist (JS rolls 2026-02-31 into March), checked
+    // in the same zone the wall-clock was read in.
+    const back = this._zonedParts(when);
+    if (back.year !== y || back.monthIndex !== mo || back.day !== d) return null;
   } else {
-    when = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (dayShift || 0), hour, mi, 0, 0);
+    const nowP = this._zonedParts(now);
+    when = this._wallToInstant(nowP.year, nowP.monthIndex, nowP.day + (dayShift || 0), hour, mi, 0);
     // A bare time that already went by today means the next one. Someone
     // saying "8pm" at nine in the evening is scheduling, not reminiscing.
     if (dayShift === null && when.getTime() <= now.getTime()) when = new Date(when.getTime() + 86400000);
@@ -1244,15 +1350,19 @@ _formatContent(str) {
 _formatTime(dateStr) {
   const date = new Date(dateStr);
   const now = new Date();
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const isToday = date.toDateString() === now.toDateString();
+  const time = this._fmtTime(date);
+  // Compare the calendar day in the reader's chosen zone (falls back to the
+  // device zone when unset), so "today"/"yesterday" don't drift across a date
+  // boundary when a timezone is picked.
+  const dayKey = (d) => this._fmtDate(d, { year: 'numeric', month: '2-digit', day: '2-digit' });
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
+  const isToday = dayKey(date) === dayKey(now);
+  const isYesterday = dayKey(date) === dayKey(yesterday);
 
   if (isToday) return t('utils.today_at', { time });
   if (isYesterday) return t('utils.yesterday_at', { time });
-  return `${date.toLocaleDateString()} ${time}`;
+  return `${this._fmtDate(date)} ${time}`;
 },
 
 _getUserColor(username) {
@@ -3869,7 +3979,7 @@ _appendThreadMessage(msg) {
   if (msg.avatar) el.dataset.avatar = msg.avatar;
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
   if (threadCompact) {
-    const shortTime = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const shortTime = this._fmtTime(msg.created_at);
     el.innerHTML = `
       <div class="thread-msg-row">
         <div class="thread-msg-avatar thread-msg-compact-spacer"><span class="thread-compact-time">${this._escapeHtml(shortTime)}</span></div>

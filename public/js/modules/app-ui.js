@@ -3084,10 +3084,12 @@ _setupUI() {
       const di = document.getElementById('tsm-cal-input');
       if (!di) return;
       const cur = this._tsmBuildDate();
-      // Seed the native picker with the fields' current date so it opens there.
+      // Seed the native picker with the fields' current date so it opens there,
+      // decomposed in the same zone the wall-clock fields are read in.
       if (cur) {
         const p = n => String(n).padStart(2, '0');
-        di.value = `${cur.getFullYear()}-${p(cur.getMonth() + 1)}-${p(cur.getDate())}`;
+        const parts = this._zonedParts(cur);
+        di.value = `${parts.year}-${p(parts.monthIndex + 1)}-${p(parts.day)}`;
       }
       try { di.showPicker(); } catch { di.focus(); di.click(); }
     });
@@ -3535,6 +3537,12 @@ _setupUI() {
     if (window.i18n) i18n.setLocale(e.target.value);
   });
   this._buildLanguagePicker();
+
+  // ── Timezone (Configure Time) ────────────────────────
+  document.getElementById('configure-time-btn')?.addEventListener('click', () => {
+    this._openTimezoneModal({ firstRun: false });
+  });
+  this._updateTimezoneSummary?.();
 
   // ── Password change ──────────────────────────────────
   document.getElementById('change-password-btn').addEventListener('click', async () => {
@@ -4253,7 +4261,7 @@ _setupUI() {
       }
       listEl.innerHTML = files.map(f => {
         const safeName = f.name.replace(/[<>"&]/g, c => ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', '&': '&amp;' }[c]));
-        const when = new Date(f.mtime).toLocaleString();
+        const when = this._fmtDateTime(f.mtime);
         return `<div style="display:flex;gap:6px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:6px 8px;border-radius:4px">
           <div style="min-width:0;flex:1">
             <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.85em">${safeName}</div>
@@ -4747,7 +4755,7 @@ _setupUI() {
           : 'settings.admin.invite_links.channel_other', { count: ic.channels.length }
       );
       const uses = ic.max_uses > 0 ? `${ic.use_count} / ${ic.max_uses}` : `${ic.use_count}`;
-      const expiry = ic.expires_at ? new Date(ic.expires_at).toLocaleString() : t('settings.admin.invite_links.never');
+      const expiry = ic.expires_at ? this._fmtDateTime(ic.expires_at) : t('settings.admin.invite_links.never');
       const label = ic.label ? this._escapeHtml(ic.label) : `<em style="opacity:.6">${t('settings.admin.invite_links.no_label')}</em>`;
       const editorChannels = _inviteChannelChecks('invite-edit-channel-cb', new Set(ic.channels || []));
       return `<div class="invite-code-card" data-id="${ic.id}" style="border:1px solid var(--border);border-radius:8px;padding:10px">
@@ -5037,7 +5045,7 @@ async _copyInviteCard(card) {
 
   if (invite?.expires_at) {
     const expiryDate = new Date(invite.expires_at);
-    if (!Number.isNaN(expiryDate.getTime())) expiryText = expiryDate.toLocaleString();
+    if (!Number.isNaN(expiryDate.getTime())) expiryText = this._fmtDateTime(expiryDate);
   }
 
   const invitedText = t('settings.admin.invite_links.card_invited', { server: brandText });
@@ -6549,13 +6557,13 @@ _openScheduleModal(prefill = '') {
   const ch = this.channels?.find(c => c.code === this.currentChannel);
   if (!ch || ch.is_dm) { this._showToast(t('modals.schedule.not_here'), 'error'); return; }
   const text = document.getElementById('schedule-text');
-  const when = document.getElementById('schedule-when');
   text.value = prefill || document.getElementById('message-input')?.value || '';
   text.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  // Default to one hour out, on the whole minute, seeded in the user's zone.
   const d = new Date(Date.now() + 60 * 60 * 1000);
   d.setSeconds(0, 0);
-  when.value = this._toLocalInputValue(d);
-  when.min = this._toLocalInputValue(new Date());
+  this._wireScheduleFields();
+  this._seedScheduleFields(d);
   this._scheduleEditingId = null;
   document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
   modal.style.display = 'flex';
@@ -6563,9 +6571,47 @@ _openScheduleModal(prefill = '') {
   this._loadScheduledList();
 },
 
-_toLocalInputValue(d) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+/** Load an instant into the Send-at fields, decomposed into the user's
+ *  confirmed timezone (device zone when none is set). */
+_seedScheduleFields(d) {
+  const parts = this._zonedParts(d);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('sch-year', parts.year);
+  set('sch-month', parts.monthIndex + 1);
+  set('sch-day', parts.day);
+  set('sch-minute', parts.minute);
+  set('sch-second', parts.second);
+  this._tsmSetMeridiem(this._tsm24hDefault() ? '24' : (parts.hour < 12 ? 'AM' : 'PM'), parts.hour, this._schScope());
+},
+
+/** Wire the Send-at picker once: meridiem toggle and the calendar helper,
+ *  reusing the /time picker's field logic under the schedule scope. */
+_wireScheduleFields() {
+  if (this._scheduleFieldsWired) return;
+  this._scheduleFieldsWired = true;
+  const scope = this._schScope();
+  document.querySelectorAll('#schedule-modal .tsm-mer-btn').forEach(b => {
+    b.addEventListener('click', () => this._tsmSetMeridiem(b.dataset.mer, undefined, scope));
+  });
+  document.getElementById('sch-cal-btn')?.addEventListener('click', () => {
+    const di = document.getElementById('sch-cal-input');
+    if (!di) return;
+    const cur = this._tsmBuildDate(scope);
+    if (cur) {
+      const p = n => String(n).padStart(2, '0');
+      const parts = this._zonedParts(cur);
+      di.value = `${parts.year}-${p(parts.monthIndex + 1)}-${p(parts.day)}`;
+    }
+    try { di.showPicker(); } catch { di.focus(); di.click(); }
+  });
+  document.getElementById('sch-cal-input')?.addEventListener('change', () => {
+    const v = document.getElementById('sch-cal-input')?.value; // YYYY-MM-DD
+    const m = v && v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return;
+    document.getElementById('sch-year').value = Number(m[1]);
+    document.getElementById('sch-month').value = Number(m[2]);
+    document.getElementById('sch-day').value = Number(m[3]);
+  });
 },
 
 _loadScheduledList() {
@@ -6584,7 +6630,7 @@ _renderScheduledList(items) {
   }
   list.innerHTML = items.map(it => `<div class="schedule-item" data-id="${it.id}">
     <div class="schedule-item-main">
-      <span class="schedule-item-when">${this._escapeHtml(new Date(it.sendAt).toLocaleString())}</span>
+      <span class="schedule-item-when">${this._escapeHtml(this._fmtDateTime(it.sendAt))}</span>
       <span class="schedule-item-chan">#${this._escapeHtml(it.channelName || '')}</span>
       <div class="schedule-item-text">${this._escapeHtml(it.content)}</div>
     </div>
@@ -6603,7 +6649,8 @@ _renderScheduledList(items) {
     }
     this._scheduleEditingId = id;
     document.getElementById('schedule-text').value = it.content;
-    document.getElementById('schedule-when').value = this._toLocalInputValue(new Date(it.sendAt));
+    this._wireScheduleFields();
+    this._seedScheduleFields(new Date(it.sendAt));
     document.getElementById('schedule-save').textContent = t('modals.common.save');
   }));
 },
@@ -6611,13 +6658,17 @@ _renderScheduledList(items) {
 _submitSchedule() {
   const textEl = document.getElementById('schedule-text');
   const content = textEl.value.trim();
-  const at = new Date(document.getElementById('schedule-when').value);
+  // Read the wall-clock in the user's confirmed zone (device fallback), so the
+  // absolute instant sent to the server is the moment the user actually meant,
+  // not whatever the browser's clock/zone claims. toISOString() below is still
+  // a plain UTC handoff; only the zone the fields are read in has changed.
+  const at = this._tsmBuildDate(this._schScope());
   if (!content) { textEl.focus(); return; }
-  if (isNaN(at.getTime()) || at.getTime() < Date.now() + 30000) { this._showToast(t('modals.schedule.in_past'), 'error'); return; }
+  if (!at || isNaN(at.getTime()) || at.getTime() < Date.now() + 30000) { this._showToast(t('modals.schedule.in_past'), 'error'); return; }
   const editing = this._scheduleEditingId;
   const done = (r) => {
     if (!r || r.error) { this._showToast((r && r.error) || t('toasts.role_server_no_response'), 'error'); return; }
-    this._showToast(t(editing ? 'modals.schedule.updated' : 'modals.schedule.scheduled', { when: at.toLocaleString() }), 'success');
+    this._showToast(t(editing ? 'modals.schedule.updated' : 'modals.schedule.scheduled', { when: this._fmtDateTime(at) }), 'success');
     if (!editing) {
       const input = document.getElementById('message-input');
       if (input && input.value.trim() === content) { input.value = ''; input.style.height = 'auto'; }
@@ -6639,6 +6690,10 @@ _submitSchedule() {
 /** True when the reader's locale keeps a 24-hour clock. Falls back to 24-hour
  *  when the browser cannot report an hour cycle, per the feature's default. */
 _tsm24hDefault() {
+  // A confirmed clock preference wins over the locale probe.
+  const h12 = this._userHour12?.();
+  if (h12 === true) return false;
+  if (h12 === false) return true;
   try {
     const hc = new Intl.DateTimeFormat(this._timeLocale?.(), { hour: 'numeric' })
       .resolvedOptions().hourCycle;
@@ -6653,35 +6708,44 @@ _tsm24hDefault() {
 _openTimeModal() {
   const modal = document.getElementById('time-modal');
   if (!modal) return;
-  const now = new Date();
+  // Seed "now" in the reader's confirmed zone (device zone when none is set),
+  // so a privacy browser reporting a false clock does not preset the wrong time.
+  const now = this._nowZonedParts();
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  set('tsm-year', now.getFullYear());
-  set('tsm-month', now.getMonth() + 1);
-  set('tsm-day', now.getDate());
-  set('tsm-minute', now.getMinutes());
-  set('tsm-second', now.getSeconds());
+  set('tsm-year', now.year);
+  set('tsm-month', now.monthIndex + 1);
+  set('tsm-day', now.day);
+  set('tsm-minute', now.minute);
+  set('tsm-second', now.second);
   // Default the clock mode to the reader's own convention, then seed the hour
   // field in whatever units that mode expects.
-  this._tsmSetMeridiem(this._tsm24hDefault() ? '24' : (now.getHours() < 12 ? 'AM' : 'PM'), now.getHours());
+  this._tsmSetMeridiem(this._tsm24hDefault() ? '24' : (now.hour < 12 ? 'AM' : 'PM'), now.hour);
   this._tsmRenderStyles();
   this._tsmUpdatePreview();
   modal.style.display = 'flex';
   document.getElementById('tsm-hour')?.focus();
 },
 
+/** The two wall-clock pickers that share this field logic. Each names its modal
+ *  (for the meridiem buttons), its field id prefix, and where its 24/AM/PM
+ *  state lives. Defaulting every function to the /time scope keeps that
+ *  picker's existing call sites untouched. */
+_tsmScope() { return { modalId: 'time-modal', prefix: 'tsm', meridiemKey: '_tsmMeridiem' }; },
+_schScope() { return { modalId: 'schedule-modal', prefix: 'sch', meridiemKey: '_schMeridiem' }; },
+
 /** Switch the 24HR / AM / PM segmented control. `seedHour24`, when given, is a
  *  0–23 hour to load into the field in the new mode's units. */
-_tsmSetMeridiem(mode, seedHour24) {
-  this._tsmMeridiem = mode;
-  document.querySelectorAll('#time-modal .tsm-mer-btn').forEach(b => {
+_tsmSetMeridiem(mode, seedHour24, scope = this._tsmScope()) {
+  this[scope.meridiemKey] = mode;
+  document.querySelectorAll(`#${scope.modalId} .tsm-mer-btn`).forEach(b => {
     b.classList.toggle('active', b.dataset.mer === mode);
   });
-  const hourEl = document.getElementById('tsm-hour');
+  const hourEl = document.getElementById(`${scope.prefix}-hour`);
   if (!hourEl) return;
   const cur = Number(hourEl.value);
   // Reuse whatever hour is already showing when the user flips the toggle, so
   // "8 PM" stays 8 PM going to 24-hour (→ 20) and back.
-  let h24 = Number.isFinite(seedHour24) ? seedHour24 : this._tsmReadHour24(cur);
+  let h24 = Number.isFinite(seedHour24) ? seedHour24 : this._tsmReadHour24(cur, scope);
   if (!Number.isFinite(h24)) h24 = 0;
   if (mode === '24') {
     hourEl.min = 0; hourEl.max = 23;
@@ -6693,27 +6757,32 @@ _tsmSetMeridiem(mode, seedHour24) {
 },
 
 /** Convert the hour field's current number into 0–23, honouring the mode. */
-_tsmReadHour24(raw) {
+_tsmReadHour24(raw, scope = this._tsmScope()) {
   const h = Number(raw);
   if (!Number.isFinite(h)) return NaN;
-  if (this._tsmMeridiem === '24') return h;
+  if (this[scope.meridiemKey] === '24') return h;
   const base = h % 12;
-  return this._tsmMeridiem === 'PM' ? base + 12 : base;
+  return this[scope.meridiemKey] === 'PM' ? base + 12 : base;
 },
 
-/** Read all fields into a Date in the sender's own timezone, or null if the
+/** Read all fields into a Date, interpreting the entered wall-clock in the
+ *  reader's confirmed timezone (device zone when none is set), or null if the
  *  combination is not a real calendar instant. */
-_tsmBuildDate() {
+_tsmBuildDate(scope = this._tsmScope()) {
   const num = id => Number(document.getElementById(id)?.value);
-  const y = num('tsm-year'), mo = num('tsm-month'), d = num('tsm-day');
-  const mi = num('tsm-minute'), se = num('tsm-second');
-  const h24 = this._tsmReadHour24(document.getElementById('tsm-hour')?.value);
+  const y = num(`${scope.prefix}-year`), mo = num(`${scope.prefix}-month`), d = num(`${scope.prefix}-day`);
+  const mi = num(`${scope.prefix}-minute`), se = num(`${scope.prefix}-second`);
+  const h24 = this._tsmReadHour24(document.getElementById(`${scope.prefix}-hour`)?.value, scope);
   if (![y, mo, d, mi, se, h24].every(Number.isFinite)) return null;
   if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
   if (h24 < 0 || h24 > 23 || mi < 0 || mi > 59 || se < 0 || se > 59) return null;
-  const when = new Date(y, mo - 1, d, h24, mi, se, 0);
-  // Reject dates JS silently rolls forward (e.g. 2026-02-31 → March).
-  if (when.getFullYear() !== y || when.getMonth() !== mo - 1 || when.getDate() !== d) return null;
+  // Interpret the entered wall-clock in the reader's confirmed zone (device
+  // zone when none is set), so the instant matches what the person meant.
+  const when = this._wallToInstant(y, mo - 1, d, h24, mi, se);
+  // Reject dates JS silently rolls forward (e.g. 2026-02-31 → March), checked
+  // in the same zone the wall-clock was read in.
+  const back = this._zonedParts(when);
+  if (back.year !== y || back.monthIndex !== mo - 1 || back.day !== d) return null;
   return when;
 },
 
@@ -7430,7 +7499,7 @@ _renderMediaGalleryTab(tab) {
     try {
       const d = new Date(iso);
       if (isNaN(d)) return '';
-      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      return this._fmtDate(d, { year: 'numeric', month: 'short', day: 'numeric' });
     } catch { return ''; }
   };
   const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
