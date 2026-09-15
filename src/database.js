@@ -1704,6 +1704,9 @@ function initDatabase() {
     { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
     // Closed topics grey out and sit below the open ones (#5624).
     { name: 'closed', sql: "ALTER TABLE messages ADD COLUMN closed INTEGER DEFAULT 0" },
+    // NSFW topics blur their picture and preview until clicked, and stay out
+    // of the list for anyone who hides NSFW channels (#5633).
+    { name: 'nsfw', sql: "ALTER TABLE messages ADD COLUMN nsfw INTEGER DEFAULT 0" },
   ]) {
     try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
   }

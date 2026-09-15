@@ -2495,7 +2495,7 @@
     },
     "nsfw": {
       "hide": "Hide NSFW channels",
-      "hide_hint": "Channels an admin marked 🔞 leave your sidebar until you turn this off. Handy on a phone in public."
+      "hide_hint": "Channels an admin marked 🔞 leave your sidebar, and forum topics marked 🔞 leave their forum, until you turn this off. Handy on a phone in public."
     },
     "search_placeholder": "Search settings (Ctrl+F)"
   },
@@ -3754,6 +3754,11 @@
     "body_placeholder": "Write the first message of the topic…",
     "tags": "Tags",
     "tags_hint": "(up to 5)",
+    "nsfw": "NSFW",
+    "nsfw_reveal": "NSFW, click to show",
+    "mark_nsfw": "NSFW: blur the picture and preview until clicked, and keep the topic away from anyone who hides NSFW channels",
+    "mark_nsfw_menu": "Mark NSFW",
+    "unmark_nsfw": "Unmark NSFW",
     "attach_hint": "To attach an image or a file, paste or drop it into the message box below the topics instead.",
     "sort": "Sort",
     "sort_active": "Recently active",

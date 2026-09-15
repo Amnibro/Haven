@@ -25,6 +25,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Send later shortcuts (#5657).** Ctrl+Enter in the message box opens Send
   later with your text, and the Send later box takes the same formatting
   shortcuts and link paste as the composer. Thanks to @birdcrazy.
+- **NSFW forum topics (#5633).** A topic can be marked NSFW when it is
+  posted or edited, or from its right-click menu. Its picture and preview
+  are blurred behind a label until clicked, like a spoiler, the title stays
+  readable, and a 🔞 sits with its tags. Anyone who hides NSFW channels in
+  Settings does not see the topic at all. Requested by @quakeman00.
 - **Lock a forum's layout (#5656).** Next to Set as default there is a lock:
   once on, only people who can change the channel's settings can switch the
   view or tile shape, and everyone else sees the forum the way it was set.

@@ -59,7 +59,7 @@ module.exports = function register(socket, ctx) {
   // means "less recently active than X".
   const FORUM_ACTIVITY = 'COALESCE((SELECT MAX(t.created_at) FROM messages t WHERE t.thread_id = m.id), m.created_at)';
   const FORUM_SELECT = `
-    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.title, m.tags, m.closed,
+    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.title, m.tags, m.closed, m.nsfw,
            COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
            COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile,
            ${FORUM_ACTIVITY} AS activity_at
@@ -345,6 +345,7 @@ module.exports = function register(socket, ctx) {
       }
       if ('tags' in m) obj.tags = parseTags(m.tags);
       if ('closed' in m) obj.closed = !!m.closed;
+      if ('nsfw' in m) obj.nsfw = !!m.nsfw;
       if (m.poll_data) {
         try {
           obj.poll = JSON.parse(m.poll_data);
@@ -950,8 +951,11 @@ module.exports = function register(socket, ctx) {
     // ignored outside forum channels so a stale client cannot tag chat.
     let topicTitle = null;
     let topicTags = null;
+    let topicNsfw = 0;
     if (channel.is_forum) {
       if (typeof data.title === 'string' && data.title.trim()) topicTitle = data.title.trim().replace(/\s+/g, ' ').slice(0, 120);
+      // The poster can mark the topic NSFW (#5633).
+      if (data.nsfw === true) topicNsfw = 1;
       const allowed = new Set(parseChannelTags(channel.forum_tags).map(t => t.name));
       if (Array.isArray(data.tags)) {
         const picked = [...new Set(data.tags.filter(t => typeof t === 'string').map(t => t.trim()).filter(t => allowed.has(t)))].slice(0, 5);
@@ -1167,14 +1171,15 @@ module.exports = function register(socket, ctx) {
 
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags);
+        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw);
 
       const message = {
         id: result.lastInsertRowid,
         content: finalContent,
         title: topicTitle || undefined,
         tags: topicTags ? JSON.parse(topicTags) : undefined,
+        nsfw: topicNsfw ? true : undefined,
         created_at: new Date().toISOString(),
         username: personaUsername || socket.user.displayName,
         user_id: socket.user.id,
@@ -1455,11 +1460,16 @@ module.exports = function register(socket, ctx) {
     // Closed is only changed when the editor sent it, so an older client that
     // edits the title leaves it alone (#5624).
     const closed = typeof data.closed === 'boolean' ? (data.closed ? 1 : 0) : null;
+    // Same rule for the NSFW flag (#5633).
+    const nsfw = typeof data.nsfw === 'boolean' ? (data.nsfw ? 1 : 0) : null;
     try {
       db.prepare('UPDATE messages SET title = ?, tags = ? WHERE id = ?').run(title || null, tags.length ? JSON.stringify(tags) : null, msg.id);
       if (closed !== null) db.prepare('UPDATE messages SET closed = ? WHERE id = ?').run(closed, msg.id);
-      const closedNow = closed !== null ? closed : (db.prepare('SELECT closed FROM messages WHERE id = ?').get(msg.id)?.closed || 0);
-      io.to(`channel:${msg.code}`).emit('topic-updated', { channelCode: msg.code, messageId: msg.id, title: title || null, tags, closed: !!closedNow });
+      if (nsfw !== null) db.prepare('UPDATE messages SET nsfw = ? WHERE id = ?').run(nsfw, msg.id);
+      const row = db.prepare('SELECT closed, nsfw FROM messages WHERE id = ?').get(msg.id) || {};
+      const closedNow = closed !== null ? closed : (row.closed || 0);
+      const nsfwNow = nsfw !== null ? nsfw : (row.nsfw || 0);
+      io.to(`channel:${msg.code}`).emit('topic-updated', { channelCode: msg.code, messageId: msg.id, title: title || null, tags, closed: !!closedNow, nsfw: !!nsfwNow });
     } catch (err) {
       console.error('set-topic-meta error:', err);
       socket.emit('error-msg', 'Failed to update the topic');

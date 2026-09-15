@@ -169,7 +169,7 @@ _renderForum(messages) {
   const grid = document.createElement('div');
   grid.className = 'forum-topics';
   grid.id = 'forum-topics';
-  const topics = this._forumSortTopics((messages || []).filter(m => m && !m.thread_id && (m.type || 'user') === 'user'));
+  const topics = this._forumSortTopics((messages || []).filter(m => m && !m.thread_id && (m.type || 'user') === 'user' && !this._forumTopicHidden(m)));
   for (const m of topics) { this._forumTopics.set(m.id, m); grid.appendChild(this._createForumTopicEl(m)); }
   container.appendChild(grid);
   if (!topics.length) {
@@ -292,7 +292,7 @@ _forumToolbarEl(code) {
 _createForumTopicEl(msg) {
   const el = document.createElement('div');
   const unread = !!(msg.thread && msg.thread.unread);
-  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '') + (unread ? ' forum-topic-unread' : '');
+  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '') + (unread ? ' forum-topic-unread' : '') + (msg.nsfw ? ' forum-topic-nsfw' : '');
   el.dataset.msgId = msg.id;
   el.dataset.userId = msg.user_id;
   el.dataset.time = msg.created_at;
@@ -306,11 +306,14 @@ _createForumTopicEl(msg) {
   const count = msg.thread && msg.thread.count ? msg.thread.count : 0;
   const when = this._forumPrefs().sort === 'created' ? new Date(msg.created_at) : new Date(this._forumActivityOf(msg));
   const canEdit = this.user && (msg.user_id === this.user.id || this.user.isAdmin || (this._hasPerm && this._hasPerm('manage_messages')));
+  // An NSFW topic blurs its picture and preview behind a label until clicked,
+  // like a spoiler; the title stays readable (#5633).
+  const cover = msg.nsfw ? ` data-nsfw-label="${this._escapeHtml(t('forum.nsfw_reveal'))}"` : '';
   el.innerHTML = `
     ${this._forumAvatarHtml(msg)}
-    ${thumb ? `<div class="forum-topic-thumb"><img ${this._lazySrcAttr ? this._lazySrcAttr(`src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"><span>⬡</span></div>`}
+    ${thumb ? `<div class="forum-topic-thumb"${cover}><img ${this._lazySrcAttr ? this._lazySrcAttr(`src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"${cover}><span>⬡</span></div>`}
     <div class="forum-topic-body">
-      <div class="forum-topic-tags">${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
+      <div class="forum-topic-tags">${msg.nsfw ? `<span class="forum-tag forum-tag-nsfw" title="${this._escapeHtml(t('forum.nsfw'))}">🔞</span>` : ''}${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
       <div class="forum-topic-title">${unread ? `<span class="forum-unread-dot" title="${t('forum.unread')}"></span>` : ''}${this._escapeHtml(this._forumTitleOf(msg))}</div>
       <div class="forum-topic-snippet message-content">${this._escapeHtml(this._forumSnippetOf(msg))}</div>
       <div class="forum-topic-meta">
@@ -322,6 +325,9 @@ _createForumTopicEl(msg) {
     </div>`;
   el.addEventListener('click', (e) => {
     if (e.target.closest('.forum-topic-edit')) { e.stopPropagation(); this._forumEditTopicMeta(msg.id); return; }
+    // The first click on a blurred picture or preview shows it; the title and
+    // the rest of the card open the topic as usual.
+    if (msg.nsfw && !el.classList.contains('revealed') && e.target.closest('.forum-topic-thumb, .forum-topic-snippet')) { e.stopPropagation(); el.classList.add('revealed'); return; }
     if (e.target.closest('a')) return;
     this._openThread(msg.id);
   });
@@ -360,6 +366,7 @@ _showForumTopicContextMenu(e, msg) {
   if (canEdit) items.push(item('edit', '✏️', t('forum.edit_post')));
   if (canPin) items.push(msg.pinned ? item('unpin', '📌', t('msg_toolbar.unpin')) : item('pin', '📌', t('msg_toolbar.pin')));
   if (canEdit) items.push(msg.closed ? item('reopen', '🔓', t('forum.reopen_topic')) : item('close', '✔', t('forum.close_topic')));
+  if (canEdit) items.push(msg.nsfw ? item('unnsfw', '🔞', t('forum.unmark_nsfw')) : item('nsfw', '🔞', t('forum.mark_nsfw_menu')));
   const more = [];
   if (canShareLink) more.push(item('copy-link', '🔗', t('msg_toolbar.copy_link')));
   if (canArchive) more.push(msg.is_archived ? item('unarchive', '🛡️', t('app.messages.unprotect_btn')) : item('archive', '🛡️', t('app.messages.protect_btn')));
@@ -392,6 +399,8 @@ _showForumTopicContextMenu(e, msg) {
       this.socket.emit('unpin-message', { messageId: msgId });
     } else if (action === 'close' || action === 'reopen') {
       this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], closed: action === 'close' });
+    } else if (action === 'nsfw' || action === 'unnsfw') {
+      this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], nsfw: action === 'nsfw' });
     } else if (action === 'copy-link') {
       this._copyChannelLink(this.currentChannel, msgId);
     } else if (action === 'archive') {
@@ -445,6 +454,7 @@ _forumAgo(date) {
 _forumInsertTopic(msg) {
   const grid = document.getElementById('forum-topics');
   if (!grid || !msg || msg.thread_id) return;
+  if (this._forumTopicHidden(msg)) return;
   const p = this._forumPrefs();
   if (p.tags.length) {
     const has = Array.isArray(msg.tags) ? msg.tags : [];
@@ -511,6 +521,9 @@ _forumApplyTopicUpdate(data) {
   topic.tags = Array.isArray(data.tags) ? data.tags : [];
   const wasClosed = !!topic.closed;
   if (typeof data.closed === 'boolean') topic.closed = data.closed;
+  if (typeof data.nsfw === 'boolean') topic.nsfw = data.nsfw;
+  // Marked NSFW while this reader hides NSFW: the card goes away (#5633).
+  if (this._forumTopicHidden(topic)) { this._forumReload(); return; }
   // Closing or reopening moves the card between the open and closed groups,
   // so the list is rebuilt rather than the card swapped in place (#5624).
   if (!!topic.closed !== wasClosed) { this._forumReload(); return; }
@@ -538,6 +551,7 @@ _forumAppendOlder(messages) {
   // client reverses them; a forum page arrives already in display order.
   for (const m of list) {
     if (grid.querySelector(`[data-msg-id="${m.id}"]`)) continue;
+    if (this._forumTopicHidden(m)) continue;
     this._forumTopics && this._forumTopics.set(m.id, m);
     grid.appendChild(this._createForumTopicEl(m));
   }
@@ -568,6 +582,7 @@ _openForumComposer(existing = null) {
         <label class="forum-field"><span>${t('forum.title')}</span><input type="text" id="forum-post-title" maxlength="120" placeholder="${t('forum.title_placeholder')}" value="${existing ? this._escapeHtml(existing.title || '') : ''}"></label>
         ${bodyField}
         ${tags.length ? `<div class="forum-field"><span>${t('forum.tags')} <small>${t('forum.tags_hint')}</small></span><div class="forum-tag-picker">${tags.map(tg => `<button type="button" class="forum-tag-chip${picked.has(tg.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tg.name)}">${tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(tg.name)}</button>`).join('')}</div></div>` : ''}
+        <label class="forum-field forum-field-closed forum-field-nsfw"><span><input type="checkbox" id="forum-post-nsfw"${existing && existing.nsfw ? ' checked' : ''}> 🔞 ${t('forum.mark_nsfw')}</span></label>
         ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : `<small class="settings-hint">${t('forum.attach_hint')}</small>`}
       </div>
       <div class="modal-footer"><button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
@@ -588,7 +603,8 @@ _openForumComposer(existing = null) {
     const title = titleEl.value.trim();
     if (existing) {
       const closedBox = overlay.querySelector('#forum-post-closed');
-      this.socket.emit('set-topic-meta', { messageId: existing.id, title, tags: [...picked], closed: closedBox ? closedBox.checked : undefined });
+      const nsfwBox = overlay.querySelector('#forum-post-nsfw');
+      this.socket.emit('set-topic-meta', { messageId: existing.id, title, tags: [...picked], closed: closedBox ? closedBox.checked : undefined, nsfw: nsfwBox ? nsfwBox.checked : undefined });
       const bodyEl = overlay.querySelector('#forum-post-body');
       if (bodyEl) {
         const body = bodyEl.value.trim();
@@ -601,7 +617,7 @@ _openForumComposer(existing = null) {
     }
     const body = overlay.querySelector('#forum-post-body').value.trim();
     if (!title && !body) { titleEl.focus(); return; }
-    this.socket.emit('send-message', { code, content: body || title, title: title || undefined, tags: [...picked] });
+    this.socket.emit('send-message', { code, content: body || title, title: title || undefined, tags: [...picked], nsfw: !!overlay.querySelector('#forum-post-nsfw')?.checked });
     this.notifications && this.notifications.play && this.notifications.play('sent');
     close();
   });
@@ -664,6 +680,12 @@ _hideNsfw() {
   return localStorage.getItem('haven_hide_nsfw') === 'true';
 },
 
+// A topic marked NSFW is left out of the forum for anyone who hides NSFW
+// channels; it is the same switch (#5633).
+_forumTopicHidden(msg) {
+  return !!(msg && msg.nsfw && this._hideNsfw());
+},
+
 _setHideNsfw(v) {
   const val = v ? 'true' : 'false';
   try { localStorage.setItem('haven_hide_nsfw', val); } catch {}
@@ -672,6 +694,7 @@ _setHideNsfw(v) {
   const toggle = document.getElementById('hide-nsfw-channels');
   if (toggle) toggle.checked = !!v;
   if (this._renderChannels) this._renderChannels();
+  if (this._forumActive && this._forumReload) this._forumReload();
 },
 
 };
