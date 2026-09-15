@@ -561,6 +561,21 @@ _setupNotifications() {
     applyHideSend();
   }
 
+  // Fold the toolbar into one + button (#5654).
+  const compactToggle = document.getElementById('compact-composer');
+  if (compactToggle) {
+    const applyCompact = () => {
+      document.documentElement.toggleAttribute('data-compact-composer', compactToggle.checked);
+      if (!compactToggle.checked) this._closeComposerMenu?.();
+    };
+    compactToggle.checked = localStorage.getItem('haven_compact_composer') === 'true';
+    compactToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_compact_composer', String(compactToggle.checked));
+      applyCompact();
+    });
+    applyCompact();
+  }
+
   // ── Score badge visibility ──
   // "Hide other players' badges" is a per-device client-side filter.
   // "Hide my own badge" is a server-side preference so other clients also

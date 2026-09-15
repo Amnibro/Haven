@@ -538,6 +538,7 @@
           </div>
           <div id="message-input-area" class="message-input-area" data-haven-region="composer">
             <div class="pip-input-resizer" aria-hidden="true"></div>
+            <button id="composer-plus-btn" class="btn-composer-plus" type="button" data-i18n-title="app.input_bar.plus_btn" title="More" aria-expanded="false">+</button>
             <div class="input-actions-box">
               <button id="upload-btn" class="btn-upload" data-i18n-title="media.upload_file_title" title="Upload File">
                 <svg class="upload-icon-default" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -575,6 +576,13 @@
                   <line x1="12" y1="12" x2="15.5" y2="13.5"/>
                 </svg>
               </button>
+              <span class="input-actions-divider"></span>
+              <button id="format-btn" class="btn-poll btn-format" data-i18n-title="app.input_bar.format_btn" title="Formatting and commands">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"/>
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                </svg>
+              </button>
               <span class="input-actions-divider" id="burn-divider" style="display:none"></span>
               <button id="burn-btn" class="btn-burn" data-i18n-title="app.input_bar.burn_btn" title="Burn after read (DM only)" style="display:none">🔥</button>
             </div>
@@ -589,6 +597,13 @@
               </div>
               <div class="gif-picker-grid" id="gif-grid"></div>
               <div class="gif-picker-footer" data-i18n="header.powered_by_giphy">Powered by GIPHY</div>
+            </div>
+            <div id="format-picker" class="gif-picker format-picker" style="display:none">
+              <div class="gif-picker-tabs">
+                <button type="button" class="gif-tab active" data-format-tab="markdown" data-i18n="format_picker.tab_formatting">Formatting</button>
+                <button type="button" class="gif-tab" data-format-tab="commands" data-i18n="format_picker.tab_commands">Commands</button>
+              </div>
+              <div class="format-picker-list" id="format-picker-list"></div>
             </div>
             <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
             <div id="channel-dropdown" class="mention-dropdown" style="display:none"></div>
@@ -1506,6 +1521,11 @@
             <input type="checkbox" id="hide-send-btn">
           </label>
           <small class="settings-hint" style="display:block" data-i18n="settings.layout.composer.hide_send_hint">Enter still sends. Frees the end of the message box if you never click the button.</small>
+          <label class="toggle-row">
+            <span data-i18n="settings.layout.composer.compact">Fold the buttons into one + button</span>
+            <input type="checkbox" id="compact-composer">
+          </label>
+          <small class="settings-hint" style="display:block" data-i18n="settings.layout.composer.compact_hint">Upload, emoji, GIF and the rest sit behind a single + at the start of the message box, so the box gets the room.</small>
         </div>
       </div>
 
@@ -4555,7 +4575,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.8.8"></script>
+  <script type="module" src="/js/app.js?v=4.8.9"></script>
   <script src="/js/plugin-loader.js?v=4.6.10"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

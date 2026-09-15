@@ -312,6 +312,8 @@
       "gif_label": "GIF",
       "poll_btn": "Create Poll",
       "time_btn": "Insert timestamp",
+      "format_btn": "Formatting and commands",
+      "plus_btn": "More",
       "burn_btn": "Burn after read (DM only)",
       "burn_btn_armed": "Burn after read armed — next message self-destructs 30s after viewing"
     },
@@ -1421,7 +1423,9 @@
       "composer": {
         "title": "Message Box",
         "hide_send": "Hide the Send button",
-        "hide_send_hint": "Enter still sends. Frees the end of the message box if you never click the button."
+        "hide_send_hint": "Enter still sends. Frees the end of the message box if you never click the button.",
+        "compact": "Fold the buttons into one + button",
+        "compact_hint": "Upload, emoji, GIF and the rest sit behind a single + at the start of the message box, so the box gets the room."
       }
     },
     "toggle_style": {
@@ -3697,6 +3701,32 @@
     "anonymous": "Anonymous",
     "votes_one": "{{count}} vote",
     "votes_other": "{{count}} votes"
+  },
+  "format_picker": {
+    "tab_formatting": "Formatting",
+    "tab_commands": "Commands",
+    "sample_text": "text",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strike": "Strikethrough",
+    "highlight": "Highlight",
+    "spoiler": "Spoiler",
+    "code": "Inline code",
+    "codeblock": "Code block",
+    "quote": "Quote",
+    "heading": "Heading",
+    "list": "Bullet list",
+    "numbered": "Numbered list",
+    "link": "Link",
+    "colour": "Coloured text",
+    "rule": "Divider line",
+    "table": "Table",
+    "mention": "Mention someone",
+    "channel": "Link a channel",
+    "emoji": "Emoji by name",
+    "commands_hint": "Type / in the message box to get these as you type.",
+    "no_commands": "No commands in this channel."
   },
   "thread_runtime": {
     "title": "Thread",

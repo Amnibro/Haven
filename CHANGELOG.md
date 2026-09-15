@@ -25,6 +25,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Send later shortcuts (#5657).** Ctrl+Enter in the message box opens Send
   later with your text, and the Send later box takes the same formatting
   shortcuts and link paste as the composer. Thanks to @birdcrazy.
+- **A formatting guide in the message box (#5654).** The pen button next
+  to the timestamp opens two tabs: every markdown trick Haven understands,
+  each with its syntax and a live example, and a click wraps your selection
+  in it; and every slash command that works in the channel, bot commands
+  included. Requested by @quakeman00.
+- **One + button in place of the toolbar (#5654).** Settings, Layout,
+  Message Box has a switch that folds upload, emoji, GIF, poll, timestamp
+  and formatting behind a single + at the start of the box, so the box
+  keeps its width on a half screen. Off by default. Requested by
+  @quakeman00.
 - **Forum topics open full width (#5659).** A topic from a forum used to
   slide out the same narrow panel a chat thread gets. It now takes the whole
   chat column, with a title bar naming the channel and the topic, its tags

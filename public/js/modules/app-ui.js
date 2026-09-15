@@ -3538,6 +3538,66 @@ _setupUI() {
   });
   this._buildLanguagePicker();
 
+  // ── One + button in place of the toolbar (#5654) ──────
+  // With the setting on, the toolbar is hidden and becomes the menu the +
+  // opens; the buttons keep their own handlers, only their home moves.
+  const plusBtn = document.getElementById('composer-plus-btn');
+  const actionsBox = document.querySelector('#message-input-area .input-actions-box');
+  this._closeComposerMenu = () => {
+    actionsBox?.classList.remove('open');
+    plusBtn?.setAttribute('aria-expanded', 'false');
+  };
+  if (plusBtn && actionsBox) {
+    plusBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = !actionsBox.classList.contains('open');
+      actionsBox.classList.toggle('open', open);
+      plusBtn.setAttribute('aria-expanded', String(open));
+    });
+    // Picking a tool closes the menu; the tool's own picker takes over.
+    actionsBox.addEventListener('click', (e) => {
+      if (document.documentElement.hasAttribute('data-compact-composer') && e.target.closest('button')) setTimeout(() => this._closeComposerMenu(), 0);
+    });
+    document.addEventListener('click', (e) => {
+      if (actionsBox.classList.contains('open') && !e.target.closest('.input-actions-box') && e.target !== plusBtn) this._closeComposerMenu();
+    });
+  }
+
+  // ── Formatting guide and command list (#5654) ─────────
+  const formatBtn = document.getElementById('format-btn');
+  const formatPicker = document.getElementById('format-picker');
+  if (formatBtn && formatPicker) {
+    let formatTab = 'markdown';
+    const renderFormatPicker = () => {
+      formatPicker.querySelectorAll('.gif-tab').forEach(b => b.classList.toggle('active', b.dataset.formatTab === formatTab));
+      const list = document.getElementById('format-picker-list');
+      if (list) list.innerHTML = formatTab === 'markdown' ? this._formatGuideHtml() : this._commandGuideHtml();
+    };
+    formatBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = formatPicker.style.display === 'none';
+      const emojiPicker = document.getElementById('emoji-picker');
+      const gifPicker = document.getElementById('gif-picker');
+      if (emojiPicker) emojiPicker.style.display = 'none';
+      if (gifPicker) gifPicker.style.display = 'none';
+      formatPicker.style.display = open ? 'flex' : 'none';
+      if (open) renderFormatPicker();
+    });
+    formatPicker.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tab = e.target.closest('[data-format-tab]');
+      if (tab) { formatTab = tab.dataset.formatTab; renderFormatPicker(); return; }
+      const row = e.target.closest('.format-row');
+      if (!row) return;
+      if (row.dataset.cmd) this._insertSlashCommand(row.dataset.cmd);
+      else this._wrapComposerSelection(row.dataset.before || '', row.dataset.after || '', row.dataset.sample || '', row.dataset.block === '1');
+      formatPicker.style.display = 'none';
+    });
+    document.addEventListener('click', (e) => {
+      if (formatPicker.style.display !== 'none' && !e.target.closest('#format-picker') && !e.target.closest('#format-btn')) formatPicker.style.display = 'none';
+    });
+  }
+
   // ── Timezone (Configure Time) ────────────────────────
   document.getElementById('configure-time-btn')?.addEventListener('click', () => {
     this._openTimezoneModal({ firstRun: false });
@@ -6513,6 +6573,89 @@ _submitPoll() {
 
 // The drag bar above a text box. Bound once per handle; the edit box makes
 // its own handle on the fly (#5662).
+// ── Formatting guide and command list (#5654) ─────────────
+// Every markdown trick the message formatter understands, in one place. A
+// click wraps the selection (or drops a sample) into the message box.
+_formatGuideRows() {
+  return [
+    { key: 'bold',      before: '**', after: '**' },
+    { key: 'italic',    before: '*',  after: '*' },
+    { key: 'underline', before: '__', after: '__' },
+    { key: 'strike',    before: '~~', after: '~~' },
+    { key: 'highlight', before: '==', after: '==' },
+    { key: 'spoiler',   before: '||', after: '||' },
+    { key: 'code',      before: '`',  after: '`' },
+    { key: 'codeblock', before: '```\n', after: '\n```', block: true },
+    { key: 'quote',     before: '> ',  after: '', block: true },
+    { key: 'heading',   before: '# ',  after: '', block: true },
+    { key: 'list',      before: '- ',  after: '', block: true },
+    { key: 'numbered',  before: '1. ', after: '', block: true },
+    { key: 'link',      before: '[',   after: '](https://example.com)' },
+    { key: 'colour',    before: 'c#FF00EF ', after: ' #c' },
+    { key: 'rule',      before: '---', after: '', block: true, sample: '' },
+    { key: 'table',     before: '| A | B |\n| --- | --- |\n| 1 | 2 |', after: '', block: true, sample: '' },
+    { key: 'mention',   before: '@',  after: '', sample: '' },
+    { key: 'channel',   before: '#',  after: '', sample: '' },
+    { key: 'emoji',     before: ':',  after: ':', sample: 'smile' },
+  ];
+},
+
+_formatGuideHtml() {
+  return this._formatGuideRows().map(r => {
+    const sample = r.sample !== undefined ? r.sample : t('format_picker.sample_text');
+    const syntax = r.before + sample + r.after;
+    const demo = (r.block || !sample) ? '' : `<span class="format-row-demo message-content">${this._formatContent(syntax)}</span>`;
+    return `<button type="button" class="format-row" data-before="${this._escapeHtml(r.before)}" data-after="${this._escapeHtml(r.after)}" data-sample="${this._escapeHtml(sample)}"${r.block ? ' data-block="1"' : ''}>
+      <span class="format-row-label">${this._escapeHtml(t('format_picker.' + r.key))}</span>
+      <code class="format-row-syntax">${this._escapeHtml(syntax)}</code>${demo}</button>`;
+  }).join('');
+},
+
+// The same list the / dropdown offers, for the current channel, including
+// the bot commands registered here.
+_commandGuideHtml() {
+  const code = this.currentChannel;
+  const cmds = (this.slashCommands || []).filter(c => c && c.cmd && (!Array.isArray(c.channelCodes) || c.channelCodes.includes(code)));
+  if (!cmds.length) return `<div class="format-picker-hint">${this._escapeHtml(t('format_picker.no_commands'))}</div>`;
+  const rows = cmds.map(c => {
+    const desc = (c.descByChannel && code && c.descByChannel[code]) || c.desc || '';
+    return `<button type="button" class="format-row format-row-command" data-cmd="${this._escapeHtml(c.cmd)}">
+      <span class="format-row-cmd">/${this._escapeHtml(c.cmd)}${c.args ? ' ' + this._escapeHtml(c.args) : ''}</span>
+      <span class="format-row-desc">${this._escapeHtml(desc)}</span></button>`;
+  }).join('');
+  return `<div class="format-picker-hint">${this._escapeHtml(t('format_picker.commands_hint'))}</div>${rows}`;
+},
+
+// Wrap the selection in the message box (or the box being edited) with a
+// markdown pair, or drop a sample in when nothing is selected. Block-level
+// syntax starts on its own line.
+_wrapComposerSelection(before, after, sample = '', block = false) {
+  const input = this._activeEditTextarea || document.getElementById('message-input');
+  if (!input) return;
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  const selected = input.value.slice(start, end);
+  const inner = selected || sample;
+  const lead = (block && start > 0 && input.value[start - 1] !== '\n') ? '\n' : '';
+  input.focus();
+  input.setRangeText(lead + before + inner + after, start, end, 'end');
+  if (!selected && sample) {
+    const s = start + lead.length + before.length;
+    input.setSelectionRange(s, s + sample.length);
+  }
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+},
+
+// Put a command at the front of the message box, replacing one already there.
+_insertSlashCommand(cmd) {
+  const input = document.getElementById('message-input');
+  if (!input) return;
+  input.value = '/' + cmd + ' ' + input.value.replace(/^\/\S*\s?/, '');
+  input.focus();
+  input.setSelectionRange(cmd.length + 2, cmd.length + 2);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+},
+
 _bindInputResizer(handle) {
   if (!handle || handle._resizerBound) return;
   handle._resizerBound = true;

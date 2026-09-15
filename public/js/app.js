@@ -5,9 +5,9 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.8.3';
-import UIBindMethods   from './modules/app-ui.js?v=4.8.3';
+import UIBindMethods   from './modules/app-ui.js?v=4.8.4';
 import MediaMethods    from './modules/app-media.js?v=4.8.1';
-import ContextMethods  from './modules/app-context.js?v=4.8.2';
+import ContextMethods  from './modules/app-context.js?v=4.8.3';
 import ChannelMethods  from './modules/app-channels.js?v=4.8.2';
 import MessageMethods  from './modules/app-messages.js?v=4.8.2';
 import UserMethods     from './modules/app-users.js?v=4.8.2';
