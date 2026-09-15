@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Admin → Check for update → Update now launched the first-time installer on zip installs.** `Install Haven.bat` and `install.sh` have no update mode, so the server ran them as if they did, opened the GUI installer over a live server, and then exited with nothing to restart it; one host ended up with a Haven Desktop that would not come back until its config was deleted. Zip installs now report the update as manual with the exact steps instead of running anything. Git installs keep the one-click path.
+
 ## [3.24.0] — 2026-06-07
 
 ### Added
