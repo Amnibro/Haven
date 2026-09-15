@@ -4282,51 +4282,7 @@ app.post('/api/admin/ddns/refresh', async (req, res) => {
 // Detects how Haven was installed and returns the right command (or runs it).
 // Docker is intentionally NOT auto-runnable from inside the container — we just
 // surface the right command for the operator to run on the host.
-function detectInstallMethod() {
-  const cwd = process.cwd();
-  const inDocker = fs.existsSync('/.dockerenv') || process.env.HAVEN_IN_DOCKER === 'true';
-  if (inDocker) return 'docker';
-  if (fs.existsSync(path.join(cwd, '.git'))) return 'git';
-  // Haven Desktop sets HAVEN_DESKTOP when it hosts the server; it restarts the
-  // process after an update, so the git path stays runnable there.
-  if (process.platform === 'win32' && fs.existsSync(path.join(cwd, 'Install Haven.bat'))) return 'windows-installer';
-  if (fs.existsSync(path.join(cwd, 'install.sh'))) return 'shell-installer';
-  return 'manual';
-}
-
-function getUpdateInstructions(method) {
-  switch (method) {
-    case 'docker': return {
-      runnable: false,
-      command: 'docker compose pull && docker compose up -d',
-      message: 'Update from the host machine: cd into the haven-docker folder and run the command below.',
-    };
-    case 'git': return {
-      runnable: true,
-      command: 'git pull --ff-only && npm install --omit=dev',
-      message: 'Pull latest from GitHub and reinstall dependencies. The server will exit after the update so your supervisor (systemd / Docker / installer service) restarts it on the new code.',
-    };
-    // The zip installs have no update mode: "Install Haven.bat" and install.sh are
-    // first-time setup. Running them again from here opened the GUI installer over a
-    // live server, re-ran npm install and let the admin password be reset, and left
-    // the server exited with nothing to restart it (#5267 follow-up). Until the
-    // installer can update in place, hand the admin the manual steps instead.
-    case 'windows-installer': return {
-      runnable: false,
-      command: 'Download the latest release zip, unzip it over this folder, then restart Haven (or quit and relaunch Haven Desktop if it hosts the server).',
-      message: 'Zip install. Do not run "Install Haven.bat" again: it is the first-time setup, not an updater. Your data stays in %APPDATA%\\Haven.',
-    };
-    case 'shell-installer': return {
-      runnable: false,
-      command: 'Download the latest release zip, unzip it over this folder, then restart Haven (or quit and relaunch Haven Desktop if it hosts the server).',
-      message: 'Zip install. Do not run install.sh again: it is the first-time setup, not an updater. Your data stays in ~/.haven.',
-    };
-    default: return {
-      runnable: false,
-      message: 'Update method could not be detected. Pull the latest release from https://github.com/ancsemi/Haven/releases and replace your install manually.',
-    };
-  }
-}
+const { detectInstallMethod, getUpdateInstructions } = require('./src/update-instructions');
 
 app.get('/api/admin/update/check', async (req, res) => {
   const token = req.query.token || req.headers.authorization?.split(' ')[1];
