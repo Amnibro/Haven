@@ -435,6 +435,7 @@ _forumApplyContentEdit(messageId, content) {
   if (!topic) return false;
   topic.content = content;
   topic.edited_at = new Date().toISOString();
+  if (this._activeThreadParent === messageId) this._forumThreadRenderTopic?.();
   const el = document.querySelector(`#forum-topics [data-msg-id="${messageId}"]`);
   if (el) el.replaceWith(this._createForumTopicEl(topic));
   this._lazyMedia && this._lazyPump && this._lazyPump();
@@ -672,6 +673,96 @@ _setupSettingsSearch() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); input.focus(); input.select(); }
     if (e.key === 'Escape' && document.activeElement === input && input.value) { e.stopPropagation(); input.value = ''; apply(); }
   });
+},
+
+// ── Full-width topic view (#5659) ──────────────────────────
+// Opening a topic from a forum used to slide out the same narrow thread
+// panel a chat message gets, which read as a room inside a room. A forum
+// topic now takes the whole chat column, with a title bar naming the
+// channel, the topic, its tags and flags, and shows the whole first post
+// above the replies. A button on the bar switches back to the side panel,
+// and the choice sticks.
+
+_forumTopicFullPref() {
+  return localStorage.getItem('haven_forum_topic_full') !== '0';
+},
+
+_forumApplyThreadChrome(parentId) {
+  const panel = document.getElementById('thread-panel');
+  const bar = document.getElementById('thread-forum-bar');
+  const icon = panel && panel.querySelector('.thread-panel-icon');
+  if (!panel || !bar) return;
+  const topic = parentId && this._forumActive && this._forumTopics ? this._forumTopics.get(parentId) : null;
+  if (!topic) {
+    panel.classList.remove('thread-panel-forum');
+    panel.style.removeProperty('--thread-forum-left');
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    if (icon) icon.textContent = '🧵';
+    return;
+  }
+  const full = this._forumTopicFullPref();
+  panel.classList.toggle('thread-panel-forum', full);
+  if (!this._forumThreadResizeBound) {
+    this._forumThreadResizeBound = true;
+    window.addEventListener('resize', () => this._forumSyncThreadLeft());
+  }
+  this._forumSyncThreadLeft();
+
+  const ch = this.channels.find(c => c.code === this.currentChannel);
+  const title = document.getElementById('thread-panel-title');
+  if (title) title.textContent = ch ? ch.name : t('thread_runtime.title');
+  if (icon) icon.textContent = '🗂️';
+
+  const tagsOf = this._forumTagsOf();
+  const tags = Array.isArray(topic.tags) ? topic.tags : [];
+  const thumb = this._forumThumbOf(topic);
+  const flags = [
+    topic.nsfw ? `<span class="forum-tag forum-tag-nsfw" title="${this._escapeHtml(t('forum.nsfw'))}">🔞</span>` : '',
+    topic.is_archived ? `<span class="forum-tag forum-tag-protected" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : '',
+    topic.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : '',
+    topic.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : '',
+    ...tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }),
+  ].join('');
+  const when = new Date(topic.created_at);
+  bar.innerHTML = `
+    ${thumb ? `<div class="thread-forum-thumb"><img src="${this._escapeHtml(thumb)}" alt=""></div>` : ''}
+    <div class="thread-forum-text">
+      <div class="thread-forum-title">${this._escapeHtml(this._forumTitleOf(topic))}</div>
+      ${flags ? `<div class="forum-topic-tags thread-forum-tags">${flags}</div>` : ''}
+      <div class="thread-forum-meta">${this._escapeHtml(topic.username || '')} · <span title="${this._escapeHtml(this._fmtDateTime(when))}">${this._forumAgo(when)}</span></div>
+    </div>
+    <button type="button" class="btn-sm thread-forum-layout" title="${this._escapeHtml(t(full ? 'thread_runtime.forum_side_title' : 'thread_runtime.forum_full_title'))}">${t(full ? 'thread_runtime.forum_side' : 'thread_runtime.forum_full')}</button>`;
+  bar.style.display = 'flex';
+  bar.querySelector('.thread-forum-layout').addEventListener('click', () => {
+    localStorage.setItem('haven_forum_topic_full', full ? '0' : '1');
+    this._forumApplyThreadChrome(parentId);
+  });
+},
+
+// The panel is fixed to the window, so its left edge is set to the chat
+// column's left edge and kept there when the window changes size.
+_forumSyncThreadLeft() {
+  const panel = document.getElementById('thread-panel');
+  if (!panel || !panel.classList.contains('thread-panel-forum')) return;
+  const header = document.querySelector('.channel-header');
+  const left = header ? Math.max(0, Math.round(header.getBoundingClientRect().left)) : 0;
+  panel.style.setProperty('--thread-forum-left', left + 'px');
+},
+
+// The whole first post, rendered like a message, above the replies.
+_forumThreadRenderTopic() {
+  const container = document.getElementById('thread-messages');
+  if (!container) return;
+  container.querySelector('.thread-topic-body')?.remove();
+  const parentId = this._activeThreadParent;
+  const topic = parentId && this._forumActive && this._forumTopics ? this._forumTopics.get(parentId) : null;
+  if (!topic) return;
+  const body = document.createElement('div');
+  body.className = 'thread-topic-body message-content';
+  body.innerHTML = this._formatContent(topic.content || '');
+  container.prepend(body);
+  this._lazyMedia && this._lazyPump && this._lazyPump();
 },
 
 // ── NSFW channels ──────────────────────────────────────────

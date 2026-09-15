@@ -8696,6 +8696,39 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .thread-panel.pip .thread-panel-resizer {
   display: none;
 }
+/* A forum topic opens across the whole chat column with a title bar (#5659).
+   --thread-forum-left is set from the chat column's left edge by the app. */
+.thread-panel.thread-panel-forum:not(.pip) {
+  left: var(--thread-forum-left, 0px);
+  width: auto;
+  max-width: none;
+  animation: none;
+}
+.thread-panel.thread-panel-forum:not(.pip) .thread-panel-resizer { display: none; }
+.thread-panel-forum .thread-parent-meta,
+.thread-panel-forum .thread-parent-preview { display: none; }
+.thread-forum-bar { display: flex; gap: 0.75rem; align-items: flex-start; margin-top: 0.6rem; }
+.thread-forum-thumb {
+  flex: 0 0 4.5rem;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+  background: var(--bg-input);
+}
+.thread-forum-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thread-forum-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.thread-forum-title { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+.thread-forum-meta { font-size: 0.75rem; color: var(--text-muted); }
+.thread-forum-layout { flex: none; white-space: nowrap; }
+.thread-topic-body {
+  padding: 0.75rem 1rem 0.9rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.thread-panel:not(.thread-panel-forum) .thread-topic-body { font-size: 0.85rem; }
 @keyframes thread-slide-in {
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }

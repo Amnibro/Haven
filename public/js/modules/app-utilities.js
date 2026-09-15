@@ -3826,6 +3826,9 @@ _openThread(parentId) {
   const parentUserIdRaw = msgEl?.dataset?.userId;
   const parentUserId = parentUserIdRaw ? parseInt(parentUserIdRaw, 10) : null;
   this._setThreadParentHeader({ userId: parentUserId, username: author, avatar, avatarShape });
+  // A forum topic opens across the chat column with a title bar; this runs
+  // after the header above so the bar's title is what shows (#5659).
+  this._forumApplyThreadChrome?.(parentId);
 
   // Focus input
   const input = document.getElementById('thread-input');
@@ -3894,6 +3897,7 @@ _closeThread() {
     panel.style.display = 'none';
     panel.dataset.parentId = '';
   }
+  this._forumApplyThreadChrome?.(null);
 },
 
 _sendThreadMessage() {

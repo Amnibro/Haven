@@ -3715,7 +3715,11 @@
     "dock_panel": "Dock thread panel",
     "pop_out": "Pop out thread (PiP)",
     "cancel_reply": "Cancel thread reply",
-    "reply_placeholder": "Reply in thread..."
+    "reply_placeholder": "Reply in thread...",
+    "forum_full": "Full width",
+    "forum_side": "Side panel",
+    "forum_full_title": "Open topics across the whole chat area",
+    "forum_side_title": "Open topics in a panel beside the forum"
   },
   "dm_runtime": {
     "title": "DM",

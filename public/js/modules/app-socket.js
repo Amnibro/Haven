@@ -1674,6 +1674,8 @@ _setupSocketListeners() {
     const container = document.getElementById('thread-messages');
     if (!container) return;
     container.innerHTML = '';
+    // A forum topic shows its whole first post above the replies (#5659).
+    this._forumThreadRenderTopic?.();
     if (data.messages) {
       data.messages.forEach(msg => this._appendThreadMessage(msg));
     }

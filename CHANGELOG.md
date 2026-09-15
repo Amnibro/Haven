@@ -25,6 +25,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Send later shortcuts (#5657).** Ctrl+Enter in the message box opens Send
   later with your text, and the Send later box takes the same formatting
   shortcuts and link paste as the composer. Thanks to @birdcrazy.
+- **Forum topics open full width (#5659).** A topic from a forum used to
+  slide out the same narrow panel a chat thread gets. It now takes the whole
+  chat column, with a title bar naming the channel and the topic, its tags
+  and flags, and the whole first post above the replies. A Side panel button
+  on the bar switches back, and the choice sticks. Requested by @quakeman00.
 - **NSFW forum topics (#5633).** A topic can be marked NSFW when it is
   posted or edited, or from its right-click menu. Its picture and preview
   are blurred behind a label until clicked, like a spoiler, the title stays
