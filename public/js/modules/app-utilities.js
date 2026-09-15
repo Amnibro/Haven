@@ -799,11 +799,15 @@ _formatContent(str) {
         const mime = this._escapeHtml(typeof meta.mime === 'string' ? meta.mime : 'application/octet-stream');
         const size = Number(meta.size) || 0;
         const sizeStr = this._escapeHtml(this._formatFileSize ? this._formatFileSize(size) : (size + ' B'));
-        return `<div class="file-attachment e2e-file-pending" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="${t('app.messages.e2e_file_title')}">
+        // A voice message in a DM shows as one, with its length, and a click
+        // decrypts it into a player (#5665).
+        const voiceDur = this._voiceMessageLength(name);
+        const label = voiceDur !== null ? t('app.messages.voice_message') : name;
+        return `<div class="file-attachment e2e-file-pending${voiceDur !== null ? ' voice-message' : ''}" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="${t('app.messages.e2e_file_title')}">
           <button type="button" class="file-download-link e2e-file-download">
-            <span class="file-icon">🔒</span>
-            <span class="file-name">${name}</span>
-            <span class="file-size">(${sizeStr})</span>
+            <span class="file-icon">${voiceDur !== null ? '🎤' : '🔒'}</span>
+            <span class="file-name">${label}</span>
+            <span class="file-size">(${voiceDur !== null ? voiceDur : sizeStr})</span>
             <span class="file-download-arrow">⬇</span>
           </button>
         </div>`;
@@ -842,6 +846,15 @@ _formatContent(str) {
       'cpl','inf','reg','dll','ocx','sys','drv',
       'sh','app','dmg','pkg','deb','rpm','appimage',
     ]);
+    // A voice message from the mic button: a small player with its length
+    // rather than a file name and size (#5665).
+    const voiceDur = this._voiceMessageLength(fileName);
+    if (voiceDur !== null) {
+      return `<div class="file-attachment voice-message">
+        <div class="file-info">🎤 <span class="file-name">${t('app.messages.voice_message')}</span> <span class="file-size">(${voiceDur})</span></div>
+        <audio controls preload="metadata" src="${fileUrl}" class="file-audio"></audio>
+      </div>`;
+    }
     // Audio/video get inline players. The extension lists are optimistic —
     // a container being playable depends on the codecs inside it, not just the
     // extension (a .mov holding ProRes or HEVC won't decode in most browsers).
@@ -1355,6 +1368,14 @@ _formatContent(str) {
   if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;
 
   return html;
+},
+
+// "1:05" for a voice-message-1m05s.weba name, "" for a voice message with
+// no length in its name, null for any other file (#5665).
+_voiceMessageLength(name) {
+  if (!/^voice-message/i.test(String(name || ''))) return null;
+  const m = String(name).match(/(\d+)m(\d+)s/);
+  return m ? `${Number(m[1])}:${String(m[2]).padStart(2, '0')}` : '';
 },
 
 _formatTime(dateStr) {

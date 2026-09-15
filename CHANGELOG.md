@@ -25,6 +25,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Send later shortcuts (#5657).** Ctrl+Enter in the message box opens Send
   later with your text, and the Send later box takes the same formatting
   shortcuts and link paste as the composer. Thanks to @birdcrazy.
+- **Voice messages (#5665).** A mic button in the message box records
+  from your microphone; click it again, or Send, to post the recording as a
+  small player with its length, or Cancel to throw it away. Five minutes
+  tops. In an encrypted DM it is encrypted like any file and a click plays
+  it. Requested by @Gho6.
 - **A formatting guide in the message box (#5654).** The pen button next
   to the timestamp opens two tabs: every markdown trick Haven understands,
   each with its syntax and a live example, and a click wraps your selection

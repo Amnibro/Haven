@@ -3538,6 +3538,11 @@ _setupUI() {
   });
   this._buildLanguagePicker();
 
+  // ── Voice messages (#5665) ────────────────────────────
+  document.getElementById('voice-btn')?.addEventListener('click', () => this._toggleVoiceMessage());
+  document.getElementById('voice-rec-cancel')?.addEventListener('click', () => this._stopVoiceMessage(false));
+  document.getElementById('voice-rec-send')?.addEventListener('click', () => this._stopVoiceMessage(true));
+
   // ── One + button in place of the toolbar (#5654) ──────
   // With the setting on, the toolbar is hidden and becomes the menu the +
   // opens; the buttons keep their own handlers, only their home moves.
@@ -6654,6 +6659,108 @@ _insertSlashCommand(cmd) {
   input.focus();
   input.setSelectionRange(cmd.length + 2, cmd.length + 2);
   input.dispatchEvent(new Event('input', { bubbles: true }));
+},
+
+// ── Voice messages (#5665) ─────────────────────────────────
+// Click the mic to record, click it again (or Send) to post the recording as
+// an audio attachment; Cancel or Escape throws it away. It goes out through
+// the same upload as any file, so in an encrypted DM it is encrypted like
+// one. Five minutes is the ceiling.
+_voiceMimeChoice() {
+  if (typeof MediaRecorder === 'undefined') return null;
+  const wants = [
+    ['audio/webm;codecs=opus', 'weba'], ['audio/webm', 'weba'],
+    ['audio/ogg;codecs=opus', 'ogg'], ['audio/mp4', 'm4a'],
+  ];
+  for (const [mime, ext] of wants) {
+    try { if (MediaRecorder.isTypeSupported(mime)) return { mime, ext }; } catch { /* next */ }
+  }
+  return null;
+},
+
+async _toggleVoiceMessage() {
+  if (this._voiceRec) { this._stopVoiceMessage(true); return; }
+  const ch = this.channels.find(c => c.code === this.currentChannel);
+  if (!ch) return;
+  if (ch.media_enabled === 0) { this._showToast(t('media.uploads_disabled'), 'error'); return; }
+  const choice = this._voiceMimeChoice();
+  if (!choice || !navigator.mediaDevices?.getUserMedia) { this._showToast(t('voice_message.unsupported'), 'error'); return; }
+  let stream;
+  try {
+    // The same microphone voice chat uses, when one was picked.
+    const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    const savedInputId = localStorage.getItem('haven_input_device') || '';
+    if (savedInputId) audio.deviceId = { exact: savedInputId };
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+    catch { delete audio.deviceId; stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+  } catch {
+    this._showToast(t('voice_message.mic_denied'), 'error');
+    return;
+  }
+  const chunks = [];
+  let recorder;
+  try { recorder = new MediaRecorder(stream, { mimeType: choice.mime }); }
+  catch { recorder = new MediaRecorder(stream); }
+  const rec = { recorder, stream, chunks, ext: choice.ext, mime: recorder.mimeType || choice.mime, startedAt: Date.now(), code: this.currentChannel, send: false, timer: null };
+  recorder.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) chunks.push(e.data); });
+  recorder.addEventListener('stop', () => this._finishVoiceMessage(rec));
+  try {
+    recorder.start(250);
+  } catch {
+    // A browser that has the API but cannot encode from this input.
+    try { stream.getTracks().forEach(tr => tr.stop()); } catch { /* nothing to stop */ }
+    this._showToast(t('voice_message.unsupported'), 'error');
+    return;
+  }
+  this._voiceRec = rec;
+  const bar = document.getElementById('voice-record-bar');
+  if (bar) bar.style.display = 'flex';
+  document.getElementById('voice-btn')?.classList.add('recording');
+  const tick = () => {
+    const s = Math.floor((Date.now() - rec.startedAt) / 1000);
+    const el = document.getElementById('voice-rec-time');
+    if (el) el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (s >= 300) this._stopVoiceMessage(true);
+  };
+  tick();
+  rec.timer = setInterval(tick, 250);
+  this._voiceRecKeyHandler = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this._stopVoiceMessage(false); } };
+  document.addEventListener('keydown', this._voiceRecKeyHandler, true);
+},
+
+_stopVoiceMessage(send) {
+  const rec = this._voiceRec;
+  if (!rec) return;
+  rec.send = !!send;
+  rec.seconds = Math.round((Date.now() - rec.startedAt) / 1000);
+  clearInterval(rec.timer);
+  if (this._voiceRecKeyHandler) {
+    document.removeEventListener('keydown', this._voiceRecKeyHandler, true);
+    this._voiceRecKeyHandler = null;
+  }
+  const bar = document.getElementById('voice-record-bar');
+  if (bar) bar.style.display = 'none';
+  document.getElementById('voice-btn')?.classList.remove('recording');
+  this._voiceRec = null;
+  try {
+    if (rec.recorder.state !== 'inactive') rec.recorder.stop();
+    else this._finishVoiceMessage(rec);
+  } catch { this._finishVoiceMessage(rec); }
+},
+
+_finishVoiceMessage(rec) {
+  try { rec.stream.getTracks().forEach(tr => tr.stop()); } catch { /* already stopped */ }
+  if (rec.done) return;
+  rec.done = true;
+  if (!rec.send || !rec.chunks.length) return;
+  if (!rec.seconds || rec.seconds < 1) { this._showToast(t('voice_message.too_short'), 'error'); return; }
+  const type = String(rec.mime || '').split(';')[0] || 'audio/webm';
+  const blob = new Blob(rec.chunks, { type });
+  const m = Math.floor(rec.seconds / 60), s = rec.seconds % 60;
+  // The length rides in the name so the message can show it without loading
+  // the audio: voice-message-1m05s.weba.
+  const file = new File([blob], `voice-message-${m}m${String(s).padStart(2, '0')}s.${rec.ext}`, { type });
+  this._uploadGeneralFile(file, rec.code);
 },
 
 _bindInputResizer(handle) {

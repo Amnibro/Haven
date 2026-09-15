@@ -285,6 +285,7 @@
       "e2e_image_title": "🔒 End-to-end encrypted image",
       "e2e_file_title": "🔒 End-to-end encrypted file — click to download",
       "e2e_file_parse_error": "[Encrypted file — unable to parse]",
+      "voice_message": "Voice message",
       "file": "file",
       "mark_spoiler": "Mark as spoiler",
       "spoiler_on": "Spoiler on — click to send normally",
@@ -313,6 +314,7 @@
       "poll_btn": "Create Poll",
       "time_btn": "Insert timestamp",
       "format_btn": "Formatting and commands",
+      "voice_btn": "Record a voice message",
       "plus_btn": "More",
       "burn_btn": "Burn after read (DM only)",
       "burn_btn_armed": "Burn after read armed — next message self-destructs 30s after viewing"
@@ -3701,6 +3703,13 @@
     "anonymous": "Anonymous",
     "votes_one": "{{count}} vote",
     "votes_other": "{{count}} votes"
+  },
+  "voice_message": {
+    "recording_hint": "Recording. Click the mic or Send to post it, Escape to throw it away.",
+    "send": "Send",
+    "unsupported": "This browser cannot record audio.",
+    "mic_denied": "Haven needs the microphone for a voice message. Allow it and try again.",
+    "too_short": "That was too short to send."
   },
   "format_picker": {
     "tab_formatting": "Formatting",

@@ -1696,6 +1696,8 @@ _decryptE2EFiles(root) {
           mediaEl.preload = 'metadata';
           mediaEl.src = objectUrl;
           mediaEl.className = isVideo ? 'file-video' : 'file-audio';
+          // The click that decrypted a voice message was a play click (#5665).
+          if (isAudio && /^voice-message/i.test(name)) mediaEl.autoplay = true;
 
           row.classList.remove('e2e-file-loading');
           row.innerHTML = '';

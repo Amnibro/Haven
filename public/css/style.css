@@ -2235,6 +2235,31 @@ html.rgb-cycling *::after {
   white-space: nowrap;
 }
 
+/* Voice messages (#5665) */
+.btn-voice-msg.recording { color: #e74c5f; animation: voice-rec-pulse 1s ease-in-out infinite; }
+@keyframes voice-rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.voice-record-bar {
+  position: absolute;
+  left: 1.25rem;
+  right: 1.25rem;
+  bottom: 100%;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 1050;
+}
+.voice-rec-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: #e74c5f; animation: voice-rec-pulse 1s ease-in-out infinite; flex-shrink: 0; }
+.voice-rec-time { font-variant-numeric: tabular-nums; font-weight: 700; }
+.voice-rec-hint { flex: 1; font-size: 0.8rem; color: var(--text-muted); }
+.file-attachment.voice-message { max-width: 22rem; }
+.file-attachment.voice-message .file-audio { width: 100%; margin-top: 0.4rem; }
+
 /* Formatting guide and command list (#5654) */
 .format-picker { width: 24rem; max-height: 28rem; }
 .format-picker-list {
