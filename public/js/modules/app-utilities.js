@@ -522,7 +522,17 @@ _timeLocale() {
  *  historical offset change are resolved per-instant — never a frozen offset. */
 _userTimeZone() {
   const tz = this._userPrefs && this._userPrefs.timezone;
-  return (typeof tz === 'string' && tz) ? tz : undefined;
+  if (typeof tz !== 'string' || !tz) return undefined;
+  // A zone this browser does not know (a newer zone name on an older engine,
+  // or a stray value) would make every Intl call throw and take the message
+  // list with it. Check it once per value and fall back to the browser's own
+  // zone when it is unknown.
+  if (this._tzCheckedValue !== tz) {
+    this._tzCheckedValue = tz;
+    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); this._tzCheckedOk = true; }
+    catch { this._tzCheckedOk = false; }
+  }
+  return this._tzCheckedOk ? tz : undefined;
 },
 
 /** The reader's confirmed hour cycle as an Intl `hour12` value: true for 12h,

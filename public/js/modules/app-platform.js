@@ -305,19 +305,10 @@ _initWelcomePopups() {
     }
   } catch { /* storage unavailable: nothing to carry over */ }
 
-  // The first-run localisation prompt takes precedence over the app promos so
-  // two modals never fight for the screen. When it closes (Skip / Remind
-  // later) the promo queue runs; Confirm reloads the page, after which the
-  // prompt no longer qualifies and the promos evaluate normally.
-  if (this._shouldShowTzPrompt && this._shouldShowTzPrompt()) {
-    this._openTimezoneModal({ firstRun: true, onClose: () => this._runWelcomePromoQueue() });
-    return;
-  }
   this._runWelcomePromoQueue();
 },
 
-/** The app-promo sequencer, split out of _initWelcomePopups so the first-run
- *  localisation prompt can run ahead of it and hand control back on close. */
+/** The app-promo sequencer. */
 _runWelcomePromoQueue() {
   // ── Build the queue ──
   // Each entry: { id, modalId, prefKey, checkboxId, shouldShow }. A popup is
@@ -432,24 +423,12 @@ _runWelcomePromoQueue() {
   setTimeout(showCurrent, 1200);
 },
 
-// ── Persisted timezone / time-format prompt ─────────────────────────────
+// ── Persisted timezone / time-format ────────────────────────────────────
 // Storage (server-side user_preferences): `timezone` is an IANA zone id, so
 // Intl resolves DST per-instant rather than freezing an offset; `time_format`
-// is '12' or '24'; `tz_prompt` is 'skipped' once the user dismisses the modal
-// with Skip. A confirmed timezone or a 'skipped' flag both stop the auto-show;
-// "Remind later" writes nothing, so the modal returns on the next launch.
-
-/** Should the first-run modal auto-show? Registered accounts only (guests have
- *  nowhere to persist), once prefs have loaded, and only while the user has
- *  neither confirmed a timezone nor skipped. */
-_shouldShowTzPrompt() {
-  if (this._tzPromptResolvedThisSession) return false;
-  if (!this.user || this.user.isGuest) return false;
-  if (!this._userPrefs) return false;
-  if (this._userPrefs.timezone) return false;
-  if (this._userPrefs.tz_prompt === 'skipped') return false;
-  return true;
-},
+// is '12' or '24'. Nothing is asked at login: the modal opens from Settings,
+// Localization, Configure Time, and until someone saves a zone every time
+// follows the browser as before.
 
 /** Common IANA zones for the rare engine without Intl.supportedValuesOf. */
 _fallbackTimezones() {
@@ -513,13 +492,10 @@ _openTimezoneModal({ firstRun = false, onClose = null } = {}) {
 
   this._tzModalOnClose = typeof onClose === 'function' ? onClose : null;
 
-  // Once a timezone is saved, Skip (a "never ask again" for the unconfigured
-  // state) makes no sense, so it is swapped for Erase, which clears the saved
-  // zone and returns the account to the browser default.
+  // Erase only shows once a zone is saved; it clears the saved zone and
+  // returns the account to the browser default.
   const hasTz = !!(this._userPrefs && this._userPrefs.timezone);
-  const skipBtn = document.getElementById('timezone-skip-btn');
   const eraseBtn = document.getElementById('timezone-erase-btn');
-  if (skipBtn) skipBtn.style.display = hasTz ? 'none' : '';
   if (eraseBtn) eraseBtn.style.display = hasTz ? '' : 'none';
 
   if (!this._tzModalWired) {
@@ -527,12 +503,11 @@ _openTimezoneModal({ firstRun = false, onClose = null } = {}) {
     const live = () => this._updateTimezonePreview();
     tzSel?.addEventListener('change', live);
     fmtSel?.addEventListener('change', live);
-    document.getElementById('timezone-skip-btn')?.addEventListener('click', () => this._resolveTimezoneModal('skip'));
     document.getElementById('timezone-erase-btn')?.addEventListener('click', () => this._resolveTimezoneModal('erase'));
-    document.getElementById('timezone-later-btn')?.addEventListener('click', () => this._resolveTimezoneModal('later'));
+    document.getElementById('timezone-cancel-btn')?.addEventListener('click', () => this._resolveTimezoneModal('cancel'));
     document.getElementById('timezone-confirm-btn')?.addEventListener('click', () => this._resolveTimezoneModal('confirm'));
-    // A click on the backdrop is a plain, session-only close = Remind later.
-    modal.addEventListener('click', (e) => { if (e.target === modal) this._resolveTimezoneModal('later'); });
+    // A click on the backdrop closes without saving, like Cancel.
+    modal.addEventListener('click', (e) => { if (e.target === modal) this._resolveTimezoneModal('cancel'); });
   }
 
   this._updateTimezonePreview();
@@ -564,7 +539,6 @@ _resolveTimezoneModal(action) {
   const tz = document.getElementById('timezone-select')?.value;
   const fmt = document.getElementById('timeformat-select')?.value === '24' ? '24' : '12';
   const onClose = this._tzModalOnClose; this._tzModalOnClose = null;
-  this._tzPromptResolvedThisSession = true;
   if (modal) modal.style.display = 'none';
 
   if (action === 'confirm') {
@@ -580,33 +554,21 @@ _resolveTimezoneModal(action) {
     this._eraseTimezonePrefs();
     return;
   }
-  if (action === 'skip') {
-    // Persist the skip so the modal is never auto-shown again. Nothing about
-    // the displayed times changes: unset = the old browser-default behaviour.
-    this._userPrefs = this._userPrefs || {};
-    this._userPrefs.tz_prompt = 'skipped';
-    this.socket?.emit('set-preference', { key: 'tz_prompt', value: 'skipped' });
-    this._updateTimezoneSummary?.();
-  }
-  // 'later' persists nothing — the modal returns on the next launch.
+  // Cancel persists nothing.
   if (onClose) onClose();
 },
 
-/** Delete the saved timezone/format, mark the prompt skipped so it does not
- *  re-nag after an explicit erase, then reload once the server confirms. */
+/** Delete the saved timezone/format, then reload once the server confirms. */
 _eraseTimezonePrefs() {
   this._userPrefs = this._userPrefs || {};
   delete this._userPrefs.timezone;
   delete this._userPrefs.time_format;
-  this._userPrefs.tz_prompt = 'skipped';
   this._updateTimezoneSummary?.();
 
   const reload = () => { try { location.reload(); } catch { /* non-browser */ } };
   if (!this.socket) { reload(); return; }
 
-  // Persist the skip first (so it is durable before the socket tears down),
-  // then delete both rows and reload once their deletions are acknowledged.
-  this.socket.emit('set-preference', { key: 'tz_prompt', value: 'skipped' });
+  // Delete both rows and reload once their deletions are acknowledged.
   const pending = new Set(['timezone', 'time_format']);
   let timer = null;
   const finish = () => { this.socket.off('preference-deleted', onDeleted); clearTimeout(timer); reload(); };
