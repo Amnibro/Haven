@@ -11,7 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.9.0] - 2026-09-15
+
+A release built from the tracker. The message box grows a mic for voice
+messages, a formatting guide with every markdown trick and slash command,
+and a switch that folds its buttons into one; times can follow a timezone
+saved to your account; forum topics open full width with a title bar, can
+be marked NSFW, and a forum's layout can be locked; picture polls sit in
+columns; theme authors get a static preview page; and a run of fixes, among
+them the Discord multi-picture bridge, colour markdown, encrypted DM
+pictures, and backups made without uploads. One new column is created on
+first start; nothing to run by hand.
 
 ### Added
 - **Saved timezone and 12 or 24 hour clock.** Settings has a Localization
