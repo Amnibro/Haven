@@ -19,6 +19,7 @@ import SearchMethods   from './modules/app-search.js?v=4.9.1';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
 import ForumMethods    from './modules/app-forum.js?v=4.9.1';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.9.1';
+import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.9.1';
 
 class HavenApp {
   constructor() {
@@ -325,6 +326,7 @@ class HavenApp {
     this._setupDiscordImport();
     this._setupAuditLog();
     this._initRoleManagement();
+    this._initPermMatrix();
     this._initServerBranding();
     this._setupResizableSidebars();
     this.modMode = typeof ModMode === 'function' ? new ModMode() : null;
@@ -456,6 +458,7 @@ Object.assign(HavenApp.prototype,
   FerryMethods,
   ForumMethods,
   RoleToolMethods,
+  PermMatrixMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────
