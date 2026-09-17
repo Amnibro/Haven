@@ -23,6 +23,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   in a thread too. Reported by @quakeman00.
 
 ### Fixed
+- **Caps Lock, Num Lock and Scroll Lock record as desktop shortcuts.** The
+  recorder sent them with the browser's spelling, which the desktop app's
+  shortcut system does not accept. Reported by Constooli on the desktop
+  tracker.
 - **Leaving the Braid layout brought back closed banners (#5671).** The
   Update, Desktop app and Android pills came back at the top when switching
   from Braid to another look, because the layout remembered a hidden banner
