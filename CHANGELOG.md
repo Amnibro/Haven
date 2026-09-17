@@ -14,6 +14,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Fixed
+- **Picture poll thumbnails are no longer cropped (#5648).** A tall or wide
+  picture fits inside its square, and a poll in columns gets a wider box on
+  a big screen. Reported by @quakeman00.
 - **The edit box's drag bar is under the box (#5662).** It was above it,
   where the first message in a channel had nowhere to drag up to. Dragging
   down now makes the box taller. Reported by @quakeman00.
