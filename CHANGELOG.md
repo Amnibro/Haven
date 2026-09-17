@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **"Discord relay failed: the resource is being rate limited."** When
+  Discord throttles a channel it says how long to wait; the bridge waited at
+  most ten seconds once and then gave up with Discord's own words, which read
+  as a fault. It now waits out anything up to thirty seconds, three times
+  over, with later messages queued behind, and when the wait is longer than
+  that the toast says so and how long. Reported by Andalishious.
+
 ## [4.9.0] - 2026-09-15
 
 A release built from the tracker. The message box grows a mic for voice
