@@ -14,6 +14,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Glyphs, a third look for the interface's icons (#5673).** Settings,
+  Interface Icons (the old Toolbar Icons) has Glyphs next to Monochrome and
+  Colorful Emoji. It redraws the icons across the whole interface with a
+  bundled Font Awesome font, through the new Haven Glyphs plugin, and leaves
+  message text, reactions and the pickers alone. The plugin and font are by
+  @bernardokcosta.
 - **The NSFW blur can be switched off (#5633).** Under Settings, next to
   Hide NSFW channels, a switch that is on by default. Off, a topic marked
   🔞 shows plainly with its tag still on it. Asked for by @quakeman00.
