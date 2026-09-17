@@ -23,6 +23,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   in a thread too. Reported by @quakeman00.
 
 ### Fixed
+- **Leaving the Braid layout brought back closed banners (#5671).** The
+  Update, Desktop app and Android pills came back at the top when switching
+  from Braid to another look, because the layout remembered a hidden banner
+  as visible. It remembers what it found now. Reported by @quakeman00.
 - **Picture poll thumbnails are no longer cropped (#5648).** A tall or wide
   picture fits inside its square, and a poll in columns gets a wider box on
   a big screen. Reported by @quakeman00.
