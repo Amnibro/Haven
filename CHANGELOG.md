@@ -14,6 +14,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **The NSFW blur can be switched off (#5633).** Under Settings, next to
+  Hide NSFW channels, a switch that is on by default. Off, a topic marked
+  🔞 shows plainly with its tag still on it. Asked for by @quakeman00.
 - **A paperclip in the pop-out DM (#5663).** Pictures and files can be sent
   from the pop-out DM with the button or by dropping them on it; paste was
   the only way before. Middle-click opens a picture in a new tab there and

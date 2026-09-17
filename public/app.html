@@ -2048,6 +2048,11 @@
           <input type="checkbox" id="hide-nsfw-channels">
         </label>
         <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.nsfw.hide_hint">Channels an admin marked 🔞 leave your sidebar until you turn this off. Handy on a phone in public.</small>
+        <label class="toggle-row">
+          <span data-i18n="settings.nsfw.blur">Blur NSFW topics until clicked</span>
+          <input type="checkbox" id="blur-nsfw-topics" checked>
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.nsfw.blur_hint">The picture and preview of a topic marked 🔞 sit behind a blur, like a spoiler. Turn this off to see them plainly.</small>
       </div>
 
       <!-- Password Change Section -->
@@ -4593,7 +4598,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.9.2"></script>
+  <script type="module" src="/js/app.js?v=4.9.3"></script>
   <script src="/js/plugin-loader.js?v=4.6.10"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

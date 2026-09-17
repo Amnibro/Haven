@@ -2501,7 +2501,9 @@
     },
     "nsfw": {
       "hide": "Hide NSFW channels",
-      "hide_hint": "Channels an admin marked 🔞 leave your sidebar, and forum topics marked 🔞 leave their forum, until you turn this off. Handy on a phone in public."
+      "hide_hint": "Channels an admin marked 🔞 leave your sidebar, and forum topics marked 🔞 leave their forum, until you turn this off. Handy on a phone in public.",
+      "blur": "Blur NSFW topics until clicked",
+      "blur_hint": "The picture and preview of a topic marked 🔞 sit behind a blur, like a spoiler. Turn this off to see them plainly."
     },
     "search_placeholder": "Search settings (Ctrl+F)"
   },
