@@ -4240,12 +4240,14 @@ _startEditMessage(msgEl, msgId) {
   textarea.rows = 1;
   textarea.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
   // The same drag bar the composer has, so a long message can be pulled
-  // open while editing it (#5662).
+  // open while editing it. It sits under the box, and dragging it down makes
+  // the box taller, since the message above it may be at the very top of
+  // the chat with nowhere to drag up to (#5662).
   const grip = document.createElement('div');
   grip.className = 'pip-input-resizer edit-resizer';
   grip.setAttribute('aria-hidden', 'true');
-  contentEl.appendChild(grip);
   contentEl.appendChild(textarea);
+  contentEl.appendChild(grip);
   this._bindInputResizer?.(grip);
 
   // Track active edit textarea for emoji picker redirection

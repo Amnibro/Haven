@@ -6766,6 +6766,9 @@ _finishVoiceMessage(rec) {
 _bindInputResizer(handle) {
   if (!handle || handle._resizerBound) return;
   handle._resizerBound = true;
+  // The composer's bar sits above its box, so up means taller; the edit
+  // box's bar sits below it, so there down means taller (#5662).
+  const below = handle.classList.contains('edit-resizer');
   let startY = 0;
   let startHeight = 0;
   let ta = null;
@@ -6773,7 +6776,7 @@ _bindInputResizer(handle) {
 
   const onMove = (e) => {
     if (!ta) return;
-    const delta = startY - e.clientY; // positive when dragging up
+    const delta = below ? (e.clientY - startY) : (startY - e.clientY); // positive when growing
     const newHeight = Math.max(34, Math.min(cap, startHeight + delta));
     ta.style.height = `${newHeight}px`;
     ta.style.minHeight = `${newHeight}px`;

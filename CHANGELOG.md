@@ -14,6 +14,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Fixed
+- **The edit box's drag bar is under the box (#5662).** It was above it,
+  where the first message in a channel had nowhere to drag up to. Dragging
+  down now makes the box taller. Reported by @quakeman00.
 - **"Discord relay failed: the resource is being rate limited."** When
   Discord throttles a channel it says how long to wait; the bridge waited at
   most ten seconds once and then gave up with Discord's own words, which read

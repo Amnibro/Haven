@@ -4006,6 +4006,12 @@ html.rgb-cycling *::after {
   justify-content: center;
   z-index: 2;
 }
+/* The edit box's bar sits under the box, in the flow, so dragging down grows it (#5662) */
+.pip-input-resizer.edit-resizer {
+  position: static;
+  height: 0.875rem;
+  margin: 0.1rem 0 0.15rem;
+}
 .pip-input-resizer::before {
   content: '';
   width: 2.25rem;
