@@ -2376,6 +2376,49 @@ _setupUI() {
     }
   });
 
+  // A paperclip and drag-and-drop in the pop-out DM, since paste was the
+  // only way to send a picture from it, and middle-click opens a picture
+  // there and in a thread like it does in chat (#5663).
+  const dmPipUploadBtn = document.getElementById('dm-pip-upload-btn');
+  const dmPipFileInput = document.getElementById('dm-pip-file-input');
+  const dmPipTakeFiles = (files) => {
+    const targetCode = this._activeDMPip;
+    if (!files || !files.length || !targetCode) return false;
+    for (const file of files) {
+      if (file.type.startsWith('image/')) this._queueImageForPiP(file, targetCode);
+      else this._uploadGeneralFile(file, targetCode);
+    }
+    return true;
+  };
+  if (dmPipUploadBtn && dmPipFileInput) {
+    dmPipUploadBtn.addEventListener('click', (e) => { e.stopPropagation(); dmPipFileInput.click(); });
+    dmPipFileInput.addEventListener('change', () => {
+      dmPipTakeFiles(dmPipFileInput.files);
+      dmPipFileInput.value = '';
+    });
+  }
+  const dmPipPanel = document.getElementById('dm-pip-panel');
+  if (dmPipPanel) {
+    dmPipPanel.addEventListener('dragover', (e) => {
+      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+    });
+    dmPipPanel.addEventListener('drop', (e) => {
+      if (!e.dataTransfer?.files?.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dmPipTakeFiles(e.dataTransfer.files);
+    });
+  }
+  ['dm-pip-messages', 'thread-messages'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('auxclick', (e) => {
+      if (e.button !== 1) return;
+      const img = e.target.closest('img.chat-image');
+      if (!img) return;
+      e.preventDefault();
+      this._openImageInNewTab(img);
+    });
+  });
+
   // PiP emoji button — positions the picker above the button and targets the PiP input
   const dmPipEmojiBtn = document.getElementById('dm-pip-emoji-btn');
   if (dmPipEmojiBtn) {

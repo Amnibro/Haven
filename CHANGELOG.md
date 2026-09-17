@@ -13,6 +13,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Added
+- **A paperclip in the pop-out DM (#5663).** Pictures and files can be sent
+  from the pop-out DM with the button or by dropping them on it; paste was
+  the only way before. Middle-click opens a picture in a new tab there and
+  in a thread too. Reported by @quakeman00.
+
 ### Fixed
 - **Picture poll thumbnails are no longer cropped (#5648).** A tall or wide
   picture fits inside its square, and a poll in columns gets a wider box on
