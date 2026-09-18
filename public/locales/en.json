@@ -1167,6 +1167,10 @@
     "image": {
       "alt": "Image",
       "save": "Save Image",
+      "saved": "Image saved",
+      "saved_to": "Image saved to {{path}}",
+      "save_cancelled": "Save cancelled",
+      "save_failed": "Could not save image: {{error}}",
       "copy": "Copy Image",
       "view": "View image",
       "open_failed": "Could not open that image",
