@@ -2600,12 +2600,30 @@ _showMentionDropdown() {
     }
   }
 
-  const filtered = (this.channelMembers || []).filter(m => {
-    const dn = (m.username || '').toLowerCase();
-    const ln = (m.loginName || '').toLowerCase();
-    const nk = (m.id && this._nicknames && this._nicknames[m.id] || '').toLowerCase();
-    return dn.startsWith(query) || ln.startsWith(query) || (nk && nk.startsWith(query));
-  }).slice(0, 8);
+  // Any part of a name matches, so "dan" finds TheDannister and "tanee"
+  // finds LADY TANEE. Names that start with the letters come first, then
+  // names where a word starts with them, then the rest. (#5674)
+  const mentionRank = (m) => {
+    const names = [
+      (m.username || '').toLowerCase(),
+      (m.loginName || '').toLowerCase(),
+      (m.id && this._nicknames && this._nicknames[m.id] || '').toLowerCase(),
+    ].filter(Boolean);
+    let best = -1;
+    for (const n of names) {
+      const at = n.indexOf(query);
+      if (at < 0) continue;
+      const rank = at === 0 ? 0 : (/[\s._-]/.test(n[at - 1]) ? 1 : 2);
+      if (best < 0 || rank < best) best = rank;
+    }
+    return best;
+  };
+  const filtered = (this.channelMembers || [])
+    .map((m, i) => ({ m, i, rank: mentionRank(m) }))
+    .filter(x => x.rank >= 0)
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .slice(0, 8)
+    .map(x => x.m);
 
   // Offer @everyone / @here as mention options when the query matches and
   // the user has the mention_everyone permission (admins implicitly have it).
@@ -2617,7 +2635,7 @@ _showMentionDropdown() {
   }
   // Roles sit behind the same permission, since a role ping fans out the same way. (#5579)
   const roleOptions = canMentionEveryone
-    ? (this._mentionableRoles || []).filter(r => r && r.name && r.name.toLowerCase().startsWith(query)).slice(0, 5)
+    ? (this._mentionableRoles || []).filter(r => r && r.name && r.name.toLowerCase().includes(query)).slice(0, 5)
     : [];
 
   if (filtered.length === 0 && everyoneOptions.length === 0 && roleOptions.length === 0) {
