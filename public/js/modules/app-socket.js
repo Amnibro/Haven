@@ -919,6 +919,7 @@ _setupSocketListeners() {
         // Per-channel, same reasoning as the composer gate in app-channels.js (#5468)
         const _isReadOnly = curCh.read_only === 1 && !this.user?.isAdmin && !curCh.canOverrideReadOnly;
         if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+        this._applyReactionLock?.();
       }
     }
 
@@ -2131,6 +2132,14 @@ _setupSocketListeners() {
     // open — results are cross-channel and this only fires on a confirmed
     // delete, so removal stays truthful. (search-overhaul phase 3)
     this._searchRemoveResult?.(data.channelCode, data.messageId);
+  });
+
+  // Attachment tags edited (#tagging phase 3). Repaint the Tags footer on every
+  // rendered copy of the message. Fires cross-channel (users are joined to all
+  // their channel rooms), so search results update too, wherever they're shown.
+  this.socket.on('message-tags-updated', (data) => {
+    if (!data || !data.messageId) return;
+    this._updateMessageTagsFooter?.(data.messageId, data.tags || []);
   });
 
   // ── Low disk warning (admins only, #5505) ────────
