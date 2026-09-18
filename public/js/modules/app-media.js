@@ -4827,25 +4827,40 @@ _suggestedImageFilename(src, blob) {
   if (!name || name === 'media-proxy' || name === 'proxy' || name.length > 80 || !/\.[a-z0-9]{2,5}$/i.test(name)) {
     const ext = ((blob?.type || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
     name = `haven-image.${ext}`;
+  } else if (/^image\/(png|jpeg|gif|webp|avif|bmp)$/.test(blob?.type || '')) {
+    // The name follows the bytes: a fallback copy is a PNG whatever the
+    // picture was called, and a .gif name on PNG bytes opens as a broken file.
+    const ext = blob.type.split('/')[1].replace('jpeg', 'jpg');
+    const cur = name.split('.').pop().toLowerCase().replace('jpeg', 'jpg');
+    if (cur !== ext) name = name.replace(/\.[a-z0-9]{2,5}$/i, '.' + ext);
   }
   return name;
 },
 
-async _blobForContextImage(src) {
-  if (this._ctxImageBlob && this._ctxImageBlobSrc === src) {
-    try {
-      const warmed = await this._ctxImageBlob;
-      if (warmed) return warmed;
-    } catch { /* fall through */ }
+// The bytes to save. An encrypted DM picture is decrypted again, since the
+// feed has let go of its copy (#5663). Anything else is fetched as the server
+// has it. The copy warmed for Copy Image is a PNG re-encode, so it is only a
+// fallback: saving it turned an animated GIF into one still frame.
+async _blobForContextImage(src, sourceImg) {
+  if (sourceImg?.dataset?.e2eSrc && this._e2eImageBlob) {
+    try { return await this._e2eImageBlob(sourceImg); } catch { /* fall back to what is on screen */ }
   }
+  const realSrc = (sourceImg && this._lazyRealSrc ? this._lazyRealSrc(sourceImg) : '') || src;
   try {
-    const resp = await fetch(src, { credentials: 'same-origin' });
+    const resp = await fetch(realSrc, { credentials: 'same-origin' });
     if (!resp.ok) throw new Error('fetch ' + resp.status);
     return await resp.blob();
   } catch (fetchErr) {
+    if (this._ctxImageBlob && this._ctxImageBlobSrc === src) {
+      try {
+        const warmed = await this._ctxImageBlob;
+        if (warmed) return warmed;
+      } catch { /* fall through */ }
+    }
     const candidates = [];
+    if (sourceImg) candidates.push(sourceImg);
     const lb = document.getElementById('lightbox-img');
-    if (lb?.src) candidates.push(lb);
+    if (lb?.src && lb.src === src) candidates.push(lb);
     document.querySelectorAll('img.chat-image').forEach(img => {
       if (img.src === src || this._normalizeImgSrc?.(img.getAttribute('src')) === this._normalizeImgSrc?.(src)) {
         candidates.push(img);
@@ -4867,9 +4882,9 @@ async _blobForContextImage(src) {
   }
 },
 
-async _saveContextImage(src) {
+async _saveContextImage(src, sourceImg) {
   try {
-    const blob = await this._blobForContextImage(src);
+    const blob = await this._blobForContextImage(src, sourceImg);
     const filename = this._suggestedImageFilename(src, blob);
     if (typeof window.havenDesktop?.saveImage === 'function') {
       const buf = await blob.arrayBuffer();
@@ -4979,7 +4994,7 @@ _showImageContextMenu(e, src, opts = {}) {
     const action = ev.target.dataset.action;
     if (action === 'save') {
       this._hideImageContextMenu();
-      this._saveContextImage(src);
+      this._saveContextImage(src, sourceImg);
       return;
     } else if (action === 'copy') {
       // Hide the menu immediately so it doesn't sit on screen during
