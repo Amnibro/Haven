@@ -113,10 +113,13 @@ test('Haven Glyphs scopes hosts and protects user content', () => {
   assert.doesNotMatch(pluginSource, /\/tmp\/opencode|https?:\/\//i);
 });
 
-test('native channel template options use text-only labels', () => {
-  assert.doesNotMatch(roleToolsSource, /label: `\$\{tp\.emoji\}/);
-  assert.doesNotMatch(roleToolsSource, /label: `💾/);
-  assert.doesNotMatch(roleToolsSource, /replace\(\/\^💾/);
+// The template names sit in a native <select>, which the plugin cannot draw
+// into, so they keep their emoji for everyone; the delete prompt drops the
+// marker again.
+test('native channel template options keep their emoji', () => {
+  assert.match(roleToolsSource, /label: `\$\{tp\.emoji\} /);
+  assert.match(roleToolsSource, /label: `💾 /);
+  assert.match(roleToolsSource, /replace\(\/\^💾 \//);
 });
 
 test('the bundled icon font is present and non-empty', () => {

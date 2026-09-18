@@ -6705,7 +6705,7 @@ _formatGuideHtml() {
     const syntax = r.before + sample + r.after;
     const demo = (r.block || !sample) ? '' : `<span class="format-row-demo message-content">${this._formatContent(syntax)}</span>`;
     return `<button type="button" class="format-row" data-before="${this._escapeHtml(r.before)}" data-after="${this._escapeHtml(r.after)}" data-sample="${this._escapeHtml(sample)}"${r.block ? ' data-block="1"' : ''}>
-      <span class="format-row-label">${this._escapeHtml(t('format_picker.' + r.key))}</span>
+      <span class="format-row-label">${this._escapeHtml(t(`format_picker.${r.key}`))}</span>
       <code class="format-row-syntax">${this._escapeHtml(syntax)}</code>${demo}</button>`;
   }).join('');
 },
