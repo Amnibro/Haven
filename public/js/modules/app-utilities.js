@@ -4563,6 +4563,10 @@ _enforceDmLinkPolicy(containerEl) {
     try {
       const u = new URL(rawUrl, location.href);
       if (u.origin === location.origin) return false;   // our own uploads / proxy
+      // A data: or blob: address has no host to judge. A picture that has not
+      // loaded yet carries a data: placeholder, and reading that as a host
+      // turned the server's own uploads into "blocked domain" notices.
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
       return !R.checkHost(u.hostname, policy).allowed;
     } catch { return false; }
   };
@@ -4588,7 +4592,7 @@ _enforceDmLinkPolicy(containerEl) {
   containerEl.querySelectorAll('.message-content img[data-mp-origin], .message-content img.chat-image').forEach(img => {
     if (img.dataset.policyChecked) return;
     img.dataset.policyChecked = '1';
-    const origin = img.dataset.mpOrigin || img.getAttribute('data-mp-src') || img.src;
+    const origin = img.dataset.mpOrigin || img.getAttribute('data-mp-src') || img.dataset.lazySrc || img.src;
     if (!hostBlocked(origin)) return;
     const ph = document.createElement('span');
     ph.className = 'hidden-image';

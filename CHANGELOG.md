@@ -14,6 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Fixed
+- **Pictures in a pop-out DM or thread could show as "blocked domain".**
+  With a link policy switched on, a picture that had not loaded yet was
+  judged by its placeholder address instead of its real one, so the
+  server's own uploads were hidden behind the warning.
 - **A Discord pairing could slip back to "Mirror everything".** Changing any
   control on a pairing saved the whole row as that window showed it, so a
   settings panel left open somewhere else, still showing the old values,
