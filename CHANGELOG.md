@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Last night's messages still said "Today" the next day.** The Today and
+  Yesterday labels were written once and never looked at again, so an app
+  left open past midnight kept them. They are rewritten when the day
+  changes, and when the window comes back from being hidden or asleep.
+
 ## [4.10.0] - 2026-09-18
 
 Most of this one came from contributors. Pictures and files can carry tags

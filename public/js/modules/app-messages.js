@@ -1203,7 +1203,7 @@ _createMessageEl(msg, prevMsg) {
           ${ferryBadge}
           ${guestBadge}
           ${msgRoleBadge}
-          <span class="message-time">${this._formatTime(msg.created_at)}</span>
+          <span class="message-time"${this._timeAttr(msg.created_at)}>${this._formatTime(msg.created_at)}</span>
           ${pinnedTag}
           ${archivedTag}
           ${ephemeralTag}
@@ -1303,7 +1303,7 @@ _promoteCompactToFull(compactEl) {
           <span class="message-author" style="color:${color}"${this._nicknames[userId] ? ` title="${this._escapeHtml(username)}"` : ''}>${this._escapeHtml(this._getNickname(userId, username))}</span>
           ${msgRoleIconAfter2}
           ${msgRoleBadge}
-          <span class="message-time">${this._formatTime(time)}</span>
+          <span class="message-time"${this._timeAttr(time)}>${this._formatTime(time)}</span>
           ${pinnedTag}
           ${statusSlotHtml}
           <span class="message-header-spacer"></span>

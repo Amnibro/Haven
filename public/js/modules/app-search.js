@@ -652,7 +652,7 @@ _searchRenderPanel() {
         <div class="search-result-item" data-msg-id="${r.id}" data-user-id="${this._escapeHtml(String(r.user_id ?? ''))}" data-channel-code="${this._escapeHtml(r.channel_code || '')}">
           ${chan}
           <span class="search-result-author" style="color:${this._getUserColor(r.username)}">${this._escapeHtml(this._getNickname(r.user_id, r.username))}</span>
-          <span class="search-result-time">${this._formatTime(r.created_at)}</span>
+          <span class="search-result-time"${this._timeAttr(r.created_at)}>${this._formatTime(r.created_at)}</span>
           ${thread}
           <div class="message-content search-result-content">${this._formatContent(r.content)}</div>
           ${this._renderAttachmentTags ? this._renderAttachmentTags(r.attachmentTags) : ''}

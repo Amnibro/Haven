@@ -1391,7 +1391,40 @@ _voiceMessageLength(name) {
   return m ? `${Number(m[1])}:${String(m[2]).padStart(2, '0')}` : '';
 },
 
+// "Today at 9 PM" is only true until midnight, and a label is written once.
+// An app left open overnight kept calling last night's messages Today, so
+// every label carries its timestamp (data-ftime) and is rewritten when the
+// calendar day changes.
+_timeAttr(dateStr) {
+  return ` data-ftime="${this._escapeHtml(String(dateStr ?? ''))}"`;
+},
+
+_refreshTimeLabels() {
+  document.querySelectorAll('[data-ftime]').forEach(el => {
+    const raw = el.dataset.ftime;
+    if (!raw) return;
+    const next = this._formatTime(raw);
+    if (next && el.textContent !== next) el.textContent = next;
+  });
+},
+
+_startDayRolloverWatch() {
+  if (this._dayRolloverTimer || typeof document === 'undefined') return;
+  const dayKey = () => this._fmtDate(new Date(), { year: 'numeric', month: '2-digit', day: '2-digit' });
+  this._dayRolloverKey = dayKey();
+  const check = () => {
+    const key = dayKey();
+    if (key === this._dayRolloverKey) return;
+    this._dayRolloverKey = key;
+    this._refreshTimeLabels();
+  };
+  this._dayRolloverTimer = setInterval(check, 60000);
+  // A sleeping laptop or a hidden tab can skip the timer; look again on return.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+},
+
 _formatTime(dateStr) {
+  this._startDayRolloverWatch();
   const date = new Date(dateStr);
   const now = new Date();
   const time = this._fmtTime(date);
@@ -4055,7 +4088,7 @@ _appendThreadMessage(msg) {
         <div class="thread-msg-body">
           <div class="thread-msg-header">
             <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
-            <span class="thread-msg-time">${this._formatTime(msg.created_at)}</span>
+            <span class="thread-msg-time"${this._timeAttr(msg.created_at)}>${this._formatTime(msg.created_at)}</span>
             <span class="thread-msg-header-spacer"></span>
             <div class="thread-msg-toolbar">
               <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
@@ -4112,7 +4145,7 @@ _promoteThreadCompactToFull(compactEl) {
       <div class="thread-msg-body">
         <div class="thread-msg-header">
           <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
-          <span class="thread-msg-time">${this._formatTime(time)}</span>
+          <span class="thread-msg-time"${this._timeAttr(time)}>${this._formatTime(time)}</span>
           <span class="thread-msg-header-spacer"></span>
           ${toolbarHtml}
         </div>
