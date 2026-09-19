@@ -20391,7 +20391,7 @@ ul.chat-list { list-style-type: disc; }
 }
 .perm-view-btn.is-active {
   background: var(--accent, #6b4fdb);
-  color: #fff;
+  color: var(--accent-text, #fff);
 }
 #perm-roles-pane,
 #perm-users-pane {
@@ -20540,7 +20540,7 @@ ul.chat-list { list-style-type: disc; }
   font-size: 0.78rem;
   cursor: pointer;
 }
-.perm-user-chip.is-on { background: var(--accent, #6b4fdb); color: #fff; border-color: transparent; }
+.perm-user-chip.is-on { background: var(--accent, #6b4fdb); color: var(--accent-text, #fff); border-color: transparent; }
 .perm-user-chip:disabled { opacity: 0.55; cursor: default; }
 .perm-user-group {
   margin: 10px 0 4px;

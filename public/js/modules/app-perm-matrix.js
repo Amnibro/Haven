@@ -139,7 +139,7 @@ _matrixRoles() {
 
 _sortedGroupPerms(group) {
   return [...(group.perms || [])].sort((a, b) =>
-    t('permissions.' + a).localeCompare(t('permissions.' + b), undefined, { sensitivity: 'base' })
+    t(`permissions.${a}`).localeCompare(t(`permissions.${b}`), undefined, { sensitivity: 'base' })
   );
 },
 
@@ -174,9 +174,9 @@ _renderPermMatrix() {
 
   let body = '';
   for (const group of PERM_GROUPS) {
-    body += `<tr class="perm-matrix-group"><td colspan="${roles.length + 2}">${esc(t('settings.admin.perm_matrix.group_' + group.key))}</td></tr>`;
+    body += `<tr class="perm-matrix-group"><td colspan="${roles.length + 2}">${esc(t(`settings.admin.perm_matrix.group_${group.key}`))}</td></tr>`;
     for (const perm of this._sortedGroupPerms(group)) {
-      body += `<tr><th scope="row">${esc(t('permissions.' + perm))}</th>`;
+      body += `<tr><th scope="row">${esc(t(`permissions.${perm}`))}</th>`;
       for (const role of roles) {
         const on = (role.permissions || []).includes(perm);
         body += `<td><input type="checkbox" data-role="${role.id}" data-perm="${perm}" ${on ? 'checked' : ''}></td>`;
@@ -327,12 +327,12 @@ _renderPermUserDetail() {
 
   let rows = '';
   for (const group of PERM_GROUPS) {
-    rows += `<div class="perm-user-group">${esc(t('settings.admin.perm_matrix.group_' + group.key))}</div>`;
+    rows += `<div class="perm-user-group">${esc(t(`settings.admin.perm_matrix.group_${group.key}`))}</div>`;
     for (const perm of this._sortedGroupPerms(group)) {
       const on = allOn || perms.includes(perm);
       rows += `<label class="perm-user-perm">
         <input type="checkbox" data-user-perm="${perm}" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''}>
-        <span>${esc(t('permissions.' + perm))}</span>
+        <span>${esc(t(`permissions.${perm}`))}</span>
       </label>`;
     }
   }
