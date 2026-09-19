@@ -203,6 +203,23 @@ _renderTagBar() {
     this._closeTagPopup();
     return;
   }
+  // Someone who cannot make tags has nothing to pick until one exists, so on
+  // a server with no tags the bar stays out of their way. Asked again every
+  // so often, since a tag can turn up while they are connected.
+  if (!this._canManageTags?.() && this._uploadTagsExist !== true) {
+    bar.style.display = 'none';
+    this._closeTagPopup();
+    const now = Date.now();
+    if (this.socket && now - (this._uploadTagsProbedAt || 0) > 15000) {
+      this._uploadTagsProbedAt = now;
+      this.socket.emit('search-upload-tags', { query: '' }, (res) => {
+        if (!res || res.error || !(res.tags || []).length) return;
+        this._uploadTagsExist = true;
+        this._renderTagBar();
+      });
+    }
+    return;
+  }
   bar.style.display = 'flex';
   this._ensureTagComposerBound();
 

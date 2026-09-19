@@ -690,7 +690,7 @@
     "type_to_search": "Type to search tags",
     "none_yet": "No tags yet",
     "search_for": "Search for tag \"{{name}}\"",
-    "search_removed": "Search removed tags",
+    "search_removed": "Search anyway",
     "edit": "Edit tags",
     "limit_reached": "Up to {{n}} tags per attachment",
     "invalid": "That tag isn't valid"

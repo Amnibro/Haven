@@ -541,9 +541,7 @@ _sfpRenderTagList(term) {
       if (res && res.error === 'rate_limited') return;
       const tags = (res && res.tags) || [];
       if (!tags.length) {
-        // No active tag matches. If they typed something, offer to search for it
-        // anyway — a removed (soft-deleted) tag is gone from this list but its
-        // old attachments still carry it, so the tag: search can still find them.
+        // No tag starts with what they typed. Offer to run the search anyway.
         if (q) {
           list.innerHTML = `<button type="button" class="sfp-item sfp-search-removed" data-token="${this._escapeHtml(this._tagSearchToken(q))}">${this._escapeHtml(t('tags.search_removed'))}</button>`;
           list.querySelector('.sfp-search-removed')?.addEventListener('click', (e) => this._sfpAppend(e.currentTarget.dataset.token));
