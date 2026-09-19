@@ -13,6 +13,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Added
+- **Mark everything as read (#5683).** Right-click any channel or DM and
+  pick it. Every channel and DM you belong to is marked read, including
+  ones the sidebar is not showing, so an unread badge with nothing to click
+  can be cleared. Asked for by @quakeman00.
+
 ### Changed
 - **The tag picker is wider and lists tags in columns (#5682).** A long tag
   list is a short scroll now, and it shows up to 100 tags before you type.

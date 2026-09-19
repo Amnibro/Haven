@@ -3421,7 +3421,10 @@
       "webhooks": "Webhooks",
       "delete": "Delete Channel",
       "hide": "Hide Channel",
-      "mark_read": "Mark as Read"
+      "mark_read": "Mark as Read",
+      "mark_all_read": "Mark everything as read",
+      "mark_all_read_done": "Everything is marked as read",
+      "mark_all_read_failed": "Could not mark everything as read"
     },
     "dm": {
       "mute": "Mute DM",

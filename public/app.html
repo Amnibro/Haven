@@ -3927,6 +3927,7 @@
   <!-- Channel context menu (appears on "..." hover button) -->
   <div id="channel-ctx-menu" class="channel-ctx-menu" style="display:none">
     <button class="channel-ctx-item" data-action="mark-read">✅ <span data-i18n="context_menu.channel.mark_read">Mark as Read</span></button>
+    <button class="channel-ctx-item" data-action="mark-all-read">☑️ <span data-i18n="context_menu.channel.mark_all_read">Mark everything as read</span></button>
     <button class="channel-ctx-item" data-action="mute">🔔 <span data-i18n="context_menu.channel.mute">Mute Channel</span></button>
     <button class="channel-ctx-item" data-action="copy-channel-link">🔗 <span data-i18n="context_menu.channel.copy_link">Copy Channel Link</span></button>
     <button class="channel-ctx-item" data-action="join-voice">🎙️ <span data-i18n="voice.join_ctx">Join Voice</span></button>
@@ -4052,6 +4053,7 @@
   <!-- DM context menu -->
   <div id="dm-ctx-menu" class="channel-ctx-menu" style="display:none">
     <button class="channel-ctx-item" data-action="dm-mark-read">✅ <span data-i18n="context_menu.dm.mark_read">Mark as Read</span></button>
+    <button class="channel-ctx-item" data-action="mark-all-read">☑️ <span data-i18n="context_menu.channel.mark_all_read">Mark everything as read</span></button>
     <button class="channel-ctx-item" data-action="dm-mute">🔔 <span data-i18n="context_menu.dm.mute">Mute DM</span></button>
     <hr class="channel-ctx-sep">
     <button class="channel-ctx-item danger" data-action="dm-delete">🗑️ <span data-i18n="context_menu.dm.delete">Delete DM</span></button>
@@ -4697,7 +4699,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.10.5"></script>
+  <script type="module" src="/js/app.js?v=4.10.6"></script>
   <script src="/js/plugin-loader.js?v=4.6.10"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

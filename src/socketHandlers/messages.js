@@ -2429,6 +2429,34 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // Mark everything read (#5683): every channel and DM this account belongs
+  // to moves to its latest message, including ones the sidebar is not showing,
+  // which is where a badge nobody can reach to clear comes from.
+  socket.on('mark-all-read', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    try {
+      const rows = db.prepare(`
+        SELECT cm.channel_id AS channelId, MAX(m.id) AS latest
+        FROM channel_members cm
+        JOIN messages m ON m.channel_id = cm.channel_id AND m.thread_id IS NULL
+        WHERE cm.user_id = ?
+        GROUP BY cm.channel_id
+      `).all(socket.user.id);
+      const upsert = db.prepare(`
+        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
+      `);
+      db.transaction(() => {
+        for (const r of rows) if (r.latest) upsert.run(socket.user.id, r.channelId, r.latest);
+      })();
+      cb({ ok: true, channels: rows.length });
+    } catch (err) {
+      console.error('Mark all read error:', err);
+      cb({ error: 'Could not mark everything read' });
+    }
+  });
+
   // Mark every topic in a forum channel read for this account (#5641). Each
   // topic's row moves to its latest reply, or 0 when it has none, so the dot
   // comes back only for replies that land after this.

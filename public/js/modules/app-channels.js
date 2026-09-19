@@ -854,6 +854,26 @@ _initDmContextMenu() {
   this._dmCtxMenuEl = document.getElementById('dm-ctx-menu');
   this._dmCtxMenuCode = null;
 
+  // Mark everything as read, from either menu (#5683). The counts are zeroed
+  // here for every channel the client knows about, shown or not, and the
+  // server moves each read position so they do not come back on reconnect.
+  document.querySelectorAll('[data-action="mark-all-read"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      this._closeChannelCtxMenu?.();
+      this._closeDmCtxMenu?.();
+      this.socket.emit('mark-all-read', {}, (res) => {
+        if (!res || res.error) return this._showToast(res?.error || t('context_menu.channel.mark_all_read_failed'), 'error');
+        const codes = new Set([...Object.keys(this.unreadCounts || {}), ...(this.channels || []).map(c => c.code)]);
+        codes.forEach(code => { this.unreadCounts[code] = 0; });
+        (this.channels || []).forEach(c => { c.unreadCount = 0; });
+        this._renderChannels();
+        this._updateTabTitle();
+        this._updateDesktopBadge();
+        this._showToast(t('context_menu.channel.mark_all_read_done'), 'success');
+      });
+    });
+  });
+
   // Mark DM as read
   document.querySelector('[data-action="dm-mark-read"]')?.addEventListener('click', () => {
     const code = this._dmCtxMenuCode;
