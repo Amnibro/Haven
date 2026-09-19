@@ -14,6 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Fixed
+- **A Discord pairing could slip back to "Mirror everything".** Changing any
+  control on a pairing saved the whole row as that window showed it, so a
+  settings panel left open somewhere else, still showing the old values,
+  could undo "On command". Only the control that was changed is saved now.
 - **Last night's messages still said "Today" the next day.** The Today and
   Yesterday labels were written once and never looked at again, so an app
   left open past midnight kept them. They are rewritten when the day
