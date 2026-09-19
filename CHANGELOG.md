@@ -14,6 +14,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Tags on pictures and files (#5599).** Put a few tags on an upload as
+  you send it, or later from the message menu under Edit tags. A message
+  shows its tags under it, and clicking one searches for it. Search has a
+  `tag:` filter, and Files & Media has a Tags filter, tag chips on every
+  tile, and Append or Replace across a selection. The tag list is one list
+  for the whole server: anyone can use a tag that exists, making a new one
+  needs the new Manage Tags permission, and Settings, Tags is where they are
+  added, renamed, merged and deleted. Limits for tags per upload and tag
+  length are under Limits. Not in DMs, which the server cannot read, or in
+  forum channels, which have their own tags. Someone who cannot make tags
+  does not see the tag bar until the server has at least one. By @Bo0sted.
 - **Save Image can pick a folder**, in browsers that have a file picker, and chat pictures that went black in some Tauri webviews stay on screen. Cancel shows a toast instead of failing silently.
 - **Per-channel Reactions toggle.** Channel Functions has a Reactions ON/OFF switch. Off hides the react control and the server refuses new or removed reactions. Existing badges stay. DMs stay on.
 - **Glyphs, a third look for the interface's icons (#5673).** Settings,
@@ -31,6 +42,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   in a thread too. Reported by @quakeman00.
 
 ### Fixed
+- **The @ list finds a name from any part of it (#5674).** Typing `@dan`
+  only found names that started with "dan", so TheDannister needed `@the`.
+  Any part of a display name, login name or nickname matches now, with
+  names that start with the letters listed first. Role pings match the
+  same way. Reported by @quakeman00.
 - **Caps Lock, Num Lock and Scroll Lock record as desktop shortcuts.** The
   recorder sent them with the browser's spelling, which the desktop app's
   shortcut system does not accept. Reported by Constooli on the desktop
