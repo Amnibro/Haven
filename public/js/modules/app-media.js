@@ -5064,11 +5064,19 @@ _showImageContextMenu(e, src, opts = {}) {
   // opts.sourceImg: the <img> the menu was opened on, so an encrypted DM
   // picture can be decrypted again for Open and Save (#5663).
   const sourceImg = opts.sourceImg || opts.viewImage || null;
+  // A picture post is mostly picture, so right-clicking it lands here and not
+  // on the message menu where Edit tags lives. Offer it here too, under the
+  // same rule: your own upload, or anyone's with Manage Tags (#5682).
+  const tagMsgEl = sourceImg && sourceImg.closest ? sourceImg.closest('#messages [data-msg-id]') : null;
+  const tagCh = this.channels?.find(c => c.code === this.currentChannel);
+  const canEditTags = !!tagMsgEl && !!tagCh && !tagCh.is_dm && !tagCh.is_forum &&
+    (String(tagMsgEl.dataset.userId) === String(this.user?.id) || !!this.user?.isAdmin || !!this._hasPerm?.('manage_tags'));
   menu.innerHTML = `
     ${opts.viewImage ? `<button data-action="view">🔍 ${t('media_runtime.image.view')}</button>` : ''}
     <button data-action="save">💾 ${t('media_runtime.image.save')}</button>
     <button data-action="copy">📋 ${t('media_runtime.image.copy')}</button>
     <button data-action="open">🔗 ${t('media_runtime.image.open_new_tab')}</button>
+    ${canEditTags ? `<button data-action="edit-tags">🏷️ ${this._escapeHtml(t('tags.edit'))}</button>` : ''}
     <button data-action="hide">🙈 ${this._escapeHtml(t('app.messages.hide_image'))}</button>
   `;
   menu.style.left = e.clientX + 'px';
@@ -5265,6 +5273,10 @@ _showImageContextMenu(e, src, opts = {}) {
     } else if (action === 'open') {
       if (sourceImg) this._openImageInNewTab(sourceImg);
       else window.open(src, '_blank', 'noopener,noreferrer');
+    } else if (action === 'edit-tags') {
+      this._hideImageContextMenu();
+      if (tagMsgEl) this._openMessageTagEditor?.(parseInt(tagMsgEl.dataset.msgId, 10), tagMsgEl);
+      return;
     } else if (action === 'hide') {
       this._hideImage(src);
       // Collapse every live copy of this image to a placeholder right away.

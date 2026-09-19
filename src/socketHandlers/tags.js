@@ -52,7 +52,7 @@ module.exports = function register(socket, ctx) {
     try {
       // Empty query browses the whole vocabulary (picker just opened); a typed
       // query narrows by prefix. Both capped inside searchTags.
-      respond({ tags: searchTags(db, query, 50) });
+      respond({ tags: searchTags(db, query, 100) });
     } catch (e) {
       respond({ tags: [] });
     }

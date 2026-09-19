@@ -13,7 +13,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Changed
+- **The tag picker is wider and lists tags in columns (#5682).** A long tag
+  list is a short scroll now, and it shows up to 100 tags before you type.
+  Edit tags is also on the right-click menu of a picture, since a picture
+  post has almost nowhere else to right-click. Asked for by @quakeman00.
+
 ### Fixed
+- **Tag names in the picker were cut off at the top (#5682).** Once the list
+  was long enough to scroll, its rows were squeezed shorter than their text.
+  Reported by @quakeman00.
 - **Middle-click on a picture in the pop-out DM and in threads (#5663).**
   Those two lists had ended up with two handlers each, so one click asked
   for two tabs, and on Windows the middle button's autoscroll could swallow
