@@ -34,6 +34,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   bundled Font Awesome font, through the new Haven Glyphs plugin, and leaves
   message text, reactions and the pickers alone. The plugin and font are by
   @bernardokcosta.
+- **A Steam game on a profile card opens its store page (#5679).** Click
+  the game under Activity and the Steam store page for it opens in a new
+  tab. Asked for by @birdcrazy.
 - **The NSFW blur can be switched off (#5633).** Under Settings, next to
   Hide NSFW channels, a switch that is on by default. Off, a topic marked
   🔞 shows plainly with its tag still on it. Asked for by @quakeman00.

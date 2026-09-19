@@ -15454,6 +15454,8 @@ ul.chat-list { list-style-type: disc; }
   margin: 0.25rem 0 0.5rem;
 }
 
+.profile-activity-link { color: inherit; text-decoration: none; cursor: pointer; }
+.profile-activity-link:hover .profile-activity-name { text-decoration: underline; }
 .profile-activity-row {
   display: flex;
   align-items: center;

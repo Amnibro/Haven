@@ -997,6 +997,7 @@
     "activity_playing": "Playing",
     "activity_listening": "Listening to",
     "activity_paused": "Paused",
+    "activity_open_steam": "Open this game on the Steam store",
     "camera_on": "Camera on",
     "connections": {
       "lastfm_blurb": "A free service that tracks what you listen to. Connect it to Spotify, YouTube Music, Apple Music, Navidrome and more — then Haven can show your music.",
