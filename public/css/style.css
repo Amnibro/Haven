@@ -20352,3 +20352,215 @@ ul.chat-list { list-style-type: disc; }
 .role-menu-btn.held { background: var(--role-c, var(--accent)); color: #fff; }
 .role-menu-btn .rm-state { opacity: 0.8; font-weight: 700; }
 .role-menu-btn:disabled { opacity: 0.6; cursor: wait; }
+
+/* ── Permissions matrix ─────────────────────────────────── */
+.perm-matrix-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(96vw, 62rem);
+  max-width: 96vw;
+  height: min(88vh, 46rem);
+  min-height: 24rem;
+}
+.perm-matrix-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.perm-matrix-header h3 { margin: 0; flex: 0 0 auto; }
+.perm-matrix-header .perm-view-toggle { flex: 0 0 auto; }
+.perm-matrix-header > .perm-view-toggle + .modal-expand-btn-inline { margin-left: auto; }
+.perm-matrix-lead { margin: 6px 0 10px; font-size: 0.8rem; }
+.perm-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.perm-view-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 0;
+  padding: 5px 14px;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.perm-view-btn.is-active {
+  background: var(--accent, #6b4fdb);
+  color: var(--accent-text, #fff);
+}
+#perm-roles-pane,
+#perm-users-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+#perm-roles-pane[hidden],
+#perm-users-pane[hidden] { display: none; }
+.perm-matrix-toolbar { margin-bottom: 8px; flex-shrink: 0; }
+.perm-matrix-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.perm-matrix-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.78rem;
+}
+.perm-matrix-table th,
+.perm-matrix-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+.perm-matrix-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-secondary, var(--bg-input));
+  vertical-align: top;
+}
+.perm-matrix-table th.perm-matrix-perm,
+.perm-matrix-table tbody th {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg-primary, var(--bg));
+  font-weight: 500;
+}
+.perm-matrix-table thead th.perm-matrix-perm { z-index: 3; }
+.perm-matrix-group td {
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--accent, #6b4fdb) 8%, transparent);
+}
+.perm-matrix-role-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.perm-matrix-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.perm-matrix-remove {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1;
+}
+.perm-matrix-remove:hover { color: #e74c3c; border-color: #e74c3c; }
+.perm-matrix-auto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.perm-users-layout {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+.perm-users-side {
+  width: 14rem;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.perm-user-list {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex: 1;
+}
+.perm-user-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+}
+.perm-user-row:hover { background: rgba(255,255,255,0.05); }
+.perm-user-row.is-active { background: color-mix(in srgb, var(--accent, #6b4fdb) 22%, transparent); }
+.perm-user-badge { font-size: 0.7rem; opacity: 0.7; }
+.perm-user-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.perm-user-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.perm-user-chip {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.perm-user-chip.is-on { background: var(--accent, #6b4fdb); color: var(--accent-text, #fff); border-color: transparent; }
+.perm-user-chip:disabled { opacity: 0.55; cursor: default; }
+.perm-user-group {
+  margin: 10px 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.perm-user-perm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.82rem;
+}
+#perm-roles-pane, #perm-users-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+#perm-roles-pane[hidden], #perm-users-pane[hidden] { display: none; }

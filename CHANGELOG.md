@@ -27,6 +27,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   does not see the tag bar until the server has at least one. By @Bo0sted.
 - **Save Image can pick a folder**, in browsers that have a file picker, and chat pictures that went black in some Tauri webviews stay on screen. Cancel shows a toast instead of failing silently.
 - **Per-channel Reactions toggle.** Channel Functions has a Reactions ON/OFF switch. Off hides the react control and the server refuses new or removed reactions. Existing badges stay. DMs stay on.
+- **Permissions is a grid of roles, plus a Users tab.** Settings still opens the same button; it now shows Member and Mod as columns you can tick, and a Users tab for one person. New servers and Reset to Default seed Member (auto-assign), Mod and Channel Mod. The host stays Admin via `is_admin`. A chip on the Users tab adds or removes that one role, and a tick there only touches the permissions the grid shows. More options still opens the old role editor.
 - **Glyphs, a third look for the interface's icons (#5673).** Settings,
   Interface Icons (the old Toolbar Icons) has Glyphs next to Monochrome and
   Colorful Emoji. It redraws the icons across the whole interface with a

@@ -2623,7 +2623,7 @@
           <h5 class="settings-section-subtitle">👑 <span data-i18n="settings.admin.roles_title">Role Management</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.roles_hint">Create and manage roles. Assign roles to users from the user list context menu.</small>
           <div style="margin-top:8px;display:flex;gap:6px">
-            <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Manage Roles</span></button>
+            <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Permissions</span></button>
             <button class="btn-sm" id="post-role-menu-btn" data-i18n-title="settings.admin.role_menu.hint" title="Post a message people react to, or click, to give themselves a role">🎭 <span data-i18n="settings.admin.role_menu.post">Post a role menu</span></button>
             <button class="btn-sm" id="reset-roles-btn" data-i18n-title="settings.admin.reset_roles_title" title="Reset all roles to deployment defaults">🔄 <span data-i18n="settings.admin.reset_roles_btn">Reset to Default</span></button>
           </div>
@@ -3376,6 +3376,43 @@
       </div>
     </div>
   </div>
+
+
+  <!-- Permissions matrix -->
+  <div class="modal-overlay" id="perm-matrix-overlay" style="display:none">
+    <div class="modal modal-wide perm-matrix-modal">
+      <div class="perm-matrix-header">
+        <h3>👑 <span data-i18n="settings.admin.perm_matrix.title">Permissions</span></h3>
+        <div class="perm-view-toggle" role="tablist">
+          <button type="button" class="perm-view-btn is-active" id="perm-view-roles" data-i18n="settings.admin.perm_matrix.view_roles">Roles</button>
+          <button type="button" class="perm-view-btn" id="perm-view-users" data-i18n="settings.admin.perm_matrix.view_users">Users</button>
+        </div>
+      </div>
+      <p class="muted-text perm-matrix-lead" data-i18n="settings.admin.perm_matrix.lead">New servers start with Member, Mod, and Admin (you). Members can use every public channel. Mods can kick, ban, and run channels. Admin can do everything.</p>
+      <div id="perm-roles-pane">
+        <div class="perm-matrix-toolbar">
+          <button type="button" class="btn-sm btn-accent" id="perm-add-role-btn">+ <span data-i18n="settings.admin.perm_matrix.add_role">Add role</span></button>
+        </div>
+        <div class="perm-matrix-scroll">
+          <table class="perm-matrix-table" id="perm-matrix-table"></table>
+        </div>
+      </div>
+      <div id="perm-users-pane" hidden>
+        <div class="perm-users-layout">
+          <div class="perm-users-side">
+            <input type="search" id="perm-user-search" class="settings-text-input" data-i18n-placeholder="settings.admin.perm_matrix.search_users" placeholder="Search members…">
+            <div id="perm-user-list" class="perm-user-list"></div>
+          </div>
+          <div id="perm-user-detail" class="perm-user-detail"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-sm" id="perm-open-classic-btn" data-i18n="settings.admin.perm_matrix.classic">More options</button>
+        <button type="button" class="btn-sm" id="close-perm-matrix-btn" data-i18n="modals.common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Role Management Modal -->
   <div class="modal-overlay" id="role-modal" style="display:none">
