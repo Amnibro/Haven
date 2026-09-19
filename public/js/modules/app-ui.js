@@ -2229,19 +2229,22 @@ _setupUI() {
           this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, { sourceImg: e.target });
         }
       });
-      // Middle click on a picture opens it in a new tab, like a link (#5663).
-      el.addEventListener('auxclick', (e) => {
-        if (e.button !== 1) return;
-        const img = e.target.closest('img.chat-image');
-        if (!img) return;
-        e.preventDefault();
-        this._openImageInNewTab(img);
-      });
     }
   }
-  document.getElementById('messages').addEventListener('auxclick', (e) => {
-    if (e.button !== 1) return;
+  // Middle click on a picture opens it in a new tab, like a link (#5663).
+  // One handler for every message list: the pop-out DM and the thread panel
+  // had ended up with two each, so one click asked for two tabs. The
+  // mousedown half stops Windows from starting its middle-button autoscroll
+  // on the picture, which swallows the click before it gets here.
+  const MIDCLICK_LISTS = '#messages, #thread-messages, #dm-pip-messages, #search-panel-list';
+  const midClickImage = (e) => {
+    if (e.button !== 1 || !e.target || !e.target.closest) return null;
     const img = e.target.closest('img.chat-image');
+    return img && img.closest(MIDCLICK_LISTS) ? img : null;
+  };
+  document.addEventListener('mousedown', (e) => { if (midClickImage(e)) e.preventDefault(); });
+  document.addEventListener('auxclick', (e) => {
+    const img = midClickImage(e);
     if (!img) return;
     e.preventDefault();
     this._openImageInNewTab(img);
@@ -2459,15 +2462,6 @@ _setupUI() {
       dmPipTakeFiles(e.dataTransfer.files);
     });
   }
-  ['dm-pip-messages', 'thread-messages'].forEach((id) => {
-    document.getElementById(id)?.addEventListener('auxclick', (e) => {
-      if (e.button !== 1) return;
-      const img = e.target.closest('img.chat-image');
-      if (!img) return;
-      e.preventDefault();
-      this._openImageInNewTab(img);
-    });
-  });
 
   // PiP emoji button — positions the picker above the button and targets the PiP input
   const dmPipEmojiBtn = document.getElementById('dm-pip-emoji-btn');

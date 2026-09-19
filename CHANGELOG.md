@@ -14,6 +14,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Fixed
+- **Middle-click on a picture in the pop-out DM and in threads (#5663).**
+  Those two lists had ended up with two handlers each, so one click asked
+  for two tabs, and on Windows the middle button's autoscroll could swallow
+  the click before Haven saw it. There is one handler for every message
+  list now, and autoscroll no longer starts on a picture.
 - **Pictures in a pop-out DM or thread could show as "blocked domain".**
   With a link policy switched on, a picture that had not loaded yet was
   judged by its placeholder address instead of its real one, so the
