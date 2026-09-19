@@ -11,7 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.10.0] - 2026-09-18
+
+Most of this one came from contributors. Pictures and files can carry tags
+that search and the media gallery filter on; Settings, Permissions is a grid
+of roles with a Users tab; a channel can switch reactions off; Save Image
+asks where to save; and the interface's icons get a third look, Glyphs.
+Around that, a run of fixes from the tracker. Two tables and one column are
+created on first start; nothing to run by hand.
 
 ### Added
 - **Tags on pictures and files (#5599).** Put a few tags on an upload as
@@ -24,10 +31,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   added, renamed, merged and deleted. Limits for tags per upload and tag
   length are under Limits. Not in DMs, which the server cannot read, or in
   forum channels, which have their own tags. Someone who cannot make tags
-  does not see the tag bar until the server has at least one. By @Bo0sted.
-- **Save Image can pick a folder**, in browsers that have a file picker, and chat pictures that went black in some Tauri webviews stay on screen. Cancel shows a toast instead of failing silently.
-- **Per-channel Reactions toggle.** Channel Functions has a Reactions ON/OFF switch. Off hides the react control and the server refuses new or removed reactions. Existing badges stay. DMs stay on.
-- **Permissions is a grid of roles, plus a Users tab.** Settings still opens the same button; it now shows Member and Mod as columns you can tick, and a Users tab for one person. New servers and Reset to Default seed Member (auto-assign), Mod and Channel Mod. The host stays Admin via `is_admin`. A chip on the Users tab adds or removes that one role, and a tick there only touches the permissions the grid shows. More options still opens the old role editor.
+  does not see the tag bar until the server has at least one. A Frequent
+  row under the tag bar offers the tags you use most, one click each. By
+  @Bo0sted (#5678, #5680).
+- **Save Image asks where to save (#5676).** In browsers that have a file
+  picker, and through the save dialog in the desktop app; Cancel says so
+  instead of failing silently. It saves the file itself, so a GIF stays a
+  GIF. Chat pictures that went black in some Tauri webviews stay on screen.
+  By @Amnibro.
+- **Reactions can be switched off per channel (#5677).** Channel Functions
+  has a Reactions switch, on by default. Off hides the react button and the
+  server refuses new or removed reactions; the ones already there stay. DMs
+  keep theirs. By @Amnibro, asked for by Andalishious.
+- **Permissions is a grid of roles, plus a Users tab (#5675).** The Manage
+  Roles button in Settings is now Permissions: every server role is a
+  column, every permission a row, and a tick is the whole job. The Users tab
+  picks one person, adds or removes a role with a click, and ticks a
+  permission just for them; each of those changes lands in the audit log.
+  More options opens the old role editor, which is unchanged. Servers keep
+  the roles they have. A new server, or Reset to Default, now starts with
+  Member, Channel Mod, and a Mod who can also ban, create channels, promote
+  and read the audit log. By @Amnibro.
 - **Glyphs, a third look for the interface's icons (#5673).** Settings,
   Interface Icons (the old Toolbar Icons) has Glyphs next to Monochrome and
   Colorful Emoji. It redraws the icons across the whole interface with a
@@ -51,6 +75,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   Any part of a display name, login name or nickname matches now, with
   names that start with the letters listed first. Role pings match the
   same way. Reported by @quakeman00.
+- **The folded toolbar's + button matches the text box (#5670).** With the
+  composer buttons folded into one, the + sat a little shorter than the box
+  beside it. By @birdcrazy.
 - **Caps Lock, Num Lock and Scroll Lock record as desktop shortcuts.** The
   recorder sent them with the browser's spelling, which the desktop app's
   shortcut system does not accept. Reported by Constooli on the desktop
