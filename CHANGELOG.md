@@ -26,6 +26,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   post has almost nowhere else to right-click. Asked for by @quakeman00.
 
 ### Fixed
+- **One-way audio after a server restart or a channel code rotation.** When
+  the connection to the server blinked, every client "healed" its call by
+  restarting the link to each person in it, even though those links were
+  fine, and both people did it at the same moment. The two restarts
+  collided and the call came back one-way: one person could hear, the other
+  was sending nothing, until someone reloaded. Healthy links are left alone
+  now, and for a link that really is down only one side goes first.
 - **Tag names in the picker were cut off at the top (#5682).** Once the list
   was long enough to scroll, its rows were squeezed shorter than their text.
   Reported by @quakeman00.
