@@ -3640,16 +3640,33 @@ class VoiceManager {
     // restores voice audio often leaves screen video undelivered because
     // ontrack doesn't re-fire for an already-negotiated transceiver.
     setTimeout(() => { try { this._rearmScreenWatchdogs(); } catch {} }, 2500);
+    // Only a path that is actually broken gets restarted. This sweep used to
+    // restart every peer, healthy or not, and the other person's client ran
+    // the same sweep at the same moment: after a server restart or a channel
+    // code rotation both sides offered an ICE restart on a perfectly good
+    // connection, the two offers collided, and the call came out one-way
+    // (one person heard, the other sent nothing) until someone reloaded.
+    // A live peer-to-peer path does not care that signaling blinked.
+    const isBroken = (conn) => {
+      const cs = conn.connectionState, ics = conn.iceConnectionState;
+      return cs === 'failed' || cs === 'disconnected' || ics === 'failed' || ics === 'disconnected';
+    };
     let i = 0;
     for (const [userId, peer] of this.peers) {
       const conn = peer && peer.connection;
       if (!conn || conn.connectionState === 'closed') continue;
-      const delay = (i++) * 200;
+      if (!isBroken(conn)) continue;
+      // Both ends see the same broken path, so both would restart it at once
+      // and collide again. The side whose offer wins a collision goes first;
+      // the side that would yield gives it a few seconds and only steps in
+      // if the path is still down.
+      const delay = (i++) * 200 + (this._isPolite(userId) ? 4000 : 0);
       setTimeout(() => {
         const current = this.peers.get(userId);
         // Bail if the peer was torn down/replaced while we were waiting.
         if (!this.inVoice || !current || current.connection !== conn) return;
-        if (conn.connectionState === 'closed') return;
+        if (conn.connectionState === 'closed' || !isBroken(conn)) return;
+        if (current._makingOffer || current._awaitingAnswer || conn.signalingState !== 'stable') return;
         console.warn('[Voice] post-reconnect heal: ICE-restarting peer', userId,
           `(conn=${conn.connectionState}, ice=${conn.iceConnectionState})`);
         this._restartIce(userId, conn);
