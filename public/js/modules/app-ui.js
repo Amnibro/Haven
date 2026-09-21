@@ -4809,11 +4809,17 @@ _setupUI() {
     host.innerHTML = html;
     const toggle = document.getElementById('guests-enabled');
     if (toggle) toggle.checked = (this.serverSettings?.guests_enabled === 'true');
+    const voiceToggle = document.getElementById('guests-allow-voice');
+    if (voiceToggle) voiceToggle.checked = (this.serverSettings?.guests_allow_voice !== 'false');
   };
   this._renderGuestChannels = _renderGuestChannels;
   document.getElementById('guests-enabled')?.addEventListener('change', (e) => {
     this.socket.emit('update-server-setting', { key: 'guests_enabled', value: e.target.checked ? 'true' : 'false' });
     this._showToast?.(t(e.target.checked ? 'settings.admin.guest_access.enabled' : 'settings.admin.guest_access.disabled'), 'success');
+  });
+  document.getElementById('guests-allow-voice')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', { key: 'guests_allow_voice', value: e.target.checked ? 'true' : 'false' });
+    this._showToast?.(t(e.target.checked ? 'settings.admin.guest_access.voice_on' : 'settings.admin.guest_access.voice_off'), 'success');
   });
   document.getElementById('guest-channels-all-btn')?.addEventListener('click', () => {
     document.querySelectorAll('.guest-channel-cb').forEach(cb => { cb.checked = true; });

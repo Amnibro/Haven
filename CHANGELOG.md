@@ -14,6 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Guests can be kept to text (#5687).** Settings, Guest Access has a
+  "Guests can join voice and video" switch, on by default. Off, a guest can
+  read and type in the channels you picked but cannot join a call, and the
+  Join Voice button is not shown to them. Asked for by @wxdth88.
 - **Mark everything as read (#5683).** Right-click any channel or DM and
   pick it. Every channel and DM you belong to is marked read, including
   ones the sidebar is not showing, so an unread badge with nothing to click

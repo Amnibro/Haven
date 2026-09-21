@@ -160,6 +160,14 @@ module.exports = function register(socket, ctx) {
   }
 
   // ── Voice join ──────────────────────────────────────────
+  // (#5687) On unless an admin switched it off under Guest Access.
+  function guestsMayUseVoice() {
+    try {
+      const row = db.prepare("SELECT value FROM server_settings WHERE key = 'guests_allow_voice'").get();
+      return !(row && row.value === 'false');
+    } catch { return true; }
+  }
+
   socket.on('voice-join', (data) => {
     if (!data || typeof data !== 'object') return;
     const nativeClient = readNativeScreenClient(data);
@@ -187,6 +195,11 @@ module.exports = function register(socket, ctx) {
     }
     if (!socket.user.isAdmin && !socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', vch.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to use voice chat');
+    }
+    // Guests skip the role permission above, since they hold no roles. An
+    // admin can keep them to text with one switch instead (#5687).
+    if (socket.user.isGuest && !guestsMayUseVoice()) {
+      return socket.emit('error-msg', 'Guests cannot join voice on this server');
     }
     if (vchSettings && vchSettings.voice_user_limit > 0) {
       const currentCount = voiceUsers.has(code) ? voiceUsers.get(code).size : 0;
@@ -918,6 +931,11 @@ module.exports = function register(socket, ctx) {
     ).get(vch.id, socket.user.id);
     if (!vMember) {
       console.warn(`[VoiceDiag] voice-rejoin from ${socket.user.username} (id=${socket.user.id}) on ${code} REJECTED — not a channel member`);
+      socket.emit('voice-channel-gone', { code });
+      return;
+    }
+    if (socket.user.isGuest && !guestsMayUseVoice()) {
+      socket.emit('error-msg', 'Guests cannot join voice on this server');
       socket.emit('voice-channel-gone', { code });
       return;
     }

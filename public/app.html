@@ -2971,6 +2971,11 @@
             <span data-i18n="settings.admin.guests_allow">Allow guests</span>
             <input type="checkbox" id="guests-enabled">
           </label>
+          <label class="toggle-row" style="margin-top:6px">
+            <span data-i18n="settings.admin.guests_allow_voice">Guests can join voice and video</span>
+            <input type="checkbox" id="guests-allow-voice" checked>
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.guests_allow_voice_hint">Off, guests can read and type in the channels below but cannot join a call, share a screen or turn on a camera.</small>
           <div style="margin-top:10px;">
             <h6 style="margin:0 0 4px;font-size:0.85rem;font-weight:600" data-i18n="settings.admin.guests_channels_title">📋 Channels guests can access</h6>
             <small class="settings-hint" data-i18n="settings.admin.guests_channels_hint">Pick which channels guests can see and post in. Pick none and the Guest button won't be very useful. DMs are never available to guests.</small>
@@ -4699,7 +4704,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.10.6"></script>
+  <script type="module" src="/js/app.js?v=4.10.7"></script>
   <script src="/js/plugin-loader.js?v=4.6.10"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

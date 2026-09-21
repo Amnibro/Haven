@@ -31,6 +31,10 @@ async _joinVoice() {
     this._showToast(t('voice.no_permission'), 'error');
     return;
   }
+  if (this.user?.isGuest && this.serverSettings?.guests_allow_voice === 'false') {
+    this._showToast(t('voice.guests_no_voice'), 'error');
+    return;
+  }
   this._joiningVoice = true;
   // Visually disable the join buttons while the async pipeline runs so a
   // human can't fire 15 of them. We restore disabled=false in finally.
@@ -312,7 +316,9 @@ _voiceJoinAvailable() {
   if (!this.currentChannel) return false;
   const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
   if (ch && ch.voice_enabled === 0) return false;
-  return !!(this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice'));
+  // Guests hold no roles, so voice for them is one server switch (#5687).
+  if (this.user?.isGuest) return this.serverSettings?.guests_allow_voice !== 'false';
+  return !!(this.user?.isAdmin || this._hasPerm('use_voice'));
 },
 
 _updateVoiceButtons(inVoice) {

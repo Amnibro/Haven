@@ -472,6 +472,7 @@ function initDatabase() {
   insertSetting.run('admin_password_reset_enabled', 'false'); // admin can reset user passwords (#5300), opt-in, defaults off
   insertSetting.run('guests_enabled', 'false');          // (#5381) allow Join-as-Guest on the login page
   insertSetting.run('guest_channels', '');               // (#5381) CSV of channel IDs guests are auto-joined to (empty = none)
+  insertSetting.run('guests_allow_voice', 'true');       // (#5687) guests may join voice and video; false keeps them to text
   // (#5399) Voice connectivity. Admin-configurable STUN/TURN, served by
   // /api/ice-servers. All empty by default = use the built-in STUN pool.
   insertSetting.run('stun_urls', '');                    // newline/comma separated stun: URIs (empty = built-in defaults)

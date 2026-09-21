@@ -129,6 +129,7 @@ module.exports = function register(socket, ctx) {
       'default_join_channels', 'registration_token_enabled', 'invites_bypass_registration_token', // (#5344, #5345), registration_token has its own generate/clear handlers
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
       'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
+      'guests_allow_voice', // (#5687) whether guests may join voice and video
       'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
       'registration_captcha_enabled', 'turnstile_site_key', 'turnstile_secret_key', // opt-in Cloudflare Turnstile on registration
       'registration_rate_limit_enabled', 'registration_rate_limit_per_hour', // opt-in global new-account velocity cap
@@ -364,7 +365,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'invites_bypass_registration_token') {
       if (!['true', 'false'].includes(value)) return;
     }
-    if (key === 'guests_enabled') {
+    if (key === 'guests_enabled' || key === 'guests_allow_voice') {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'guest_channels') {
