@@ -608,6 +608,10 @@ module.exports = function register(socket, ctx) {
   // like the promo-modal dismissals).
   socket.on('get-recovery-notice-state', () => {
     try {
+      if (socket.user.isGuest) {
+        socket.emit('recovery-notice-state', { show: false });
+        return;
+      }
       const codes = db.prepare(
         'SELECT COUNT(*) AS c FROM account_recovery_codes WHERE user_id = ? AND used = 0'
       ).get(socket.user.id);

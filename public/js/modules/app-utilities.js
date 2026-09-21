@@ -1387,6 +1387,15 @@ _showToast(message, type = 'info', action = null, duration = 4000) {
  *  against showing twice within a single session (e.g. socket reconnects). */
 _showRecoveryNotice() {
   if (this._recoveryNoticeShown) return;
+  if (this.user?.isGuest) return;
+  const promoOpen = ['android-beta-modal', 'desktop-promo-modal'].some((id) => {
+    const el = document.getElementById(id);
+    return el && el.style.display === 'flex';
+  });
+  if (promoOpen) {
+    setTimeout(() => this._showRecoveryNotice(), 400);
+    return;
+  }
   this._recoveryNoticeShown = true;
 
   const overlay = document.createElement('div');

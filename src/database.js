@@ -447,6 +447,7 @@ function initDatabase() {
   insertSetting.run('session_duration_days', '0');       // login token lifetime in days; 0 = never expire (default for new installs, #5391). Existing installs that were seeded with '7' keep that value until the admin changes it.
   insertSetting.run('published_themes', '[]');             // JSON array of *.theme.css filenames shown in the theme picker
   insertSetting.run('admin_password_reset_enabled', 'false'); // admin can reset user passwords (#5300), opt-in, defaults off
+  insertSetting.run('ios_latest_version', '');           // version the iOS app compares itself against for its update prompt; empty = no prompt
   insertSetting.run('guests_enabled', 'false');          // (#5381) allow Join-as-Guest on the login page
   insertSetting.run('guest_channels', '');               // (#5381) CSV of channel IDs guests are auto-joined to (empty = none)
   // (#5399) Voice connectivity. Admin-configurable STUN/TURN, served by

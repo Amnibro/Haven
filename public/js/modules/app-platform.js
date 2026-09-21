@@ -268,6 +268,7 @@ _syncAndroidBanner() {
 _initWelcomePopups() {
   // Run the queue at most once per page load.
   if (this._welcomePopupsStarted) return;
+  if (this.user?.isGuest) return;
 
   // Dismissal state lives server-side in user_preferences (fetched via
   // get-preferences). Wait for it to land before deciding what to show —
@@ -326,7 +327,7 @@ _initWelcomePopups() {
       modalId: 'android-beta-modal',
       prefKey: 'promo_seen_android',
       checkboxId: 'android-beta-dismiss-check',
-      shouldShow: () => true,
+      shouldShow: () => !isElectron,
     },
   ];
 

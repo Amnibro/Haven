@@ -1693,6 +1693,7 @@ app.get('/api/public-config', (req, res) => {
     const nameRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
     const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
     const adminPwResetRow = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
+    const iosVersionRow = db.prepare("SELECT value FROM server_settings WHERE key = 'ios_latest_version'").get();
     const oidcConfig = require('./src/oidc').getOidcConfig();
     let storedPublishedThemes = [];
     try { storedPublishedThemes = JSON.parse(publishedThemesRow?.value || '[]'); } catch {}
@@ -1711,6 +1712,7 @@ app.get('/api/public-config', (req, res) => {
       // an admin can reset their password is the trust-and-warning half
       // of the feature — admins enable, users get the disclosure.
       admin_password_reset_enabled: adminPwResetRow?.value === 'true',
+      ios_latest_version: iosVersionRow?.value || '',
       // SSO (#12). Reports configured-and-usable, not just the toggle, so the
       // login page never offers a button that can only fail. The issuer and
       // client id stay server-side; the client needs neither.

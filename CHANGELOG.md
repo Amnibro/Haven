@@ -17,6 +17,27 @@ On top of 4.8.0: the permissions grid, original layout and sidebar chrome,
 and the image / Chrome local-network fixes.
 
 ### Added
+- **Amni-Scient theme sits tighter and the server banner shows through
+  chat.** Channel rows and composer padding dropped; opaque `.main` /
+  message layers no longer cover the gold wordmark.
+
+### Fixed
+- **First-login popups no longer stack over the whole app.** The Amni-Haven
+  Android card and the recovery-codes notice were both `position: fixed`
+  overlays. Clicks on channels, settings, and the composer went into the
+  dimmer instead. Recovery now waits until the promo is gone, guests skip
+  both, and Desktop skips the Android promo.
+
+### Added
+- **Amni-Scient public instance helpers.** `Start Haven Public.bat` and
+  `scripts/seedAmniScientCommunity.js` stand up a second data dir
+  (`%APPDATA%\Haven-AmniScient`) on port 3010 for
+  `https://haven.amni-scient.com` behind the existing Cloudflare named
+  tunnel. Cloudflare steps live in `docs/cloudflare-haven-amni-scient.md`.
+  Themes `amni-scient.theme.css` / `amni-scient-light.theme.css`, branded
+  icon/banner, Guide pins with product URLs, and `amniScientGuideBot.js`.
+
+### Added
 - **Permissions matrix.** Settings → Permissions is a grid: permission rows,
   role columns, tickboxes, + / − roles, and one auto-assign radio. New servers
   start with Member and Mod. A Users tab lists members so you can change one

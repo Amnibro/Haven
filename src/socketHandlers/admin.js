@@ -127,6 +127,7 @@ module.exports = function register(socket, ctx) {
       'session_duration_days', 'max_message_chars',
       'default_join_channels', 'registration_token_enabled', 'invites_bypass_registration_token', // (#5344, #5345), registration_token has its own generate/clear handlers
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
+      'ios_latest_version', // version string the iOS app compares itself against for its update prompt
       'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
       'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
       'registration_captcha_enabled', 'turnstile_site_key', 'turnstile_secret_key', // opt-in Cloudflare Turnstile on registration
@@ -271,6 +272,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'update_banner_admin_only' && !['true', 'false'].includes(value)) return;
     if (key === 'hide_disabled_channel_badges' && !['true', 'false'].includes(value)) return;
     if (key === 'admin_password_reset_enabled' && !['true', 'false'].includes(value)) return;
+    if (key === 'ios_latest_version' && value && !/^\d{1,3}(\.\d{1,4}){0,3}$/.test(value)) return;
     // (#12) OIDC. The issuer must be an absolute https URL — anything else is
     // either a typo or an attempt to point discovery somewhere it shouldn't go.
     if (key === 'oidc_enabled' && !['0', '1'].includes(value)) return;
