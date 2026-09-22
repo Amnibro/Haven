@@ -41,7 +41,9 @@ async _sendMessage() {
       if (line) lines.push(line);
       if (this._uploadsCancelled) break;
     }
-    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n') });
+    const topicTags = [...new Set(files.flatMap(f => (f && Array.isArray(f._tags)) ? f._tags : []))];
+    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n'), ...(topicTags.length ? { attachmentTags: topicTags } : {}) });
+    if (topicTags.length) this._recordFrequentTags?.(topicTags);
     this.notifications.play('sent');
     if (hasFiles) this._flushFileQueue?.();
     return;
@@ -2382,11 +2384,12 @@ _hideMessageContextMenu() {
 // lookup, normalize, limits) and the shared .tag-* styles. Each change emits
 // set-message-tags with the full set; the server replaces + broadcasts, and the
 // message-tags-updated handler repaints every footer, including this one.
-_openMessageTagEditor(msgId, msgEl) {
+_openMessageTagEditor(msgId, msgEl, knownTags = null) {
   this._closeMessageTagEditor();
   if (!msgId) return;
-  // Seed the working set from the message's current footer chips.
-  const current = Array.from(msgEl?.querySelectorAll('.message-tags .message-tag') || [])
+  // Seed the working set from the message's current footer chips, or from the
+  // list the caller already has (a forum card has no footer, #5682).
+  const current = Array.isArray(knownTags) ? [...knownTags] : Array.from(msgEl?.querySelectorAll('.message-tags .message-tag') || [])
     .map(el => el.dataset.tag).filter(Boolean);
   this._msgTagEditor = { msgId, tags: current };
 
@@ -2564,7 +2567,13 @@ _msgTagEditorSave() {
 // search results, thread, PiP) after a live tag change. (#tagging phase 3)
 _updateMessageTagsFooter(msgId, tags) {
   const list = Array.isArray(tags) ? tags : [];
+  const topic = this._forumTopics && this._forumTopics.get(msgId);
+  if (topic) {
+    topic.attachmentTags = list.length ? list : undefined;
+    if (this._activeThreadParent === msgId) this._forumThreadRenderTopic?.();
+  }
   document.querySelectorAll(`[data-msg-id="${msgId}"]`).forEach(el => {
+    if (el.classList.contains('forum-topic')) return;
     const existing = el.querySelector('.message-tags');
     if (existing) existing.remove();
     if (!list.length) return;
@@ -2574,7 +2583,7 @@ _updateMessageTagsFooter(msgId, tags) {
     tmp.innerHTML = html.trim();
     const node = tmp.content.firstChild;
     const anchor = el.querySelector('.reactions-row')
-      || el.querySelector('.message-content, .search-result-content');
+      || el.querySelector('.message-content, .search-result-content, .thread-msg-content');
     if (anchor && anchor.parentNode) anchor.insertAdjacentElement('afterend', node);
     else (el.querySelector('.message-body') || el).appendChild(node);
   });

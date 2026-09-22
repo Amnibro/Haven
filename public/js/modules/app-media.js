@@ -176,11 +176,11 @@ _composerAttachments() {
 },
 
 // Tagging is for plaintext channel uploads: DMs are E2E (the server never sees
-// their bytes, so it can't index a tag), and forum channels have their own
-// topic-tag UI in the composer that this would visually collide with.
+// their bytes, so it can't index a tag). Forums take it too: their topic tags
+// live in the New Post window, not in this message box (#5682).
 _tagBarEligible() {
   const ch = this.channels?.find(c => c.code === this.currentChannel);
-  return !!(ch && !ch.is_dm && !ch.is_forum);
+  return !!(ch && !ch.is_dm);
 },
 
 // Point the tag bar at a different queued attachment.
@@ -5054,6 +5054,29 @@ async _saveContextImage(src, sourceImg) {
   }
 },
 
+// The message a picture belongs to, for Edit tags on the image menu: a chat
+// message, a forum topic card, a topic open in full (its first post has no
+// message row of its own), or a reply in a thread. Returns the message id,
+// its author, the element to anchor the editor on and the tags it has.
+_imageTagTarget(img) {
+  if (!img || !img.closest) return null;
+  const topicBody = img.closest('#thread-messages .thread-topic-body');
+  if (topicBody) {
+    const id = this._activeThreadParent;
+    const topic = id && this._forumTopics ? this._forumTopics.get(id) : null;
+    return topic ? { msgId: topic.id, userId: topic.user_id, el: topicBody, tags: topic.attachmentTags || [] } : null;
+  }
+  const el = img.closest('#messages [data-msg-id], #thread-messages [data-msg-id]');
+  if (!el) return null;
+  const msgId = parseInt(el.dataset.msgId, 10);
+  if (!msgId) return null;
+  if (el.classList.contains('forum-topic')) {
+    const topic = this._forumTopics ? this._forumTopics.get(msgId) : null;
+    return { msgId, userId: el.dataset.userId, el, tags: (topic && topic.attachmentTags) || [] };
+  }
+  return { msgId, userId: el.dataset.userId, el, tags: null };
+},
+
 _showImageContextMenu(e, src, opts = {}) {
   this._hideImageContextMenu();
   const menu = document.createElement('div');
@@ -5067,10 +5090,13 @@ _showImageContextMenu(e, src, opts = {}) {
   // A picture post is mostly picture, so right-clicking it lands here and not
   // on the message menu where Edit tags lives. Offer it here too, under the
   // same rule: your own upload, or anyone's with Manage Tags (#5682).
-  const tagMsgEl = sourceImg && sourceImg.closest ? sourceImg.closest('#messages [data-msg-id]') : null;
+  // In a forum that includes a topic's card, the topic open in full, and
+  // the replies under it (#5682).
+  const tagTarget = this._imageTagTarget(sourceImg);
+  const tagMsgEl = tagTarget && tagTarget.el;
   const tagCh = this.channels?.find(c => c.code === this.currentChannel);
-  const canEditTags = !!tagMsgEl && !!tagCh && !tagCh.is_dm && !tagCh.is_forum &&
-    (String(tagMsgEl.dataset.userId) === String(this.user?.id) || !!this.user?.isAdmin || !!this._hasPerm?.('manage_tags'));
+  const canEditTags = !!tagTarget && !!tagCh && !tagCh.is_dm &&
+    (String(tagTarget.userId) === String(this.user?.id) || !!this.user?.isAdmin || !!this._hasPerm?.('manage_tags'));
   menu.innerHTML = `
     ${opts.viewImage ? `<button data-action="view">🔍 ${t('media_runtime.image.view')}</button>` : ''}
     <button data-action="save">💾 ${t('media_runtime.image.save')}</button>
@@ -5275,7 +5301,7 @@ _showImageContextMenu(e, src, opts = {}) {
       else window.open(src, '_blank', 'noopener,noreferrer');
     } else if (action === 'edit-tags') {
       this._hideImageContextMenu();
-      if (tagMsgEl) this._openMessageTagEditor?.(parseInt(tagMsgEl.dataset.msgId, 10), tagMsgEl);
+      if (tagTarget) this._openMessageTagEditor?.(tagTarget.msgId, tagMsgEl, tagTarget.tags);
       return;
     } else if (action === 'hide') {
       this._hideImage(src);

@@ -4083,6 +4083,8 @@ _appendThreadMessage(msg) {
     threadCompact = samePerson && within;
   }
 
+  // A reply's picture shows its tags like a chat message does (#5682).
+  const threadTagsHtml = this._renderAttachmentTags ? this._renderAttachmentTags(msg.attachmentTags) : '';
   const el = document.createElement('div');
   el.className = 'thread-message' + (threadCompact ? ' thread-compact' : '');
   el.dataset.msgId = msg.id;
@@ -4107,7 +4109,7 @@ _appendThreadMessage(msg) {
             ${threadOverflowHtml}
           </div>
           <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
-          ${reactionsHtml}
+          ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
     `;
@@ -4127,7 +4129,7 @@ _appendThreadMessage(msg) {
           </div>
           ${replyHtml}
           <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
-          ${reactionsHtml}
+          ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
     `;

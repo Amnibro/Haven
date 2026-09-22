@@ -838,7 +838,7 @@ _forumThreadRenderTopic() {
   if (!topic) return;
   const body = document.createElement('div');
   body.className = 'thread-topic-body message-content';
-  body.innerHTML = this._formatContent(topic.content || '');
+  body.innerHTML = this._formatContent(topic.content || '') + (this._renderAttachmentTags ? this._renderAttachmentTags(topic.attachmentTags) : '');
   container.prepend(body);
   this._lazyMedia && this._lazyPump && this._lazyPump();
 },

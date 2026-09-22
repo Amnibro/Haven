@@ -2661,8 +2661,26 @@ module.exports = function register(socket, ctx) {
       });
     }
 
+    // Attachment tags on the replies' pictures, for their footers and the
+    // Edit tags entry on the image menu (#5682).
+    const threadTagMap = new Map();
+    if (msgIds.length > 0) {
+      const ph = msgIds.map(() => '?').join(',');
+      db.prepare(`
+        SELECT at.message_id, ut.name
+        FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
+        WHERE at.message_id IN (${ph}) ORDER BY ut.name_norm
+      `).all(...msgIds).forEach(r => {
+        if (!threadTagMap.has(r.message_id)) threadTagMap.set(r.message_id, []);
+        const arr = threadTagMap.get(r.message_id);
+        if (!arr.includes(r.name)) arr.push(r.name);
+      });
+    }
+
     const enriched = messages.map(m => {
       const obj = { ...m };
+      const atags = threadTagMap.get(m.id);
+      if (atags && atags.length) obj.attachmentTags = atags;
       // Border fit travels with the message (like avatar) so it renders even when
       // the author is offline. Parse the stored JSON into the op array the client folds.
       obj.borderTransform = parseBorderTransform(m.border_transform);
