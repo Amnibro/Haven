@@ -11,7 +11,7 @@ account, no telemetry, no paid tier. Free forever.
 One person runs the server. Everyone else joins with a code. Messages, files and
 voice never touch anybody else's infrastructure.
 
-<img width="1917" height="948" alt="Haven chat interface" src="https://github.com/user-attachments/assets/0c85ca6c-f811-43db-a26b-9b66c418830e" />
+<img width="1918" height="1010" alt="Haven's default look: channels and DMs on the left, the member list on the right" src="docs/img/haven-4-6-default.jpg" />
 
 ---
 
@@ -118,7 +118,7 @@ is open, no code needed, just sign up. Volunteer-hosted, thanks MutantRabbit.
 - Bcrypt passwords, JWT auth, HTTPS, MFA, rate-limited logins, and a disk reserve
   so a full drive never wedges the server.
 
-<img width="1917" height="911" alt="Haven with themes applied" src="https://github.com/user-attachments/assets/79b62980-0822-4e9d-b346-c5a93de95862" />
+<img width="1918" height="1009" alt="A community channel in the Braid theme" src="docs/img/haven-theme-braid.jpg" />
 
 ---
 
@@ -142,6 +142,14 @@ a bug, the version number from `https://your-server:3000/api/version` helps.
 
 AGPL-3.0. Free to use, modify and share. If you deploy a modified version as a
 network service, you have to publish its source. See [LICENSE](LICENSE).
+
+## Gallery
+
+<img width="1916" height="1006" alt="A DM window and profile card in the CRT theme" src="docs/img/haven-theme-crt.jpg" />
+
+<img width="1200" height="591" alt="Screen sharing with voice chat and more than one stream" src="docs/img/haven-screen-share.jpg" />
+
+<img width="1200" height="593" alt="The login screen with the theme picker" src="docs/img/haven-theme-chat.jpg" />
 
 ---
 
