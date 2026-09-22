@@ -20365,6 +20365,14 @@ ul.chat-list { list-style-type: disc; }
 .forum-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
 .forum-field input, .forum-field textarea { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.6rem; font: inherit; }
 .forum-tag-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+/* Pictures and files in a post's body (#5689, #5690) */
+.forum-attach-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin: -0.35rem 0 0.75rem; }
+.forum-attach-row .settings-hint { margin: 0; }
+.forum-post-modal.drag-over { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.forum-post-modal .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 0.4rem; }
+.forum-post-modal .modal-footer .forum-post-delete { margin-right: auto; font-size: 0.85rem; }
+.content-media-part { margin: 0.3rem 0; }
+.content-media-part:first-child { margin-top: 0; }
 /* Settings search */
 .settings-search-wrap { padding: 0.5rem 0.75rem 0.25rem; }
 .settings-search { width: 100%; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.4rem 0.6rem; font-size: 0.82rem; }

@@ -573,9 +573,15 @@ _openForumComposer(existing = null) {
   // ordinary edit path, so it gets the same checks as any message (#5650).
   const canEditBody = !!(existing && this.user && existing.user_id === this.user.id);
   const maxChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  // Pictures and files go into the body where the cursor is, each on a line
+  // of its own, so a post can be text with pictures between it (#5689, #5690).
+  const attachRow = `<div class="forum-attach-row"><button type="button" class="btn-sm forum-attach-btn" id="forum-post-attach">📎 ${t('forum.attach_file')}</button><input type="file" id="forum-post-file" multiple hidden><small class="settings-hint">${t('forum.attach_hint_inline')}</small></div>`;
   const bodyField = !existing
-    ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}"></textarea></label>`
-    : (canEditBody ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" maxlength="${maxChars}">${this._escapeHtml(existing.content || '')}</textarea></label>` : '');
+    ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}"></textarea></label>${attachRow}`
+    : (canEditBody ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" maxlength="${maxChars}">${this._escapeHtml(existing.content || '')}</textarea></label>${attachRow}` : '');
+  // Deleting a topic from here too: a gallery card is nearly all picture, and
+  // right-clicking the picture gets the image menu, not the topic's (#5690).
+  const canDelete = !!(existing && this.user && (existing.user_id === this.user.id || this.user.isAdmin || this._canModerate?.() || this._hasPerm?.('delete_message')));
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'forum-post-modal';
@@ -587,9 +593,9 @@ _openForumComposer(existing = null) {
         ${bodyField}
         ${tags.length ? `<div class="forum-field"><span>${t('forum.tags')} <small>${t('forum.tags_hint')}</small></span><div class="forum-tag-picker">${tags.map(tg => `<button type="button" class="forum-tag-chip${picked.has(tg.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tg.name)}">${tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(tg.name)}</button>`).join('')}</div></div>` : ''}
         <label class="forum-field forum-field-closed forum-field-nsfw"><span><input type="checkbox" id="forum-post-nsfw"${existing && existing.nsfw ? ' checked' : ''}> 🔞 ${t('forum.mark_nsfw')}</span></label>
-        ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : `<small class="settings-hint">${t('forum.attach_hint')}</small>`}
+        ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : ''}
       </div>
-      <div class="modal-footer"><button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
+      <div class="modal-footer">${canDelete ? `<button type="button" class="btn-sm btn-danger forum-post-delete" id="forum-post-delete">🗑️ ${t('forum.delete_topic')}</button>` : ''}<button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
     </div>`;
   document.body.appendChild(overlay);
   const close = () => overlay.remove();
@@ -601,9 +607,36 @@ _openForumComposer(existing = null) {
     if (picked.has(name)) picked.delete(name); else if (picked.size < 5) picked.add(name);
     c.classList.toggle('active', picked.has(name));
   }));
+  const bodyInput = overlay.querySelector('#forum-post-body');
+  if (bodyInput) {
+    const fileInput = overlay.querySelector('#forum-post-file');
+    overlay.querySelector('#forum-post-attach')?.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => { this._forumUploadIntoBody(fileInput.files, bodyInput, code); fileInput.value = ''; });
+    bodyInput.addEventListener('paste', (e) => {
+      const files = Array.from(e.clipboardData?.items || []).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+      if (!files.length) return;
+      e.preventDefault();
+      this._forumUploadIntoBody(files, bodyInput, code);
+    });
+    const modalEl = overlay.querySelector('.forum-post-modal');
+    modalEl.addEventListener('dragover', (e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); modalEl.classList.add('drag-over'); } });
+    modalEl.addEventListener('dragleave', (e) => { if (!modalEl.contains(e.relatedTarget)) modalEl.classList.remove('drag-over'); });
+    modalEl.addEventListener('drop', (e) => {
+      if (!e.dataTransfer?.files?.length) return;
+      e.preventDefault();
+      modalEl.classList.remove('drag-over');
+      this._forumUploadIntoBody(e.dataTransfer.files, bodyInput, code);
+    });
+  }
+  overlay.querySelector('#forum-post-delete')?.addEventListener('click', async () => {
+    if (!await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) return;
+    this.socket.emit('delete-message', { messageId: existing.id, attachments: this._getMessageAttachments?.(existing.id) });
+    close();
+  });
   const titleEl = overlay.querySelector('#forum-post-title');
   titleEl.focus();
   overlay.querySelector('#forum-post-go').addEventListener('click', () => {
+    if (bodyInput && Number(bodyInput.dataset.uploading) > 0) { this._showToast(t('forum.wait_upload'), 'info'); return; }
     const title = titleEl.value.trim();
     if (existing) {
       const closedBox = overlay.querySelector('#forum-post-closed');
@@ -625,6 +658,48 @@ _openForumComposer(existing = null) {
     this.notifications && this.notifications.play && this.notifications.play('sent');
     close();
   });
+},
+
+// Upload files from the New Post or Edit post window and put each one in the
+// body at the cursor, on a line of its own: the picture's link, or a file line
+// in the same form the message box sends (#5689, #5690).
+async _forumUploadIntoBody(fileList, textarea, code) {
+  const files = Array.from(fileList || []);
+  if (!files.length || !textarea) return;
+  const ch = this.channels?.find(c => c.code === code);
+  if (ch && ch.media_enabled === 0) { this._showToast(t('media.uploads_disabled'), 'error'); return; }
+  const maxMb = this._uploadCapMb();
+  const busy = (d) => { textarea.dataset.uploading = String(Math.max(0, (Number(textarea.dataset.uploading) || 0) + d)); };
+  for (const file of files) {
+    if (file.size > maxMb * 1024 * 1024) { this._showToast(t('media.file_too_large', { maxMb }), 'error'); continue; }
+    busy(1);
+    try {
+      const raster = /^image\/(jpeg|png|gif|webp)$/.test(file.type || '');
+      const fd = new FormData();
+      fd.append('scope', 'channel');
+      fd.append(raster ? 'image' : 'file', file);
+      const data = await this._uploadWithProgress(raster ? '/api/upload' : '/api/upload-file', fd);
+      if (!data || data.error || !data.url) { this._showToast((data && data.error) || t('toasts.upload_failed'), 'error'); continue; }
+      let line = data.url;
+      if (!raster && !data.isImage) {
+        const name = String(data.originalName || file.name || 'file').replace(/[\[\]()|\r\n]/g, '_');
+        line = `[file:${name}](${data.url}|${this._formatFileSize(data.fileSize || file.size)})`;
+      }
+      if (!textarea.isConnected) continue;
+      const v = textarea.value;
+      const at = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : v.length;
+      const before = v.slice(0, at), after = v.slice(at);
+      const insert = (before && !before.endsWith('\n') ? '\n' : '') + line + (after.startsWith('\n') ? '' : '\n');
+      textarea.value = before + insert + after;
+      const caret = before.length + insert.length;
+      textarea.setSelectionRange(caret, caret);
+      textarea.focus();
+    } catch (err) {
+      if (!err?.aborted) this._showToast(err?.message || t('toasts.upload_failed'), 'error');
+    } finally {
+      busy(-1);
+    }
+  }
 },
 
 _forumEditTopicMeta(messageId) {

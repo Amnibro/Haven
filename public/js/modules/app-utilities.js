@@ -829,6 +829,32 @@ _formatContent(str) {
     return `<span class="muted-text">${t('app.messages.e2e_file_parse_error')}</span>`;
   }
 
+  // A post can carry pictures and files on lines of their own between its
+  // text: a forum topic sent with a picture, or one written in New Post. Each
+  // of those lines shows as the picture or file, and the text around them
+  // formats as usual; the link used to print as plain text (#5690, #5689).
+  // Only this server's uploads, and never inside a code block.
+  if (typeof str === 'string' && str.includes('\n') && !str.includes('```')) {
+    const mediaLine = (l) => /^(?:spoiler-img:)?\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(l) ||
+      /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l);
+    const lines = str.split('\n');
+    if (lines.some(l => mediaLine(l.trim()))) {
+      const parts = [];
+      let text = [];
+      const flush = () => {
+        const chunk = text.join('\n');
+        text = [];
+        if (chunk.trim()) parts.push(`<div class="content-text-part">${this._formatContent(chunk)}</div>`);
+      };
+      for (const l of lines) {
+        if (mediaLine(l.trim())) { flush(); parts.push(`<div class="content-media-part">${this._formatContent(l.trim())}</div>`); }
+        else text.push(l);
+      }
+      flush();
+      return parts.join('');
+    }
+  }
+
   // Decode legacy HTML entities from old server-side sanitization.
   // The server no longer entity-encodes, but older messages in the DB
   // may still contain entities like &#39; &amp; &lt; etc.
