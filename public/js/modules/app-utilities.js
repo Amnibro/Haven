@@ -3971,6 +3971,10 @@ _closeThread() {
     panel.style.display = 'none';
     panel.dataset.parentId = '';
   }
+  // Closed means stopped: a video or embed left in the hidden panel kept
+  // playing (#5690). Opening a thread fetches and redraws it anyway.
+  const threadMsgs = document.getElementById('thread-messages');
+  if (threadMsgs) threadMsgs.innerHTML = '';
   this._forumApplyThreadChrome?.(null);
 },
 
