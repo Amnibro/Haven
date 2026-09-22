@@ -7340,7 +7340,8 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 
 .btn-upload:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
-.message-area.drag-over {
+.message-area.drag-over,
+.thread-panel.drag-over {
   outline: 2px dashed var(--accent);
   outline-offset: -4px;
   background: rgba(124, 92, 252, 0.04);

@@ -2630,10 +2630,15 @@ _setupUI() {
     });
 
     // Drag & drop parity with the other composers — queue, never insta-post.
-    const threadArea = threadInput.closest('.thread-input-area') || threadInput;
-    threadArea.addEventListener('dragover', (e) => { e.preventDefault(); threadArea.classList.add('drag-over'); });
-    threadArea.addEventListener('dragleave', () => threadArea.classList.remove('drag-over'));
+    // The whole panel takes the drop, not only the reply box: in a forum topic
+    // people drop pictures onto the replies the way they would onto a chat
+    // (#5684).
+    const threadArea = threadInput.closest('.thread-panel') || threadInput.closest('.thread-input-area') || threadInput;
+    const hasFiles = (e) => !!e.dataTransfer?.types?.includes('Files');
+    threadArea.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); threadArea.classList.add('drag-over'); });
+    threadArea.addEventListener('dragleave', (e) => { if (!threadArea.contains(e.relatedTarget)) threadArea.classList.remove('drag-over'); });
     threadArea.addEventListener('drop', (e) => {
+      if (!hasFiles(e)) return;
       e.preventDefault();
       threadArea.classList.remove('drag-over');
       if (!this._activeThreadParent) return;
