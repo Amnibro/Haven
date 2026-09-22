@@ -2071,7 +2071,12 @@ _renderChannels() {
       el.appendChild(bell);
     }
 
-    el.addEventListener('click', () => this.switchChannel(ch.code));
+    el.addEventListener('click', () => {
+      // Clicking the forum you are already in, with one of its topics open,
+      // goes back to the topic list (#5688).
+      if (ch.code === this.currentChannel && this._activeThreadParent && this._isForumChannel?.(ch.code)) this._closeThread();
+      this.switchChannel(ch.code);
+    });
     // Double-click to join voice in the channel (blocked for text-only)
     el.addEventListener('dblclick', () => {
       const _dblCh = this.channels.find(c => c.code === ch.code);
