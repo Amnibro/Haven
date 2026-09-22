@@ -4142,6 +4142,51 @@ _setupUI() {
     });
   });
 
+  // Delete every message you wrote (#5686). Same shape as Delete Account:
+  // password, a second confirm, then the server does it and says how many.
+  document.getElementById('self-purge-btn')?.addEventListener('click', () => {
+    document.querySelector('.self-purge-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay self-purge-overlay';
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:380px">
+        <h3>🧹 ${t('settings.self_purge.title')}</h3>
+        <p class="modal-desc">${t('settings.self_purge.confirm_desc')}</p>
+        <div class="form-group compact">
+          <input type="password" id="self-purge-pw" placeholder="${t('settings.delete_account_section.password_placeholder')}" maxlength="128" autocomplete="current-password">
+        </div>
+        <small class="settings-hint self-purge-status" style="display:block;margin-bottom:8px"></small>
+        <div class="modal-actions">
+          <button class="btn-sm self-purge-cancel">${t('modals.common.cancel')}</button>
+          <button class="btn-sm btn-danger-fill self-purge-confirm">${t('settings.self_purge.btn')}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('.self-purge-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('.self-purge-confirm').addEventListener('click', async () => {
+      const pw = document.getElementById('self-purge-pw').value;
+      const status = overlay.querySelector('.self-purge-status');
+      if (!pw) { status.textContent = t('settings.delete_account_section.password_required'); return; }
+      const ok = await this._showConfirmModal(t('settings.self_purge.confirm_title'), t('settings.self_purge.confirm_body'), { danger: true, confirmLabel: t('settings.self_purge.btn') });
+      if (!ok) return;
+      status.textContent = t('settings.delete_account_section.deleting');
+      overlay.querySelector('.self-purge-confirm').disabled = true;
+      this.socket.emit('self-purge-messages', { password: pw }, (res) => {
+        if (!res || res.error) {
+          status.textContent = res?.error || t('settings.self_purge.failed');
+          overlay.querySelector('.self-purge-confirm').disabled = false;
+          return;
+        }
+        overlay.remove();
+        this._showToast(res.kept
+          ? t('settings.self_purge.done_kept', { n: res.deleted, kept: res.kept })
+          : t('settings.self_purge.done', { n: res.deleted }), 'success');
+      });
+    });
+  });
+
   // Member visibility select (admin) — saved via admin Save button
 
   // View bans button

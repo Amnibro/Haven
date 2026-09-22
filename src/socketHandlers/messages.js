@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
+const bcrypt = require('bcryptjs');
 const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
@@ -10,7 +11,7 @@ module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay,
-          UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
+          logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
 
   const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
@@ -968,6 +969,78 @@ module.exports = function register(socket, ctx) {
 
     cb({ success: true, deleted: deletable.length, skipped: skipped.length });
   };
+
+  // ── Delete every message you wrote (#5686) ────────────────
+  // For someone leaving a server for good. Off unless an admin turned on
+  // "Members can delete all their own messages" under Members; that switch is
+  // the permission, so the per-role delete-own-messages rule does not apply.
+  // Messages a moderator protected stay, the same as the account deletion's
+  // scrub. Deleting a message takes its thread along, as a single delete does.
+  socket.on('self-purge-messages', async (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
+    const uid = socket.user.id;
+    const allowRow = db.prepare("SELECT value FROM server_settings WHERE key = 'allow_self_purge'").get();
+    if (!allowRow || allowRow.value !== 'true') return cb({ error: 'This server does not allow deleting all your messages at once' });
+    if (socket.user.isGuest) return cb({ error: 'Guest accounts cannot do this' });
+
+    const password = typeof data.password === 'string' ? data.password : '';
+    if (!password) return cb({ error: 'Password is required' });
+    const userRow = db.prepare('SELECT password_hash, COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(uid);
+    if (!userRow) return cb({ error: 'User not found' });
+    try {
+      if (!(await bcrypt.compare(password, userRow.password_hash))) return cb({ error: 'Incorrect password' });
+    } catch (err) {
+      console.error('Self-purge password verification error:', err);
+      return cb({ error: 'Password verification failed' });
+    }
+
+    if (!state.selfPurgeInFlight) state.selfPurgeInFlight = new Set();
+    if (state.selfPurgeInFlight.has(uid)) return cb({ error: 'Already deleting, give it a moment' });
+    state.selfPurgeInFlight.add(uid);
+    try {
+      const rows = db.prepare(`
+        SELECT m.id, m.content, c.code, c.is_dm
+        FROM messages m JOIN channels c ON c.id = m.channel_id
+        WHERE m.user_id = ? AND m.is_archived = 0
+      `).all(uid);
+      const kept = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE user_id = ? AND is_archived = 1').get(uid).n;
+      if (!rows.length) return cb({ success: true, deleted: 0, kept });
+
+      // Reactions, votes, tags and thread replies follow through the foreign
+      // keys; pins are cleared by hand, the way the bulk delete does it.
+      const delPin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
+      const delMsg = db.prepare('DELETE FROM messages WHERE id = ?');
+      db.transaction(() => {
+        for (const r of rows) { delPin.run(r.id); delMsg.run(r.id); }
+      })();
+
+      for (const r of rows) {
+        UPLOAD_PATH_RE.lastIndex = 0;
+        let m;
+        while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) moveUploadToDeleted(m[1]);
+      }
+
+      // One event per channel rather than one per message: a person with
+      // years of history would otherwise send thousands of events to every
+      // open client. The client drops that author's rows and reloads the
+      // channel it has open.
+      const codes = new Set(rows.map(r => r.code));
+      for (const code of codes) {
+        io.to(`channel:${code}`).emit('messages-purged', { channelCode: code, userId: uid });
+      }
+      logAudit({ actor: socket.user, action: 'self_purge_messages',
+        target_type: 'user', target_id: uid, target_name: userRow.username,
+        details: { deleted: rows.length, kept, channels: codes.size } });
+      console.log(`🗑️  ${userRow.username} (id: ${uid}) deleted all their messages: ${rows.length} removed, ${kept} protected kept`);
+      cb({ success: true, deleted: rows.length, kept });
+    } catch (err) {
+      console.error('Self-purge error:', err);
+      cb({ error: 'Failed to delete messages' });
+    } finally {
+      state.selfPurgeInFlight.delete(uid);
+    }
+  });
 
   // ── Bulk delete from media gallery (#5375) ──────────────
   socket.on('delete-channel-media', (data, callback) => {

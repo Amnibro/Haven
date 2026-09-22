@@ -14,6 +14,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Delete All My Messages (#5686).** For someone leaving a server for
+  good. An admin turns it on under Settings, Members ("Members can delete
+  all their own messages"); the button then appears in everyone's Settings
+  next to Delete Account. It asks for the password, confirms twice, and
+  removes every message and file the person posted, in every channel and
+  DM, whether or not their role may delete messages one at a time. Messages
+  a moderator has protected are kept, and the audit log records it. Asked
+  for by @quakeman00.
 - **Guests can be kept to text (#5687).** Settings, Guest Access has a
   "Guests can join voice and video" switch, on by default. Off, a guest can
   read and type in the channels you picked but cannot join a call, and the

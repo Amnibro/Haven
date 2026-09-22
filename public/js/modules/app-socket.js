@@ -2134,6 +2134,33 @@ _setupSocketListeners() {
     this._searchRemoveResult?.(data.channelCode, data.messageId);
   });
 
+  // Someone deleted every message they wrote (#5686): one event per channel.
+  // Their rows go from whatever is on screen, and the open channel is loaded
+  // again so the compact chains and the history cursor come out right.
+  this.socket.on('messages-purged', (data) => {
+    if (!data || !data.channelCode || !data.userId) return;
+    const uid = String(data.userId);
+    const views = [
+      ['messages', this.currentChannel], ['thread-messages', this.currentChannel],
+      ['dm-pip-messages', this._activeDMPip],
+    ];
+    for (const [id, code] of views) {
+      if (code !== data.channelCode) continue;
+      document.getElementById(id)?.querySelectorAll(`[data-msg-id][data-user-id="${uid}"]`).forEach(el => el.remove());
+    }
+    if (data.channelCode === this.currentChannel) {
+      this._oldestMsgId = null;
+      this._noMoreHistory = false;
+      this._loadingHistory = false;
+      this._historyBefore = null;
+      this._newestMsgId = null;
+      this._noMoreFuture = true;
+      this._loadingFuture = false;
+      this._historyAfter = null;
+      this.socket.emit('get-messages', { code: this.currentChannel });
+    }
+  });
+
   // Attachment tags edited (#tagging phase 3). Repaint the Tags footer on every
   // rendered copy of the message. Fires cross-channel (users are joined to all
   // their channel rooms), so search results update too, wherever they're shown.

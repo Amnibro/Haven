@@ -1762,6 +1762,17 @@
       "delete_messages": "Delete all my messages",
       "delete_messages_hint": "If unchecked, your messages will show as \"[Deleted User]\" instead."
     },
+    "self_purge": {
+      "title": "Delete All My Messages",
+      "desc": "Remove every message and file you ever posted here, in one go, and keep your account. Messages a moderator has protected stay. This cannot be undone.",
+      "btn": "Delete All My Messages",
+      "confirm_desc": "Every message and file you have posted on this server will be removed, in every channel and DM. Threads you started go with them, replies and all. Your account stays.",
+      "confirm_title": "Delete every message you have ever posted here?",
+      "confirm_body": "There is no undo and no copy kept.",
+      "done": "Deleted {{n}} messages",
+      "done_kept": "Deleted {{n}} messages. {{kept}} protected by a moderator were kept.",
+      "failed": "Could not delete your messages"
+    },
     "desktop_shortcuts_section": {
       "title": "Desktop Shortcuts",
       "desc": "Global keyboard shortcuts — active even when Haven is in the background. Click a row to rebind, or “Clear” to disable.",
@@ -2255,6 +2266,8 @@
       "no_locale": "Auto-detect (browser)",
       "default_locale_hint": "New users see Haven in this language on first visit. They can still pick their own.",
       "update_banner_hint": "When enabled, the \"update available\" banner is only shown to admins",
+      "allow_self_purge_label": "Members can delete all their own messages",
+      "allow_self_purge_hint": "Puts a Delete All My Messages button in everyone's Settings, next to Delete Account, for people who want to leave nothing behind. It works whether or not their role may delete messages one by one; messages a moderator has protected are kept.",
       "hide_disabled_badges_label": "Hide the crossed-out icons in the channel list",
       "hide_disabled_badges_hint": "Channels with screen share or music turned off show small crossed-out icons next to their name. Turn this on to hide those icons for everyone.",
       "whitelist_hint": "When enabled, only pre-approved usernames can register",

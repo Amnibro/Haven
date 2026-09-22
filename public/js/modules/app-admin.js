@@ -562,6 +562,11 @@ _applyServerSettings() {
     if (updateBannerAdminOnly) {
       updateBannerAdminOnly.checked = this.serverSettings.update_banner_admin_only === 'true';
     }
+    const allowSelfPurge = document.getElementById('allow-self-purge');
+    if (allowSelfPurge) allowSelfPurge.checked = this.serverSettings.allow_self_purge === 'true';
+    // The member-facing button follows the switch (#5686).
+    const selfPurgeBlock = document.getElementById('self-purge-block');
+    if (selfPurgeBlock) selfPurgeBlock.style.display = (this.serverSettings.allow_self_purge === 'true' && !this.user?.isGuest) ? '' : 'none';
     const hideDisabledBadges = document.getElementById('hide-disabled-badges');
     if (hideDisabledBadges) hideDisabledBadges.checked = this.serverSettings.hide_disabled_channel_badges === 'true';
     const defaultTheme = document.getElementById('default-theme-select');
@@ -938,6 +943,7 @@ _snapshotAdminSettings() {
     session_duration_days: this.serverSettings.session_duration_days || '7',
     max_message_chars: this.serverSettings.max_message_chars || '2000',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
+    allow_self_purge: this.serverSettings.allow_self_purge || 'false',
     hide_disabled_channel_badges: this.serverSettings.hide_disabled_channel_badges || 'false',
     admin_password_reset_enabled: this.serverSettings.admin_password_reset_enabled || 'false',
     unicode_emoji_auto_update: this.serverSettings.unicode_emoji_auto_update || 'false',
@@ -1136,6 +1142,11 @@ _saveAdminSettings() {
     this.socket.emit('update-server-setting', { key: 'update_banner_admin_only', value: updateBannerAdminOnly });
     changed = true;
   }
+  const allowSelfPurge = document.getElementById('allow-self-purge')?.checked ? 'true' : 'false';
+  if (allowSelfPurge !== (snap.allow_self_purge || 'false')) {
+    this.socket.emit('update-server-setting', { key: 'allow_self_purge', value: allowSelfPurge });
+    changed = true;
+  }
   const hideDisabledBadges = document.getElementById('hide-disabled-badges')?.checked ? 'true' : 'false';
   if (hideDisabledBadges !== (snap.hide_disabled_channel_badges || 'false')) {
     this.socket.emit('update-server-setting', { key: 'hide_disabled_channel_badges', value: hideDisabledBadges });
@@ -1318,6 +1329,8 @@ _cancelAdminSettings() {
     if (mmc) mmc.value = snap.max_message_chars || '2000';
     const uba = document.getElementById('update-banner-admin-only');
     if (uba) uba.checked = snap.update_banner_admin_only === 'true';
+    const asp = document.getElementById('allow-self-purge');
+    if (asp) asp.checked = snap.allow_self_purge === 'true';
     const hdb = document.getElementById('hide-disabled-badges');
     if (hdb) hdb.checked = snap.hide_disabled_channel_badges === 'true';
     const dt = document.getElementById('default-theme-select');

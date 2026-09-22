@@ -2195,6 +2195,11 @@
         <h5 class="settings-section-title">⚠️ <span data-i18n="settings.delete_account_section.title">Delete Account</span></h5>
         <p class="settings-hint" style="margin-bottom:8px;" data-i18n="settings.delete_account_section.desc">Permanently delete your account. This cannot be undone.</p>
         <button class="btn-sm btn-danger-fill" id="delete-account-btn" data-i18n="settings.delete_account_section.btn">Delete My Account</button>
+        <div id="self-purge-block" style="display:none;margin-top:14px">
+          <h5 class="settings-section-title">🧹 <span data-i18n="settings.self_purge.title">Delete All My Messages</span></h5>
+          <p class="settings-hint" style="margin-bottom:8px;" data-i18n="settings.self_purge.desc">Remove every message and file you ever posted here, in one go, and keep your account. Messages a moderator has protected stay. This cannot be undone.</p>
+          <button class="btn-sm btn-danger-fill" id="self-purge-btn" data-i18n="settings.self_purge.btn">Delete All My Messages</button>
+        </div>
       </div>
 
       <!-- Plugins & Themes Section -->
@@ -2607,6 +2612,11 @@
             <input type="checkbox" id="update-banner-admin-only">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.update_banner_hint">When enabled, the "update available" banner is only shown to admins</small>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.allow_self_purge_label">Members can delete all their own messages</span>
+            <input type="checkbox" id="allow-self-purge">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.allow_self_purge_hint">Puts a Delete All My Messages button in everyone's Settings, next to Delete Account, for people who want to leave nothing behind. It works whether or not their role may delete messages one by one; messages a moderator has protected are kept.</small>
           <label class="toggle-row" style="margin-top:8px">
             <span data-i18n="settings.admin.hide_disabled_badges_label">Hide the crossed-out icons in the channel list</span>
             <input type="checkbox" id="hide-disabled-badges">
@@ -4704,7 +4714,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.10.7"></script>
+  <script type="module" src="/js/app.js?v=4.10.8"></script>
   <script src="/js/plugin-loader.js?v=4.6.10"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
