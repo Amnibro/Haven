@@ -11,7 +11,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.11.0] - 2026-09-21
+
+A voice fix worth updating for on its own: a server restart or a channel
+code rotation during a call no longer leaves it one-way. Around it, a run
+from the tracker: a Delete All My Messages button behind an admin switch,
+guests can be kept to text, Mark everything as read, a wider tag picker,
+and fixes for stale Today labels, middle-click in the pop-out DM, a Discord
+pairing that slipped back to mirroring, and pictures wrongly hidden as
+blocked. Two settings are added on first start; nothing to run by hand.
 
 ### Added
 - **Delete All My Messages (#5686).** For someone leaving a server for
