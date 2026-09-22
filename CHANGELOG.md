@@ -11,6 +11,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Pictures and files inside forum posts (#5689, #5690).** New Post and
+  Edit post have an Add a picture or file button, and a picture pasted or
+  dropped into the body uploads too. Each one goes in where the cursor is,
+  on a line of its own, so a guide can be text, a picture, more text. The
+  topic shows them in place; before, a topic sent as text plus a picture
+  showed the picture's link instead of the picture.
+- **Attachment tags in forums (#5682).** The tag bar under the message box
+  works in forum channels, a topic sent as text with pictures keeps their
+  tags, and Edit tags is on the right-click menu of a topic's picture, on
+  its card, in the topic itself, and on a reply's picture. The tags show
+  under the topic and under each reply.
+- **Delete topic in Edit post (#5690).** A gallery card is nearly all
+  picture, and right-clicking the picture gets the image menu, so deleting
+  a topic was hard to find.
+
+### Fixed
+- **A video in a forum topic kept playing after leaving it (#5690).**
+  Closing a thread or topic, or switching channels, now stops it.
+- **Clicking the forum you are in did nothing while a topic was open
+  (#5688).** It goes back to the topic list now.
+- **Dropping a file on a forum topic's replies did nothing (#5684).** The
+  whole thread panel takes the drop now, not only the reply box.
+
 ## [4.11.0] - 2026-09-21
 
 A voice fix worth updating for on its own: a server restart or a channel
