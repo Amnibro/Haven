@@ -142,6 +142,23 @@ _clearChannelCodeMap() {
 
 // ── Socket Event Listeners ────────────────────────────
 
+// A message refused for being too long used to vanish: the box clears on
+// send. Put the text back so it can be trimmed, unless something new has
+// been typed since or the channel changed (#5691).
+_restoreRefusedDraft(msg) {
+  const d = this._lastSendDraft;
+  if (!d || typeof msg !== 'string' || !/^Message too long/.test(msg)) return;
+  this._lastSendDraft = null;
+  const inputId = d.inputId || 'message-input';
+  const open = inputId === 'dm-pip-input' ? this._activeDMPip : this.currentChannel;
+  if (Date.now() - d.at > 15000 || d.code !== open) return;
+  const input = document.getElementById(inputId);
+  if (!input || input.value.trim()) return;
+  input.value = d.text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.focus();
+},
+
 _setupSocketListeners() {
   this._setupFerrySocket();
   // Authoritative user info pushed by server on every connect
@@ -1618,6 +1635,7 @@ _setupSocketListeners() {
     // A refused channel-functions toggle arrives here and nowhere else, so
     // this is the only chance to put the row back where it was.
     this._revertPendingChannelToggle();
+    this._restoreRefusedDraft(msg);
     this._showToast(msg, 'error');
   });
 

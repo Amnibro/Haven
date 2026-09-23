@@ -10,6 +10,8 @@ async _sendMessage() {
   // `let` (not `const`) — DM slash commands like /me, /shrug rewrite this
   // before E2E encryption further down. (#5297)
   let content = input.value.trim();
+  // Kept for a moment so a refusal for length can put the text back (#5691).
+  if (content) this._lastSendDraft = { text: input.value, code: this.currentChannel, at: Date.now() };
   const hasImages = this._imageQueue && this._imageQueue.length > 0;
   const hasFiles  = this._fileQueue  && this._fileQueue.length  > 0; // (#5425)
   if (!content && !hasImages && !hasFiles) return;

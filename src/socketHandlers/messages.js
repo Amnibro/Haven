@@ -7,6 +7,25 @@ const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyCo
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
 
+// The length limit is on what people type. An encrypted DM reaches the
+// server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
+// up to about four times the typed length (a character can take three bytes
+// as UTF-8 and base64 adds a third). A DM near the limit was refused after
+// the message box had already cleared (#5691), so ciphertext gets that room.
+function encryptedDmCap(maxChars) {
+  return maxChars * 4 + 256;
+}
+function looksEncrypted(content) {
+  if (typeof content !== 'string' || content.charCodeAt(0) !== 123) return false;
+  try {
+    const o = JSON.parse(content);
+    return !!(o && (o.v === 1 || o.v === 2) && typeof o.iv === 'string' && typeof o.ct === 'string');
+  } catch { return false; }
+}
+function contentCap(maxChars, channel, content) {
+  return channel && channel.is_dm && looksEncrypted(content) ? encryptedDmCap(maxChars) : maxChars;
+}
+
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
@@ -1068,7 +1087,8 @@ module.exports = function register(socket, ctx) {
     if (!content || content.trim().length === 0) return;
     const _maxCharsRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
     const _maxChars = parseInt(_maxCharsRow?.value) || 2000;
-    if (content.length > _maxChars) {
+    // Nothing could be this long; the exact check waits for the channel.
+    if (content.length > encryptedDmCap(_maxChars)) {
       return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
     }
 
@@ -1080,6 +1100,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
+    if (content.length > contentCap(_maxChars, channel, content)) {
+      return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
+    }
 
     // A moderation mute covers the server's channels, not private messages:
     // a muted person can still DM, which is also how they reach a mod about
@@ -1768,7 +1791,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const _editMaxRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
     const _editMax = parseInt(_editMaxRow?.value) || 2000;
-    if (!isInt(data.messageId) || !isString(data.content, 1, _editMax)) return;
+    if (!isInt(data.messageId) || !isString(data.content, 1, encryptedDmCap(_editMax))) return;
 
     // Accept an explicit channelCode from the client (e.g. DM PiP, where
     // socket.currentChannel is a different server channel). Fall back to
@@ -1779,6 +1802,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    if (data.content.length > contentCap(_editMax, channel, data.content)) {
+      return socket.emit('error-msg', `Message too long (max ${_editMax} characters)`);
+    }
 
     const msg = db.prepare(
       'SELECT id, user_id FROM messages WHERE id = ? AND channel_id = ?'

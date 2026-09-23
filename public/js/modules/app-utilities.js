@@ -3798,6 +3798,8 @@ _sendDMPiPMessage() {
   const code = this._activeDMPip;
   const replyTo = this._dmPipReplyingTo ? this._dmPipReplyingTo.id : null;
 
+  // Kept for a moment so a refusal for length can put the text back (#5691).
+  if (content) this._lastSendDraft = { text: input.value, code, at: Date.now(), inputId: 'dm-pip-input' };
   // Clear the UI immediately so the input feels responsive.
   input.value = '';
   this._clearDMPiPReply();
