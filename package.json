@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "haven",
   "version": "4.8.0",
   "description": "Haven - self-hosted private chat for your server, your rules",
@@ -39,5 +39,8 @@
   "devDependencies": {
     "innosetup-compiler": "^6.3.1",
     "socket.io-client": "^4.8.1"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.10.0": true
   }
 }

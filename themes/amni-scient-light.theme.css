@@ -180,16 +180,10 @@ body { background: var(--bg-primary) !important; color: var(--text-primary) !imp
   .auth-card { padding: 1.75rem 1.25rem !important; }
 }
 
-.main.has-banner { background: transparent !important; }
+.main.has-banner { background: var(--bg-primary) !important; }
 .main.has-banner .message-area,
-.main.has-banner .welcome-screen,
 .main.has-banner .messages,
-.main.has-banner .forum-view { background: transparent !important; }
-.main.has-banner .server-banner-display {
-  inset: 0 !important;
-  height: auto !important;
-  z-index: 0;
-}
+.main.has-banner .forum-view { background: var(--bg-primary) !important; }
 .main.has-banner .server-banner-img { opacity: .4; object-fit: cover; }
 .main.has-banner .server-banner-display::after {
   height: 75%;
@@ -197,7 +191,7 @@ body { background: var(--bg-primary) !important; color: var(--text-primary) !imp
 }
 .main.has-banner .channel-header,
 .main.has-banner .channel-topic-bar {
-  background: color-mix(in srgb, var(--bg-secondary) 42%, transparent) !important;
+  background: var(--bg-secondary) !important;
 }
 .main.has-banner .welcome-screen { z-index: 1; background: transparent !important; }
 
@@ -215,5 +209,5 @@ html[data-braid-density="spacious"][data-braid-layout="1"] {
   --braid-msg-pad-y: .8rem !important;
   --braid-msg-pad-x: 1.15rem !important;
 }
-html[data-braid-layout="1"] .main.has-banner { background: transparent !important; }
+html[data-braid-layout="1"] .main.has-banner { background: var(--bg-primary) !important; }
 html[data-braid-layout="1"] .channel-item { padding: .32rem .5rem !important; margin: 0 .35rem !important; }

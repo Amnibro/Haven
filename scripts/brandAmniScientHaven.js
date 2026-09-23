@@ -40,11 +40,11 @@ const PRODUCTS = {
 };
 
 const GUIDES = {
-  general: 'This is the hangout room. Product talk can live in that product\'s channel. Bugs and requests go in the Feedback forums so they stay as topics I can work.\n\nSite: https://amni-scient.com\nAndroid client: https://amni-scient.com/amni-haven.html\nWant builds? Open #introductions and take the Tester role. Prerelease APKs and packages drop in #prerelease.',
+  general: 'This is the hangout room. Product questions go in #product-talk (one thread per topic, tagged by product). Bugs and requests go in the Feedback forums so they stay as topics I can work.\n\nSite: https://amni-scient.com\nAndroid client: https://amni-scient.com/amni-haven.html\nWant builds? Open #introductions and take the Tester role. Prerelease APKs and packages drop in #prerelease.',
   announcements: 'Staff-only posts. Chat stays in #general.',
   introductions: 'Say who you are and what you want to try. Click the flask on the Tester menu in this channel if you want pings when a build is ready. That also opens #prerelease.',
   testers: 'People who opted into testing. I will ping here when something needs eyes. Files live in #prerelease. If you wandered in without the role, grab Tester in #introductions.',
-  prerelease: 'Unsigned / prerelease drops. APK, zip, msi, exe, nupkg — attach the file and put product + version in the same message (example: Amni-Haven 0.4.2-pre android).\n\nTreat these as tester bits: sideload at your own risk, do not ship them as store builds. Chat about a drop here; file bugs in #bug-reports.\n\nUpload cap on this server is 256 MB. Haven will warn on exe/msi before download. Play-store / signed releases stay on the product pages.',
+  prerelease: 'Unsigned / prerelease drops. APK, zip, msi, exe, nupkg — attach the file and put product + version in the same message (example: Amni-Haven 0.4.2-pre android).\n\nTreat these as tester bits: sideload at your own risk, do not ship them as store builds. Talk about a drop in #testers; file bugs in #bug-reports.\n\nUpload cap on this server is 256 MB. Haven will warn on exe/msi before download. Play-store / signed releases stay on the product pages.',
   'bug-reports': 'One bug per topic. Tag the product. Include OS, version, and what you expected. Screenshots help. Feature ideas go in #feature-requests.',
   'feature-requests': 'One request per topic. Tag the product. Say what you were trying to do, not just a widget name.',
   voice: 'Talk here. Camera is optional. Join the voice channel from the header. If audio is one-way, say so in #general — that is usually NAT, not the room.',
@@ -66,7 +66,7 @@ function ensureEnvFlag() {
 
 function makeArt() {
   const py = path.join(__dirname, 'makeAmniScientBrandArt.py');
-  const r = spawnSync('python', [py], { env: { ...process.env, HAVEN_DATA_DIR: dataDir }, encoding: 'utf8' });
+  const r = spawnSync(process.platform === 'win32' ? 'python' : 'python3', [py], { env: { ...process.env, HAVEN_DATA_DIR: dataDir }, encoding: 'utf8' });
   if (r.status !== 0) throw new Error(r.stderr || r.stdout || 'brand art failed');
 }
 
@@ -126,12 +126,8 @@ wipeGuides(db);
 
 const channels = db.prepare('SELECT * FROM channels WHERE COALESCE(is_dm, 0) = 0').all();
 for (const ch of channels) {
-  if (PRODUCTS[ch.name]) {
-    const url = PRODUCTS[ch.name];
-    db.prepare('UPDATE channels SET topic = ? WHERE id = ?').run(`Open ${ch.name}: ${url}`, ch.id);
-    postGuide(db, ch, `${ch.name}\nUse it here: ${url}\nTalk about this product in this channel. File bugs in #bug-reports and ideas in #feature-requests, one topic each.`, adminId);
-    continue;
-  }
+  // Product pages are laid out by amniScientLayout.js.
+  if (PRODUCTS[ch.name]) continue;
   if (GUIDES[ch.name]) {
     const topic = ch.name === 'general'
       ? 'Hang out. Product links live in each product channel.'
@@ -143,8 +139,6 @@ for (const ch of channels) {
 
 const general = db.prepare("SELECT * FROM channels WHERE name = 'general' AND COALESCE(is_dm,0)=0").get();
 if (general) {
-  const catalog = Object.entries(PRODUCTS).map(([n, u]) => `${n}: ${u}`).join('\n');
-  postGuide(db, general, `Product index (same links as the product channels):\n${catalog}`, adminId);
   ensureGuideWebhook(db, general.id);
 }
 
