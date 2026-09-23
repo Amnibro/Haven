@@ -3412,7 +3412,7 @@
       "allow_dms": "Allow Discord DMs",
       "allow_dms_hint": "Lets members send a one-way DM to a Discord user. Replies stay in Discord. Needs the Server Members Intent.",
       "allow_mentions": "Allow pings",
-      "allow_mentions_hint": "Off means relayed messages never ping anyone on Discord.",
+      "allow_mentions_hint": "Off means relayed messages never ping anyone on Discord. On, @name pings the Discord person, and an @Role ping goes through both ways when the Discord role lets everyone mention it.",
       "relay_bots": "Relay other bots",
       "relay_bots_hint": "Off means messages from Discord bots are ignored. On can flood a Haven channel.",
       "token_required": "Paste a bot token first",
