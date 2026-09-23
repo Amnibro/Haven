@@ -12,6 +12,9 @@ module.exports = function register(socket, ctx) {
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay,
           UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, broadcastChannelLists } = ctx;
   const { slowModeTracker } = state;
+  // channelId → { at, n }: attachments this socket may still send under the
+  // slow-mode slot its last text message used (see send-message).
+  const slowBundleBudget = new Map();
 
   const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
   const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
@@ -40,6 +43,54 @@ module.exports = function register(socket, ctx) {
       fs.mkdirSync(path.dirname(dst), { recursive: true });
       fs.renameSync(src, dst);
     } catch { /* file locked or already moved */ }
+  }
+
+  // An /uploads/ path in a message (or in the client-supplied attachment list
+  // for an E2E DM) is only a claim: anyone can type another person's file or
+  // avatar URL into a message and delete it. Move a file only when the
+  // message author uploaded it, or when nothing (legacy, unattributed) still
+  // points at it. `strict` (client-supplied DM list) skips that fallback,
+  // since other DMs are ciphertext and cannot be searched for references.
+  function mayMoveUploadFor(relPath, authorId, strict = false) {
+    try {
+      const own = db.prepare('SELECT user_id, scope FROM upload_ownership WHERE rel_path = ?').get(relPath);
+      if (own) return own.user_id != null && own.user_id === authorId && own.scope !== 'profile';
+      if (strict) return false;
+      const p = '/uploads/' + relPath;
+      const ref = db.prepare(`
+        SELECT 1 WHERE
+             EXISTS(SELECT 1 FROM messages WHERE instr(lower(content), lower(@p)) > 0 OR instr(lower(COALESCE(poll_data, '')), lower(@p)) > 0
+                    OR instr(lower(COALESCE(persona_avatar, '')), lower(@p)) > 0 OR instr(lower(COALESCE(webhook_avatar, '')), lower(@p)) > 0)
+          OR EXISTS(SELECT 1 FROM users WHERE instr(lower(COALESCE(avatar, '')), lower(@p)) > 0 OR instr(lower(COALESCE(border, '')), lower(@p)) > 0)
+          OR EXISTS(SELECT 1 FROM user_personas WHERE instr(lower(COALESCE(avatar, '')), lower(@p)) > 0)
+          OR EXISTS(SELECT 1 FROM webhooks WHERE instr(lower(COALESCE(avatar_url, '')), lower(@p)) > 0)
+          OR EXISTS(SELECT 1 FROM roles WHERE instr(lower(COALESCE(icon, '')), lower(@p)) > 0)
+          OR EXISTS(SELECT 1 FROM server_settings WHERE instr(lower(COALESCE(value, '')), lower(@p)) > 0)
+          OR EXISTS(SELECT 1 FROM scheduled_messages WHERE instr(lower(content), lower(@p)) > 0)
+          OR EXISTS(SELECT 1 FROM custom_sounds WHERE filename = @f)
+          OR EXISTS(SELECT 1 FROM custom_emojis WHERE filename = @f)
+          OR EXISTS(SELECT 1 FROM stickers WHERE filename = @f)
+      `).get({ p, f: relPath });
+      return !ref;
+    } catch { return false; }
+  }
+
+  // @everyone / @here / @Role pings for senders without mention_everyone:
+  // the text stays, a zero-width space stops the ping. Same rule send-message
+  // applies, shared with every other surface that posts text (#5579).
+  function stripMassMentions(content, userId, isAdmin, channelId) {
+    if (typeof content !== 'string' || !content.includes('@')) return content;
+    if (isAdmin || userHasPermission(userId, 'mention_everyone', channelId)) return content;
+    const stripped = content.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
+    return stripRoleMentions(stripped, db.prepare('SELECT name FROM roles').all().map(r => r.name));
+  }
+
+  // The client renders a whole-message `[file:name](url|size)` as an
+  // attachment card (download link / inline player). Real ones always point
+  // at a file on this server; anything else is a disguised external link.
+  function isForgedFileCard(content) {
+    const m = typeof content === 'string' ? content.match(/^\[file:(.+?)\]\((.+?)\|(.+?)\)$/) : null;
+    return !!m && !/^\/uploads\/[\w\-.]+$/.test(m[2]);
   }
 
   // Reply banners must match message rendering: bots live in webhook_* with
@@ -557,11 +608,12 @@ module.exports = function register(socket, ctx) {
       // #code resolves by unique code (unambiguous); a bare name resolves by
       // name, which is not unique so it takes the first match.
       const target = filters.inIsCode
-        ? db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(filters.in)
-        : db.prepare('SELECT id FROM channels WHERE name = ? COLLATE NOCASE AND is_dm = 0').get(filters.in);
+        ? db.prepare('SELECT id, role_gate FROM channels WHERE code = ? AND is_dm = 0').get(filters.in)
+        : db.prepare('SELECT id, role_gate FROM channels WHERE name = ? COLLATE NOCASE AND is_dm = 0').get(filters.in);
       if (!target) return socket.emit('search-results', empty);
       const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(target.id, socket.user.id);
       if (!isMember) return socket.emit('search-results', empty);
+      if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, target)) return socket.emit('search-results', empty);
       conditions.push('m.channel_id = ?');
       params.push(target.id);
     } else {
@@ -571,6 +623,18 @@ module.exports = function register(socket, ctx) {
         WHERE cm.user_id = ? AND c.is_dm = 0
       )`);
       params.push(socket.user.id);
+      // Role-gated channels whose gate this member does not pass stay out,
+      // matching get-messages (hand-added rows keep membership, not access).
+      if (!socket.user.isAdmin) {
+        const gatedOut = db.prepare(`
+          SELECT c.id, c.role_gate FROM channel_members cm JOIN channels c ON c.id = cm.channel_id
+          WHERE cm.user_id = ? AND c.is_dm = 0 AND c.role_gate IS NOT NULL
+        `).all(socket.user.id).filter(c => !ctx.roleGateAllows(socket.user.id, c)).map(c => c.id);
+        if (gatedOut.length) {
+          conditions.push(`m.channel_id NOT IN (${gatedOut.map(() => '?').join(',')})`);
+          params.push(...gatedOut);
+        }
+      }
     }
 
     // ── from:username filter ──
@@ -675,7 +739,7 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = db.prepare(
@@ -684,6 +748,11 @@ module.exports = function register(socket, ctx) {
     if (!member && !socket.user.isAdmin) {
       return socket.emit('error-msg', 'Not a member of this channel');
     }
+    // Same gate as get-messages: a hand-added member without the channel's
+    // required roles does not get its history by another route.
+    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
+    // Up to 5000 rows plus disk stats per call: share search's tighter bucket.
+    if (floodCheck('search')) return;
 
     // Pull every message in this channel that mentions /uploads/ or http(s)://
     // Cap at 5000 to avoid pathological loads on giant channels.
@@ -824,7 +893,7 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = db.prepare(
@@ -833,6 +902,7 @@ module.exports = function register(socket, ctx) {
     if (!member && !socket.user.isAdmin) {
       return socket.emit('error-msg', 'Not a member of this channel');
     }
+    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
 
     // A thread is a message that has replies hanging off it, so the join is
     // what defines one: no replies, no thread, nothing to list. Capped like
@@ -956,7 +1026,7 @@ module.exports = function register(socket, ctx) {
       uploadRe.lastIndex = 0;
       let m;
       while ((m = uploadRe.exec(r.content || '')) !== null) {
-        moveUploadToDeleted(m[1]);
+        if (mayMoveUploadFor(m[1], r.user_id)) moveUploadToDeleted(m[1]);
       }
       // For E2E DMs the content is ciphertext; honor client-supplied URLs
       // the same way `delete-message` does. (`data.attachmentsByMessage`
@@ -968,7 +1038,7 @@ module.exports = function register(socket, ctx) {
             if (typeof url !== 'string') continue;
             const match = url.match(UPLOAD_PATH_EXACT_RE);
             if (!match || !isSafeUploadRelPath(match[1])) continue;
-            moveUploadToDeleted(match[1]);
+            if (mayMoveUploadFor(match[1], r.user_id, true)) moveUploadToDeleted(match[1]);
           }
         }
       }
@@ -1101,16 +1171,27 @@ module.exports = function register(socket, ctx) {
     // as a separate socket event by the client. They've already consumed one
     // slow-mode slot (via the text message). Skip the check so the media
     // arrives with its parent message instead of being blocked. (#5342)
-    if (channel.slow_mode_interval > 0 && !socket.user.isAdmin && getUserEffectiveLevel(socket.user.id, channel.id) < 25 && !data.bundled) {
-      const slowKey = `slow:${socket.user.id}:${channel.id}`;
+    // The flag is client-supplied, so it only buys the attachments of a text
+    // message this socket just got through slow mode: media content, at most
+    // 50 of them (the composer's attachment cap), within 15 minutes of it.
+    if (channel.slow_mode_interval > 0 && !socket.user.isAdmin && getUserEffectiveLevel(socket.user.id, channel.id) < 25) {
       const now = Date.now();
-      const lastSent = slowModeTracker.get(slowKey) || 0;
-      const waitMs = channel.slow_mode_interval * 1000;
-      if (now - lastSent < waitMs) {
-        const remaining = Math.ceil((waitMs - (now - lastSent)) / 1000);
-        return socket.emit('error-msg', `Slow mode — wait ${remaining}s before sending another message`);
+      const bundle = slowBundleBudget.get(channel.id);
+      const bundledOk = data.bundled === true && bundle && now - bundle.at < 15 * 60000 && bundle.n < 50 &&
+        (channel.is_dm || /\/uploads\//i.test(content));
+      if (bundledOk) {
+        bundle.n++;
+      } else {
+        const slowKey = `slow:${socket.user.id}:${channel.id}`;
+        const lastSent = slowModeTracker.get(slowKey) || 0;
+        const waitMs = channel.slow_mode_interval * 1000;
+        if (now - lastSent < waitMs) {
+          const remaining = Math.ceil((waitMs - (now - lastSent)) / 1000);
+          return socket.emit('error-msg', `Slow mode — wait ${remaining}s before sending another message`);
+        }
+        slowModeTracker.set(slowKey, now);
+        slowBundleBudget.set(channel.id, { at: now, n: 0 });
       }
-      slowModeTracker.set(slowKey, now);
     }
 
     // ── /break prefix (#5393) ─────────────────────────────
@@ -1259,6 +1340,8 @@ module.exports = function register(socket, ctx) {
         if (!finalContent) return socket.emit('error-msg', 'Add a message after the Discord target');
       }
     }
+
+    if (isForgedFileCard(finalContent)) return socket.emit('error-msg', 'Attachments must be uploaded to this server');
 
     try {
       const result = db.prepare(
@@ -1435,6 +1518,7 @@ module.exports = function register(socket, ctx) {
     if (mute) return cb({ error: mute });
     const content = sanitizeText(data.content.trim());
     if (!content) return cb({ error: 'Nothing to send' });
+    if (isForgedFileCard(content)) return cb({ error: 'Attachments must be uploaded to this server' });
     // The same checks a live send gets, at the moment it is queued.
     if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return cb({ error: 'That message was blocked' });
     const pending = db.prepare('SELECT COUNT(*) AS c FROM scheduled_messages WHERE user_id = ?').get(socket.user.id).c;
@@ -1463,6 +1547,7 @@ module.exports = function register(socket, ctx) {
     if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
     const content = sanitizeText(data.content.trim());
     if (!content) return cb({ error: 'Nothing to send' });
+    if (isForgedFileCard(content)) return cb({ error: 'Attachments must be uploaded to this server' });
     if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id })) return cb({ error: 'That message was blocked' });
     db.prepare('UPDATE scheduled_messages SET content = ?, send_at = ? WHERE id = ?').run(content, sendAt, row.id);
     cb({ success: true, items: scheduledList(socket.user.id) });
@@ -1490,9 +1575,21 @@ module.exports = function register(socket, ctx) {
       for (const row of due) {
         try {
           db.prepare('DELETE FROM scheduled_messages WHERE id = ?').run(row.id);
-          const author = db.prepare('SELECT id, username, display_name, avatar, avatar_shape, border, border_transform, animate_profile FROM users WHERE id = ?').get(row.user_id);
+          const author = db.prepare('SELECT id, username, display_name, avatar, avatar_shape, border, border_transform, animate_profile, is_admin FROM users WHERE id = ?').get(row.user_id);
           const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, row.user_id);
           if (!author || !member) continue;
+          // Standing is re-read at send time: a ban, mute, read-only switch or
+          // role gate that arrived after queueing still applies, and mass
+          // mentions follow the author's permission as it is now.
+          const chRow = db.prepare('SELECT id, read_only, role_gate FROM channels WHERE id = ?').get(row.channel_id);
+          if (!chRow) continue;
+          if (!author.is_admin) {
+            if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(author.id)) continue;
+            if (db.prepare("SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").get(author.id)) continue;
+            if (!ctx.roleGateAllows(author.id, chRow)) continue;
+            if (chRow.read_only === 1 && !userHasPermission(author.id, 'read_only_override', chRow.id)) continue;
+          }
+          row.content = stripMassMentions(row.content, author.id, !!author.is_admin, chRow.id);
           const result = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(row.channel_id, row.user_id, row.content);
           const message = {
             id: result.lastInsertRowid, content: row.content, created_at: new Date().toISOString(),
@@ -1624,8 +1721,9 @@ module.exports = function register(socket, ctx) {
     const editMute = channel.is_dm ? null : activeMuteNotice(socket.user.id);
     if (editMute) return socket.emit('error-msg', editMute);
 
-    const newContent = sanitizeText(data.content.trim());
+    const newContent = stripMassMentions(sanitizeText(data.content.trim()), socket.user.id, socket.user.isAdmin, channel.id);
     if (!newContent) return;
+    if (isForgedFileCard(newContent)) return socket.emit('error-msg', 'Attachments must be uploaded to this server');
 
     // Edits get the same link policy as sends. Without this the filter is
     // trivially bypassed: post something harmless, then edit the payload in.
@@ -1690,6 +1788,12 @@ module.exports = function register(socket, ctx) {
         } catch { /* table may not exist */ }
       }
     } else {
+      // Moderating someone else's message needs a seat in that channel, as the
+      // bulk path already requires; a server-wide delete_message must not reach
+      // into DMs or private channels by code.
+      if (!socket.user.isAdmin && !db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) {
+        return socket.emit('error-msg', 'Not a member of this channel');
+      }
       const canDeleteAny = socket.user.isAdmin || userHasPermission(socket.user.id, 'delete_message', channel.id);
       let canDeleteLower = false;
       if (!canDeleteAny && userHasPermission(socket.user.id, 'delete_lower_messages', channel.id)) {
@@ -1714,7 +1818,7 @@ module.exports = function register(socket, ctx) {
     const uploadRe = UPLOAD_PATH_RE;
     let m;
     while ((m = uploadRe.exec(msg.content || '')) !== null) {
-      moveUploadToDeleted(m[1]);
+      if (mayMoveUploadFor(m[1], msg.user_id)) moveUploadToDeleted(m[1]);
     }
 
     // For E2E DMs, the message content is encrypted ciphertext, so the
@@ -1727,7 +1831,7 @@ module.exports = function register(socket, ctx) {
         if (typeof url !== 'string') continue;
         const match = url.match(UPLOAD_PATH_EXACT_RE);
         if (!match || !isSafeUploadRelPath(match[1])) continue;
-        moveUploadToDeleted(match[1]);
+        if (mayMoveUploadFor(match[1], msg.user_id, true)) moveUploadToDeleted(match[1]);
       }
     }
 
@@ -1757,6 +1861,19 @@ module.exports = function register(socket, ctx) {
 
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_message', fromCh.id)) {
       return cb({ error: 'You need message management permissions to move messages' });
+    }
+    // Both ends need a seat (the picker only offers the mover's own channels),
+    // and a read-only destination needs the right to post there. Without this
+    // a mod could drop messages into any private channel by its code.
+    if (!socket.user.isAdmin) {
+      const isMem = (id) => !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(id, socket.user.id);
+      const toRow = db.prepare('SELECT id, read_only, role_gate FROM channels WHERE id = ?').get(toCh.id);
+      if (!isMem(fromCh.id) || !isMem(toCh.id) || !ctx.roleGateAllows(socket.user.id, toRow)) {
+        return cb({ error: 'Not a member of both channels' });
+      }
+      if (toRow.read_only === 1 && !userHasPermission(socket.user.id, 'read_only_override', toCh.id)) {
+        return cb({ error: 'The destination channel is read-only' });
+      }
     }
 
     const placeholders = messageIds.map(() => '?').join(',');
@@ -1950,13 +2067,14 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
     if (!member) return;
+    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return;
 
     const pins = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar,
@@ -2125,14 +2243,22 @@ module.exports = function register(socket, ctx) {
 
       const code = socket.currentChannel;
       if (!code) return;
-      const channel = db.prepare('SELECT id, name, text_enabled FROM channels WHERE code = ?').get(code);
+      const channel = db.prepare('SELECT id, name, text_enabled, read_only, role_gate FROM channels WHERE code = ?').get(code);
       if (!channel) return;
       if (channel.text_enabled === 0) return socket.emit('error-msg', 'Polls are not allowed when text is disabled');
       const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
       if (!member) return socket.emit('error-msg', 'Not a member of this channel');
+      // A poll is a post: the same gates send-message applies.
+      if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
+      if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
+        return socket.emit('error-msg', 'This channel is read-only');
+      }
 
-      const safeQuestion = sanitizeText(question);
+      const safeQuestion = stripMassMentions(sanitizeText(question), socket.user.id, socket.user.isAdmin, channel.id);
       if (!safeQuestion) return;
+      for (let i = 0; i < cleanOptions.length; i++) {
+        cleanOptions[i] = stripMassMentions(cleanOptions[i], socket.user.id, socket.user.isAdmin, channel.id);
+      }
 
       const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }) });
       const content = `📊 Poll: ${safeQuestion}`;
@@ -2188,6 +2314,7 @@ module.exports = function register(socket, ctx) {
       if (!code) return;
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
       if (!channel) return;
+      if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return;
 
       const msg = db.prepare('SELECT id, poll_data FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
       if (!msg || !msg.poll_data) return;
@@ -2239,6 +2366,7 @@ module.exports = function register(socket, ctx) {
       if (!code) return;
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
       if (!channel) return;
+      if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return;
       const msg = db.prepare('SELECT id, poll_data FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
       if (!msg || !msg.poll_data) return;
 
@@ -2538,8 +2666,10 @@ module.exports = function register(socket, ctx) {
 
     if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return;
 
-    const safeContent = sanitizeText(content);
+    // Thread replies ping the whole channel room like top-level sends (#5579).
+    const safeContent = stripMassMentions(sanitizeText(content), socket.user.id, socket.user.isAdmin, channel.id);
     if (!safeContent) return;
+    if (isForgedFileCard(safeContent)) return socket.emit('error-msg', 'Attachments must be uploaded to this server');
 
     let replyTo = isInt(data.replyTo) ? data.replyTo : null;
     if (replyTo) {

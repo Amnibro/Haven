@@ -3961,7 +3961,7 @@ async _importPickGuild(guild) {
       }
       const icon = typeIcons[ch.type] || '#';
       const tagHint = ch.tags && ch.tags.length
-        ? ` <span class="muted-text" style="font-size:0.625rem">(${ch.tags.map(t => t.name).join(', ')})</span>`
+        ? ` <span class="muted-text" style="font-size:0.625rem">(${this._escapeHtml(ch.tags.map(t => String(t.name ?? '')).join(', '))})</span>`
         : '';
       const row = document.createElement('div');
       row.className = 'import-channel-row';
@@ -3983,7 +3983,7 @@ async _importPickGuild(guild) {
         const childThreads = data.threads.filter(t => t.parentId === ch.id);
         childThreads.forEach(t => {
           const tagStr = t.tags && t.tags.length
-            ? ` <span class="muted-text" style="font-size:0.625rem">[${t.tags.join(', ')}]</span>`
+            ? ` <span class="muted-text" style="font-size:0.625rem">[${this._escapeHtml(t.tags.map(tag => String(tag ?? '')).join(', '))}]</span>`
             : '';
           const tRow = document.createElement('div');
           tRow.className = 'import-channel-row import-thread-row';
@@ -4954,7 +4954,7 @@ _renderChannelRolesMembers() {
         ).join('') || `<span class="channel-roles-no-role">${t('settings.admin.roles_no_roles')}</span>`;
 
     return `<div class="channel-roles-member${sel}" data-uid="${m.id}">
-      <img class="channel-roles-member-avatar${shapeClass}" src="${avatarSrc}" alt="">
+      <img class="channel-roles-member-avatar${shapeClass}" src="${this._escapeHtml(avatarSrc)}" alt="">
       <div class="channel-roles-member-info">
         <span class="channel-roles-member-name">${this._escapeHtml(m.displayName)}</span>
         <span class="channel-roles-member-login">@${this._escapeHtml(m.loginName)}</span>

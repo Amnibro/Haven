@@ -5,6 +5,12 @@ const fs   = require('fs');
 const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
+const { validateCallbackUrl } = require('../webhookCallback');
+
+// Per-account caps on stored push targets. Each one is contacted on every
+// message the account misses, so an unbounded list is a fan-out amplifier.
+const MAX_PUSH_SUBS_PER_USER = 20;
+const MAX_FCM_TOKENS_PER_USER = 20;
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission, getUserEffectiveLevel,
@@ -51,7 +57,7 @@ module.exports = function register(socket, ctx) {
         SELECT id FROM users
         WHERE id != ?
           AND (LOWER(display_name) = LOWER(?)
-               OR (display_name IS NULL AND LOWER(username) = LOWER(?)))
+               OR LOWER(username) = LOWER(?))
         LIMIT 1
       `).get(socket.user.id, newName, newName);
       if (conflict) {
@@ -316,6 +322,9 @@ module.exports = function register(socket, ctx) {
       for (const [, s] of io.of('/').sockets) {
         if (s.user && s.user.id === data.userId) { isOnline = true; break; }
       }
+      // Invisible means offline to everyone else, here as in the member list.
+      const hidden = row.status === 'invisible' && data.userId !== socket.user.id;
+      if (hidden) isOnline = false;
 
       socket.emit('user-profile', {
         id: row.id,
@@ -326,7 +335,7 @@ module.exports = function register(socket, ctx) {
         border: row.border || null,
         borderTransform: parseBorderTransform(row.border_transform),
         animateProfile: row.animate_profile || 'trigger',
-        status: row.status || 'online',
+        status: hidden ? 'offline' : (row.status || 'online'),
         statusText: row.status_text || '',
         bio: row.bio || '',
         roles: roles,
@@ -365,6 +374,10 @@ module.exports = function register(socket, ctx) {
     if (typeof keys.auth !== 'string' || !keys.auth) return;
 
     try { const u = new URL(endpoint); if (u.protocol !== 'https:') return; } catch { return; }
+    // web-push POSTs to this URL server-side, so it must not name a local or
+    // private address (SSRF).
+    if (endpoint.length > 1024 || keys.p256dh.length > 256 || keys.auth.length > 256) return;
+    if (!validateCallbackUrl(endpoint, false)) return;
 
     try {
       // One endpoint is one browser/device, and only one account is signed
@@ -379,6 +392,9 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?, ?, ?)
           ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth
         `).run(socket.user.id, endpoint, keys.p256dh, keys.auth);
+        db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
+          SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT ?
+        )`).run(socket.user.id, socket.user.id, MAX_PUSH_SUBS_PER_USER);
       })();
       socket.emit('push-subscribed');
     } catch (err) {
@@ -412,6 +428,7 @@ module.exports = function register(socket, ctx) {
       // token stays valid across an account switch, so a stale row never
       // cleans itself up.
       const fcmToken = data.token.trim();
+      if (fcmToken.length > 4096) return;
       db.transaction(() => {
         db.prepare('DELETE FROM fcm_tokens WHERE token = ? AND user_id != ?').run(fcmToken, socket.user.id);
         db.prepare(`
@@ -419,6 +436,9 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?)
           ON CONFLICT(user_id, token) DO NOTHING
         `).run(socket.user.id, fcmToken);
+        db.prepare(`DELETE FROM fcm_tokens WHERE user_id = ? AND id NOT IN (
+          SELECT id FROM fcm_tokens WHERE user_id = ? ORDER BY id DESC LIMIT ?
+        )`).run(socket.user.id, socket.user.id, MAX_FCM_TOKENS_PER_USER);
       })();
     } catch (err) {
       console.error('FCM token register error:', err);
@@ -440,6 +460,12 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const jwk = data.jwk;
     if (!jwk || typeof jwk !== 'object' || jwk.kty !== 'EC' || jwk.crv !== 'P-256') {
+      return socket.emit('error-msg', 'Invalid public key format');
+    }
+    // P-256 coordinates are 32 bytes (43 base64url chars). Anything that is not
+    // a short base64url string would be stored and handed to every DM partner.
+    if (typeof jwk.x !== 'string' || typeof jwk.y !== 'string' ||
+        !/^[A-Za-z0-9_=-]{1,64}$/.test(jwk.x) || !/^[A-Za-z0-9_=-]{1,64}$/.test(jwk.y)) {
       return socket.emit('error-msg', 'Invalid public key format');
     }
     const publicJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
@@ -903,6 +929,10 @@ module.exports = function register(socket, ctx) {
       if (signups.some(s => s.email === email)) {
         return callback({ ok: true });
       }
+      // One account cannot grow this file without bound.
+      if (signups.filter(s => s.username === socket.user.username).length >= 3) {
+        return callback({ ok: true });
+      }
 
       signups.push({
         email,
@@ -992,7 +1022,7 @@ module.exports = function register(socket, ctx) {
           SELECT id FROM users
           WHERE id != ?
             AND (LOWER(display_name) = LOWER(?)
-                 OR (display_name IS NULL AND LOWER(username) = LOWER(?)))
+                 OR LOWER(username) = LOWER(?))
           LIMIT 1
         `).get(targetId, raw, raw);
         if (conflict) {

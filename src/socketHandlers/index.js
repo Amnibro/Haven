@@ -767,14 +767,36 @@ function setupSocketHandlers(io, db, opts = {}) {
         })
       : [];
     io.to(`voice:${code}`).to(`channel:${code}`).emit('voice-users-update', { channelCode: code, users });
-    io.except('bot-sockets').emit('voice-count-update', {
+    // Only people who can see this channel get its count. Broadcasting it to
+    // every socket handed out the code of every private channel and DM with
+    // someone in voice (a private channel's code is its join secret), plus who
+    // was on each DM call.
+    const countPayload = {
       code, count: users.length,
       users: users.map(u => ({
         id: u.id, username: u.username,
         isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
         isBot: !!u.isBot, isListening: !!u.isListening
       }))
-    });
+    };
+    const viewerIds = getVoiceCountViewerIds(code);
+    for (const [, s] of io.of('/').sockets) {
+      if (!s.user || s.user.isBot) continue;
+      if (viewerIds.members.has(s.user.id) || (s.user.isAdmin && viewerIds.nonDm)) {
+        s.emit('voice-count-update', countPayload);
+      }
+    }
+  }
+
+  // Who may receive a channel's voice-count-update: its members, plus admins
+  // for any non-DM channel (they see every channel in the sidebar).
+  function getVoiceCountViewerIds(code) {
+    const ch = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    if (!ch) return { members: new Set(), nonDm: false };
+    const members = new Set(
+      db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(ch.id).map(r => r.user_id)
+    );
+    return { members, nonDm: !ch.is_dm };
   }
 
   // A user agent is long, spoofable and full of history nobody wants to read.
@@ -920,7 +942,8 @@ function setupSocketHandlers(io, db, opts = {}) {
         const customUsers = users.map(u => {
           if (u.status === 'invisible' && u.id !== viewerId) {
             if (mode === 'online') return null;
-            return { ...u, online: false, status: 'offline' };
+            // Rich presence would give away that an invisible user is online.
+            return { ...u, online: false, status: 'offline', activity: null };
           }
           return u;
         }).filter(Boolean);
@@ -1651,6 +1674,9 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     const user = verifyToken(token);
     if (!user) return next(new Error('Invalid token'));
+    // Single-purpose tokens (TOTP challenge, 'connect' redirect) are signed
+    // with the same secret but are not sessions.
+    if (user.purpose || user.scope) return next(new Error('Invalid token'));
 
     const ban = db.prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
     if (ban) return next(new Error('You have been banned from this server'));
@@ -1870,6 +1896,10 @@ function setupSocketHandlers(io, db, opts = {}) {
     // view of the room. (#5347 v3.15.4.)
     for (const code of Array.from(voiceUsers.keys())) {
       pruneStaleVoiceUsers(code);
+      // Same visibility rule as broadcastVoiceUsers: members only (admins
+      // also see non-DM channels), so private codes and DM calls stay private.
+      const viewers = getVoiceCountViewerIds(code);
+      if (!viewers.members.has(socket.user.id) && !(socket.user.isAdmin && viewers.nonDm)) continue;
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(u => ({
@@ -2216,7 +2246,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships,
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers, emitDmPresence,
-      getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
+      getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers, getVoiceCountViewerIds,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode,
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent,

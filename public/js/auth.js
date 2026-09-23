@@ -716,7 +716,13 @@
           const base = sourceOrigin || getSsoOrigin();
           src = base + src;
         }
-        ssoPreviewAvatar.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:cover" alt="">`;
+        // Built as a node: src comes from the remote SSO server and must not be
+        // parsed as markup.
+        const img = document.createElement('img');
+        img.src = src;
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+        img.alt = '';
+        ssoPreviewAvatar.replaceChildren(img);
       } else {
         ssoPreviewAvatar.textContent = (previewName || '?')[0].toUpperCase();
       }

@@ -729,10 +729,14 @@ _formatContent(str) {
   // may still contain entities like &#39; &amp; &lt; etc.
   const emojiOnly = this._isEmojiOnly(str);
   str = this._decodeHtmlEntities(str);
+  // NUL delimits the internal placeholders below (\x00MDLINK_0\x00 …). A
+  // message carrying its own could steer a placeholder's HTML into another
+  // one's attribute, so it never reaches the markdown pass.
+  str = str.replace(/\x00/g, '');
 
   // Render file attachments [file:name](url|size)
   const fileMatch = str.match(/^\[file:(.+?)\]\((.+?)\|(.+?)\)$/);
-  if (fileMatch) {
+  if (fileMatch && /^(?:\/|https?:\/\/)/i.test(fileMatch[2])) {
     const fileName = this._escapeHtml(fileMatch[1]);
     const fileUrl = this._escapeHtml(fileMatch[2]);
     const fileSize = this._escapeHtml(fileMatch[3]);
@@ -1226,11 +1230,11 @@ _formatContent(str) {
 
   // ── Restore tables (do this after <br> so they aren't broken up) ──
   tablePlaceholders.forEach((tbl, idx) => {
-    html = html.replace(new RegExp(`(?:<br>)?\\x00TABLE_${idx}\\x00(?:<br>)?`), tbl);
+    html = html.replace(new RegExp(`(?:<br>)?\\x00TABLE_${idx}\\x00(?:<br>)?`), () => tbl);
   });
 
   blockquotes.forEach((block, idx) => {
-    html = html.replace(`\x00BLOCKQUOTE_${idx}\x00`, block);
+    html = html.replace(`\x00BLOCKQUOTE_${idx}\x00`, () => block);
   });
 
   // ── Restore fenced code blocks ──
@@ -1239,17 +1243,20 @@ _formatContent(str) {
     const langAttr = block.lang ? ` data-lang="${this._escapeHtml(block.lang)}"` : '';
     const langLabel = block.lang ? `<span class="code-block-lang">${this._escapeHtml(block.lang)}</span>` : '';
     const rendered = `<div class="code-block"${langAttr}>${langLabel}<pre><code>${escaped}</code></pre></div>`;
-    html = html.replace(`\x00CODEBLOCK_${idx}\x00`, rendered);
+    html = html.replace(`\x00CODEBLOCK_${idx}\x00`, () => rendered);
   });
 
   // ── Restore markdown links/images ──
+  // Function replacements throughout: the restored HTML carries user text,
+  // and a `$\`` in it would otherwise paste the preceding markup into an
+  // attribute.
   mdLinks.forEach((link, idx) => {
-    html = html.replace(`\x00MDLINK_${idx}\x00`, link);
+    html = html.replace(`\x00MDLINK_${idx}\x00`, () => link);
   });
 
   // ── Restore auto-linked URLs ──
   autoLinks.forEach((link, idx) => {
-    html = html.replace(`\x00AUTOLINK_${idx}\x00`, link);
+    html = html.replace(`\x00AUTOLINK_${idx}\x00`, () => link);
   });
 
   // ── Restore timestamps ──
@@ -2532,12 +2539,12 @@ _renderReactions(msgId, reactions) {
     const usersJson = this._escapeHtml(JSON.stringify(g.users.map(u => u.username)));
     // Check if it's a custom emoji
     const customMatch = g.emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-    let emojiDisplay = g.emoji;
+    let emojiDisplay = this._escapeHtml(g.emoji);
     if (customMatch && this.customEmojis) {
       const ce = this._findNamedEmoji(customMatch[1]);
       if (ce) emojiDisplay = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji reaction-custom-emoji">`;
     }
-    return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${names}">${emojiDisplay} ${g.users.length}</button>`;
+    return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${this._escapeHtml(names)}">${emojiDisplay} ${g.users.length}</button>`;
   }).join('');
 
   return `<div class="reactions-row">${badges}</div>`;
@@ -2572,7 +2579,7 @@ _showReactionPopout(badge) {
 
   const emoji = badge.dataset.emoji;
   const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-  let emojiDisplay = emoji;
+  let emojiDisplay = this._escapeHtml(emoji);
   if (customMatch && this.customEmojis) {
     const ce = this.customEmojis.find(e => e.name === customMatch[1]);
     if (ce) emojiDisplay = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji reaction-custom-emoji">`;

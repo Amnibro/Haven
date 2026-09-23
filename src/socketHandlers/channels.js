@@ -31,8 +31,39 @@ function moveUploadToDeleted(relPath) {
     fs.renameSync(src, dst);
   } catch { /* file locked or already moved */ }
 }
+// True when anything other than the rows being deleted still points at this
+// upload: a surviving message, an avatar/border, a persona, a bot, a role
+// icon, a server setting, or a custom emoji/sound/sticker. Mirrors the
+// orphan check in server.js. Fails safe (true) if a table is missing.
+function isUploadStillReferenced(db, relPath) {
+  try {
+    const like = '%/uploads/' + relPath.replace(/[\\%_]/g, '\\$&') + '%';
+    return !!db.prepare(`
+      SELECT 1 WHERE
+           EXISTS(SELECT 1 FROM messages WHERE content LIKE @like ESCAPE '\\' OR persona_avatar LIKE @like ESCAPE '\\' OR webhook_avatar LIKE @like ESCAPE '\\')
+        OR EXISTS(SELECT 1 FROM users WHERE avatar LIKE @like ESCAPE '\\' OR border LIKE @like ESCAPE '\\')
+        OR EXISTS(SELECT 1 FROM user_personas WHERE avatar LIKE @like ESCAPE '\\')
+        OR EXISTS(SELECT 1 FROM webhooks WHERE avatar_url LIKE @like ESCAPE '\\')
+        OR EXISTS(SELECT 1 FROM roles WHERE icon LIKE @like ESCAPE '\\')
+        OR EXISTS(SELECT 1 FROM server_settings WHERE value LIKE @like ESCAPE '\\')
+        OR EXISTS(SELECT 1 FROM custom_sounds WHERE filename = @rel)
+        OR EXISTS(SELECT 1 FROM custom_emojis WHERE filename = @rel)
+        OR EXISTS(SELECT 1 FROM stickers WHERE filename = @rel)
+        OR EXISTS(SELECT 1 FROM upload_ownership WHERE rel_path = @rel AND scope = 'profile')
+    `).get({ like, rel: relPath });
+  } catch {
+    return true;
+  }
+}
+
 const { isString, isInt } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
+
+// Failed join-by-code attempts per user, so channel codes (32-bit) and custom
+// invite slugs cannot be enumerated at the general event rate.
+const JOIN_FAIL_MAX = 20;
+const JOIN_FAIL_WINDOW_MS = 10 * 60 * 1000;
+const joinFailures = new Map(); // userId → timestamps
 
 module.exports = function register(socket, ctx) {
   const {
@@ -352,6 +383,19 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code) return socket.emit('error-msg', 'Invalid channel code');
 
+    const _now = Date.now();
+    const _fails = (joinFailures.get(socket.user.id) || []).filter(t => _now - t < JOIN_FAIL_WINDOW_MS);
+    if (_fails.length) joinFailures.set(socket.user.id, _fails); else joinFailures.delete(socket.user.id);
+    if (_fails.length >= JOIN_FAIL_MAX) {
+      return socket.emit('error-msg', 'Too many invalid codes — try again in a few minutes');
+    }
+    const _failJoin = (msg) => {
+      _fails.push(_now);
+      joinFailures.set(socket.user.id, _fails);
+      return socket.emit('error-msg', msg);
+    };
+    const _gateOk = (ch) => socket.user.isAdmin || !ctx.roleGateAllows || ctx.roleGateAllows(socket.user.id, ch);
+
     // (#5345) Helper: figure out which channels a server-code / vanity-code
     // joiner should be added to. Always EXCLUDES private parents (private
     // channels were never supposed to be unlocked by an invite code).
@@ -363,7 +407,7 @@ module.exports = function register(socket, ctx) {
     // array means "all public" — same as leaving the global default unset.
     const _resolveAutoJoinChannels = (explicitChannelIds) => {
       const allParents = db.prepare(
-        "SELECT id, code, parent_channel_id FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private')"
+        "SELECT id, code, parent_channel_id, role_gate FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private')"
       ).all();
       let allowSet = null;
       if (Array.isArray(explicitChannelIds)) {
@@ -396,16 +440,16 @@ module.exports = function register(socket, ctx) {
       const txn = db.transaction(() => {
         for (const parent of parents) {
           insertMember.run(parent.id, socket.user.id);
-          socket.join(`channel:${parent.code}`);
+          if (_gateOk(parent)) socket.join(`channel:${parent.code}`);
           joinedChannelIds.push(parent.id);
           joinedCount++;
           // Sub-channels: never grant private subs via invite. When a
           // default-channels allowlist is set, only grant subs whose
           // parent is on the list (matches admin intent).
-          const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(parent.id);
+          const subs = db.prepare('SELECT id, code, role_gate FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(parent.id);
           for (const sub of subs) {
             insertMember.run(sub.id, socket.user.id);
-            socket.join(`channel:${sub.code}`);
+            if (_gateOk(sub)) socket.join(`channel:${sub.code}`);
             joinedChannelIds.push(sub.id);
             joinedCount++;
           }
@@ -479,7 +523,7 @@ module.exports = function register(socket, ctx) {
 
     // Standard 8-char hex code
     if (!/^[a-f0-9]{8}$/i.test(code)) {
-      return socket.emit('error-msg', 'Invalid channel code format');
+      return _failJoin('Invalid channel code format');
     }
 
     // ── Check if this is a server-wide invite code ─────
@@ -493,7 +537,7 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
     if (!channel) {
-      return socket.emit('error-msg', 'Invalid channel code — double-check it');
+      return _failJoin('Invalid channel code — double-check it');
     }
 
     // (#5348) DMs are private one-to-one channels. Their codes must never be
@@ -501,7 +545,7 @@ module.exports = function register(socket, ctx) {
     // (who is talking to whom, timing, frequency). Reject silently with the
     // same generic error so callers can't distinguish "no channel" from "is DM".
     if (channel.is_dm) {
-      return socket.emit('error-msg', 'Invalid channel code — double-check it');
+      return _failJoin('Invalid channel code — double-check it');
     }
 
     const membership = db.prepare(
@@ -525,8 +569,15 @@ module.exports = function register(socket, ctx) {
       // matching the public-only auto-join rule); public subs require parent
       // membership. Reuse the generic error so the code's existence stays hidden.
       if (isPrivateSub || !parentMember) {
-        return socket.emit('error-msg', 'Invalid channel code — double-check it');
+        return _failJoin('Invalid channel code — double-check it');
       }
+    }
+
+    // A role gate covers joining by code too. Without this, anyone holding
+    // the code became a member and sat in the room receiving every new
+    // message of a channel whose gate they fail.
+    if (!_gateOk(channel)) {
+      return socket.emit('error-msg', 'This channel needs a role you do not hold');
     }
 
     if (!membership) {
@@ -549,12 +600,12 @@ module.exports = function register(socket, ctx) {
 
     if (!channel.parent_channel_id) {
       const subs = db.prepare(
-        'SELECT id, code FROM channels WHERE parent_channel_id = ? AND is_private = 0'
+        'SELECT id, code, role_gate FROM channels WHERE parent_channel_id = ? AND is_private = 0'
       ).all(channel.id);
       const insertSub = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
       subs.forEach(sub => {
         insertSub.run(sub.id, socket.user.id);
-        socket.join(`channel:${sub.code}`);
+        if (_gateOk(sub)) socket.join(`channel:${sub.code}`);
         _applyChannelDefaultRole(sub.id, socket.user.id);
       });
     }
@@ -644,8 +695,13 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const ch = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    const ch = db.prepare('SELECT id, is_dm, role_gate FROM channels WHERE code = ?').get(code);
     if (!ch) return;
+    // The gate hides a channel from members who fail it; entering would still
+    // put them in the room and stream its messages to them.
+    if (!socket.user.isAdmin && !ch.is_dm && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, ch)) {
+      return socket.emit('error-msg', 'This channel needs a role you do not hold');
+    }
     const isMember = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(ch.id, socket.user.id);
@@ -749,13 +805,12 @@ module.exports = function register(socket, ctx) {
     // The same file can be linked from more than one message (a copy-pasted
     // image URL), so only relocate the ones nothing else points at anymore.
     // Mirrors what auto-cleanup does. (#5423)
+    // Avatars, emoji and the like count too: a message can link any file in
+    // uploads/, so without that a channel deleter could post someone's avatar
+    // path and then delete the channel to take the file down with it.
     for (const rel of doomedUploads) {
       try {
-        const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
-        const still = db.prepare(
-          "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
-        ).get(like);
-        if (!still) moveUploadToDeleted(rel);
+        if (!isUploadStillReferenced(db, rel)) moveUploadToDeleted(rel);
       } catch { /* best-effort */ }
     }
 
@@ -1145,8 +1200,17 @@ module.exports = function register(socket, ctx) {
       if (!Number.isFinite(parsed) || parsed <= 0) {
         return socket.emit('error-msg', 'Invalid role');
       }
-      const role = db.prepare('SELECT id, name FROM roles WHERE id = ?').get(parsed);
+      const role = db.prepare('SELECT id, name, level FROM roles WHERE id = ?').get(parsed);
       if (!role) return socket.emit('error-msg', 'Role not found');
+      // Same rank rule as assign-role: the default role is granted to every
+      // member (the setter included), so without it manage_roles could hand
+      // out, and take, a role above the setter's own level.
+      if (!socket.user.isAdmin) {
+        const myLevel = getUserEffectiveLevel(socket.user.id);
+        if (role.level >= myLevel) {
+          return socket.emit('error-msg', `You can only set a default role below your level (${myLevel})`);
+        }
+      }
       roleId = role.id;
     }
 
@@ -1665,8 +1729,9 @@ module.exports = function register(socket, ctx) {
       }
     } catch { /* non-critical */ }
     const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === targetUserId);
+    const targetPassesGate = !ctx.roleGateAllows || ctx.roleGateAllows(targetUserId, channel);
     for (const ts of targetSockets) {
-      ts.join(`channel:${channel.code}`);
+      if (ts.user.isAdmin || targetPassesGate) ts.join(`channel:${channel.code}`);
       if (!channel.parent_channel_id) {
         const subs = db.prepare('SELECT code FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(channel.id);
         subs.forEach(sub => ts.join(`channel:${sub.code}`));
@@ -1811,6 +1876,14 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // Anyone can open a DM (even with themselves), and both the message scan
+    // and the client's list can name any file in uploads/. Only files a member
+    // of this DM uploaded, and that nothing else still uses, may go.
+    const dmMemberIds = new Set(
+      db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id).map(r => r.user_id)
+    );
+    const ownerOf = db.prepare('SELECT user_id FROM upload_ownership WHERE rel_path = ?');
+
     const deleteAll = db.transaction((chId) => {
       db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
       db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
@@ -1820,7 +1893,14 @@ module.exports = function register(socket, ctx) {
     });
     deleteAll(channel.id);
 
-    for (const name of filenames) moveUploadToDeleted(name);
+    for (const name of filenames) {
+      try {
+        const owner = ownerOf.get(name);
+        if (!owner || !dmMemberIds.has(owner.user_id)) continue;
+        if (isUploadStillReferenced(db, name)) continue;
+        moveUploadToDeleted(name);
+      } catch { /* best-effort cleanup */ }
+    }
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
     clearChannelRuntimeState(state, code);

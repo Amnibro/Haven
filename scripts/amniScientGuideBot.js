@@ -17,7 +17,9 @@ function guideToken() {
 }
 
 function greet(user) {
-  const name = (user && (user.username || user.displayName)) || 'there';
+  // /hook is unauthenticated, so the name comes from the DB row, not the POST body.
+  const row = db.prepare('SELECT username, display_name FROM users WHERE id = ?').get(Number(user.id));
+  const name = (row && (row.display_name || row.username)) || 'there';
   return `Hey ${name}. I am Guide. Pinned posts in this channel and in each product room have the live links. Take Tester in #introductions for #testers and #prerelease.`;
 }
 

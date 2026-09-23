@@ -29,6 +29,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { DATA_DIR } = require('./paths');
+const { safeFetch } = require('./safeFetch');
 
 const CACHE_DIR = path.join(DATA_DIR, 'media-cache');
 try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch { /* created lazily below */ }
@@ -210,7 +211,10 @@ async function fetchAndCache(url, validateUrlSafe) {
       if (_isDiscordMediaHost(host)) headers.Referer = 'https://discord.com/';
     } catch { /* malformed URL — validateUrlSafe already ran */ }
 
-    const res = await fetch(url, {
+    // safeFetch, not fetch: every redirect hop is re-checked and the connection
+    // is pinned to the address that passed, so a public URL that 302s to
+    // http://127.0.0.1:<port>/ (or rebinds its DNS) cannot reach internal services.
+    const res = await safeFetch(url, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       headers,
       redirect: 'follow'

@@ -1999,7 +1999,9 @@ _wireEmbedControls(card, url) {
 
 /** Compact engagement count (1.2K / 3.4M); null for missing/negative values. */
 _cnt(n) {
-  if (n == null || n < 0) return null;
+  // Counts come from third-party APIs via the preview route and land in
+  // innerHTML, so anything that is not a plain number is dropped.
+  if (n == null || typeof n !== 'number' || !Number.isFinite(n) || n < 0) return null;
   if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
   return String(n);

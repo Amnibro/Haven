@@ -1639,7 +1639,30 @@ _e2eImageBlob(img, partner = null) {
   return fetch(url)
     .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
     .then(buf => this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk))
-    .then(plain => new Blob([plain], { type: mime }));
+    .then(plain => new Blob([plain], { type: mime }))
+    .then(blob => this._e2eRasterizeSvg(blob));
+},
+
+/** The sender picks the MIME of a decrypted image, and a blob: URL is
+ *  same-origin: an image/svg+xml blob opened in its own tab (drag to the tab
+ *  bar, native "open image") runs the sender's SVG as a Haven page. Redraw
+ *  SVG to PNG so the object URL never holds a scriptable document. */
+async _e2eRasterizeSvg(blob) {
+  if (!/svg/i.test(blob.type)) return blob;
+  const tmpUrl = URL.createObjectURL(blob);
+  try {
+    const im = new Image();
+    im.src = tmpUrl;
+    await im.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = im.naturalWidth || 300;
+    canvas.height = im.naturalHeight || 150;
+    canvas.getContext('2d').drawImage(im, 0, 0, canvas.width, canvas.height);
+    return await new Promise((res, rej) =>
+      canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob null')), 'image/png'));
+  } finally {
+    URL.revokeObjectURL(tmpUrl);
+  }
 },
 
 };

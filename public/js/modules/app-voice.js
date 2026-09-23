@@ -927,7 +927,7 @@ _popOutWebcamOverlay(tile, userId) {
     <div class="music-pip-embed stream-pip-video"></div>
     <div class="music-pip-controls">
       <button class="music-pip-btn stream-pip-popin" title="${t('media.pop_back_in')}">⧈</button>
-      <span class="music-pip-label">📷 ${who}</span>
+      <span class="music-pip-label">📷 ${this._escapeHtml(who)}</span>
       <span class="music-pip-vol-icon" title="${t('voice_runtime.window_opacity')}">👁</span>
       <input type="range" class="music-pip-vol pip-opacity-slider" min="20" max="100" value="${savedOpacity}">
       <button class="music-pip-btn stream-pip-fullscreen" title="${t('media.fullscreen')}">⤢</button>
@@ -2067,7 +2067,7 @@ _popOutStreamWindow(tile, userId) {
     <div class="music-pip-embed stream-pip-video"></div>
     <div class="music-pip-controls">
       <button class="music-pip-btn stream-pip-popin" title="${t('media.pop_back_in')}">⧈</button>
-      <span class="music-pip-label">🖥️ ${who}</span>
+      <span class="music-pip-label">🖥️ ${this._escapeHtml(who)}</span>
       <span class="music-pip-vol-icon stream-pip-opacity-icon" title="${t('voice_runtime.window_opacity')}">👁</span>
       <input type="range" class="music-pip-vol pip-opacity-slider stream-pip-opacity" min="20" max="100" value="${savedOpacity}">
       <button class="music-pip-btn stream-pip-maximize" title="${t('voice_runtime.maximize')}">⛶</button>

@@ -215,6 +215,9 @@ module.exports = function register(socket, ctx) {
     const epoch = isInt(data.epoch) ? data.epoch : null;
     const keys = Array.isArray(data.keys) ? data.keys : null;
     if (!epoch || !keys) return socket.emit('error-msg', 'Malformed epoch publication');
+    if (keys.some((k) => !k || typeof k !== 'object' || !isInt(k.recipientId))) {
+      return socket.emit('error-msg', 'Malformed epoch publication');
+    }
 
     // Strictly sequential. Two members rotating at once means one of them
     // loses here and retries against the newer membership.

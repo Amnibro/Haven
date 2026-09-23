@@ -805,6 +805,20 @@ module.exports = function register(socket, ctx) {
 
     const targetUser = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
     if (!targetUser) return socket.emit('error-msg', 'User not found');
+
+    // Same rank guard as unban-user: a moderator can lift their own mutes and
+    // those placed by someone below them, not an admin's or a peer's.
+    if (!socket.user.isAdmin) {
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      const muters = db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(data.userId);
+      for (const m of muters) {
+        if (m.muted_by === socket.user.id) continue;
+        const muter = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(m.muted_by);
+        if ((muter && muter.is_admin) || getUserEffectiveLevel(m.muted_by) >= myLevel) {
+          return socket.emit('error-msg', 'You can\'t undo a mute placed by an admin or someone of equal or higher rank');
+        }
+      }
+    }
     const wasMuted = db.prepare('SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') LIMIT 1').get(data.userId);
     db.prepare('DELETE FROM mutes WHERE user_id = ?').run(data.userId);
     if (!wasMuted) return socket.emit('toast', { message: `${targetUser.username} is not muted`, type: 'info' });
@@ -878,9 +892,26 @@ module.exports = function register(socket, ctx) {
   socket.on('ban-ip', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!_canBanIp()) return socket.emit('error-msg', 'You don\'t have permission to ban IPs');
-    const input = (data.ip || '').trim();
+    const input = typeof data.ip === 'string' ? data.ip.trim() : '';
     if (!isValidIpOrCidr(input)) return socket.emit('error-msg', 'Invalid IP address or CIDR range');
     const ip = _canonicalBanEntry(input);
+    // A non-admin may not ban an address or range that covers an admin or
+    // anyone of equal or higher rank (e.g. 0.0.0.0/0 would lock the admin
+    // out of their own server).
+    if (!socket.user.isAdmin) {
+      const { ipMatches: _ipMatches } = require('../clientIp');
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      const hit = new Set();
+      for (const r of db.prepare('SELECT user_id, ip FROM user_ips').all()) {
+        if (r.user_id !== socket.user.id && _ipMatches(r.ip, ip)) hit.add(r.user_id);
+      }
+      for (const uid of hit) {
+        const u = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(uid);
+        if ((u && u.is_admin) || getUserEffectiveLevel(uid) >= myLevel) {
+          return socket.emit('error-msg', 'That address or range covers an admin or someone of equal or higher rank');
+        }
+      }
+    }
     const reason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : '';
     try {
       db.prepare('INSERT OR REPLACE INTO ip_bans (ip, banned_by, reason) VALUES (?, ?, ?)').run(ip, socket.user.id, reason);
@@ -909,7 +940,7 @@ module.exports = function register(socket, ctx) {
   socket.on('unban-ip', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!_canBanIp()) return socket.emit('error-msg', 'You don\'t have permission to unban IPs');
-    const raw = (data.ip || '').trim();
+    const raw = typeof data.ip === 'string' ? data.ip.trim() : '';
     if (!raw) return;
     // Try the canonical form first, then the literal string, so entries stored
     // by older versions (pre-normalisation) can still be lifted from the UI.

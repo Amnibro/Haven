@@ -11,6 +11,10 @@ module.exports = function register(socket, ctx) {
           broadcastMusicQueue, getMusicQueuePayload, sanitizeQueueEntry,
           trimMusicText, stripYouTubePlaylistParam } = ctx;
   const { voiceUsers, activeMusic, musicQueues } = state;
+  // Upper bound on a room's queue. Each playlist share adds up to 200 entries
+  // and the whole queue is rebroadcast on every change, so without a cap a
+  // single member could grow it (and every broadcast) without limit.
+  const MAX_QUEUE_LENGTH = 1000;
 
   // ── Share a track ───────────────────────────────────────
   socket.on('music-share', async (data) => {
@@ -63,6 +67,7 @@ module.exports = function register(socket, ctx) {
     }
 
     const queue = musicQueues.get(data.code) || [];
+    if (queue.length >= MAX_QUEUE_LENGTH) return socket.emit('error-msg', 'The music queue is full');
     queue.push(entry);
     musicQueues.set(data.code, queue);
     broadcastMusicQueue(data.code);
@@ -109,6 +114,7 @@ module.exports = function register(socket, ctx) {
         startQueuedMusic(data.code, entry);
       } else {
         const queue = musicQueues.get(data.code) || [];
+        if (queue.length >= MAX_QUEUE_LENGTH) break;
         queue.push(entry);
         musicQueues.set(data.code, queue);
       }

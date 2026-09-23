@@ -7,6 +7,7 @@ const OTPAuth = require('otpauth');
 const QRCode = require('qrcode');
 const https = require('https');
 const http = require('http');
+const { resolveCallbackDestination, createPinnedLookup } = require('./webhookCallback');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -165,67 +166,74 @@ function downloadSSOAvatar(url) {
       return reject(new Error('Invalid protocol'));
     }
 
-    const fetcher = parsed.protocol === 'https:' ? https : http;
-    const request = fetcher.get(url, { timeout: 10000 }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        return reject(new Error(`HTTP ${res.statusCode}`));
-      }
-
-      const contentType = (res.headers['content-type'] || '').toLowerCase();
-      const validTypes = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const ext = validTypes[contentType.split(';')[0].trim()];
-      if (!ext) {
-        res.resume();
-        return reject(new Error('Not a supported image type'));
-      }
-
-      // Limit to 2 MB
-      let size = 0;
-      const maxSize = 2 * 1024 * 1024;
-      const chunks = [];
-
-      res.on('data', (chunk) => {
-        size += chunk.length;
-        if (size > maxSize) {
-          res.destroy();
-          return reject(new Error('Image too large'));
+    // The URL comes straight from an anonymous /register body, so without this
+    // anyone could make the server GET any loopback/LAN address (and keep the
+    // response as their avatar if it happened to be an image). Resolve once,
+    // refuse internal addresses, and pin the connection to what was checked.
+    const allowPrivate = (process.env.ALLOW_PRIVATE_PREVIEWS || '').toLowerCase() === 'true';
+    resolveCallbackDestination(url, { allowPrivateCallbacks: allowPrivate }).then((dest) => {
+      const fetcher = parsed.protocol === 'https:' ? https : http;
+      const request = fetcher.get(url, { timeout: 10000, agent: false, lookup: createPinnedLookup(dest.address, dest.family) }, (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          return reject(new Error(`HTTP ${res.statusCode}`));
         }
-        chunks.push(chunk);
+
+        const contentType = (res.headers['content-type'] || '').toLowerCase();
+        const validTypes = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
+        const ext = validTypes[contentType.split(';')[0].trim()];
+        if (!ext) {
+          res.resume();
+          return reject(new Error('Not a supported image type'));
+        }
+
+        // Limit to 2 MB
+        let size = 0;
+        const maxSize = 2 * 1024 * 1024;
+        const chunks = [];
+
+        res.on('data', (chunk) => {
+          size += chunk.length;
+          if (size > maxSize) {
+            res.destroy();
+            return reject(new Error('Image too large'));
+          }
+          chunks.push(chunk);
+        });
+
+        res.on('end', () => {
+          try {
+            const buffer = Buffer.concat(chunks);
+
+            // Validate magic bytes
+            let validMagic = false;
+            if (ext === '.jpg') validMagic = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+            else if (ext === '.png') validMagic = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+            else if (ext === '.gif') validMagic = buffer.slice(0, 6).toString().startsWith('GIF8');
+            else if (ext === '.webp') validMagic = buffer.slice(0, 4).toString() === 'RIFF' && buffer.slice(8, 12).toString() === 'WEBP';
+            if (!validMagic) return reject(new Error('File content does not match image type'));
+
+            const filename = Date.now() + crypto.randomBytes(8).toString('hex') + ext;
+            const { UPLOADS_DIR } = require('./paths');
+            const path = require('path');
+            const fs = require('fs');
+            const filePath = path.join(UPLOADS_DIR, filename);
+            fs.writeFileSync(filePath, buffer);
+            resolve(`/uploads/${filename}`);
+          } catch (err) {
+            reject(err);
+          }
+        });
+
+        res.on('error', reject);
       });
 
-      res.on('end', () => {
-        try {
-          const buffer = Buffer.concat(chunks);
-
-          // Validate magic bytes
-          let validMagic = false;
-          if (ext === '.jpg') validMagic = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
-          else if (ext === '.png') validMagic = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
-          else if (ext === '.gif') validMagic = buffer.slice(0, 6).toString().startsWith('GIF8');
-          else if (ext === '.webp') validMagic = buffer.slice(0, 4).toString() === 'RIFF' && buffer.slice(8, 12).toString() === 'WEBP';
-          if (!validMagic) return reject(new Error('File content does not match image type'));
-
-          const filename = Date.now() + crypto.randomBytes(8).toString('hex') + ext;
-          const { UPLOADS_DIR } = require('./paths');
-          const path = require('path');
-          const fs = require('fs');
-          const filePath = path.join(UPLOADS_DIR, filename);
-          fs.writeFileSync(filePath, buffer);
-          resolve(`/uploads/${filename}`);
-        } catch (err) {
-          reject(err);
-        }
+      request.on('error', reject);
+      request.on('timeout', () => {
+        request.destroy();
+        reject(new Error('Download timed out'));
       });
-
-      res.on('error', reject);
-    });
-
-    request.on('error', reject);
-    request.on('timeout', () => {
-      request.destroy();
-      reject(new Error('Download timed out'));
-    });
+    }).catch(reject);
   });
 }
 
@@ -826,8 +834,11 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
   try {
     const auth = req.headers.authorization || '';
     if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
-    let decoded;
-    try { decoded = jwt.verify(auth.slice(7), JWT_SECRET); } catch { return res.status(401).json({ error: 'Unauthorized' }); }
+    // verifyToken, not a bare jwt.verify: that accepted the pre-2FA challenge
+    // token and sessions revoked by a password change, and either one could
+    // set a new password here without knowing the old one.
+    const decoded = verifyToken(auth.slice(7));
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
     const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
     // (#5300 DM-preservation) Optional escape hatch from the forced
     // change-password screen: if the user remembers their original password
@@ -837,8 +848,12 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
     // history is preserved. The newPassword field is ignored in this path.
     const oldPassword = typeof req.body.oldPassword === 'string' ? req.body.oldPassword : '';
     const db = getDb();
-    const user = db.prepare('SELECT id, username, is_admin, display_name, password_version, password_hash FROM users WHERE id = ?').get(decoded.id);
+    const user = db.prepare('SELECT id, username, is_admin, display_name, password_version, password_hash, must_change_password FROM users WHERE id = ?').get(decoded.id);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    // Only an account an admin actually reset may skip the current-password
+    // check. Anyone else goes through /change-password, which asks for it, so
+    // a stolen session token cannot be turned into a permanent takeover.
+    if (!user.must_change_password) return res.status(403).json({ error: 'No password change is pending for this account' });
 
     let preserved = false;
     if (oldPassword) {
@@ -1384,10 +1399,18 @@ function _currentPwv(userId) {
   return pwv;
 }
 
-function verifyToken(token) {
+// Single-purpose tokens are not sessions. The TOTP challenge (issued after the
+// password check but BEFORE the second factor) used to pass here untouched, so
+// a password alone was enough to call every HTTP route, disable 2FA, or pull
+// an admin backup. A 'connect' token (which travels in a URL) likewise worked
+// as a full session. Scoped tokens are only accepted by a caller that names
+// the scope it expects (connectRoutes passes 'connect').
+function verifyToken(token, expectedScope) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded && decoded.id && !decoded.purpose) {
+    if (!decoded || decoded.purpose) return null;
+    if ((decoded.scope || null) !== (expectedScope || null)) return null;
+    if (decoded.id) {
       const current = _currentPwv(decoded.id);
       if (current !== null && (decoded.pwv || 1) !== current) return null;
     }
@@ -1409,7 +1432,8 @@ router.get('/recovery-codes/status', async (req, res) => {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+    const decoded = verifyToken(auth.slice(7));
+    if (!decoded) return res.status(401).json({ error: 'Invalid token' });
     const db = getDb();
     const count = db.prepare(
       'SELECT COUNT(*) as count FROM account_recovery_codes WHERE user_id = ? AND used = 0'
@@ -1424,7 +1448,8 @@ router.post('/recovery-codes/generate', authLimiter, async (req, res) => {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+    const decoded = verifyToken(auth.slice(7));
+    if (!decoded) return res.status(401).json({ error: 'Invalid token' });
     const password = typeof req.body.password === 'string' ? req.body.password : '';
     if (!password) return res.status(400).json({ error: 'Password required' });
 

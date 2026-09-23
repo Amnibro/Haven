@@ -84,6 +84,7 @@ const { Server } = require('socket.io');
 const crypto = require('crypto');
 const helmet = require('helmet');
 const multer = require('multer');
+const { stripImageMetadata } = require('./src/imageMetadata');
 const diskGuard = require('./src/diskGuard');
 
 // (#5505) Refuse uploads that would eat into the reserved disk headroom, so a
@@ -657,6 +658,13 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
       res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     } else {
       res.setHeader('Content-Disposition', 'attachment');
+      // Content-Disposition only governs navigation; a <script src> or
+      // <link rel=stylesheet> pointed at an uploaded .js/.css would still run it
+      // as same-origin code, turning any HTML injection into account takeover.
+      // With nosniff, an opaque type makes the browser refuse to execute it.
+      if (['.js', '.mjs', '.cjs', '.css', '.html', '.htm', '.xhtml', '.xml', '.wasm'].includes(ext)) {
+        res.setHeader('Content-Type', 'application/octet-stream');
+      }
     }
   }
 }));
@@ -792,7 +800,7 @@ app.get('/api/push/vapid-key', (req, res) => {
 });
 
 // ── Push notification subscription endpoints ─────────────
-app.post('/api/push/subscribe', express.json(), (req, res) => {
+app.post('/api/push/subscribe', express.json(), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -800,6 +808,13 @@ app.post('/api/push/subscribe', express.json(), (req, res) => {
   const { endpoint, keys } = req.body;
   if (!endpoint || !keys?.p256dh || !keys?.auth)
     return res.status(400).json({ error: 'Invalid subscription object' });
+  // The server POSTs to this URL on every notification, so an unchecked value
+  // is a server-side request forgery primitive against anything on the host's
+  // loopback or LAN. Real push services are public HTTPS endpoints.
+  if (typeof endpoint !== 'string' || !/^https:\/\//i.test(endpoint))
+    return res.status(400).json({ error: 'Invalid subscription object' });
+  try { await resolveCallbackDestination(endpoint); }
+  catch { return res.status(400).json({ error: 'Invalid subscription object' }); }
 
   try {
     const { getDb } = require('./src/database');
@@ -1070,6 +1085,7 @@ app.post('/api/upload-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
       return res.status(400).json({ error: 'Failed to validate file' });
     }
 
+    stripImageMetadata(req.file.path); // GPS/camera EXIF must not reach other members
     // Force safe extension
     const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
     const safeExt = mimeToExt[req.file.mimetype];
@@ -1166,6 +1182,7 @@ app.post('/api/upload-border', uploadLimiter, uploadDiskGuard, (req, res) => {
       return res.status(400).json({ error: 'Failed to validate file' });
     }
 
+    stripImageMetadata(req.file.path); // GPS/camera EXIF must not reach other members
     // Force safe extension
     const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
     const safeExt = mimeToExt[req.file.mimetype];
@@ -1303,6 +1320,7 @@ app.post('/api/upload-webhook-avatar', uploadLimiter, uploadDiskGuard, (req, res
       return res.status(400).json({ error: 'Failed to validate file' });
     }
 
+    stripImageMetadata(req.file.path); // GPS/camera EXIF must not reach other members
     const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
     const safeExt = mimeToExt[req.file.mimetype];
     if (!safeExt) {
@@ -1494,6 +1512,7 @@ app.post('/api/upload-persona-avatar', uploadLimiter, uploadDiskGuard, (req, res
       try { fs.unlinkSync(req.file.path); } catch {}
       return res.status(400).json({ error: 'Failed to validate file' });
     }
+    stripImageMetadata(req.file.path); // GPS/camera EXIF must not reach other members
     const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
     const safeExt = mimeToExt[req.file.mimetype];
     if (!safeExt) {
@@ -1872,6 +1891,7 @@ app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
       return res.status(400).json({ error: 'Failed to validate file' });
     }
 
+    stripImageMetadata(req.file.path); // GPS/camera EXIF must not reach other members
     // Force safe extension based on validated mimetype (prevent HTML/SVG upload)
     const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
     const safeExt = mimeToExt[req.file.mimetype];
@@ -1924,6 +1944,10 @@ app.post('/api/upload-file', uploadLimiter, uploadDiskGuard, (req, res) => {
       fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: `File too large (max ${capMb} MB)` });
     }
+
+    // Photos sent as files carry the same GPS/camera EXIF; the strip only
+    // touches JPEG/PNG/WebP bytes and leaves every other file alone.
+    stripImageMetadata(req.file.path);
 
     const isImage = /^image\//.test(req.file.mimetype);
     // multer passes the raw bytes from the multipart header as a latin1 string;
@@ -3102,9 +3126,8 @@ function decodeHtmlEntities(str) {
     .replace(/&gt;/gi, '>')
     .replace(/&amp;/gi, '&');
 }
-const dns = require('dns');
-const { promisify } = require('util');
-const dnsResolve = promisify(dns.resolve4);
+const { resolveCallbackDestination, UnsafeCallbackError } = require('./src/webhookCallback');
+const { safeFetch } = require('./src/safeFetch');
 
 // Rate limit link preview fetches (per IP, separate from upload limiter).
 // Returns true when the request is within the window, false if the caller
@@ -3126,16 +3149,6 @@ function previewLimiterCheck(req) {
   return true;
 }
 setInterval(() => { const now = Date.now(); for (const [ip, t] of previewLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) previewLimitStore.delete(ip); else previewLimitStore.set(ip, f); } }, 5 * 60 * 1000);
-
-// Check if an IP is private/internal
-function isPrivateIP(ip) {
-  if (!ip) return true;
-  return ip === '127.0.0.1' || ip === '0.0.0.0' || ip === '::1' || ip === '::' ||
-    ip.startsWith('10.') || ip.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
-    ip.startsWith('169.254.') || ip.startsWith('fc00:') || ip.startsWith('fd') ||
-    ip.startsWith('fe80:');
-}
 
 // Check if a hostname is private/internal (SSRF layer 1)
 function isPrivateHostname(hostname) {
@@ -3160,15 +3173,16 @@ async function validateUrlSafe(urlStr) {
     if (isPrivateHostname(parsed.hostname)) {
       throw new Error('Private addresses not allowed');
     }
-    // SSRF layer 2: DNS resolution check (defeats DNS rebinding)
+    // SSRF layer 2: resolve the way the fetch will (getaddrinfo, every A and
+    // AAAA record) and judge each address, including IPv4-mapped IPv6 such as
+    // [::ffff:127.0.0.1] and all of 127/8, which the old resolve4 + prefix
+    // check let through. The fetch itself (src/safeFetch.js) re-checks and pins
+    // the address, so a DNS answer that changes in between cannot slip past.
     try {
-      const addresses = await dnsResolve(parsed.hostname);
-      if (addresses.some(isPrivateIP)) {
-        throw new Error('Private addresses not allowed');
-      }
+      await resolveCallbackDestination(urlStr);
     } catch (err) {
-      if (err.message === 'Private addresses not allowed') throw err;
-      // DNS resolution failed — could be IPv6-only or non-existent; allow fetch to fail naturally
+      if (err instanceof UnsafeCallbackError) throw new Error('Private addresses not allowed');
+      // DNS resolution failed — non-existent host; allow fetch to fail naturally
     }
   }
   return parsed;
@@ -3519,7 +3533,7 @@ app.get('/api/link-preview', async (req, res) => {
       for (let i = 0; i <= MAX_REDIRECTS; i++) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 8000);
-        resp = await fetch(currentUrl, {
+        resp = await safeFetch(currentUrl, {
           signal: controller.signal,
           headers: {
             'User-Agent': PREVIEW_UA,
@@ -3533,6 +3547,7 @@ app.get('/api/link-preview', async (req, res) => {
         if ([301, 302, 303, 307, 308].includes(resp.status)) {
           const location = resp.headers.get('location');
           if (!location) break;
+          try { await resp.body?.cancel(); } catch { /* already closed */ }
           // Resolve relative redirects
           const nextUrl = new URL(location, currentUrl).href;
           try {
@@ -3614,9 +3629,11 @@ app.get('/api/link-preview', async (req, res) => {
           try {
             const oembedEndpoint = new URL(oembedHref[1], currentUrl).href;
             await validateUrlSafe(oembedEndpoint);
-            const oResp = await fetch(oembedEndpoint, {
+            // safeFetch: a redirect off the oEmbed endpoint is re-checked too
+            const oResp = await safeFetch(oembedEndpoint, {
               signal: AbortSignal.timeout(5000),
-              headers: { 'User-Agent': PREVIEW_UA }
+              headers: { 'User-Agent': PREVIEW_UA },
+              redirect: 'follow'
             });
             if (oResp.ok) {
               const oj = await oResp.json();
@@ -3638,7 +3655,7 @@ app.get('/api/link-preview', async (req, res) => {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
-        const resp = await fetch(imageSource, {
+        const resp = await safeFetch(imageSource, {
           signal: controller.signal,
           headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'text/html' },
           redirect: 'manual'  // no blind redirect following
@@ -4325,12 +4342,29 @@ app.post('/api/webhooks/:token/sounds', webhookLimiter, express.json({ limit: '1
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const modLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Rate limit exceeded' } });
 
+// Moderation over REST has to answer the same questions the socket handlers
+// do, or it is a way around them. userHasPermission above counts a role held
+// in ONE channel as if it were server-wide, and nothing here compared ranks,
+// so a moderator of a single channel could ban, mute or kick anyone on the
+// server short of an admin, including moderators above them. Use the socket
+// layer's own permission helpers (scope-aware, overrides, thresholds) and its
+// rank rule: you can only act on someone strictly below you.
+let _modPerms = null;
+function modPerms() {
+  if (!_modPerms) _modPerms = require('./src/socketHandlers/permissions')(require('./src/database').getDb());
+  return _modPerms;
+}
+function modOutranks(actor, targetId, channelId = null) {
+  if (verifyAdminFromDb(actor)) return true;
+  return modPerms().getUserEffectiveLevel(targetId, channelId) < modPerms().getUserEffectiveLevel(actor.id, channelId);
+}
+
 // Helper: get authenticated user from Bearer token with admin/mod check
-function getModUser(req, permission) {
+function getModUser(req, permission, channelId = null) {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return { error: 'Unauthorized', status: 401 };
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, permission)) {
+  if (!verifyAdminFromDb(user) && !modPerms().userHasPermission(user.id, permission, channelId)) {
     return { error: 'Insufficient permissions', status: 403 };
   }
   return { user };
@@ -4338,20 +4372,23 @@ function getModUser(req, permission) {
 
 // POST /api/moderation/kick
 app.post('/api/moderation/kick', modLimiter, express.json({ limit: '16kb' }), (req, res) => {
-  const auth = getModUser(req, 'kick_user');
-  if (auth.error) return res.status(auth.status).json({ error: auth.error });
-
   const { getDb } = require('./src/database');
   const db = getDb();
   const { userId, channelCode, reason } = req.body;
+  // Kick is channel-scoped, so the permission is checked in that channel.
+  const kickCh = typeof channelCode === 'string' ? db.prepare('SELECT id FROM channels WHERE code = ?').get(channelCode) : null;
+  const auth = getModUser(req, 'kick_user', kickCh ? kickCh.id : null);
+  if (auth.error) return res.status(auth.status).json({ error: auth.error });
+
   if (!userId || !Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
   if (!channelCode || typeof channelCode !== 'string') return res.status(400).json({ error: 'channelCode required' });
 
-  const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(channelCode);
+  const channel = kickCh;
   if (!channel) return res.status(404).json({ error: 'Channel not found' });
 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!modOutranks(auth.user, userId, channel.id)) return res.status(403).json({ error: 'You can\'t kick a user with equal or higher rank' });
 
   db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channel.id, userId);
 
@@ -4381,6 +4418,7 @@ app.post('/api/moderation/ban', modLimiter, express.json({ limit: '16kb' }), (re
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot ban an admin' });
+  if (!modOutranks(auth.user, userId)) return res.status(403).json({ error: 'You can\'t ban a user with equal or higher rank' });
 
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
@@ -4429,6 +4467,7 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!modOutranks(auth.user, userId)) return res.status(403).json({ error: 'You can\'t mute a user with equal or higher rank' });
 
   const durationMs = Number.isInteger(duration) && duration > 0 ? duration * 60 * 1000 : 10 * 60 * 1000;
   const expiresAt = new Date(Date.now() + durationMs).toISOString();

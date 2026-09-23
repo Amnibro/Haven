@@ -159,6 +159,16 @@ module.exports = function register(socket, ctx) {
     io.to(`voice:${code}`).to(`channel:${code}`).emit('stream-viewers-update', { channelCode: code, streams });
   }
 
+  // The role-gate and use_voice checks voice-join applies. The rejoin and
+  // self-heal paths re-add a user to a room without going through voice-join,
+  // so they need the same gate or they become a way around it.
+  function voiceAccessAllowed(channelId) {
+    if (socket.user.isAdmin) return true;
+    if (ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId))) return false;
+    if (!socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', channelId)) return false;
+    return true;
+  }
+
   // ── Voice join ──────────────────────────────────────────
   socket.on('voice-join', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -766,8 +776,8 @@ module.exports = function register(socket, ctx) {
           const vMember = db.prepare(
             'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
           ).get(vch.id, socket.user.id);
-          if (!vMember) {
-            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — ${socket.user.username} is not a member of channel ${code}; signalling client to clean up.`);
+          if (!vMember || !voiceAccessAllowed(vch.id)) {
+            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — ${socket.user.username} is not a member of channel ${code} or lacks voice access; signalling client to clean up.`);
             socket.emit('voice-channel-gone', { code });
           } else {
             // Cancel any pending grace-period eviction for this slot.
@@ -918,6 +928,12 @@ module.exports = function register(socket, ctx) {
     ).get(vch.id, socket.user.id);
     if (!vMember) {
       console.warn(`[VoiceDiag] voice-rejoin from ${socket.user.username} (id=${socket.user.id}) on ${code} REJECTED — not a channel member`);
+      socket.emit('voice-channel-gone', { code });
+      return;
+    }
+    if (!voiceAccessAllowed(vch.id)) {
+      console.warn(`[VoiceDiag] voice-rejoin from ${socket.user.username} (id=${socket.user.id}) on ${code} REJECTED — no voice access`);
+      socket.emit('error-msg', 'You don\'t have permission to use voice chat');
       socket.emit('voice-channel-gone', { code });
       return;
     }
@@ -1161,6 +1177,15 @@ module.exports = function register(socket, ctx) {
     // client reconciles too. (#5347 follow-up.)
     for (const code of Array.from(voiceUsers.keys())) {
       const removed = pruneStaleVoiceUsers(code);
+      // Only channels this user may see: a private channel's code is its join
+      // secret, and DM call participants are nobody else's business.
+      if (typeof ctx.getVoiceCountViewerIds === 'function') {
+        const v = ctx.getVoiceCountViewerIds(code);
+        if (!(v && (v.members.has(socket.user.id) || (socket.user.isAdmin && v.nonDm)))) {
+          if (removed.length && voiceUsers.get(code)?.size) broadcastVoiceUsers(code);
+          continue;
+        }
+      }
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(serializeVoicePeer);

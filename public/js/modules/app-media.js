@@ -4891,6 +4891,11 @@ _showImageContextMenu(e, src, opts = {}) {
       this._openLightbox(src, opts.viewImage);
       return;
     } else if (action === 'open') {
+      if (/^(blob|data):/i.test(src)) {
+        this._hideImageContextMenu();
+        this._openLocalImageInNewTab(src);
+        return;
+      }
       window.open(src, '_blank', 'noopener,noreferrer');
     } else if (action === 'hide') {
       this._hideImage(src);
@@ -4921,6 +4926,36 @@ _showImageContextMenu(e, src, opts = {}) {
     document.addEventListener('click', closer, true);
     document.addEventListener('contextmenu', closer, true);
   }, 0);
+},
+
+// A blob:/data: URL opened top-level becomes a document on this origin, and
+// its type is whatever the blob says. A decrypted DM image carries the
+// sender's chosen type (image/svg+xml is allowed), so opening it raw would run
+// the sender's SVG as a same-origin page. Only ever open raster bytes;
+// anything else is redrawn to PNG first.
+async _openLocalImageInNewTab(src) {
+  try {
+    let blob = await (await fetch(src)).blob();
+    if (!/^image\/(png|jpeg|gif|webp|avif|bmp)$/i.test(blob.type)) {
+      const tmpUrl = URL.createObjectURL(blob);
+      try {
+        const im = new Image();
+        im.src = tmpUrl;
+        await im.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = im.naturalWidth || 1;
+        canvas.height = im.naturalHeight || 1;
+        canvas.getContext('2d').drawImage(im, 0, 0);
+        blob = await new Promise((res, rej) =>
+          canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob null')), 'image/png'));
+      } finally {
+        URL.revokeObjectURL(tmpUrl);
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch { /* undecodable or revoked: nothing safe to open */ }
 },
 
 _hideImageContextMenu() {
