@@ -28,8 +28,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Delete topic in Edit post (#5690).** A gallery card is nearly all
   picture, and right-clicking the picture gets the image menu, so deleting
   a topic was hard to find.
+- **Roles and channels across the Discord bridge.** A role or channel
+  mentioned on Discord used to arrive in Haven as a string of digits; it
+  arrives as @Role and #channel now, and a Discord channel paired with a
+  Haven one shows as a link to it. With Allow pings on, an @Role pings both
+  sides together: from Discord it lights up the Haven role of the same
+  name, and from Haven it pings the Discord role, as long as that role is
+  one anybody on Discord may mention. A #channel from Haven reaches Discord
+  as a link too.
 
 ### Fixed
+- **A message refused as too long was lost (#5691).** It comes back into
+  the message box now so it can be trimmed. The usual cause was an
+  encrypted DM: the server measured it after encryption, which makes it
+  longer, so a DM well under the limit could be refused. The limit is
+  measured on what was typed now.
 - **A custom theme set as the server default could load no theme at all.** A file
   theme is stored as `file:<name>.theme.css`, and a name given without that prefix
   was applied as an unknown built-in: the page loaded no stylesheet and nothing
