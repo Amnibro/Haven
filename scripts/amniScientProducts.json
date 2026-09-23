@@ -16,25 +16,27 @@
         {
           "name": "A desktop that feels familiar",
           "desc": "Start menu, bottom bar, folders, printers and NTFS drives work the way you expect.",
-          "image": "amni-scient-site/assets/os/desktop.png"
+          "image": "product-shots/amni-os/01-a-desktop-that-feels-familiar.png"
         },
         {
           "name": "Control",
           "desc": "Drivers, updates, printers and colours in one panel.",
-          "image": "amni-scient-site/assets/os/control.png"
+          "image": "product-shots/amni-os/02-control.png"
         },
         {
           "name": "Guided installer",
           "desc": "A branded installer that walks you through it.",
-          "image": "amni-scient-site/assets/os/installer.png"
+          "image": "product-shots/amni-os/03-guided-installer.png"
         },
         {
           "name": "Games and local AI",
-          "desc": "Steam, Proton, Wine and Lutris, plus Ollama with one-click GPU setup."
+          "desc": "Steam, Proton, Wine and Lutris, plus Ollama with one-click GPU setup.",
+          "image": "product-shots/amni-os/04-games-and-local-ai.png"
         },
         {
           "name": "Restore and apps",
-          "desc": "Snapshots you can boot from GRUB; Discover, Flathub and distroboxes for apps."
+          "desc": "Snapshots you can boot from GRUB; Discover, Flathub and distroboxes for apps.",
+          "image": "product-shots/amni-os/05-restore-and-apps.png"
         }
       ]
     },
@@ -46,20 +48,22 @@
         {
           "name": "Frosted-glass desktop",
           "desc": "UEFI boot straight to a GPU-composited desktop.",
-          "image": "amni-scient-site/assets/core/desktop.jpg"
+          "image": "product-shots/amni-core/01-frosted-glass-desktop.png"
         },
         {
           "name": "Universal binaries",
           "desc": "PE, ELF and Mach-O run on the kernel, no VM.",
-          "image": "Amni-Core/screenshots/wine_native_gui_gdi_drawing.png"
+          "image": "product-shots/amni-core/02-universal-binaries.png"
         },
         {
           "name": "Built from zero",
-          "desc": "Its own bootloader, kernel, drivers and window system."
+          "desc": "Its own bootloader, kernel, drivers and window system.",
+          "image": "product-shots/amni-core/03-built-from-zero.png"
         },
         {
           "name": "Modern crypto and integrity",
-          "desc": "ChaCha20-Poly1305 and an integrity-checked boot."
+          "desc": "ChaCha20-Poly1305 and an integrity-checked boot.",
+          "image": "product-shots/amni-core/04-modern-crypto-and-integrity.png"
         }
       ]
     },
@@ -71,24 +75,27 @@
         {
           "name": "Browser viewer",
           "desc": "Control a machine from any browser, nothing to install.",
-          "image": "amni-scient-site/assets/connect/Screenshot 2026-04-17 105657.png"
+          "image": "product-shots/amni-connect/01-browser-viewer.png"
         },
         {
           "name": "Custom room codes and clipboard sync",
           "desc": "Ephemeral rooms and two-way clipboard.",
-          "image": "amni-scient-site/assets/connect/Screenshot 2026-04-17 105239.png"
+          "image": "product-shots/amni-connect/02-custom-room-codes-and-clipboard-sync.png"
         },
         {
           "name": "End-to-end encrypted",
-          "desc": "DTLS-SRTP; the signalling server never sees a frame."
+          "desc": "DTLS-SRTP; the signalling server never sees a frame.",
+          "image": "product-shots/amni-connect/03-end-to-end-encrypted.png"
         },
         {
           "name": "Self-hostable signalling",
-          "desc": "A small Node server on any VPS, Pi or LAN box."
+          "desc": "A small Node server on any VPS, Pi or LAN box.",
+          "image": "product-shots/amni-connect/04-self-hostable-signalling.png"
         },
         {
           "name": "Adaptive quality",
-          "desc": "Bitrate follows the link, with a signal indicator."
+          "desc": "Bitrate follows the link, with a signal indicator.",
+          "image": "product-shots/amni-connect/05-adaptive-quality.png"
         }
       ]
     },
@@ -100,12 +107,12 @@
         {
           "name": "Zero telemetry",
           "desc": "It only contacts the pages you navigate to.",
-          "image": "amni-scient-site/assets/browse/Screenshot 2026-04-17 110302.png"
+          "image": "product-shots/amni-browse/01-zero-telemetry.png"
         },
         {
           "name": "Built-in ad blocker",
           "desc": "Ads, pixels and fingerprinting blocked at the navigation layer.",
-          "image": "amni-scient-site/assets/browse/Screenshot 2026-04-17 110316.png"
+          "image": "product-shots/amni-browse/02-built-in-ad-blocker.png"
         },
         {
           "name": "Bring your own vault",
@@ -125,20 +132,22 @@
         {
           "name": "Two ways to look",
           "desc": "Nested treemap or sunburst, coloured by type, age or size.",
-          "image": "amni-scient-site/assets/space/treemap.png"
+          "image": "product-shots/amni-space/01-two-ways-to-look.png"
         },
         {
           "name": "Finds the fat",
-          "desc": "Caches, build output, duplicates and the biggest files."
+          "desc": "Caches, build output, duplicates and the biggest files.",
+          "image": "product-shots/amni-space/02-finds-the-fat.png"
         },
         {
           "name": "An AI that asks first",
           "desc": "A local or cloud model proposes a plan; nothing happens until you approve.",
-          "image": "Amni-Space/backups/preview_all.png"
+          "image": "product-shots/amni-space/03-an-ai-that-asks-first.png"
         },
         {
           "name": "Nothing vanishes",
-          "desc": "Deletes go to the Recycle Bin and every run can be undone."
+          "desc": "Deletes go to the Recycle Bin and every run can be undone.",
+          "image": "product-shots/amni-space/04-nothing-vanishes.png"
         }
       ]
     },
@@ -150,22 +159,22 @@
         {
           "name": "HUD dashboard",
           "desc": "Voice, sessions and skills at a glance.",
-          "image": "amni-scient-site/assets/adam/hud.png"
+          "image": "product-shots/amni-ai/01-hud-dashboard.png"
         },
         {
           "name": "Chat that streams locally",
           "desc": "Local chat with maths and diagram rendering.",
-          "image": "amni-scient-site/assets/adam/chat.png"
+          "image": "product-shots/amni-ai/02-chat-that-streams-locally.png"
         },
         {
           "name": "Socratic coach",
           "desc": "A coach mode that asks you the questions.",
-          "image": "amni-scient-site/assets/adam/coach.png"
+          "image": "product-shots/amni-ai/03-socratic-coach.png"
         },
         {
           "name": "Live widgets",
           "desc": "System stats and live data at a glance.",
-          "image": "amni-scient-site/assets/adam/widget.png"
+          "image": "product-shots/amni-ai/04-live-widgets.png"
         }
       ]
     },
@@ -177,27 +186,27 @@
         {
           "name": "All at once",
           "desc": "The same question to every seat in parallel, compared blind.",
-          "image": "amni-scient-site/assets/braid/shot-all.jpg"
+          "image": "product-shots/braid/01-all-at-once.png"
         },
         {
           "name": "One at a time",
           "desc": "Each seat reads the last and extends, pushes back or fixes it.",
-          "image": "amni-scient-site/assets/braid/shot-one.jpg"
+          "image": "product-shots/braid/02-one-at-a-time.png"
         },
         {
           "name": "Squads",
           "desc": "Builders against attackers at the same table.",
-          "image": "amni-scient-site/assets/braid/shot-squads.jpg"
+          "image": "product-shots/braid/03-squads.png"
         },
         {
           "name": "Your accounts, not a token meter",
           "desc": "Uses the CLIs you already signed into.",
-          "image": "amni-scient-site/assets/braid/shot-flows.jpg"
+          "image": "product-shots/braid/04-your-accounts-not-a-token-meter.png"
         },
         {
           "name": "Permissions per seat",
           "desc": "Plan, Edit or Bypass: set each seat's rights before the round.",
-          "image": "amni-scient-site/assets/braid/shot-perms.jpg"
+          "image": "product-shots/braid/05-permissions-per-seat.png"
         }
       ]
     },
@@ -209,22 +218,22 @@
         {
           "name": "Agentic tool loop",
           "desc": "Reads, writes and runs on its own for up to 15 iterations.",
-          "image": "amni-scient-site/assets/code/Thinking.png"
+          "image": "product-shots/amni-code/01-agentic-tool-loop.png"
         },
         {
           "name": "Any provider",
           "desc": "Adam, Gemini, Grok, GPT, Claude, Ollama, or your subscription.",
-          "image": "amni-scient-site/assets/code/Settings.png"
+          "image": "product-shots/amni-code/02-any-provider.png"
         },
         {
           "name": "Integrated terminal",
           "desc": "Runs builds, tests and git, and feeds the output back.",
-          "image": "amni-scient-site/assets/code/terminal.png"
+          "image": "product-shots/amni-code/03-integrated-terminal.png"
         },
         {
           "name": "Diffs and history",
           "desc": "Highlighted diffs and a persistent chat.",
-          "image": "amni-scient-site/assets/code/Response.png"
+          "image": "product-shots/amni-code/04-diffs-and-history.png"
         }
       ]
     },
@@ -236,19 +245,22 @@
         {
           "name": "Hugging Face search",
           "desc": "Search live, pick a quant, load it.",
-          "image": "amni-scient-site/assets/llm/ss_loader.png"
+          "image": "product-shots/amni-llm/01-hugging-face-search.png"
         },
         {
           "name": "Fully client-side",
-          "desc": "WASM inference; nothing goes to a server."
+          "desc": "WASM inference; nothing goes to a server.",
+          "image": "product-shots/amni-llm/02-fully-client-side.png"
         },
         {
           "name": "Local files",
-          "desc": "Drop a .gguf in from disk."
+          "desc": "Drop a .gguf in from disk.",
+          "image": "product-shots/amni-llm/03-local-files.png"
         },
         {
           "name": "WebLLM-compatible API",
-          "desc": "chatCompletions.create and chatStream() work as-is."
+          "desc": "chatCompletions.create and chatStream() work as-is.",
+          "image": "product-shots/amni-llm/04-webllm-compatible-api.png"
         }
       ]
     },
@@ -260,21 +272,22 @@
         {
           "name": "Live stream, not a transcript",
           "desc": "Thinking, tool calls and the answer arrive as they happen.",
-          "image": "grok-remote/docs/screenshots/01-hero-desktop-grok.png"
+          "image": "product-shots/grok-remote/01-live-stream-not-a-transcript.png"
         },
         {
           "name": "Organised sessions",
           "desc": "Sessions filed by where they came from.",
-          "image": "grok-remote/docs/screenshots/02-command-deck.png"
+          "image": "product-shots/grok-remote/02-organised-sessions.png"
         },
         {
           "name": "Pair with one QR",
-          "desc": "Scan once for a 30-day key; every request is key-gated."
+          "desc": "Scan once for a 30-day key; every request is key-gated.",
+          "image": "product-shots/grok-remote/03-pair-with-one-qr.png"
         },
         {
           "name": "Skills a tap away",
           "desc": "Every installed skill in a slash palette.",
-          "image": "grok-remote/docs/screenshots/05-skills-sheet.png"
+          "image": "product-shots/grok-remote/04-skills-a-tap-away.png"
         }
       ]
     },
@@ -286,22 +299,22 @@
         {
           "name": "Real-time chat",
           "desc": "Live messages and typing indicators.",
-          "image": "amni-scient-site/assets/haven/Screenshot_34.png"
+          "image": "product-shots/amni-haven/01-real-time-chat.png"
         },
         {
           "name": "Channels",
           "desc": "A channel sidebar with unread badges.",
-          "image": "amni-scient-site/assets/haven/Screenshot_33.png"
+          "image": "product-shots/amni-haven/02-channels.png"
         },
         {
           "name": "Any Haven server",
           "desc": "Connect to any self-hosted Haven with an invite code.",
-          "image": "amni-scient-site/assets/haven/Screenshot_32.png"
+          "image": "product-shots/amni-haven/03-any-haven-server.png"
         },
         {
           "name": "Voice, video and encrypted DMs",
           "desc": "Peer-to-peer calls and end-to-end encrypted direct messages.",
-          "image": "amni-scient-site/assets/haven/Screenshot_35.png"
+          "image": "product-shots/amni-haven/04-voice-video-and-encrypted-dms.png"
         }
       ]
     },
@@ -313,27 +326,27 @@
         {
           "name": "A feed, not an algorithm",
           "desc": "Your people's posts, no ads, no ranking.",
-          "image": "amni-scient-site/symphony/img/symphony-feed.png"
+          "image": "product-shots/symphony/01-a-feed-not-an-algorithm.png"
         },
         {
           "name": "Chat, calls and rooms",
           "desc": "Group and 1:1 chat, voice, video and screen share.",
-          "image": "amni-scient-site/symphony/img/symphony-chat.png"
+          "image": "product-shots/symphony/02-chat-calls-and-rooms.png"
         },
         {
           "name": "Stories and polls",
           "desc": "24-hour stories, polls and swipe-to-reply.",
-          "image": "amni-scient-site/symphony/img/symphony-stories.png"
+          "image": "product-shots/symphony/03-stories-and-polls.png"
         },
         {
           "name": "End-to-end encrypted",
           "desc": "The relay can't read anything.",
-          "image": "amni-scient-site/symphony/img/symphony-desktop.png"
+          "image": "product-shots/symphony/04-end-to-end-encrypted.png"
         },
         {
           "name": "Make it yours",
           "desc": "Whole-app themes and wallpapers.",
-          "image": "Symphony/docs/shots/ui_v19_style_studio.png"
+          "image": "product-shots/symphony/05-make-it-yours.png"
         }
       ]
     },
@@ -345,22 +358,22 @@
         {
           "name": "Mail",
           "desc": "Unified inbox, threads, search and rules.",
-          "image": "amni-scient-site/assets/mail/inbox.png"
+          "image": "product-shots/amni-mail/01-mail.png"
         },
         {
           "name": "Clean review",
           "desc": "Adam proposes a cleanup; you review it, with undo.",
-          "image": "amni-scient-site/assets/mail/clean.png"
+          "image": "product-shots/amni-mail/02-clean-review.png"
         },
         {
           "name": "Subscriptions",
           "desc": "One-click unsubscribe.",
-          "image": "amni-scient-site/assets/mail/subs.png"
+          "image": "product-shots/amni-mail/03-subscriptions.png"
         },
         {
           "name": "Calendar",
           "desc": "Month grid, .ics invites and RSVP.",
-          "image": "amni-scient-site/assets/mail/calendar.png"
+          "image": "product-shots/amni-mail/04-calendar.png"
         }
       ]
     },
@@ -372,16 +385,17 @@
         {
           "name": "HedgeDoc 1.x and 2",
           "desc": "History, create, edit, pin, delete and revisions.",
-          "image": "amni-scient-site/assets/hedgedoc/editor.png"
+          "image": "product-shots/hedgedoc/01-hedgedoc-1-x-and-2.png"
         },
         {
           "name": "Your login, your cookies",
           "desc": "Local, LDAP, guest, cookie or API token; no phone-home.",
-          "image": "amni-scient-site/assets/hedgedoc/connect.png"
+          "image": "product-shots/hedgedoc/02-your-login-your-cookies.png"
         },
         {
           "name": "Scient themes",
-          "desc": "Twelve Amni-Scient palettes plus Light."
+          "desc": "Twelve Amni-Scient palettes plus Light.",
+          "image": "product-shots/hedgedoc/03-scient-themes.png"
         }
       ]
     },
@@ -393,16 +407,17 @@
         {
           "name": "Swipe on-device",
           "desc": "Full-vocabulary glide typing scored on the phone.",
-          "image": "amni-type/verify-keys-now.jpg"
+          "image": "product-shots/amni-type/01-swipe-on-device.png"
         },
         {
           "name": "Look and feel",
           "desc": "Haptics, swipe trail and key gap, your way.",
-          "image": "amni-type/verify-look-now.jpg"
+          "image": "product-shots/amni-type/02-look-and-feel.png"
         },
         {
           "name": "Zero telemetry",
-          "desc": "The dictionary and language model never leave the phone."
+          "desc": "The dictionary and language model never leave the phone.",
+          "image": "product-shots/amni-type/03-zero-telemetry.png"
         }
       ]
     },
@@ -414,15 +429,17 @@
         {
           "name": "1024-bit blocks",
           "desc": "A block cipher over a 16x16 grid, 16 rounds.",
-          "image": "amni-scient-site/assets/crypt/feature_graphic.png"
+          "image": "product-shots/amni-crypt/01-1024-bit-blocks.png"
         },
         {
           "name": "Tamper detection",
-          "desc": "HMAC-SHA512 verifies every file."
+          "desc": "HMAC-SHA512 verifies every file.",
+          "image": "product-shots/amni-crypt/02-tamper-detection.png"
         },
         {
           "name": "Cipher seal and QR",
-          "desc": "A visual certificate you can verify by QR."
+          "desc": "A visual certificate you can verify by QR.",
+          "image": "product-shots/amni-crypt/03-cipher-seal-and-qr.png"
         }
       ]
     },
@@ -434,22 +451,22 @@
         {
           "name": "A galaxy you can fly",
           "desc": "80,000 particles with spiral arms, from galaxy scale down to a single system.",
-          "image": "amni-scient-site/assets/explore/ss_galaxy.png"
+          "image": "product-shots/amni-explore/01-a-galaxy-you-can-fly.png"
         },
         {
           "name": "Real exoplanets",
           "desc": "500 NASA exoplanets among 3,000+ systems.",
-          "image": "amni-scient-site/assets/explore/ss_solar_system.png"
+          "image": "product-shots/amni-explore/02-real-exoplanets.png"
         },
         {
           "name": "Planet detail",
           "desc": "3D planets with tilt, moons, atmosphere and data.",
-          "image": "amni-scient-site/assets/explore/ss_planet.png"
+          "image": "product-shots/amni-explore/03-planet-detail.png"
         },
         {
           "name": "Rocket engineering lab",
           "desc": "Build rockets part by part, then launch them.",
-          "image": "Amni-Explore/tests/shots/02-lab.png"
+          "image": "product-shots/amni-explore/04-rocket-engineering-lab.png"
         }
       ]
     },
@@ -461,25 +478,27 @@
         {
           "name": "Fasteners and seals",
           "desc": "Bolt torque and preload, springs, O-ring glands.",
-          "image": "amni-scient-site/assets/calc/ss_seal_analysis.png"
+          "image": "product-shots/amni-calc/01-fasteners-and-seals.png"
         },
         {
           "name": "Reference library",
           "desc": "Materials database and surface finishes.",
-          "image": "amni-scient-site/assets/calc/ss_materials_1.png"
+          "image": "product-shots/amni-calc/02-reference-library.png"
         },
         {
           "name": "Fluids and thermal",
           "desc": "Moody/Colebrook, pump NPSH, heat transfer, cycles.",
-          "image": "Amni-Calc/scripts/shots/cycles.png"
+          "image": "product-shots/amni-calc/03-fluids-and-thermal.png"
         },
         {
           "name": "Stress and structural",
-          "desc": "Mohr's circle, beams, columns, shafts and welds."
+          "desc": "Mohr's circle, beams, columns, shafts and welds.",
+          "image": "product-shots/amni-calc/04-stress-and-structural.png"
         },
         {
           "name": "Electrical",
-          "desc": "3-phase, NEC ampacity, electrochemistry, battery sizing."
+          "desc": "3-phase, NEC ampacity, electrochemistry, battery sizing.",
+          "image": "product-shots/amni-calc/05-electrical.png"
         }
       ]
     },
@@ -491,20 +510,22 @@
         {
           "name": "Tracing",
           "desc": "Letters, numbers, shapes and cursive with stroke guidance.",
-          "image": "amni-scient-site/assets/learn/ss_prek.png"
+          "image": "product-shots/amni-learn/01-tracing.png"
         },
         {
           "name": "Brain gym",
           "desc": "Sudoku, puzzles and cards for adults.",
-          "image": "amni-scient-site/assets/learn/ss_brain.png"
+          "image": "product-shots/amni-learn/02-brain-gym.png"
         },
         {
           "name": "Maths and life skills",
-          "desc": "Arithmetic, word problems, clocks, money and music."
+          "desc": "Arithmetic, word problems, clocks, money and music.",
+          "image": "product-shots/amni-learn/03-maths-and-life-skills.png"
         },
         {
           "name": "Private by design",
-          "desc": "Everything stays on the device, with a printable daily packet."
+          "desc": "Everything stays on the device, with a printable daily packet.",
+          "image": "product-shots/amni-learn/04-private-by-design.png"
         }
       ]
     },
@@ -516,15 +537,17 @@
         {
           "name": "Map layers",
           "desc": "Temperature, dew point, precipitation, pressure, wind, CAPE, UV and more.",
-          "image": "amni-scient-site/assets/weather/tile-weather.jpg"
+          "image": "product-shots/amni-weather/01-map-layers.png"
         },
         {
           "name": "Point forecast",
-          "desc": "Drop a pin for now, hourly, 7-day, surf and air quality."
+          "desc": "Drop a pin for now, hourly, 7-day, surf and air quality.",
+          "image": "product-shots/amni-weather/02-point-forecast.png"
         },
         {
           "name": "Hazards",
-          "desc": "NWS and GDACS alerts on the map."
+          "desc": "NWS and GDACS alerts on the map.",
+          "image": "product-shots/amni-weather/03-hazards.png"
         }
       ]
     },
@@ -536,12 +559,12 @@
         {
           "name": "Thirteen realms",
           "desc": "Find the canvases, beat the tyrants, repaint the world.",
-          "image": "amni-scient-site/assets/game/tile-game.jpg"
+          "image": "product-shots/amni-game/01-thirteen-realms.png"
         },
         {
           "name": "A hub world to explore",
           "desc": "Every realm branches from the glade.",
-          "image": "Amni-Game-v2/screenshot.png"
+          "image": "product-shots/amni-game/02-a-hub-world-to-explore.png"
         },
         {
           "name": "Boss arenas",
@@ -558,20 +581,22 @@
         {
           "name": "Constellation",
           "desc": "A 3D graph of your life.",
-          "image": "amni-scient-site/assets/life/ss_constellation.jpg"
+          "image": "product-shots/amni-life/01-constellation.png"
         },
         {
           "name": "Timeline",
-          "desc": "Your life laid out by year."
+          "desc": "Your life laid out by year.",
+          "image": "product-shots/amni-life/02-timeline.png"
         },
         {
           "name": "Globe",
           "desc": "Geo-tagged memories on a sphere.",
-          "image": "Amni-Life/test/v05_globe.png"
+          "image": "product-shots/amni-life/03-globe.png"
         },
         {
           "name": "Calendar",
-          "desc": "A year-by-month grid."
+          "desc": "A year-by-month grid.",
+          "image": "product-shots/amni-life/04-calendar.png"
         }
       ]
     },
@@ -583,15 +608,17 @@
         {
           "name": "Cross-reference graph",
           "desc": "Pick a verse and its connections glow gold.",
-          "image": "amni-scient-site/assets/prayer/ss_map.png"
+          "image": "product-shots/amni-prayer/01-cross-reference-graph.png"
         },
         {
           "name": "Tandem mode",
-          "desc": "Text, the 3D view and linked passages side by side."
+          "desc": "Text, the 3D view and linked passages side by side.",
+          "image": "product-shots/amni-prayer/02-tandem-mode.png"
         },
         {
           "name": "Seventeen layouts",
-          "desc": "Solar, golden ratio, double helix, cross and more."
+          "desc": "Solar, golden ratio, double helix, cross and more.",
+          "image": "product-shots/amni-prayer/03-seventeen-layouts.png"
         }
       ]
     }
