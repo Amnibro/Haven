@@ -1679,6 +1679,13 @@ function ssoAuthLimiter(req, res, next) {
   ssoRateLimitStore.set(ip, timestamps);
 
   if (timestamps.length >= maxAttempts) {
+    // The caller is a page on another origin. Without the same CORS header the
+    // route sets, its browser hides this 429 behind a generic network error and
+    // the user is told the home server is unreachable.
+    if (req.headers.origin) {
+      res.set('Access-Control-Allow-Origin', req.headers.origin);
+      res.set('Vary', 'Origin');
+    }
     return res.status(429).json({ error: 'Too many attempts. Try again in a minute.' });
   }
   timestamps.push(now);

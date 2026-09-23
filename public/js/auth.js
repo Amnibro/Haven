@@ -674,6 +674,8 @@
     let ssoWaiting = false;
     let ssoPollTimer = null;
     let ssoTimeoutTimer = null;
+    let ssoLastAttempt = 0;
+    const SSO_MIN_ATTEMPT_GAP_MS = 13000;
 
     const ssoConnectBtn   = document.getElementById('sso-connect-btn');
     const ssoStepServer   = document.getElementById('sso-step-server');
@@ -733,12 +735,22 @@
       hideError();
     };
 
+    // The home server's /SSO/authenticate allows 5 attempts per minute per IP,
+    // and older servers answer the 429 without CORS headers, which the browser
+    // reports as a network error ("Could not reach home server"). Polling every
+    // 2s burned that budget in ten seconds, so the check made once the user had
+    // approved was refused. Space every attempt (poll or on-focus) so at most 5
+    // land in any minute.
     const tryFetchSsoProfile = async (surfaceError = false) => {
       if (!ssoWaiting || !ssoAuthCode || !ssoServerUrl) return false;
+      if (Date.now() - ssoLastAttempt < SSO_MIN_ATTEMPT_GAP_MS) return false;
+      ssoLastAttempt = Date.now();
       try {
         const res = await fetch(`${ssoServerUrl}/api/auth/SSO/authenticate?authCode=${encodeURIComponent(ssoAuthCode)}`);
         if (!res.ok) {
-          if (surfaceError && res.status !== 404) {
+          // 404 = not approved yet, 429 = over the home server's budget; both
+          // clear up on a later attempt, so keep waiting rather than erroring.
+          if (surfaceError && res.status !== 404 && res.status !== 429) {
             const data = await res.json().catch(() => ({}));
             showError(data.error || t('auth.sso.failed'));
           }
@@ -795,6 +807,8 @@
       ssoWaiting = true;
       ssoConnectBtn.textContent = t('auth.sso.waiting');
       ssoConnectBtn.disabled = true;
+      // Nothing can be approved yet; start the attempt spacing from now.
+      ssoLastAttempt = Date.now();
 
       stopSsoPolling();
       ssoPollTimer = setInterval(() => {
@@ -807,7 +821,7 @@
         ssoConnectBtn.textContent = t('auth.sso.connect');
         ssoConnectBtn.disabled = false;
         showError(t('auth.sso.timeout'));
-      }, 90000);
+      }, 180000); // room to log in on the home server first (common on phones)
     });
 
     // When user returns to this tab after approving on home server
