@@ -826,8 +826,14 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
   try {
     const auth = req.headers.authorization || '';
     if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
-    let decoded;
-    try { decoded = jwt.verify(auth.slice(7), JWT_SECRET); } catch { return res.status(401).json({ error: 'Unauthorized' }); }
+    // A live session token only (verifyToken refuses the two-factor
+    // challenge token, linking tokens and revoked sessions), and only for an
+    // account that is actually being made to change its password. With a
+    // bare signature check, the challenge token set a new password and came
+    // back with a full session, second factor never entered; and any stolen
+    // session could change the password without knowing the current one.
+    const decoded = verifyToken(auth.slice(7));
+    if (!decoded || !decoded.id) return res.status(401).json({ error: 'Unauthorized' });
     const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
     // (#5300 DM-preservation) Optional escape hatch from the forced
     // change-password screen: if the user remembers their original password
@@ -837,8 +843,9 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
     // history is preserved. The newPassword field is ignored in this path.
     const oldPassword = typeof req.body.oldPassword === 'string' ? req.body.oldPassword : '';
     const db = getDb();
-    const user = db.prepare('SELECT id, username, is_admin, display_name, password_version, password_hash FROM users WHERE id = ?').get(decoded.id);
+    const user = db.prepare('SELECT id, username, is_admin, display_name, password_version, password_hash, must_change_password FROM users WHERE id = ?').get(decoded.id);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    if (!user.must_change_password) return res.status(403).json({ error: 'No password change is pending for this account' });
 
     let preserved = false;
     if (oldPassword) {
@@ -1405,9 +1412,15 @@ function _currentPwv(userId) {
   return pwv;
 }
 
-function verifyToken(token) {
+// Only a session token is a session. The two-factor challenge token (issued
+// once the password checks out, before the code is entered) and the
+// account-linking token are signed with the same key, and anything that
+// takes them as a login walks straight past the second factor. Callers that
+// really do want a linking token say so with { allowScoped: true }.
+function verifyToken(token, opts = {}) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded && (decoded.purpose || decoded.scope) && !opts.allowScoped) return null;
     if (decoded && decoded.id && !decoded.purpose) {
       const current = _currentPwv(decoded.id);
       if (current !== null && (decoded.pwv || 1) !== current) return null;
