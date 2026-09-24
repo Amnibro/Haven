@@ -21,8 +21,9 @@ module.exports = function register(socket, ctx) {
     if (!role || !role.link_channel_access) return;
 
     const col = direction === 'grant' ? 'grant_on_promote' : 'revoke_on_demote';
+    // Never a DM, whatever an older version let someone store.
     const channelRows = db.prepare(
-      `SELECT channel_id FROM role_channel_access WHERE role_id = ? AND ${col} = 1`
+      `SELECT rca.channel_id FROM role_channel_access rca JOIN channels c ON c.id = rca.channel_id WHERE rca.role_id = ? AND rca.${col} = 1 AND c.is_dm = 0`
     ).all(roleId);
 
     if (direction === 'grant') {
@@ -648,7 +649,9 @@ module.exports = function register(socket, ctx) {
           finalPerms = requested;
         } else {
           const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
-          const callerPerms = new Set(getUserPermissions(socket.user.id));
+          // Server-wide permissions only: one held in a single channel does not
+          // entitle the editor to put it on a role.
+          const callerPerms = new Set(getUserGlobalPermissions(socket.user.id));
           const controllable = (p) => !adminOnlyPerms.includes(p) && (callerPerms.has('*') || callerPerms.has(p));
           const lockedKept = currentPerms.filter(p => !controllable(p));
           const controlledChosen = requested.filter(p => controllable(p));
@@ -710,6 +713,13 @@ module.exports = function register(socket, ctx) {
 
     const roleId = isInt(data.roleId) ? data.roleId : null;
     if (!roleId) return;
+    if (!socket.user.isAdmin) {
+      // Same line as editing: a role at or above your level is not yours to
+      // delete (deleting one demotes everyone who holds it).
+      const target = db.prepare('SELECT level FROM roles WHERE id = ?').get(roleId);
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      if (!target || target.level >= myLevel) return cb({ error: `You can only delete roles below your level (${myLevel})` });
+    }
 
     // Read the holders first: after the delete there is nothing left to ask.
     const heldBy = db.prepare('SELECT DISTINCT user_id FROM user_roles WHERE role_id = ?').all(roleId);
@@ -849,7 +859,7 @@ module.exports = function register(socket, ctx) {
     for (const o of overrides) { if (o.allowed) current.add(o.permission); else current.delete(o.permission); }
 
     const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
-    const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserPermissions(socket.user.id));
+    const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserGlobalPermissions(socket.user.id));
     const canTouch = (p) => socket.user.isAdmin || (!adminOnlyPerms.includes(p) && (callerPermsSet.has('*') || callerPermsSet.has(p)));
     const requested = data.permissions.filter(p => typeof p === 'string' && VALID_ROLE_PERMS.includes(p) && canTouch(p));
     const known = Array.isArray(data.known)
@@ -1276,14 +1286,29 @@ module.exports = function register(socket, ctx) {
     const roleId = isInt(data.roleId) ? data.roleId : null;
     if (!roleId) return cb({ error: 'Invalid role ID' });
     if (!Array.isArray(data.access)) return cb({ error: 'Invalid access data' });
+    // Channel access decides which channels a role's holders are put in, so
+    // it follows the role hierarchy, never names a DM, and for anyone but an
+    // admin only names channels the editor is in themselves. Otherwise it was
+    // a way into private channels, and into other people's DMs.
+    if (!socket.user.isAdmin) {
+      const target = db.prepare('SELECT level FROM roles WHERE id = ?').get(roleId);
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      if (!target || target.level >= myLevel) return cb({ error: `You can only edit roles below your level (${myLevel})` });
+    }
+    const accessChannelOk = (chId) => {
+      const ch = db.prepare('SELECT id, is_dm FROM channels WHERE id = ?').get(chId);
+      if (!ch || ch.is_dm) return false;
+      if (socket.user.isAdmin) return true;
+      return !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(chId, socket.user.id);
+    };
 
     try {
       const txn = db.transaction(() => {
         db.prepare('DELETE FROM role_channel_access WHERE role_id = ?').run(roleId);
         const ins = db.prepare('INSERT INTO role_channel_access (role_id, channel_id, grant_on_promote, revoke_on_demote) VALUES (?, ?, ?, ?)');
-        data.access.forEach(a => {
+        data.access.slice(0, 500).forEach(a => {
           const chId = isInt(a.channelId) ? a.channelId : null;
-          if (!chId) return;
+          if (!chId || !accessChannelOk(chId)) return;
           const grant = a.grant ? 1 : 0;
           const revoke = a.revoke ? 1 : 0;
           if (grant || revoke) ins.run(roleId, chId, grant, revoke);
@@ -1313,9 +1338,14 @@ module.exports = function register(socket, ctx) {
     const role = db.prepare('SELECT * FROM roles WHERE id = ?').get(roleId);
     if (!role) return cb({ error: 'Role not found' });
     if (!role.link_channel_access) return cb({ error: 'Channel access linking is not enabled for this role' });
+    if (!socket.user.isAdmin) {
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      if (role.level >= myLevel) return cb({ error: `You can only edit roles below your level (${myLevel})` });
+    }
 
     const roleUsers = db.prepare('SELECT DISTINCT user_id FROM user_roles WHERE role_id = ?').all(roleId);
-    const grantChannels = db.prepare('SELECT channel_id FROM role_channel_access WHERE role_id = ? AND grant_on_promote = 1').all(roleId);
+    // Never into a DM, whatever an older version stored.
+    const grantChannels = db.prepare('SELECT rca.channel_id FROM role_channel_access rca JOIN channels c ON c.id = rca.channel_id WHERE rca.role_id = ? AND rca.grant_on_promote = 1 AND c.is_dm = 0').all(roleId);
     const ins = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
 
     const txn = db.transaction(() => {
