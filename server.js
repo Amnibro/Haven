@@ -530,17 +530,20 @@ if (!sslCert && !sslKey) {
 
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
 
-app.use(helmet({
+// unpkg serves any package anyone publishes to npm, so as a script source it
+// is a way around the CSP. Only the Flash games page loads from it (the Ruffle
+// player), so only that page's policy lists it.
+const cspFor = (withUnpkg) => helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-eval'", "'wasm-unsafe-eval'", "blob:", "https://www.youtube.com", "https://w.soundcloud.com", "https://unpkg.com", "https://challenges.cloudflare.com"],  // last host: opt-in Turnstile CAPTCHA on registration
+      scriptSrc: ["'self'", "'unsafe-eval'", "'wasm-unsafe-eval'", "blob:", "https://www.youtube.com", "https://w.soundcloud.com", ...(withUnpkg ? ["https://unpkg.com"] : []), "https://challenges.cloudflare.com"],  // last host: opt-in Turnstile CAPTCHA on registration
       styleSrc: ["'self'", "'unsafe-inline'"],  // inline styles (fonts are self-hosted, no third-party CDN)
       imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],  // link preview OG images + GIPHY (http: for local/self-hosted services)
       connectSrc: ["'self'", "ws:", "wss:", "https:"],  // Socket.IO + cross-origin health checks
       mediaSrc: ["'self'", "blob:", "data:", "https:", "http:"],  // WebRTC audio + notification sounds + link preview video embeds
       fontSrc: ["'self'"],  // self-hosted fonts only (see /public/fonts)
-      workerSrc: ["'self'", "blob:", "https://unpkg.com"],  // service worker + Ruffle WebAssembly workers
+      workerSrc: ["'self'", "blob:", ...(withUnpkg ? ["https://unpkg.com"] : [])],  // service worker + Ruffle WebAssembly workers
       objectSrc: ["'none'"],
       frameSrc: ["'self'", "https://open.spotify.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://w.soundcloud.com", "https://challenges.cloudflare.com"],  // Listen Together embeds + game iframes + Turnstile widget
       baseUri: ["'self'"],
@@ -553,7 +556,10 @@ app.use(helmet({
   crossOriginOpenerPolicy: false,    // needed for WebRTC
   hsts: useSSL ? { maxAge: 31536000, includeSubDomains: false } : false, // force HTTPS for 1 year (only sent when we actually serve it)
   referrerPolicy: false, // set dynamically from the admin-configurable cache in the middleware below
-}));
+});
+const appCsp = cspFor(false);
+const flashCsp = cspFor(true);
+app.use((req, res, next) => (req.path.startsWith('/games/') ? flashCsp : appCsp)(req, res, next));
 
 // Additional security headers helmet doesn't cover
 app.use((req, res, next) => {
