@@ -360,15 +360,21 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Push Notifications ──────────────────────────────────
-  socket.on('push-subscribe', (data) => {
+  socket.on('push-subscribe', async (data) => {
     if (!data || typeof data !== 'object') return;
     const { endpoint, keys } = data;
-    if (typeof endpoint !== 'string' || !endpoint) return;
+    if (typeof endpoint !== 'string' || !endpoint || endpoint.length > 2048) return;
     if (!keys || typeof keys !== 'object') return;
-    if (typeof keys.p256dh !== 'string' || !keys.p256dh) return;
-    if (typeof keys.auth !== 'string' || !keys.auth) return;
+    if (typeof keys.p256dh !== 'string' || !keys.p256dh || keys.p256dh.length > 512) return;
+    if (typeof keys.auth !== 'string' || !keys.auth || keys.auth.length > 512) return;
 
     try { const u = new URL(endpoint); if (u.protocol !== 'https:') return; } catch { return; }
+    // The server posts to this address for every notification, so it has to
+    // be a public push service: a client-chosen endpoint on the server's own
+    // network was a way to make it send requests there.
+    try {
+      await require('../webhookCallback').resolveCallbackDestination(endpoint);
+    } catch { return; }
 
     try {
       // One endpoint is one browser/device, and only one account is signed
