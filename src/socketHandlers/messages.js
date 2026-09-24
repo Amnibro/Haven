@@ -1201,7 +1201,15 @@ module.exports = function register(socket, ctx) {
     // as a separate socket event by the client. They've already consumed one
     // slow-mode slot (via the text message). Skip the check so the media
     // arrives with its parent message instead of being blocked. (#5342)
-    if (channel.slow_mode_interval > 0 && !socket.user.isAdmin && getUserEffectiveLevel(socket.user.id, channel.id) < 25 && !data.bundled) {
+    // The flag comes from the client, so it only counts for an attachment
+    // (optionally after a persona prefix) that follows the sender's own
+    // counted message within a minute; set on anything, it skipped slow mode.
+    const _trimmed = String(content || '').trim();
+    const _mediaOnly = /^(?:::\S+\s+)?(?:spoiler-img:)?\/uploads\/\S+$/i.test(_trimmed) ||
+      /^(?:::\S+\s+)?\[file:[^\]]+\]\(\/uploads\//i.test(_trimmed) || (channel.is_dm && data.encrypted === true);
+    const _lastCounted = slowModeTracker.get(`slow:${socket.user.id}:${channel.id}`) || 0;
+    const _bundledOk = data.bundled === true && _mediaOnly && Date.now() - _lastCounted < 60000;
+    if (channel.slow_mode_interval > 0 && !socket.user.isAdmin && getUserEffectiveLevel(socket.user.id, channel.id) < 25 && !_bundledOk) {
       const slowKey = `slow:${socket.user.id}:${channel.id}`;
       const now = Date.now();
       const lastSent = slowModeTracker.get(slowKey) || 0;
