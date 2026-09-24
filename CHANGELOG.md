@@ -11,7 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.13.0] - 2026-09-24
+
+A second security release, following up the review in 4.12.0. DMs no longer
+go out unencrypted without asking, a contact's changed encryption key is
+flagged, and the backup of your DM key can be locked with a passphrase the
+server never sees (Settings > Encryption). Private channel codes change when
+someone is removed, and forged proxy addresses are ignored. **If your server
+sits behind Cloudflare's proxy (not the tunnel), set TRUST_PROXY=1** or every
+visitor looks like the same person to the login limits. Also: a too-long
+thread reply is no longer lost. Run npm install (Start Haven.bat and start.sh
+do it for you): the Flash games player is a new dependency.
 
 ### Security
 - **DMs ask before anything goes out unencrypted.** A DM went out readable
