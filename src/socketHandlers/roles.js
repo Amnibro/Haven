@@ -199,6 +199,15 @@ module.exports = function register(socket, ctx) {
   // The role/emoji pairs of a menu, checked for this user: known roles only,
   // no repeats, and nothing at or above the poster's own level. Shared by
   // posting a menu and editing one (#5644).
+  // A role manager acts only on people ranked below them: never an admin
+  // (getUserEffectiveLevel reports 100 for one), never a peer or anyone
+  // higher. The interface hid those people; the server did not check, so a
+  // Mod could strip or reshape another Mod's or a higher staffer's roles.
+  function canActOnUser(targetId, channelId = null) {
+    if (socket.user.isAdmin) return true;
+    return getUserEffectiveLevel(targetId, channelId) < getUserEffectiveLevel(socket.user.id, channelId);
+  }
+
   function roleMenuEntries(raw) {
     const emojiOk = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]{1,8}$/u;
     const wanted = Array.isArray(raw) ? raw.slice(0, 20) : [];
@@ -1068,6 +1077,9 @@ module.exports = function register(socket, ctx) {
     }
 
     const channelId = isInt(data.channelId) ? data.channelId : null;
+    if (!canActOnUser(userId, channelId)) {
+      return cb({ error: 'You can only change roles for people ranked below you' });
+    }
 
     let assignLevel = role.level;
     if (data.customLevel !== undefined && data.customLevel !== null) {
@@ -1110,7 +1122,9 @@ module.exports = function register(socket, ctx) {
         // This prevents a non-admin promoter from escalating perms via a
         // crafted customPerms payload.
         const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
-        const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserPermissions(socket.user.id));
+        // Server-wide permissions only: one held in a single channel is not
+        // the caller's to hand out across the server.
+        const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserGlobalPermissions(socket.user.id));
         const customPerms = data.customPerms.filter(p => {
           if (typeof p !== 'string') return false;
           if (!VALID_ROLE_PERMS.includes(p)) return false;
@@ -1179,13 +1193,20 @@ module.exports = function register(socket, ctx) {
     }
 
     const channelId = isInt(data.channelId) ? data.channelId : null;
+    if (!canActOnUser(userId, channelId)) {
+      return cb({ error: 'You can only change roles for people ranked below you' });
+    }
 
     applyRoleChannelAccess(roleId, userId, 'revoke');
 
+    // The per-person overrides that came with the role go with it; left
+    // behind, they kept granting (or denying) its permissions without it.
     if (channelId) {
       db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id = ?').run(userId, roleId, channelId);
+      db.prepare('DELETE FROM user_role_perms WHERE user_id = ? AND role_id = ? AND channel_id = ?').run(userId, roleId, channelId);
     } else {
       db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').run(userId, roleId);
+      db.prepare('DELETE FROM user_role_perms WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').run(userId, roleId);
     }
 
     const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
@@ -1329,6 +1350,9 @@ module.exports = function register(socket, ctx) {
     }
 
     const channelId = isInt(data.channelId) ? data.channelId : null;
+    if (!canActOnUser(userId, channelId)) {
+      return cb({ error: 'You can only change roles for people ranked below you' });
+    }
     try {
       if (channelId) {
         db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id = ?').run(userId, roleId, channelId);
