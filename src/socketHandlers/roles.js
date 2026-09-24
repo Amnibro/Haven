@@ -234,6 +234,14 @@ module.exports = function register(socket, ctx) {
   function canManageRoleMenus() {
     return socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_roles') || userHasPermission(socket.user.id, 'promote_user');
   }
+  // A posted menu is a message that keeps its author's name, so only its
+  // author, an admin, or someone in its channel who outranks the author may
+  // read it back for editing or change it.
+  function canEditRoleMenu(channelId, createdBy) {
+    if (socket.user.isAdmin || createdBy === socket.user.id) return true;
+    if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
+    return getUserEffectiveLevel(socket.user.id) > getUserEffectiveLevel(createdBy || 0);
+  }
   function messageReactions(messageId) {
     return db.prepare(`
       SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
@@ -247,11 +255,11 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object' || !isInt(data.messageId)) return cb({ error: 'Invalid request' });
     if (!canManageRoleMenus()) return cb({ error: 'You lack permission to hand out roles' });
     const row = db.prepare(`
-      SELECT rm.message_id, rm.title, rm.data, m.content, c.code
+      SELECT rm.message_id, rm.title, rm.data, rm.channel_id, rm.created_by, m.content, c.code
       FROM role_menus rm JOIN messages m ON m.id = rm.message_id JOIN channels c ON c.id = rm.channel_id
       WHERE rm.message_id = ?
     `).get(data.messageId);
-    if (!row) return cb({ error: 'That role menu is gone' });
+    if (!row || !canEditRoleMenu(row.channel_id, row.created_by)) return cb({ error: 'That role menu is gone' });
     let roles = [];
     try { roles = JSON.parse(row.data || '{}').roles || []; } catch { /* malformed row: start empty */ }
     cb({
@@ -268,7 +276,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object' || !isInt(data.messageId)) return cb({ error: 'Invalid request' });
     if (!canManageRoleMenus()) return cb({ error: 'You lack permission to hand out roles' });
     const row = db.prepare('SELECT rm.*, c.code FROM role_menus rm JOIN channels c ON c.id = rm.channel_id WHERE rm.message_id = ?').get(data.messageId);
-    if (!row) return cb({ error: 'That role menu is gone' });
+    if (!row || !canEditRoleMenu(row.channel_id, row.created_by)) return cb({ error: 'That role menu is gone' });
     const parsed = roleMenuEntries(data.roles);
     if (parsed.error) return cb({ error: parsed.error });
     const { sanitizeText } = require('./helpers');
