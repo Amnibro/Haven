@@ -31,6 +31,7 @@
 
 const WebSocket = require('ws');
 const automod = require('./automod');
+const { stripRoleMentions } = require('./socketHandlers/helpers');
 
 const API = 'https://discord.com/api/v10';
 const USER_AGENT = 'DiscordBot (https://github.com/ancsemi/Haven, 1.0)';
@@ -808,7 +809,13 @@ function collectComponentMedia(node, into, depth = 0) {
  * than a lookup, and an unresolved id is left as-is rather than guessed at.
  */
 function translateDiscordMentions(text, msg) {
-  let out = String(text || '');
+  // Anything typed as plain text that would ping a group on Haven is
+  // defused first: @everyone and @here unless Discord itself says the
+  // message pinged everyone (it only does when the author was allowed to),
+  // and a Haven role's name typed out. A real Discord role mention,
+  // translated below and only when pings are allowed, is the one way a
+  // Discord message pings a Haven role.
+  let out = neutralizeLiteralPings(String(text || ''), msg && msg.mention_everyone === true);
   for (const u of (msg && msg.mentions) || []) {
     if (!u || !u.id) continue;
     const name = u.global_name || u.username;
@@ -820,6 +827,15 @@ function translateDiscordMentions(text, msg) {
     pingRoles: deps ? boolSetting('ferry_allow_mentions', false) : false,
     havenChannelFor: pairedHavenChannelName,
   });
+}
+
+function neutralizeLiteralPings(text, discordPingedEveryone = false) {
+  let out = String(text || '');
+  if (!discordPingedEveryone) out = out.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
+  if (deps && deps.db) {
+    try { out = stripRoleMentions(out, deps.db.prepare('SELECT name FROM roles').all().map(r => r.name)); } catch { /* roles table optional in tests */ }
+  }
+  return out;
 }
 
 /**

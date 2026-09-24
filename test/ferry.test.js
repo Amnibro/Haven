@@ -176,6 +176,8 @@ test('a stream announcement bot relays its link and thumbnail next to the text',
   // Reading the embed only for empty bodies relayed the ping line alone.
   const live = {
     content: '@everyone Streamer is now live!',
+    // Discord sets this when the ping really went out (the bot may ping everyone).
+    mention_everyone: true,
     embeds: [{
       type: 'rich',
       title: 'Streamer is playing Spira Speedruns',
@@ -322,6 +324,13 @@ const GUILD = {
   channelNames: new Map([['555555555555555555', 'general-chat'], ['666666666666666666', 'clips']]),
   channels: new Map(),
 };
+
+test('@everyone from Discord pings only when Discord says it did', () => {
+  const typed = buildHavenContent({ content: 'hey @everyone and @here', attachments: [], embeds: [] });
+  assert.equal(typed, 'hey @\u200Beveryone and @\u200Bhere');
+  const real = buildHavenContent({ content: '@everyone meeting now', mention_everyone: true, attachments: [], embeds: [] });
+  assert.equal(real, '@everyone meeting now');
+});
 
 test('Discord role and channel mentions arrive as names', () => {
   const out = translateDiscordRefs('<@&222222222222222222> <@&333333333333333333> <#555555555555555555> <#666666666666666666> <#999999999999999999>', GUILD, {
