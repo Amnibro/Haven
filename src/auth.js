@@ -2118,10 +2118,17 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
 
     // Keep the display name in step with the directory, but never clobber a
     // name the user set inside Haven.
+    // The provider's name goes through the same rules as one typed in
+    // Haven (letters, numbers, underscores, spaces); one that fails them is
+    // simply not used, and the username stands in.
     if (!user.display_name && typeof claims.name === 'string' && claims.name.trim()) {
       try {
-        db.prepare('UPDATE users SET display_name = ? WHERE id = ?')
-          .run(sanitizeString(claims.name, 32), user.id);
+        const { normalizeDisplayName } = require('./socketHandlers/helpers');
+        const dn = normalizeDisplayName(claims.name);
+        if (dn && dn.value) {
+          db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(dn.value, user.id);
+          user.display_name = dn.value;
+        }
       } catch { /* non-critical */ }
     }
 
@@ -2157,7 +2164,7 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
 <body>
 <script>
   try {
-    sessionStorage.setItem('haven_oidc_handoff', ${JSON.stringify(handoff)});
+    sessionStorage.setItem('haven_oidc_handoff', ${JSON.stringify(handoff).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')});
   } catch (e) {}
   location.replace('/?oidc=1');
 </script>
