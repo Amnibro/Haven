@@ -756,11 +756,24 @@ const uploadStorage = multer.diskStorage({
 // on disk, so anyone signed in could fill the disk with one request (the
 // avatar route needs no permission at all). Each route still checks its own,
 // often smaller, limit afterwards. Multer removes a file cut off this way.
-function uploadCapBytesFor(req) {
+function uploadCapMbFor(req) {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   const mb = user ? uploadCapMb(user) : 25;
-  return (Number.isFinite(mb) && mb > 0 ? mb : 25) * 1024 * 1024 + 1;
+  return Number.isFinite(mb) && mb > 0 ? mb : 25;
+}
+// A multer wrapper that cuts the upload off at the caller's cap and, when it
+// does, reports it the way the routes do ("File too large (max N MB)").
+function cappedUpload(options) {
+  return {
+    single: (field) => (req, res, next) => {
+      const capMb = uploadCapMbFor(req);
+      multer({ ...options, limits: { fileSize: capMb * 1024 * 1024 + 1 } }).single(field)(req, res, (err) => {
+        if (err && err.code === 'LIMIT_FILE_SIZE') err.message = `File too large (max ${capMb} MB)`;
+        next(err);
+      });
+    }
+  };
 }
 const imageOnlyFilter = (req, file, cb) => {
   if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) cb(null, true);
@@ -768,22 +781,11 @@ const imageOnlyFilter = (req, file, cb) => {
 };
 
 // Image-only upload
-const upload = {
-  single: (field) => (req, res, next) => multer({
-    storage: uploadStorage,
-    limits: { fileSize: uploadCapBytesFor(req) },
-    fileFilter: imageOnlyFilter
-  }).single(field)(req, res, next)
-};
+const upload = cappedUpload({ storage: uploadStorage, fileFilter: imageOnlyFilter });
 
 // General file upload — no MIME restrictions; safety enforced via
 // Content-Disposition: attachment on non-image downloads (see /uploads handler)
-const fileUpload = {
-  single: (field) => (req, res, next) => multer({
-    storage: uploadStorage,
-    limits: { fileSize: uploadCapBytesFor(req) }
-  }).single(field)(req, res, next)
-};
+const fileUpload = cappedUpload({ storage: uploadStorage });
 
 const botAudioUpload = multer({
   storage: multer.diskStorage({
