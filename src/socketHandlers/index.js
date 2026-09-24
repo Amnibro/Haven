@@ -744,6 +744,14 @@ function setupSocketHandlers(io, db, opts = {}) {
     return removed;
   }
 
+  // The channels a user belongs to, for the voice counts sent on request:
+  // members only, for the same reason broadcastVoiceUsers sends to members.
+  function voiceCodesVisibleTo(userId) {
+    return new Set(db.prepare(
+      'SELECT c.code FROM channels c JOIN channel_members cm ON cm.channel_id = c.id WHERE cm.user_id = ?'
+    ).all(userId).map(r => r.code));
+  }
+
   // ── broadcastVoiceUsers ─────────────────────────────────
   function broadcastVoiceUsers(code) {
     pruneStaleVoiceUsers(code);
@@ -768,7 +776,10 @@ function setupSocketHandlers(io, db, opts = {}) {
         })
       : [];
     io.to(`voice:${code}`).to(`channel:${code}`).emit('voice-users-update', { channelCode: code, users });
-    io.except('bot-sockets').emit('voice-count-update', {
+    // Only the channel's members hear about its voice room. The code in this
+    // event is the channel's join code, so sending it to every socket leaked
+    // private channels' codes, and who was on which DM call.
+    io.to(`channel:${code}`).except('bot-sockets').emit('voice-count-update', {
       code, count: users.length,
       users: users.map(u => ({
         id: u.id, username: u.username,
@@ -1869,8 +1880,10 @@ function setupSocketHandlers(io, db, opts = {}) {
     // here because that races the upcoming voice-rejoin broadcast and can
     // re-seed every other client's sidebar with this socket's pre-rejoin
     // view of the room. (#5347 v3.15.4.)
+    const _visibleVoice = voiceCodesVisibleTo(socket.user.id);
     for (const code of Array.from(voiceUsers.keys())) {
       pruneStaleVoiceUsers(code);
+      if (!_visibleVoice.has(code)) continue;
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(u => ({
@@ -2223,7 +2236,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
       parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships,
       // Broadcast helpers
-      broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers, emitDmPresence,
+      broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode,
       // Push / webhooks

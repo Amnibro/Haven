@@ -22,7 +22,7 @@ function readNativeScreenClient(data) {
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getUserHighestRole,
-          broadcastVoiceUsers, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
+          broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
           pruneStaleVoiceUsers, getMentionableChannelMembers,
           getActiveMusicSyncState, getMusicQueuePayload, botAudioManager } = ctx;
   const { channelUsers, voiceUsers, voiceLastActivity, activeMusic,
@@ -737,6 +737,8 @@ module.exports = function register(socket, ctx) {
     }
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     const channelId = channel ? channel.id : null;
+    // A voice roster is for the channel's own members.
+    if (!channel || !db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return;
     const room = voiceUsers.get(code);
     const users = room
       ? Array.from(room.values()).map(u => serializeVoiceRosterUser(u, channelId))
@@ -1176,9 +1178,12 @@ module.exports = function register(socket, ctx) {
     // Prune ghost entries first so the requesting client doesn't replace
     // an already-clean sidebar with a stale snapshot. If pruning actually
     // removed users, also rebroadcast the fresh roster so every other
-    // client reconciles too. (#5347 follow-up.)
+    // client reconciles too. (#5347 follow-up.) Only rooms of channels the
+    // user belongs to are reported.
+    const visible = voiceCodesVisibleTo(socket.user.id);
     for (const code of Array.from(voiceUsers.keys())) {
       const removed = pruneStaleVoiceUsers(code);
+      if (!visible.has(code)) { if (removed.length) broadcastVoiceUsers(code); continue; }
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(serializeVoicePeer);
