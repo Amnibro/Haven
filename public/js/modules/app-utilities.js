@@ -4035,6 +4035,8 @@ _sendThreadMessage() {
   const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
 
   if (content) {
+    // Kept so a reply refused as too long comes back to the box (#5691).
+    this._lastSendDraft = { text: input.value, code: parentId, at: Date.now(), inputId: 'thread-input' };
     this.socket.emit('send-thread-message', { parentId, content, replyTo }, (resp) => {
       if (resp && resp.error) {
         this._showToast(resp.error, 'error');

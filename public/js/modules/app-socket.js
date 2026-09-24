@@ -150,7 +150,9 @@ _restoreRefusedDraft(msg) {
   if (!d || typeof msg !== 'string' || !/^Message too long/.test(msg)) return;
   this._lastSendDraft = null;
   const inputId = d.inputId || 'message-input';
-  const open = inputId === 'dm-pip-input' ? this._activeDMPip : this.currentChannel;
+  const open = inputId === 'dm-pip-input' ? this._activeDMPip
+    : inputId === 'thread-input' ? this._activeThreadParent
+    : this.currentChannel;
   if (Date.now() - d.at > 15000 || d.code !== open) return;
   const input = document.getElementById(inputId);
   if (!input || input.value.trim()) return;
