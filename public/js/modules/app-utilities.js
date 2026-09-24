@@ -2706,12 +2706,12 @@ _renderReactions(msgId, reactions) {
     const usersJson = this._escapeHtml(JSON.stringify(g.users.map(u => u.username)));
     // Check if it's a custom emoji
     const customMatch = g.emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-    let emojiDisplay = g.emoji;
+    let emojiDisplay = this._escapeHtml(g.emoji);
     if (customMatch && this.customEmojis) {
       const ce = this._findNamedEmoji(customMatch[1]);
       if (ce) emojiDisplay = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji reaction-custom-emoji">`;
     }
-    return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${names}">${emojiDisplay} ${g.users.length}</button>`;
+    return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${this._escapeHtml(names)}">${emojiDisplay} ${g.users.length}</button>`;
   }).join('');
 
   return `<div class="reactions-row">${badges}</div>`;
