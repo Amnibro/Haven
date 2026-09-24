@@ -742,7 +742,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName },
+      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, e2ePassphrase: !!user.e2e_passphrase },
       // (#5300) Set when an admin reset this user's password to a temp
       // placeholder AND the user just logged in with that temp pw. Client
       // must funnel the user through a mandatory change-password screen
@@ -878,7 +878,7 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
       JWT_SECRET,
       _sessionSignOptions()
     );
-    res.json({ token: freshToken, user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName }, preserved });
+    res.json({ token: freshToken, user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, e2ePassphrase: !!user.e2e_passphrase }, preserved });
   } catch (err) {
     console.error('change-password-required error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -1001,7 +1001,7 @@ router.post('/totp/validate', authLimiter, async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName },
+      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, e2ePassphrase: !!user.e2e_passphrase },
       mustChangePassword: !!challenge.mustChangePassword
     });
   } catch (err) {
@@ -1531,7 +1531,8 @@ router.post('/recover-account', authLimiter, async (req, res) => {
         public_key = NULL,
         encrypted_private_key = NULL,
         e2e_key_salt = NULL,
-        e2e_secret = NULL
+        e2e_secret = NULL,
+        e2e_passphrase = 0
       WHERE id = ?
     `).run(newHash, newVersion, user.id);
     _forgetPwv(user.id);
@@ -1615,7 +1616,7 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
     );
 
     console.log(`🔑 Admin recovery used for "${user.username}" from ${req.ip || 'unknown'}`);
-    res.json({ token, user: { id: user.id, username: user.username, isAdmin: true, displayName } });
+    res.json({ token, user: { id: user.id, username: user.username, isAdmin: true, displayName, e2ePassphrase: !!user.e2e_passphrase } });
   } catch (err) {
     console.error('Admin recovery error:', err);
     res.status(500).json({ error: 'Server error' });

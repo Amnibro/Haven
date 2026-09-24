@@ -3739,8 +3739,9 @@ _setupUI() {
       this.socket.auth.token = data.token;
 
       // Re-wrap E2E private key with a key derived from the NEW password
-      // so the server backup can be unlocked with the new credentials
-      if (this.e2e && this.e2e.ready && typeof HavenE2E !== 'undefined') {
+      // so the server backup can be unlocked with the new credentials. A
+      // backup locked with a separate passphrase stays as it is.
+      if (this.e2e && this.e2e.ready && typeof HavenE2E !== 'undefined' && !this.user?.e2ePassphrase) {
         try {
           const newWrap = await HavenE2E.deriveWrappingKey(np);
           await this.e2e.reWrapKey(this.socket, newWrap);
@@ -3765,6 +3766,12 @@ _setupUI() {
       hint.classList.add('error');
     }
   });
+
+  // ── Encryption passphrase ────────────────────────────
+  // The E2E key backup is normally locked with the login password, which the
+  // server receives at every sign-in. A passphrase of the user's own keeps the
+  // server from ever being able to open it.
+  this._setupE2EPassphraseSection();
 
   // ── Two-Factor Authentication settings ─────────────
   const totpStatusText     = document.getElementById('totp-status-text');
@@ -7629,6 +7636,107 @@ _maybeRevealConcealed(e) {
     return true;
   }
   return false;
+},
+
+// Settings > Encryption: lock the E2E key backup with a passphrase of the
+// user's own instead of the login password, or go back. SSO accounts already
+// use a passphrase and guests have no password, so neither sees it.
+_setupE2EPassphraseSection() {
+  const section = document.getElementById('section-e2e-passphrase');
+  if (!section) return;
+  const navItem = document.querySelector('.settings-nav-item[data-target="section-e2e-passphrase"]');
+  const stateEl = document.getElementById('e2e-pp-state');
+  const statusEl = document.getElementById('e2e-pp-status');
+  const newEl = document.getElementById('e2e-pp-new');
+  const confirmEl = document.getElementById('e2e-pp-confirm');
+  const saveBtn = document.getElementById('e2e-pp-save-btn');
+  const revertArea = document.getElementById('e2e-pp-revert-area');
+  const pwEl = document.getElementById('e2e-pp-password');
+  const revertBtn = document.getElementById('e2e-pp-revert-btn');
+
+  const say = (msg, kind) => {
+    statusEl.textContent = msg || '';
+    statusEl.className = 'settings-hint' + (kind ? ` ${kind}` : '');
+  };
+  const render = () => {
+    const hidden = !!(this.user?.isSso || this.user?.isGuest);
+    section.style.display = hidden ? 'none' : '';
+    if (navItem) navItem.style.display = hidden ? 'none' : '';
+    const own = !!this.user?.e2ePassphrase;
+    stateEl.textContent = t(own ? 'settings.e2e_passphrase.state_own' : 'settings.e2e_passphrase.state_password');
+    saveBtn.textContent = t(own ? 'settings.e2e_passphrase.change_btn' : 'settings.e2e_passphrase.save_btn');
+    revertArea.style.display = own ? '' : 'none';
+  };
+  // session-info fills in the flags after this runs, so it re-renders too.
+  this._renderE2EPassphraseSection = render;
+  render();
+
+  // Either change re-locks the backup, so the key has to be unlocked first.
+  const whenUnlocked = (fn) => {
+    if (this.e2e?.ready) return fn();
+    say(t('settings.e2e_passphrase.unlock_first'), 'error');
+    this._requireE2E(fn);
+  };
+
+  // The backup is locked with wrapKey from now on, and the server list sync
+  // (which shares the key) follows it.
+  const adopt = async (wrapKey, own) => {
+    await this.e2e.reWrapKey(this.socket, wrapKey, { separatePassphrase: own });
+    this.user.e2ePassphrase = own;
+    try { localStorage.setItem('haven_user', JSON.stringify(this.user)); } catch { /* private mode */ }
+    this._e2eWrappingKey = wrapKey;
+    try { localStorage.setItem('haven_sync_key', wrapKey); } catch { /* private mode */ }
+    this._pushServerListToServer?.();
+    render();
+  };
+
+  saveBtn.addEventListener('click', () => {
+    const pass = newEl.value;
+    if (!pass || pass.length < 8) return say(t('settings.e2e_passphrase.too_short'), 'error');
+    if (pass !== confirmEl.value) return say(t('settings.e2e_passphrase.mismatch'), 'error');
+    whenUnlocked(async () => {
+      saveBtn.disabled = true;
+      say(t('settings.e2e_passphrase.saving'));
+      try {
+        await adopt(await HavenE2E.deriveWrappingKey(pass), true);
+        newEl.value = '';
+        confirmEl.value = '';
+        say('✅ ' + t('settings.e2e_passphrase.saved'), 'success');
+      } catch (err) {
+        console.warn('[E2E] Could not lock the backup with the passphrase:', err);
+        say(t('settings.e2e_passphrase.failed'), 'error');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  });
+
+  revertBtn.addEventListener('click', () => {
+    const password = pwEl.value;
+    if (!password) return say(t('settings.e2e_passphrase.enter_password'), 'error');
+    whenUnlocked(async () => {
+      revertBtn.disabled = true;
+      try {
+        // Checked first: a mistyped password would lock the backup with a
+        // key nobody can reproduce.
+        const res = await fetch('/api/auth/verify-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: this.user.username, password })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!data.valid) return say(t('settings.e2e_passphrase.wrong_password'), 'error');
+        await adopt(await HavenE2E.deriveWrappingKey(password), false);
+        pwEl.value = '';
+        say('✅ ' + t('settings.e2e_passphrase.reverted'), 'success');
+      } catch (err) {
+        console.warn('[E2E] Could not lock the backup with the password:', err);
+        say(t('settings.e2e_passphrase.failed'), 'error');
+      } finally {
+        revertBtn.disabled = false;
+      }
+    });
+  });
 },
 
 async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false, opts = {}) {

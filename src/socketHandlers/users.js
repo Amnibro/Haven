@@ -521,8 +521,17 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Encrypted key data too large');
     }
     try {
-      db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ? WHERE id = ?')
-        .run(encryptedKey, salt, socket.user.id);
+      // separatePassphrase says what this backup is locked with, when the
+      // client is switching between its login password and a passphrase of
+      // its own; the two are saved together so they never disagree.
+      if (typeof data.separatePassphrase === 'boolean') {
+        db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ?, e2e_passphrase = ? WHERE id = ?')
+          .run(encryptedKey, salt, data.separatePassphrase ? 1 : 0, socket.user.id);
+        socket.user.e2ePassphrase = data.separatePassphrase;
+      } else {
+        db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ? WHERE id = ?')
+          .run(encryptedKey, salt, socket.user.id);
+      }
       socket.emit('encrypted-key-stored');
     } catch (err) {
       console.error('Store encrypted key error:', err);

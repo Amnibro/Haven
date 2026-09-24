@@ -1229,12 +1229,13 @@ _showE2EPasswordModal() {
 
   // (#12) An SSO account has no Haven password — its key is wrapped with the
   // separate encryption passphrase set at first sign-in. Ask for that instead,
-  // or the prompt tells the user to enter a password they do not have.
-  if (this.user?.isSso) {
+  // or the prompt tells the user to enter a password they do not have. An
+  // account that chose its own encryption passphrase is asked for that too.
+  if (this._e2eUsesPassphrase()) {
     const titleEl = modal.querySelector('h3 span');
     const descEl = modal.querySelector('.e2e-pw-desc');
     if (titleEl) titleEl.textContent = t('platform.e2e.passphrase_required');
-    if (descEl) descEl.textContent = t('platform.e2e.passphrase_desc');
+    if (descEl) descEl.textContent = t(this.user?.isSso ? 'platform.e2e.passphrase_desc' : 'platform.e2e.passphrase_desc_own');
     input.placeholder = t('platform.e2e.passphrase_placeholder');
   }
 
@@ -1264,7 +1265,7 @@ async _submitE2EPassword() {
 
   const password = input.value;
   if (!password) {
-    errorEl.textContent = t(this.user?.isSso ? 'platform.e2e.enter_passphrase' : 'platform.e2e.enter_password');
+    errorEl.textContent = t(this._e2eUsesPassphrase() ? 'platform.e2e.enter_passphrase' : 'platform.e2e.enter_password');
     errorEl.style.display = 'block';
     return;
   }
@@ -1294,7 +1295,7 @@ async _submitE2EPassword() {
     // copy and no hash of it. Unwrapping the key IS the check: a wrong
     // passphrase fails the AES-GCM auth tag below, and init() leaves the
     // existing backup untouched rather than regenerating over it.
-    const data = this.user?.isSso
+    const data = this._e2eUsesPassphrase()
       ? { valid: true }
       : await (await fetch('/api/auth/verify-password', {
           method: 'POST',
@@ -1360,6 +1361,12 @@ async _submitE2EPassword() {
     submitBtn.disabled = false;
     submitBtn.textContent = t('platform.e2e.unlock');
   }
+},
+
+/** SSO accounts, and accounts that chose one, unlock E2E with a passphrase
+ *  the server never sees rather than with the login password. */
+_e2eUsesPassphrase() {
+  return !!(this.user?.isSso || this.user?.e2ePassphrase);
 },
 
 /**

@@ -1436,6 +1436,7 @@
 
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_account_security">Account &amp; Security</div>
           <div class="settings-nav-item" data-target="section-password">🔒 <span data-i18n="settings.nav.password">Password</span></div>
+          <div class="settings-nav-item" data-target="section-e2e-passphrase">🗝️ <span data-i18n="settings.nav.e2e_passphrase">Encryption</span></div>
           <div class="settings-nav-item" data-target="section-sessions">💻 <span data-i18n="settings.nav.sessions">Sessions</span></div>
           <div class="settings-nav-item" data-target="section-2fa">🔐 <span data-i18n="settings.nav.two_factor">Two-Factor</span></div>
           <div class="settings-nav-item" data-target="section-recovery">🔑 <span data-i18n="settings.nav.recovery">Recovery</span></div>
@@ -2094,6 +2095,29 @@
           </div>
           <button class="btn-sm btn-full" id="change-password-btn" data-i18n="settings.password_section.change_btn">Change Password</button>
           <small class="settings-hint" id="password-status"></small>
+        </div>
+      </div>
+
+      <!-- Encryption Passphrase Section -->
+      <div class="settings-section" id="section-e2e-passphrase">
+        <h5 class="settings-section-title">🗝️ <span data-i18n="settings.e2e_passphrase.title">Encryption Passphrase</span></h5>
+        <small class="settings-hint" data-i18n="settings.e2e_passphrase.hint">Your encrypted DMs use a key that is backed up on the server, so your other devices can use it too. Normally that backup is locked with your login password, which the server receives every time you sign in. Lock it with a separate passphrase instead and the server can never open it. You type the passphrase once on each new device, and nobody can reset it for you, including the server admin.</small>
+        <p class="settings-hint" id="e2e-pp-state" style="font-weight:600"></p>
+        <div class="password-change-form">
+          <div class="form-group compact">
+            <input type="password" id="e2e-pp-new" data-i18n-placeholder="settings.e2e_passphrase.new_placeholder" placeholder="New passphrase (8+ characters)" maxlength="256" autocomplete="new-password">
+          </div>
+          <div class="form-group compact">
+            <input type="password" id="e2e-pp-confirm" data-i18n-placeholder="settings.e2e_passphrase.confirm_placeholder" placeholder="Confirm passphrase" maxlength="256" autocomplete="new-password">
+          </div>
+          <button class="btn-sm btn-full" id="e2e-pp-save-btn" data-i18n="settings.e2e_passphrase.save_btn">Use This Passphrase</button>
+          <div id="e2e-pp-revert-area" style="display:none;margin-top:10px">
+            <div class="form-group compact">
+              <input type="password" id="e2e-pp-password" data-i18n-placeholder="settings.e2e_passphrase.password_placeholder" placeholder="Your login password" maxlength="128" autocomplete="current-password">
+            </div>
+            <button class="btn-sm btn-full" id="e2e-pp-revert-btn" data-i18n="settings.e2e_passphrase.revert_btn">Go Back to My Login Password</button>
+          </div>
+          <small class="settings-hint" id="e2e-pp-status"></small>
         </div>
       </div>
 

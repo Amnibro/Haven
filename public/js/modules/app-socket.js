@@ -170,6 +170,7 @@ _setupSocketListeners() {
     this.user.effectiveLevel = data.effectiveLevel || 0;
     this.user.permissions = data.permissions || [];
     this.user.globalPermissions = data.globalPermissions || [];
+    this._renderE2EPassphraseSection?.();
     if (this.voice && data.id) this.voice.localUserId = data.id;
     if (data.status) {
       this.userStatus = data.status;

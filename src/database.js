@@ -1235,6 +1235,17 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN e2e_secret TEXT DEFAULT NULL");
   }
 
+  // ── Migration: separate encryption passphrase ──
+  // 1 when the E2E key backup is locked with a passphrase of the user's own
+  // instead of their login password, which the server receives at every
+  // sign-in. The client then asks for the passphrase rather than deriving
+  // the key from the password.
+  try {
+    db.prepare("SELECT e2e_passphrase FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN e2e_passphrase INTEGER DEFAULT 0");
+  }
+
   // ── Migration: OIDC / SSO federated identity (#12) ──
   // A federated account is identified by the pair (issuer, subject), never by
   // email — an email can be reassigned inside a directory, `sub` cannot.
