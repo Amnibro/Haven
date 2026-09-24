@@ -794,20 +794,21 @@ function setupSocketHandlers(io, db, opts = {}) {
   // notice one you do not recognise, so it reduces to browser plus platform.
   function _describeUserAgent(ua) {
     if (!ua || typeof ua !== 'string') return 'Unknown device';
+    // The desktop app's user agent also names Chrome, so it is checked first.
     const browser =
-      /Edg\//.test(ua)                        ? 'Edge'
-      : /OPR\/|Opera/.test(ua)            ? 'Opera'
-      : /Firefox\//.test(ua)                  ? 'Firefox'
-      : /Chrome\//.test(ua)                   ? 'Chrome'
-      : /Safari\//.test(ua)                   ? 'Safari'
-      : /Haven|Electron/i.test(ua)              ? 'Haven Desktop'
+      /Haven|Electron/i.test(ua)                ? 'Haven Desktop'
+      : /\bEdg\//.test(ua)                      ? 'Edge'
+      : /\bOPR\/|\bOpera\b/.test(ua)            ? 'Opera'
+      : /\bFirefox\//.test(ua)                  ? 'Firefox'
+      : /\bChrome\//.test(ua)                   ? 'Chrome'
+      : /\bSafari\//.test(ua)                   ? 'Safari'
       : 'Browser';
     const platform =
-      /Android/.test(ua)                    ? 'Android'
-      : /iPhone|iPad|iOS/.test(ua)  ? 'iOS'
-      : /Windows/.test(ua)                  ? 'Windows'
-      : /Mac OS X|Macintosh/.test(ua)   ? 'macOS'
-      : /Linux/.test(ua)                    ? 'Linux'
+      /\bAndroid\b/.test(ua)                    ? 'Android'
+      : /\biPhone\b|\biPad\b|\biOS\b/.test(ua)  ? 'iOS'
+      : /\bWindows\b/.test(ua)                  ? 'Windows'
+      : /\bMac OS X\b|\bMacintosh\b/.test(ua)   ? 'macOS'
+      : /\bLinux\b/.test(ua)                    ? 'Linux'
       : '';
     return platform ? `${browser} on ${platform}` : browser;
   }
