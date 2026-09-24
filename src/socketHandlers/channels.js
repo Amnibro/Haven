@@ -933,7 +933,16 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Sub-channel not found');
     }
 
-    if (!_canManageSubsOf(channel.parent_channel_id)) {
+    // Deleting a sub-channel destroys its history, so create_channel alone is
+    // not enough: it takes delete_channel or managing that parent's
+    // sub-channels, and you have to be in the sub-channel you delete (a
+    // private one you cannot see is not yours to remove).
+    const _canDeleteSub = socket.user.isAdmin || (
+      !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id) &&
+      (userHasPermission(socket.user.id, 'delete_channel', channel.id) ||
+       userHasPermission(socket.user.id, 'manage_sub_channels', channel.parent_channel_id))
+    );
+    if (!_canDeleteSub) {
       return socket.emit('error-msg', 'You don\'t have permission to delete sub-channels');
     }
 
@@ -948,6 +957,9 @@ module.exports = function register(socket, ctx) {
       clearChannelRuntimeState(state, code);
       broadcastChannelLists();
       socket.emit('error-msg', 'Sub-channel deleted');
+      _audit({ actor: socket.user, action: 'channel_delete',
+        target_type: 'channel', target_id: channel.id, target_name: channel.name,
+        details: { code, sub_channel: true } });
     } catch (err) {
       console.error('Delete sub-channel error:', err);
       socket.emit('error-msg', 'Failed to delete sub-channel');
