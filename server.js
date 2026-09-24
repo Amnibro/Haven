@@ -4411,6 +4411,7 @@ app.post('/api/moderation/kick', modLimiter, express.json({ limit: '16kb' }), (r
       }
     }
   }
+  socketRuntime?.rotatePrivateCodesAfterRemoval?.(channel.id);
 
   res.json({ success: true, message: `Kicked ${target.username}` });
 });
@@ -4647,6 +4648,7 @@ app.post('/api/webhooks/:token/moderation/kick', webhookLimiter, express.json({ 
       }
     }
   }
+  socketRuntime?.rotatePrivateCodesAfterRemoval?.(channel.id);
   res.json({ success: true, message: `Kicked ${target.username}` });
 });
 

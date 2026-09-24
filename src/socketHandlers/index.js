@@ -1563,6 +1563,23 @@ function setupSocketHandlers(io, db, opts = {}) {
     } catch { /* column may not exist yet */ }
   }, 60 * 1000);
 
+  // Someone removed from a private channel still knows its code, and a code
+  // is enough to join. So removal rotates the code of the private channel
+  // and of its private sub-channels; members still inside are sent the new
+  // one by the rotation broadcast, and the removed person, already out of
+  // the room, is not. Call it after their memberships and rooms are gone.
+  function rotatePrivateCodesAfterRemoval(channelId) {
+    const rows = db.prepare(`
+      SELECT id, code FROM channels
+      WHERE (id = ? OR parent_channel_id = ?) AND is_dm = 0
+        AND (is_private = 1 OR code_visibility = 'private')
+    `).all(channelId, channelId);
+    for (const ch of rows) {
+      try { rotateChannelCode(ch.id, ch.code); } catch (err) { console.error('Code rotation after removal failed:', err.message); }
+    }
+    if (rows.length) broadcastChannelLists();
+  }
+
   function rotateChannelCode(channelId, oldCode) {
     const newCode = generateUniqueSharedCode(oldCode);
     if (persistChannelCodeRotation(db, channelId, oldCode, newCode)) automod.invalidate();
@@ -2242,7 +2259,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
-      broadcastStreamInfo, touchVoiceActivity, rotateChannelCode,
+      broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent,
       // Ferry (Discord bridge)
@@ -2424,7 +2441,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity, state, userHasPermission, getUserEffectiveLevel };
+  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext };

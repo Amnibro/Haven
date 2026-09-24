@@ -40,7 +40,7 @@ module.exports = function register(socket, ctx) {
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
     applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
-    rotateChannelCode, botAudioManager
+    rotateChannelCode, rotatePrivateCodesAfterRemoval, botAudioManager
   } = ctx;
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -1756,6 +1756,7 @@ module.exports = function register(socket, ctx) {
       channelRoom.delete(targetUserId);
       emitOnlineUsers(channel.code);
     }
+    if (typeof rotatePrivateCodesAfterRemoval === 'function') rotatePrivateCodesAfterRemoval(channelId);
     cb({ success: true });
     socket.emit('error-msg', `Removed ${targetUser.username} from #${channel.name}`);
   });

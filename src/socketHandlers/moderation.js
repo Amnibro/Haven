@@ -185,6 +185,10 @@ module.exports = function register(socket, ctx) {
       target_type: 'user', target_id: data.userId, target_name: targetName,
       details: { channelCode: code, reason: data.reason || null,
         scrubMessages: !!data.scrubMessages, scrubScope: data.scrubScope || null } });
+    // Last, since everything above still addresses the channel by its old
+    // code: a kicked person must not be able to walk back into a private
+    // channel with the code they already know.
+    if (kickCh && typeof ctx.rotatePrivateCodesAfterRemoval === 'function') ctx.rotatePrivateCodesAfterRemoval(kickCh.id);
   });
 
   // ── Ban user ────────────────────────────────────────────
