@@ -1143,7 +1143,8 @@ module.exports = function register(socket, ctx) {
     let topicTags = null;
     let topicNsfw = 0;
     if (channel.is_forum) {
-      if (typeof data.title === 'string' && data.title.trim()) topicTitle = data.title.trim().replace(/\s+/g, ' ').slice(0, 120);
+      if (typeof data.title === 'string' && data.title.trim()) topicTitle = sanitizeText(data.title.trim().replace(/\s+/g, ' ').slice(0, 120)) || null;
+      if (topicTitle && enforceAutomod(topicTitle, { surface: channel.is_dm ? 'dm' : 'message', channelId: channel.id })) return;
       // The poster can mark the topic NSFW (#5633).
       if (data.nsfw === true) topicNsfw = 1;
       const allowed = new Set(parseChannelTags(channel.forum_tags).map(t => t.name));
@@ -1785,10 +1786,16 @@ module.exports = function register(socket, ctx) {
     const msg = db.prepare('SELECT m.id, m.user_id, m.channel_id, m.thread_id, c.code, c.is_forum, c.forum_tags FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?').get(data.messageId);
     if (!msg || !msg.is_forum || msg.thread_id) return socket.emit('error-msg', 'Not a forum topic');
     const mine = msg.user_id === socket.user.id;
-    if (!mine && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_messages', msg.channel_id)) {
+    // There is no manage_messages permission, so this used to let nobody but
+    // the author and admins in. delete_message is what moderators hold.
+    if (!mine && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_message', msg.channel_id)) {
       return socket.emit('error-msg', 'You don\'t have permission to edit this topic');
     }
-    const title = typeof data.title === 'string' ? data.title.trim().replace(/\s+/g, ' ').slice(0, 120) : null;
+    if (!socket.user.isAdmin && !hasChannelAccess(msg.channel_id)) return socket.emit('error-msg', 'Not a forum topic');
+    // A title is shown like message text, so it gets the same cleaning and
+    // the same automod check.
+    const title = typeof data.title === 'string' ? sanitizeText(data.title.trim().replace(/\s+/g, ' ').slice(0, 120)) : null;
+    if (title && enforceAutomod(title, { surface: 'edit', channelId: msg.channel_id })) return;
     const allowed = new Set(parseChannelTags(msg.forum_tags).map(t => t.name));
     const tags = Array.isArray(data.tags) ? [...new Set(data.tags.filter(t => typeof t === 'string').map(t => t.trim()).filter(t => allowed.has(t)))].slice(0, 5) : [];
     // Closed is only changed when the editor sent it, so an older client that

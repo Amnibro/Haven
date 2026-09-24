@@ -308,7 +308,7 @@ _createForumTopicEl(msg) {
   const thumb = this._forumThumbOf(msg);
   const count = msg.thread && msg.thread.count ? msg.thread.count : 0;
   const when = this._forumPrefs().sort === 'created' ? new Date(msg.created_at) : new Date(this._forumActivityOf(msg));
-  const canEdit = this.user && (msg.user_id === this.user.id || this.user.isAdmin || (this._hasPerm && this._hasPerm('manage_messages')));
+  const canEdit = this.user && (msg.user_id === this.user.id || this.user.isAdmin || (this._hasPerm && this._hasPerm('delete_message')));
   // An NSFW topic blurs its picture and preview behind a label until clicked,
   // like a spoiler; the title stays readable (#5633).
   const cover = blurred ? ` data-nsfw-label="${this._escapeHtml(t('forum.nsfw_reveal'))}"` : '';
@@ -359,7 +359,7 @@ _showForumTopicContextMenu(e, msg) {
   this._hideMessageContextMenu?.();
   const msgId = msg.id;
   const isOwn = !!(this.user && msg.user_id === this.user.id);
-  const canEdit = !!(this.user && (isOwn || this.user.isAdmin || (this._hasPerm && this._hasPerm('manage_messages'))));
+  const canEdit = !!(this.user && (isOwn || this.user.isAdmin || (this._hasPerm && this._hasPerm('delete_message'))));
   const canPin = !!(this.user?.isAdmin || this._hasPerm('pin_message'));
   const canArchive = !!(this.user?.isAdmin || this._hasPerm('archive_messages'));
   const canShareLink = !!this._canShareChannelLink?.(this.currentChannel);
