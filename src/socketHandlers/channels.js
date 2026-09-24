@@ -709,6 +709,9 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // A DM is removed by its own people through delete-dm, never here: a
+    // server-wide delete_channel is not a key to other people's DMs.
+    if (channel.is_dm) return socket.emit('error-msg', 'Channel not found');
 
     // A parent goes with everything under it. The parent link is ON DELETE
     // SET NULL, so sub-channels used to survive their parent's deletion as

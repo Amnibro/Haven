@@ -1900,6 +1900,11 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // Deleting starts with being there. A DM belongs to its two people, so
+    // only they can delete in it, whatever server-wide delete permission
+    // someone else holds; anywhere else, a non-admin must be in the channel.
+    const _inChannel = !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    if (channel.is_dm ? !_inChannel : (!_inChannel && !socket.user.isAdmin)) return;
 
     const msg = db.prepare(
       'SELECT id, user_id, content FROM messages WHERE id = ? AND channel_id = ?'
