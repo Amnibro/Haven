@@ -11,7 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.12.0] - 2026-09-23
+
+A security release: please update soon. A full review of the server and
+the web app closed holes that let someone with only a password skip
+two-factor, let any member delete other people's files or read channels
+they were kept out of, and sent the Discord bridge's bot token to every
+signed-in browser. If you use the Discord bridge, reset the bot's token
+after updating (see Security below). Alongside it: pictures and files
+inside forum posts, tags on forum pictures, roles and channels across the
+Discord bridge, and a too-long message no longer lost. Nothing to run by
+hand.
 
 ### Security
 A full security review of the server and the web app. Update soon: several
