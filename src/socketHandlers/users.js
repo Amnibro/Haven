@@ -316,6 +316,10 @@ module.exports = function register(socket, ctx) {
       for (const [, s] of io.of('/').sockets) {
         if (s.user && s.user.id === data.userId) { isOnline = true; break; }
       }
+      // Invisible means offline to everyone else, here as in the member
+      // list: reporting online next to status 'invisible' gave it away.
+      const hidden = row.status === 'invisible' && data.userId !== socket.user.id;
+      if (hidden) isOnline = false;
 
       socket.emit('user-profile', {
         id: row.id,
@@ -326,7 +330,7 @@ module.exports = function register(socket, ctx) {
         border: row.border || null,
         borderTransform: parseBorderTransform(row.border_transform),
         animateProfile: row.animate_profile || 'trigger',
-        status: row.status || 'online',
+        status: hidden ? 'offline' : (row.status || 'online'),
         statusText: row.status_text || '',
         bio: row.bio || '',
         roles: roles,
