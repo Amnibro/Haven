@@ -355,22 +355,22 @@ function getUploadUsage() {
   return data;
 }
 
-// Trust proxy configuration — controls how many reverse-proxy hops to trust
-// when reading the real client IP from X-Forwarded-For.
+// Trust proxy configuration: whose X-Forwarded-For to believe when reading
+// the real client IP. src/clientIp.js holds the rule, so HTTP and sockets
+// agree.
 //
-//   TRUST_PROXY=1  (default) — trust the first hop (nginx/Traefik/Cloudflare)
-//   TRUST_PROXY=0             — direct exposure; do NOT trust XFF headers
-//                               (prevents attackers from spoofing their IP to
-//                               bypass the auth rate limiter)
-//   TRUST_PROXY=2             — two proxy hops, etc.
+//   (unset)        default: a proxy on this machine or the local network
+//                  (loopback, link-local, private ranges). Directly exposed
+//                  servers ignore the header, so nobody can spoof their IP
+//                  past the auth rate limiter or an IP ban.
+//   TRUST_PROXY=1  one hop, wherever it is (Cloudflare's proxy, or any proxy
+//                  on another machine)
+//   TRUST_PROXY=2  two hops, etc.; TRUST_PROXY=0 trusts nothing
 //
-// Without this every user behind a reverse proxy shares the loopback IP in
-// the auth rate limiter, causing innocent users to hit the limit on their
-// very first login/register attempt.
-const _trustProxy = process.env.TRUST_PROXY !== undefined
-  ? (isNaN(Number(process.env.TRUST_PROXY)) ? process.env.TRUST_PROXY : Number(process.env.TRUST_PROXY))
-  : 1;
-app.set('trust proxy', _trustProxy);
+// Without a trusted proxy every user behind one shares its IP in the auth
+// rate limiter, so innocent users would hit the limit on their first login.
+const { trustProxySetting } = require('./src/clientIp');
+app.set('trust proxy', trustProxySetting());
 
 // ── IP ban gate (v3.20.0) ─────────────────────────────────
 // Run before anything else (parsers, helmet, static) so banned addresses
