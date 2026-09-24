@@ -834,11 +834,24 @@ module.exports = function register(socket, ctx) {
   //   Bot-manager modal: uses data.channel_id (integer), data.id for delete/toggle
   //   Per-channel modal: uses data.channelCode (string), data.webhookId for delete/toggle
 
-  const visibleWebhookRows = rows => rows.map(webhook =>
-    socket.user.isAdmin || webhook.created_by === socket.user.id
-      ? webhook
-      : { ...webhook, token: null }
-  );
+  // A bot reads and posts in its channel, so managing one takes the same
+  // reach as a member there: never a DM, and for anyone but an admin only a
+  // channel they belong to. manage_webhooks is a default Mod permission, and
+  // without this a Mod could hang a bot on a private channel or a DM and have
+  // its callback receive every message posted there.
+  const canBotChannel = (channelId) => {
+    const ch = db.prepare('SELECT id, is_dm FROM channels WHERE id = ?').get(channelId);
+    if (!ch || ch.is_dm) return false;
+    if (socket.user.isAdmin) return true;
+    return !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(ch.id, socket.user.id);
+  };
+  const visibleWebhookRows = rows => rows
+    .filter(webhook => socket.user.isAdmin || canBotChannel(webhook.channel_id))
+    .map(webhook =>
+      socket.user.isAdmin || webhook.created_by === socket.user.id
+        ? webhook
+        : { ...webhook, token: null }
+    );
 
   socket.on('create-webhook', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -851,7 +864,7 @@ module.exports = function register(socket, ctx) {
       if (!channelCode || !/^[a-f0-9]{8}$/i.test(channelCode)) return;
 
       const channel = db.prepare('SELECT id, code FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
-      if (!channel) return socket.emit('error-msg', 'Channel not found');
+      if (!channel || !canBotChannel(channel.id)) return socket.emit('error-msg', 'Channel not found');
 
       const name = typeof data.name === 'string' ? data.name.trim().slice(0, 32) : 'Bot';
       if (!name) return socket.emit('error-msg', 'Webhook name is required');
@@ -879,7 +892,7 @@ module.exports = function register(socket, ctx) {
       if (!name || isNaN(channelId)) return socket.emit('error-msg', 'Name and channel required');
 
       const channel = db.prepare('SELECT id, name FROM channels WHERE id = ?').get(channelId);
-      if (!channel) return socket.emit('error-msg', 'Channel not found');
+      if (!channel || !canBotChannel(channel.id)) return socket.emit('error-msg', 'Channel not found');
 
       const token = crypto.randomBytes(32).toString('hex');
       db.prepare(
@@ -910,7 +923,7 @@ module.exports = function register(socket, ctx) {
       if (!channelCode || !/^[a-f0-9]{8}$/i.test(channelCode)) return;
 
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(channelCode);
-      if (!channel) return;
+      if (!channel || !canBotChannel(channel.id)) return;
 
       const webhooks = visibleWebhookRows(db.prepare(
         'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, created_by, callback_url, callback_secret, subscribed_events, last_delivery_status, last_delivery_at, last_delivery_error, failure_count, can_moderate, can_use_voice FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
@@ -939,6 +952,8 @@ module.exports = function register(socket, ctx) {
     // Per-channel variant uses webhookId, bot-manager uses id
     const webhookId = parseInt(data.webhookId || data.id);
     if (!webhookId || isNaN(webhookId)) return;
+    const _delWh = db.prepare('SELECT channel_id FROM webhooks WHERE id = ?').get(webhookId);
+    if (!_delWh || !canBotChannel(_delWh.channel_id)) return socket.emit('error-msg', 'Webhook not found');
 
     revokeBotVoiceAccess?.(webhookId, 'Webhook was deleted');
     db.prepare('DELETE FROM webhooks WHERE id = ?').run(webhookId);
@@ -970,8 +985,8 @@ module.exports = function register(socket, ctx) {
     const webhookId = parseInt(data.webhookId || data.id);
     if (!webhookId || isNaN(webhookId)) return;
 
-    const wh = db.prepare('SELECT is_active FROM webhooks WHERE id = ?').get(webhookId);
-    if (!wh) return socket.emit('error-msg', 'Webhook not found');
+    const wh = db.prepare('SELECT is_active, channel_id FROM webhooks WHERE id = ?').get(webhookId);
+    if (!wh || !canBotChannel(wh.channel_id)) return socket.emit('error-msg', 'Webhook not found');
     const newState = wh.is_active ? 0 : 1;
     db.prepare('UPDATE webhooks SET is_active = ? WHERE id = ?').run(newState, webhookId);
     if (!newState) revokeBotVoiceAccess?.(webhookId, 'Webhook was disabled');
@@ -1001,7 +1016,7 @@ module.exports = function register(socket, ctx) {
     if (isNaN(webhookId)) return;
 
     const wh = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(webhookId);
-    if (!wh) return socket.emit('error-msg', 'Webhook not found');
+    if (!wh || !canBotChannel(wh.channel_id)) return socket.emit('error-msg', 'Webhook not found');
 
     if (data.can_use_voice !== undefined && !socket.user.isAdmin) {
       return socket.emit('error-msg', 'Only admins can change a bot\'s voice permission');
@@ -1021,7 +1036,7 @@ module.exports = function register(socket, ctx) {
       const channelId = parseInt(data.channel_id);
       if (!isNaN(channelId)) {
         const channel = db.prepare('SELECT id FROM channels WHERE id = ?').get(channelId);
-        if (channel) {
+        if (channel && canBotChannel(channel.id)) {
           db.prepare('UPDATE webhooks SET channel_id = ? WHERE id = ?').run(channelId, webhookId);
           if (channelId !== wh.channel_id) revokeBotVoiceAccess?.(webhookId, 'Webhook voice channel scope changed');
         }

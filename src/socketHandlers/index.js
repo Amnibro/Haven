@@ -1251,6 +1251,9 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   function fireWebhookEvent(channelId, channelCode, eventType, body) {
     try {
+      // DMs are between their two people; no bot callback ever hears them.
+      const _whCh = db.prepare('SELECT is_dm FROM channels WHERE id = ?').get(channelId);
+      if (!_whCh || _whCh.is_dm) return;
       const bots = db.prepare(
         'SELECT id, callback_url, callback_secret, subscribed_events FROM webhooks WHERE channel_id = ? AND is_active = 1 AND callback_url IS NOT NULL'
       ).all(channelId);

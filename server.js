@@ -3738,7 +3738,7 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   }
 
   const webhook = db.prepare(
-    'SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1'
+    'SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0'
   ).get(token);
 
   if (!webhook) {
@@ -4488,7 +4488,7 @@ function getWebhookByToken(token) {
            w.can_use_voice, w.created_by, c.code AS channel_code
     FROM webhooks w
     LEFT JOIN channels c ON c.id = w.channel_id
-    WHERE w.token = ? AND w.is_active = 1
+    WHERE w.token = ? AND w.is_active = 1 AND COALESCE(c.is_dm, 0) = 0
   `).get(token);
 }
 
