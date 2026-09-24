@@ -530,20 +530,17 @@ if (!sslCert && !sslKey) {
 
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
 
-// unpkg serves any package anyone publishes to npm, so as a script source it
-// is a way around the CSP. Only the Flash games page loads from it (the Ruffle
-// player), so only that page's policy lists it.
-const cspFor = (withUnpkg) => helmet({
+app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-eval'", "'wasm-unsafe-eval'", "blob:", "https://www.youtube.com", "https://w.soundcloud.com", ...(withUnpkg ? ["https://unpkg.com"] : []), "https://challenges.cloudflare.com"],  // last host: opt-in Turnstile CAPTCHA on registration
+      scriptSrc: ["'self'", "'unsafe-eval'", "'wasm-unsafe-eval'", "blob:", "https://www.youtube.com", "https://w.soundcloud.com", "https://challenges.cloudflare.com"],  // last host: opt-in Turnstile CAPTCHA on registration
       styleSrc: ["'self'", "'unsafe-inline'"],  // inline styles (fonts are self-hosted, no third-party CDN)
       imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],  // link preview OG images + GIPHY (http: for local/self-hosted services)
       connectSrc: ["'self'", "ws:", "wss:", "https:"],  // Socket.IO + cross-origin health checks
       mediaSrc: ["'self'", "blob:", "data:", "https:", "http:"],  // WebRTC audio + notification sounds + link preview video embeds
       fontSrc: ["'self'"],  // self-hosted fonts only (see /public/fonts)
-      workerSrc: ["'self'", "blob:", ...(withUnpkg ? ["https://unpkg.com"] : [])],  // service worker + Ruffle WebAssembly workers
+      workerSrc: ["'self'", "blob:"],  // service worker + Ruffle WebAssembly workers
       objectSrc: ["'none'"],
       frameSrc: ["'self'", "https://open.spotify.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://w.soundcloud.com", "https://challenges.cloudflare.com"],  // Listen Together embeds + game iframes + Turnstile widget
       baseUri: ["'self'"],
@@ -556,10 +553,7 @@ const cspFor = (withUnpkg) => helmet({
   crossOriginOpenerPolicy: false,    // needed for WebRTC
   hsts: useSSL ? { maxAge: 31536000, includeSubDomains: false } : false, // force HTTPS for 1 year (only sent when we actually serve it)
   referrerPolicy: false, // set dynamically from the admin-configurable cache in the middleware below
-});
-const appCsp = cspFor(false);
-const flashCsp = cspFor(true);
-app.use((req, res, next) => (req.path.startsWith('/games/') ? flashCsp : appCsp)(req, res, next));
+}));
 
 // Additional security headers helmet doesn't cover
 app.use((req, res, next) => {
@@ -591,6 +585,30 @@ app.use('/fonts', express.static(path.join(__dirname, 'public', 'fonts'), {
   maxAge: '1y',
   immutable: true,
 }));
+
+// ── Flash player (Ruffle) ────────────────────────────────
+// Served from the npm package pinned in package.json. It used to come from
+// unpkg, which meant whatever version was newest that day, fetched from a
+// third party by every player, and a CSP that let the games pages run any
+// script published to npm. The core scripts and .wasm files carry a content
+// hash in their names, so those can be cached for good.
+let RUFFLE_DIR = null;
+try {
+  RUFFLE_DIR = path.dirname(require.resolve('@ruffle-rs/ruffle/package.json'));
+} catch {
+  console.warn('Flash games are unavailable: the Flash player package is missing. Run npm install in the Haven folder.');
+}
+if (RUFFLE_DIR) {
+  app.use('/games/ruffle', express.static(RUFFLE_DIR, {
+    dotfiles: 'deny',
+    maxAge: 0,
+    setHeaders: (res, file) => {
+      if (/(^|\.)[0-9a-f]{20}\.(js|wasm)$/.test(path.basename(file))) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
+}
 
 // ── Static files with caching ────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {

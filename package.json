@@ -13,6 +13,7 @@
     "test": "node --test --test-concurrency=1"
   },
   "dependencies": {
+    "@ruffle-rs/ruffle": "0.6.0",
     "adm-zip": "^0.6.0",
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",

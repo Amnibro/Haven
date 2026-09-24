@@ -3765,7 +3765,8 @@
       "init_error": "Ruffle initialization error: {{error}}",
       "no_file": "No SWF file specified",
       "emulator_failed": "Failed to load the Ruffle Flash emulator.",
-      "check_connection": "Check your internet connection."
+      "check_connection": "Check your internet connection.",
+      "not_installed": "The server may be missing it. Whoever runs the server can add it by running npm install in the Haven folder."
     },
     "io": {
       "page_title": ".io Games — Haven",
