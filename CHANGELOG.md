@@ -13,6 +13,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Security
+A full security review of the server and the web app. Update soon: several
+of these let someone signed in, or someone with only a password, do far
+more than they should. If you use the Discord bridge, reset the bot's token
+in the Discord Developer Portal after updating and paste the new one into
+Settings, since earlier versions sent it to every signed-in browser.
+
+- **Two-factor could be skipped with the password alone.** The token handed
+  out between the password and the code was accepted as a login in a few
+  places, including the forced password change and turning two-factor off,
+  and admin recovery asked for no code at all. Only a real session counts
+  as a login now, admin recovery asks for the code, and wrong codes are
+  limited per account as well as per address.
+- **Secrets reached people they should not.** The Discord bot token went to
+  every signed-in user; it now goes to nobody. GIF service keys, the TURN
+  password, the CAPTCHA secret, the invite code and the registration token
+  went to everyone whenever an admin changed them, and into the audit log;
+  they go to admins only now, and the audit log records only that they
+  changed.
+- **Link previews and the image proxy could be pointed at the server's own
+  network**, through a redirect, an IPv6 address or an unusual spelling of
+  a local address. Every step of a fetch is checked now, and the connection
+  goes to the address that was checked. Previews also stop reading a page
+  after 256 KB.
+- **Anyone could permanently delete other people's files** (avatars, emoji,
+  attachments) by naming them in a message of their own and deleting it.
+  Deleting a message now only removes files its author uploaded as
+  attachments that nothing else uses.
+- **An encrypted DM picture could run code** when opened in a new tab. It
+  opens as a plain image now, and uploads other than pictures, audio and
+  video are served in a form a browser will not run as script.
+- **Private channels leaked.** Their join codes, and who was in which DM
+  call, went to everyone through the voice counts; channels that need a
+  role could be read through search, media, threads and pins, and entered
+  live, by members without the role.
+- **Permissions followed rank in more places.** Giving, taking and editing
+  roles, role menus, permission thresholds and a channel's default role only
+  work on people and roles ranked below you. Moderators could attach bots
+  to private channels and DMs, move messages into channels they could not
+  post in, and delete sub-channels with only the create-channel permission.
+  The HTTP moderation routes skipped the rank checks the app makes.
+- **Muting now needs the mute permission server-wide**, since a mute applies
+  everywhere. Channel moderators could mute anyone ranked below them across
+  the whole server. Unmuting follows the same rule as unbanning.
+- **Voice**: rejoining after a reconnect skipped the voice permission, the
+  channel's required roles, the guest switch and the room limit.
+- **Pings**: threads, polls and scheduled messages skipped the rule that
+  @everyone and role pings need permission, and Discord users could ping
+  @everyone or a Haven role by typing it. Polls are refused in DMs (they are
+  not encrypted), GIFs in DMs are encrypted now, and scheduled messages are
+  checked again when they go out.
+- **Uploads stop at your size cap while they arrive**, instead of after the
+  whole file is on disk, so one upload cannot fill the server's disk.
+- **Smaller fixes**: the single sign-on page escapes what it prints, reaction
+  tooltips escape names, an invisible user shows as offline on their
+  profile, an admin password reset closes the person's open sessions,
+  banned accounts get no voice relay credentials, push subscriptions only
+  go to public addresses, the public high-score list drops account ids,
+  forum titles get automod, the slow-mode exception for attachments cannot
+  be claimed by any message, the active sessions list names devices again,
+  and a translations check on GitHub no longer runs file names as shell
+  text. Four libraries with published fixes were updated (adm-zip, express,
+  body-parser, qs).
+
 ### Added
 - **Pictures and files inside forum posts (#5689, #5690).** New Post and
   Edit post have an Add a picture or file button, and a picture pasted or
