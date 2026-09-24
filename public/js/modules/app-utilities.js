@@ -277,7 +277,7 @@ _replaceBurnedMessage(el) {
   const content = el.querySelector('.message-content');
   if (!content) return;
   const doneText = t('messages.burn_done');
-  content.innerHTML = `<span class="muted-text" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
+  content.innerHTML = `<span class="muted-text burn-complete-label" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
   el.classList.remove('message-burn-pending');
   el.classList.add('message-burned');
 },
@@ -362,8 +362,21 @@ _getMessageAttachments(messageId) {
   if (hinted && hinted.length) return hinted.slice();
   const msgs = this._lastRenderedMessages || [];
   const msg = msgs.find(m => m && m.id === messageId);
-  if (!msg || typeof msg.content !== 'string') return [];
-  return this._extractUploadUrls(msg.content);
+  if (msg && typeof msg.content === 'string') {
+    const urls = this._extractUploadUrls(msg.content);
+    if (urls.length) return urls;
+  }
+  // A message just sent or received is appended live to the DOM and never lands
+  // in _lastRenderedMessages, so its attachments were invisible here until a
+  // full re-render (which is why the retroactive "Edit tags" entry only showed
+  // after a refresh or channel switch). Fall back to the rendered content in the
+  // DOM, scoped to .message-content so an author avatar is not counted.
+  const el = document.querySelector(`#messages [data-msg-id="${messageId}"]`);
+  if (el) {
+    const body = el.querySelector('.message-content') || el;
+    return this._extractUploadUrls(body.innerHTML);
+  }
+  return [];
 },
 
 _extractUploadUrls(content) {
@@ -543,6 +556,119 @@ _timeLocale() {
   return browser.find(l => String(l).toLowerCase().split('-')[0] === base) || ui;
 },
 
+/** The reader's confirmed IANA timezone, or undefined to let the browser use
+ *  the device zone. Only a value the user actively confirmed counts; Skip and
+ *  "Remind later" leave this unset so nothing changes from Haven's old
+ *  browser-default behaviour. Passing an IANA id to Intl means DST and any
+ *  historical offset change are resolved per-instant — never a frozen offset. */
+_userTimeZone() {
+  const tz = this._userPrefs && this._userPrefs.timezone;
+  if (typeof tz !== 'string' || !tz) return undefined;
+  // A zone this browser does not know (a newer zone name on an older engine,
+  // or a stray value) would make every Intl call throw and take the message
+  // list with it. Check it once per value and fall back to the browser's own
+  // zone when it is unknown.
+  if (this._tzCheckedValue !== tz) {
+    this._tzCheckedValue = tz;
+    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); this._tzCheckedOk = true; }
+    catch { this._tzCheckedOk = false; }
+  }
+  return this._tzCheckedOk ? tz : undefined;
+},
+
+/** The reader's confirmed hour cycle as an Intl `hour12` value: true for 12h,
+ *  false for 24h, undefined to keep the locale's own default. */
+_userHour12() {
+  const f = this._userPrefs && this._userPrefs.time_format;
+  if (f === '12') return true;
+  if (f === '24') return false;
+  return undefined;
+},
+
+/** Merge the reader's persisted timezone + hour cycle into a set of
+ *  Intl.DateTimeFormat options. Both `timeZone` and `hour12` are legal
+ *  alongside dateStyle/timeStyle as well as explicit component options, so
+ *  every existing call site can route through here unchanged. */
+_dtOpts(opts) {
+  const out = Object.assign({}, opts);
+  const tz = this._userTimeZone();
+  if (tz && out.timeZone === undefined) out.timeZone = tz;
+  const h12 = this._userHour12();
+  if (h12 !== undefined && out.hour12 === undefined && out.hourCycle === undefined) out.hour12 = h12;
+  return out;
+},
+
+/** Central time/date formatters. All timestamp rendering across the app goes
+ *  through these so a confirmed timezone/format applies everywhere at once and
+ *  an unset preference falls back to exactly what the browser did before.
+ *  `locale` defaults to the browser default (what every call site used before);
+ *  the <t:> token formatter passes _timeLocale() to keep its own behaviour. */
+_fmtTime(value, opts = { hour: '2-digit', minute: '2-digit' }, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleTimeString(locale, this._dtOpts(opts));
+},
+_fmtDate(value, opts = {}, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleDateString(locale, this._dtOpts(opts));
+},
+_fmtDateTime(value, opts = {}, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleString(locale, this._dtOpts(opts));
+},
+
+// ── Wall-clock <-> instant in the reader's confirmed zone ───────────────
+// The formatters above render an instant; these go the other way, for the
+// features that let someone type a wall-clock time (the /time command and its
+// modal). With no timezone confirmed they fall back to the device zone, so the
+// behaviour is unchanged; with one set the entered time is anchored to that
+// zone instead of whatever the browser reports, which is the whole point on a
+// privacy browser that lies about the system clock.
+
+/** The wall-clock parts of an instant in the confirmed zone (or the device
+ *  zone when none is set). monthIndex is 0-based to match the Date API. */
+_zonedParts(date, tz = this._userTimeZone()) {
+  const d = (date instanceof Date) ? date : new Date(date);
+  if (!tz) {
+    return { year: d.getFullYear(), monthIndex: d.getMonth(), day: d.getDate(),
+             hour: d.getHours(), minute: d.getMinutes(), second: d.getSeconds() };
+  }
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const m = {};
+  for (const p of parts) if (p.type !== 'literal') m[p.type] = p.value;
+  let hour = Number(m.hour);
+  if (hour === 24) hour = 0; // some engines report midnight as 24
+  return { year: Number(m.year), monthIndex: Number(m.month) - 1, day: Number(m.day),
+           hour, minute: Number(m.minute), second: Number(m.second) };
+},
+
+/** Milliseconds that `tz` is ahead of UTC at instant `ts` (negative if behind). */
+_zoneOffsetMs(tz, ts) {
+  const p = this._zonedParts(new Date(ts), tz);
+  const asUTC = Date.UTC(p.year, p.monthIndex, p.day, p.hour, p.minute, p.second);
+  return asUTC - ts;
+},
+
+/** Turn a wall-clock (year, 0-based month, day, hour, minute, second) read in
+ *  the confirmed zone into the matching instant. With no zone set this is
+ *  exactly new Date(y, mo, d, ...) in the device zone, so the fallback path is
+ *  byte-for-byte the old behaviour. */
+_wallToInstant(y, moIndex, d, h, mi, s, tz = this._userTimeZone()) {
+  if (!tz) return new Date(y, moIndex, d, h, mi, s, 0);
+  const naive = Date.UTC(y, moIndex, d, h, mi, s);
+  // One correction, then a second pass so a DST boundary resolves correctly.
+  let inst = naive - this._zoneOffsetMs(tz, naive);
+  inst = naive - this._zoneOffsetMs(tz, inst);
+  return new Date(inst);
+},
+
+/** "Now" decomposed into the confirmed zone's wall-clock, for seeding pickers. */
+_nowZonedParts() {
+  return this._zonedParts(new Date());
+},
+
 /** "in 5 minutes" / "3 hours ago", in the largest unit that still reads well. */
 _relativeTimestamp(ms, locale) {
   const diff = ms - Date.now();
@@ -567,19 +693,19 @@ _formatTimestampToken(seconds, style = 'f') {
   let text;
   try {
     switch (style) {
-      case 't': text = date.toLocaleTimeString(locale, { timeStyle: 'short' }); break;
-      case 'T': text = date.toLocaleTimeString(locale, { timeStyle: 'medium' }); break;
-      case 'd': text = date.toLocaleDateString(locale, { dateStyle: 'short' }); break;
-      case 'D': text = date.toLocaleDateString(locale, { dateStyle: 'long' }); break;
-      case 'F': text = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'short' }); break;
+      case 't': text = this._fmtTime(date, { timeStyle: 'short' }, locale); break;
+      case 'T': text = this._fmtTime(date, { timeStyle: 'medium' }, locale); break;
+      case 'd': text = this._fmtDate(date, { dateStyle: 'short' }, locale); break;
+      case 'D': text = this._fmtDate(date, { dateStyle: 'long' }, locale); break;
+      case 'F': text = this._fmtDateTime(date, { dateStyle: 'full', timeStyle: 'short' }, locale); break;
       case 'R': text = this._relativeTimestamp(date.getTime(), locale); break;
-      default:  text = date.toLocaleString(locale, { dateStyle: 'long', timeStyle: 'short' }); break;
+      default:  text = this._fmtDateTime(date, { dateStyle: 'long', timeStyle: 'short' }, locale); break;
     }
   } catch { return null; }
   // The hover title always spells the instant out in full, so a relative or
   // time-only token can still be pinned down without asking the sender.
   let title = text;
-  try { title = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'long' }); } catch { /* keep the visible text */ }
+  try { title = this._fmtDateTime(date, { dateStyle: 'full', timeStyle: 'long' }, locale); } catch { /* keep the visible text */ }
   if (style === 'R') this._startTimestampTicker();
   return `<time class="chat-timestamp" datetime="${this._escapeHtml(date.toISOString())}" data-ts="${Math.trunc(seconds)}" data-tstyle="${this._escapeHtml(style)}" title="${this._escapeHtml(title)}">${this._escapeHtml(text)}</time>`;
 },
@@ -656,11 +782,14 @@ _parseTimeExpression(input, now = new Date()) {
   let when;
   if (ymd) {
     const y = Number(ymd[1]), mo = Number(ymd[2]) - 1, d = Number(ymd[3]);
-    when = new Date(y, mo, d, hour, mi, 0, 0);
-    // Reject dates that do not exist (JS rolls 2026-02-31 into March).
-    if (when.getFullYear() !== y || when.getMonth() !== mo || when.getDate() !== d) return null;
+    when = this._wallToInstant(y, mo, d, hour, mi, 0);
+    // Reject dates that do not exist (JS rolls 2026-02-31 into March), checked
+    // in the same zone the wall-clock was read in.
+    const back = this._zonedParts(when);
+    if (back.year !== y || back.monthIndex !== mo || back.day !== d) return null;
   } else {
-    when = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (dayShift || 0), hour, mi, 0, 0);
+    const nowP = this._zonedParts(now);
+    when = this._wallToInstant(nowP.year, nowP.monthIndex, nowP.day + (dayShift || 0), hour, mi, 0);
     // A bare time that already went by today means the next one. Someone
     // saying "8pm" at nine in the evening is scheduling, not reminiscing.
     if (dayShift === null && when.getTime() <= now.getTime()) when = new Date(when.getTime() + 86400000);
@@ -711,17 +840,47 @@ _formatContent(str) {
         const mime = this._escapeHtml(typeof meta.mime === 'string' ? meta.mime : 'application/octet-stream');
         const size = Number(meta.size) || 0;
         const sizeStr = this._escapeHtml(this._formatFileSize ? this._formatFileSize(size) : (size + ' B'));
-        return `<div class="file-attachment e2e-file-pending" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="${t('app.messages.e2e_file_title')}">
+        // A voice message in a DM shows as one, with its length, and a click
+        // decrypts it into a player (#5665).
+        const voiceDur = this._voiceMessageLength(name);
+        const label = voiceDur !== null ? t('app.messages.voice_message') : name;
+        return `<div class="file-attachment e2e-file-pending${voiceDur !== null ? ' voice-message' : ''}" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="${t('app.messages.e2e_file_title')}">
           <button type="button" class="file-download-link e2e-file-download">
-            <span class="file-icon">🔒</span>
-            <span class="file-name">${name}</span>
-            <span class="file-size">(${sizeStr})</span>
+            <span class="file-icon">${voiceDur !== null ? '🎤' : '🔒'}</span>
+            <span class="file-name">${label}</span>
+            <span class="file-size">(${voiceDur !== null ? voiceDur : sizeStr})</span>
             <span class="file-download-arrow">⬇</span>
           </button>
         </div>`;
       }
     } catch {}
     return `<span class="muted-text">${t('app.messages.e2e_file_parse_error')}</span>`;
+  }
+
+  // A post can carry pictures and files on lines of their own between its
+  // text: a forum topic sent with a picture, or one written in New Post. Each
+  // of those lines shows as the picture or file, and the text around them
+  // formats as usual; the link used to print as plain text (#5690, #5689).
+  // Only this server's uploads, and never inside a code block.
+  if (typeof str === 'string' && str.includes('\n') && !str.includes('```')) {
+    const mediaLine = (l) => /^(?:spoiler-img:)?\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(l) ||
+      /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l);
+    const lines = str.split('\n');
+    if (lines.some(l => mediaLine(l.trim()))) {
+      const parts = [];
+      let text = [];
+      const flush = () => {
+        const chunk = text.join('\n');
+        text = [];
+        if (chunk.trim()) parts.push(`<div class="content-text-part">${this._formatContent(chunk)}</div>`);
+      };
+      for (const l of lines) {
+        if (mediaLine(l.trim())) { flush(); parts.push(`<div class="content-media-part">${this._formatContent(l.trim())}</div>`); }
+        else text.push(l);
+      }
+      flush();
+      return parts.join('');
+    }
   }
 
   // Decode legacy HTML entities from old server-side sanitization.
@@ -758,6 +917,15 @@ _formatContent(str) {
       'cpl','inf','reg','dll','ocx','sys','drv',
       'sh','app','dmg','pkg','deb','rpm','appimage',
     ]);
+    // A voice message from the mic button: a small player with its length
+    // rather than a file name and size (#5665).
+    const voiceDur = this._voiceMessageLength(fileName);
+    if (voiceDur !== null) {
+      return `<div class="file-attachment voice-message">
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">🎤</span> <span class="file-name">${t('app.messages.voice_message')}</span> <span class="file-size">(${voiceDur})</span></div>
+        <audio controls preload="metadata" src="${fileUrl}" class="file-audio"></audio>
+      </div>`;
+    }
     // Audio/video get inline players. The extension lists are optimistic —
     // a container being playable depends on the codecs inside it, not just the
     // extension (a .mov holding ProRes or HEVC won't decode in most browsers).
@@ -765,13 +933,13 @@ _formatContent(str) {
     // if the element fires `error`, so listing a format here is safe.
     if (['mp3', 'ogg', 'oga', 'wav', 'm4a', 'aac', 'flac', 'opus', 'weba'].includes(ext)) {
       return `<div class="file-attachment">
-        <div class="file-info">${icon} <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
         <audio controls preload="none" src="${fileUrl}" class="file-audio"></audio>
       </div>`;
     }
     if (['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext)) {
       return `<div class="file-attachment">
-        <div class="file-info">${icon} <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
         <div class="file-video-wrap">
           <video controls preload="none" src="${fileUrl}" class="file-video"></video>
         </div>
@@ -871,6 +1039,23 @@ _formatContent(str) {
   });
 
   let html = this._escapeHtml(withEmotes);
+
+  // ── Colour spans: c#RRGGBB…#c and c#(R,G,B)…#c ──
+  // Marked out before the link pass, so a closing #c is never swallowed into
+  // the URL in front of it, and restored last, so the colour reaches text
+  // inside a quote or a spoiler as well (#5661).
+  const colorOpens = [];
+  html = html.replace(/c#([0-9a-fA-F]{6})([\s\S]+?)#c/g, (full, hex, inner) => {
+    const idx = colorOpens.length;
+    colorOpens.push(`<span style="color:#${hex}">`);
+    return `\x00COLOR_${idx}\x00${inner}\x00ENDCOLOR\x00`;
+  });
+  html = html.replace(/c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)([\s\S]+?)#c/g, (full, r, g, b, inner) => {
+    const [rr, gg, bb] = [r, g, b].map(v => Math.min(255, parseInt(v, 10)));
+    const idx = colorOpens.length;
+    colorOpens.push(`<span style="color:rgb(${rr},${gg},${bb})">`);
+    return `\x00COLOR_${idx}\x00${inner}\x00ENDCOLOR\x00`;
+  });
 
   // ── Markdown images & links (extract before auto-linking) ──
   const mdLinks = [];
@@ -1103,18 +1288,15 @@ _formatContent(str) {
     }
     const textHtml = lines.join('<br>');
     const idx = blockquotes.length;
-    blockquotes.push(`${pre}<blockquote class="chat-blockquote">${authorHtml}<div class="chat-blockquote-body">${textHtml}</div></blockquote>`);
-    return `\x00BLOCKQUOTE_${idx}\x00`;
+    blockquotes.push(`<blockquote class="chat-blockquote">${authorHtml}<div class="chat-blockquote-body">${textHtml}</div></blockquote>`);
+    // The line break after the quote stays in the text, so a list that
+    // follows still starts on its own line; the <br> it turns into is
+    // dropped again when the quote is put back (#5661).
+    return `${pre}\x00BLOCKQUOTE_${idx}\x00${block.endsWith('\n') ? '\n' : ''}`;
   });
 
-  // Render c#RRGGBB...#c color spans (HEX color code)
-  html = html.replace(/c#([0-9a-fA-F]{6})([\s\S]+?)#c/g, '<span style="color:#$1">$2</span>');
-
-  // Render c#(R,G,B)...#c color spans (RGB color code)
-  html = html.replace(/c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)([\s\S]+?)#c/g, (_, r, g, b, text) => {
-    if (r > 255 || g > 255 || b > 255) return _;
-    return `<span style="color:rgb(${r},${g},${b})">${text}</span>`;
-  });
+  // (Colour spans were marked out before the link pass and are put back at
+  // the very end.)
 
   // ── Headings: # H1, ## H2, ### H3 at start of line ──
   html = html.replace(/(^|\n)(#{1,3})\s+(.+)/g, (_, pre, hashes, text) => {
@@ -1234,7 +1416,7 @@ _formatContent(str) {
   });
 
   blockquotes.forEach((block, idx) => {
-    html = html.replace(`\x00BLOCKQUOTE_${idx}\x00`, () => block);
+    html = html.replace(new RegExp(`(?:<br>)?\\x00BLOCKQUOTE_${idx}\\x00(?:<br>)?`), () => block);
   });
 
   // ── Restore fenced code blocks ──
@@ -1271,23 +1453,74 @@ _formatContent(str) {
     html = html.replace(`\x00DEMOTE_${idx}\x00`, () => el);
   });
 
+  // ── Colour spans go back last, around whatever was rendered inside them ──
+  colorOpens.forEach((open, idx) => {
+    html = html.replace(`\x00COLOR_${idx}\x00`, () => open);
+  });
+  html = html.replace(/\x00ENDCOLOR\x00/g, '</span>');
+
   if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;
 
   return html;
 },
 
+// "1:05" for a voice-message-1m05s.weba name, "" for a voice message with
+// no length in its name, null for any other file (#5665).
+_voiceMessageLength(name) {
+  if (!/^voice-message/i.test(String(name || ''))) return null;
+  const m = String(name).match(/(\d+)m(\d+)s/);
+  return m ? `${Number(m[1])}:${String(m[2]).padStart(2, '0')}` : '';
+},
+
+// "Today at 9 PM" is only true until midnight, and a label is written once.
+// An app left open overnight kept calling last night's messages Today, so
+// every label carries its timestamp (data-ftime) and is rewritten when the
+// calendar day changes.
+_timeAttr(dateStr) {
+  return ` data-ftime="${this._escapeHtml(String(dateStr ?? ''))}"`;
+},
+
+_refreshTimeLabels() {
+  document.querySelectorAll('[data-ftime]').forEach(el => {
+    const raw = el.dataset.ftime;
+    if (!raw) return;
+    const next = this._formatTime(raw);
+    if (next && el.textContent !== next) el.textContent = next;
+  });
+},
+
+_startDayRolloverWatch() {
+  if (this._dayRolloverTimer || typeof document === 'undefined') return;
+  const dayKey = () => this._fmtDate(new Date(), { year: 'numeric', month: '2-digit', day: '2-digit' });
+  this._dayRolloverKey = dayKey();
+  const check = () => {
+    const key = dayKey();
+    if (key === this._dayRolloverKey) return;
+    this._dayRolloverKey = key;
+    this._refreshTimeLabels();
+  };
+  this._dayRolloverTimer = setInterval(check, 60000);
+  // A sleeping laptop or a hidden tab can skip the timer; look again on return.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+},
+
 _formatTime(dateStr) {
+  this._startDayRolloverWatch();
   const date = new Date(dateStr);
   const now = new Date();
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const isToday = date.toDateString() === now.toDateString();
+  const time = this._fmtTime(date);
+  // Compare the calendar day in the reader's chosen zone (falls back to the
+  // device zone when unset), so "today"/"yesterday" don't drift across a date
+  // boundary when a timezone is picked.
+  const dayKey = (d) => this._fmtDate(d, { year: 'numeric', month: '2-digit', day: '2-digit' });
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
+  const isToday = dayKey(date) === dayKey(now);
+  const isYesterday = dayKey(date) === dayKey(yesterday);
 
   if (isToday) return t('utils.today_at', { time });
   if (isYesterday) return t('utils.yesterday_at', { time });
-  return `${date.toLocaleDateString()} ${time}`;
+  return `${this._fmtDate(date)} ${time}`;
 },
 
 _getUserColor(username) {
@@ -2338,6 +2571,25 @@ _sendGifMessage(url) {
     return;
   }
   if (!this.currentChannel || !url) return;
+  // In a DM the GIF goes out through the composer's own send, the way a
+  // sticker does, so it is encrypted like any other DM message; sent
+  // straight to the server it stayed plain text. Whatever was typed in the
+  // box is put back afterwards.
+  const dmCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  const input = document.getElementById('message-input');
+  if (dmCh && dmCh.is_dm && input && typeof this._sendMessage === 'function') {
+    const draft = input.value;
+    input.value = url;
+    Promise.resolve(this._sendMessage()).catch(() => {}).then((sent) => {
+      // Backing out of an unencrypted send leaves the GIF's link in the box,
+      // and the draft is what belongs there.
+      if (sent === false || (draft && !input.value)) {
+        input.value = draft;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+    return;
+  }
   const payload = {
     code: this.currentChannel,
     content: url,
@@ -2376,9 +2628,16 @@ _sendStickerMessage(url) {
   // pre-processing apply uniformly.
   const input = document.getElementById('message-input');
   if (!input || !this.currentChannel) return;
+  const draft = input.value;
   input.value = url;
-  if (typeof this._sendMessage === 'function') this._sendMessage();
-  else this.socket.emit('send-message', { code: this.currentChannel, content: url });
+  if (typeof this._sendMessage === 'function') {
+    // Backing out of an unencrypted send brings back the draft, not the link.
+    Promise.resolve(this._sendMessage()).then((sent) => {
+      if (sent !== false) return;
+      input.value = draft;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }).catch(() => {});
+  } else this.socket.emit('send-message', { code: this.currentChannel, content: url });
 },
 
 // /gif slash command — inline GIF search results above the input
@@ -2477,9 +2736,11 @@ _renderPollWidget(msgId, poll) {
   if (poll.anonymous) settings.push(t('poll.anonymous'));
   const settingsHtml = settings.length ? `<div class="poll-settings-info">${settings.join(' · ')}</div>` : '';
 
+  // A picture poll can sit in columns (#5648).
+  const cols = Number(poll.columns) > 1 ? Math.min(5, Math.floor(Number(poll.columns))) : 0;
   return `<div class="poll-widget" data-msg-id="${msgId}">
     <div class="poll-question">${this._escapeHtml(poll.question)}</div>
-    <div class="poll-options">${optionsHtml}</div>
+    <div class="poll-options${cols ? ' poll-grid' : ''}"${cols ? ` style="--poll-cols:${cols}"` : ''}>${optionsHtml}</div>
     <div class="poll-footer">${t(totalVotes === 1 ? 'poll.votes_one' : 'poll.votes_other', { count: totalVotes })}${settingsHtml ? ' · ' : ''}${settingsHtml}</div>
   </div>`;
 },
@@ -2790,6 +3051,13 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
 },
 
 _showReactionPicker(msgEl, msgId) {
+  const pickerRoot = msgEl?.closest('#dm-pip-messages, #messages, #thread-messages');
+  const pickerCode = pickerRoot?.id === 'dm-pip-messages' ? this._activeDMPip : this.currentChannel;
+  if (this._channelAllowsReactions && !this._channelAllowsReactions(pickerCode)) {
+    this._showToast?.(t('channel_functions.reactions_disabled'), 'info');
+    return;
+  }
+
   // Toggle: if this message already has a picker open, close it and bail
   const existingPicker = msgEl.querySelector('.reaction-picker');
   if (existingPicker) {
@@ -3626,12 +3894,15 @@ _quoteDMPiPMessage(msgEl) {
 _sendDMPiPMessage() {
   const input = document.getElementById('dm-pip-input');
   if (!input || !this._activeDMPip) return;
+  const typed = input.value;
   let content = (input.value || '').trim();
   const hasPiPImages = this._pipImageQueue && this._pipImageQueue.length > 0;
   if (!content && !hasPiPImages) return;
   const code = this._activeDMPip;
   const replyTo = this._dmPipReplyingTo ? this._dmPipReplyingTo.id : null;
 
+  // Kept for a moment so a refusal for length can put the text back (#5691).
+  if (content) this._lastSendDraft = { text: input.value, code, at: Date.now(), inputId: 'dm-pip-input' };
   // Clear the UI immediately so the input feels responsive.
   input.value = '';
   this._clearDMPiPReply();
@@ -3641,15 +3912,21 @@ _sendDMPiPMessage() {
   (async () => {
     const ch = this.channels.find(c => c.code === code);
     const isDm = ch && ch.is_dm && ch.dm_target;
-    let partner = isDm ? this._getE2EPartnerFor(code) : null;
-    if (isDm && !partner && this.e2e && this.e2e.ready) {
-      try {
-        const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-        if (jwk) {
-          this._dmPublicKeys[ch.dm_target.id] = jwk;
-          partner = this._getE2EPartnerFor(code);
-        }
-      } catch {}
+    // Not sent after all: the text and the reply go back in the box.
+    const putBack = () => {
+      if (this._activeDMPip !== code || input.value.trim()) return;
+      input.value = typed;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const replyEl = replyTo && document.querySelector(`#dm-pip-messages .message[data-msg-id="${replyTo}"], #dm-pip-messages .message-compact[data-msg-id="${replyTo}"]`);
+      if (replyEl) this._setDMPiPReply(replyEl, replyTo);
+      input.focus();
+    };
+    // Nothing goes out unencrypted, or to a changed key, without asking.
+    let partner = null;
+    if (isDm) {
+      const gate = await this._dmSendGate(code);
+      if (!gate) { putBack(); return; }
+      partner = gate.partner;
     }
 
     // Pre-process content-transforming slash commands client-side so they
@@ -3715,7 +3992,11 @@ _sendDMPiPMessage() {
           payload.content = encrypted;
           payload.encrypted = true;
         } catch (err) {
+          // This used to go out unencrypted without a word. It stays here now.
           console.warn('[E2E][PiP] Encryption failed:', err);
+          this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+          putBack();
+          return;
         }
       }
       this.socket.emit('send-message', payload);
@@ -3785,6 +4066,9 @@ _openThread(parentId) {
   const parentUserIdRaw = msgEl?.dataset?.userId;
   const parentUserId = parentUserIdRaw ? parseInt(parentUserIdRaw, 10) : null;
   this._setThreadParentHeader({ userId: parentUserId, username: author, avatar, avatarShape });
+  // A forum topic opens across the chat column with a title bar; this runs
+  // after the header above so the bar's title is what shows (#5659).
+  this._forumApplyThreadChrome?.(parentId);
 
   // Focus input
   const input = document.getElementById('thread-input');
@@ -3867,6 +4151,11 @@ _closeThread() {
   document.documentElement.classList.remove('forum-thread-open');
   const subs = document.getElementById('forum-subtasks');
   if (subs) { subs.hidden = true; subs.innerHTML = ''; }
+  // Closed means stopped: a video or embed left in the hidden panel kept
+  // playing (#5690). Opening a thread fetches and redraws it anyway.
+  const threadMsgs = document.getElementById('thread-messages');
+  if (threadMsgs) threadMsgs.innerHTML = '';
+  this._forumApplyThreadChrome?.(null);
 },
 
 _sendThreadMessage() {
@@ -3881,6 +4170,8 @@ _sendThreadMessage() {
   const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
 
   if (content) {
+    // Kept so a reply refused as too long comes back to the box (#5691).
+    this._lastSendDraft = { text: input.value, code: parentId, at: Date.now(), inputId: 'thread-input' };
     this.socket.emit('send-thread-message', { parentId, content, replyTo }, (resp) => {
       if (resp && resp.error) {
         this._showToast(resp.error, 'error');
@@ -3948,6 +4239,8 @@ _appendThreadMessage(msg) {
     threadCompact = samePerson && within;
   }
 
+  // A reply's picture shows its tags like a chat message does (#5682).
+  const threadTagsHtml = this._renderAttachmentTags ? this._renderAttachmentTags(msg.attachmentTags) : '';
   const el = document.createElement('div');
   el.className = 'thread-message' + (threadCompact ? ' thread-compact' : '');
   el.dataset.msgId = msg.id;
@@ -3962,7 +4255,7 @@ _appendThreadMessage(msg) {
   if (msg.avatar) el.dataset.avatar = msg.avatar;
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
   if (threadCompact) {
-    const shortTime = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const shortTime = this._fmtTime(msg.created_at);
     el.innerHTML = `
       <div class="thread-msg-row">
         <div class="thread-msg-avatar thread-msg-compact-spacer"><span class="thread-compact-time">${this._escapeHtml(shortTime)}</span></div>
@@ -3972,7 +4265,7 @@ _appendThreadMessage(msg) {
             ${threadOverflowHtml}
           </div>
           <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
-          ${reactionsHtml}
+          ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
     `;
@@ -3983,7 +4276,7 @@ _appendThreadMessage(msg) {
         <div class="thread-msg-body">
           <div class="thread-msg-header">
             <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
-            <span class="thread-msg-time">${this._formatTime(msg.created_at)}</span>
+            <span class="thread-msg-time"${this._timeAttr(msg.created_at)}>${this._formatTime(msg.created_at)}</span>
             <span class="thread-msg-header-spacer"></span>
             <div class="thread-msg-toolbar">
               <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
@@ -3992,7 +4285,7 @@ _appendThreadMessage(msg) {
           </div>
           ${replyHtml}
           <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
-          ${reactionsHtml}
+          ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
     `;
@@ -4040,7 +4333,7 @@ _promoteThreadCompactToFull(compactEl) {
       <div class="thread-msg-body">
         <div class="thread-msg-header">
           <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
-          <span class="thread-msg-time">${this._formatTime(time)}</span>
+          <span class="thread-msg-time"${this._timeAttr(time)}>${this._formatTime(time)}</span>
           <span class="thread-msg-header-spacer"></span>
           ${toolbarHtml}
         </div>
@@ -4187,7 +4480,16 @@ _startEditMessage(msgEl, msgId) {
   textarea.value = rawText;
   textarea.rows = 1;
   textarea.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  // The same drag bar the composer has, so a long message can be pulled
+  // open while editing it. It sits under the box, and dragging it down makes
+  // the box taller, since the message above it may be at the very top of
+  // the chat with nowhere to drag up to (#5662).
+  const grip = document.createElement('div');
+  grip.className = 'pip-input-resizer edit-resizer';
+  grip.setAttribute('aria-hidden', 'true');
   contentEl.appendChild(textarea);
+  contentEl.appendChild(grip);
+  this._bindInputResizer?.(grip);
 
   // Track active edit textarea for emoji picker redirection
   this._activeEditTextarea = textarea;
@@ -4266,6 +4568,17 @@ _startEditMessage(msgEl, msgId) {
 
   textarea.addEventListener('keydown', (e) => {
     e.stopPropagation();
+
+    // Ctrl/Cmd+E toggles the emoji picker for this edit. The global shortcut
+    // in app-ui.js can't fire here because we stopPropagation above, so it's
+    // re-handled locally; _activeEditTextarea (set above) routes the pick into
+    // this textarea rather than the main composer.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === 'e') {
+      e.preventDefault();
+      this._activeEditTextarea = textarea;
+      this._toggleEmojiPicker();
+      return;
+    }
 
     // Handle @mention and :emoji dropdown navigation in edit mode
     const mentionDd = document.getElementById('mention-dropdown');
@@ -4438,6 +4751,10 @@ _enforceDmLinkPolicy(containerEl) {
     try {
       const u = new URL(rawUrl, location.href);
       if (u.origin === location.origin) return false;   // our own uploads / proxy
+      // A data: or blob: address has no host to judge. A picture that has not
+      // loaded yet carries a data: placeholder, and reading that as a host
+      // turned the server's own uploads into "blocked domain" notices.
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
       return !R.checkHost(u.hostname, policy).allowed;
     } catch { return false; }
   };
@@ -4463,7 +4780,7 @@ _enforceDmLinkPolicy(containerEl) {
   containerEl.querySelectorAll('.message-content img[data-mp-origin], .message-content img.chat-image').forEach(img => {
     if (img.dataset.policyChecked) return;
     img.dataset.policyChecked = '1';
-    const origin = img.dataset.mpOrigin || img.getAttribute('data-mp-src') || img.src;
+    const origin = img.dataset.mpOrigin || img.getAttribute('data-mp-src') || img.dataset.lazySrc || img.src;
     if (!hostBlocked(origin)) return;
     const ph = document.createElement('span');
     ph.className = 'hidden-image';
@@ -5031,6 +5348,40 @@ _showConfirmModal(title, message, opts = {}) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
     document.addEventListener('keydown', onKey);
     setTimeout(() => okBtn.focus(), 0);
+  });
+},
+
+// A question with several answers. Resolves the id of the button pressed, or
+// null for Escape or a click outside. Focus starts on the first button and
+// Enter only presses the focused one, so a stray Enter (someone still sending)
+// cannot pick a risky answer.
+_askChoice(title, message, buttons) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.style.zIndex = '100002';
+    overlay.innerHTML = `
+      <div class="modal modal-confirm">
+        <h3 style="margin-top:0">${this._escapeHtml(title || '')}</h3>
+        ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
+        <div class="modal-actions" style="margin-top:12px;flex-wrap:wrap"></div>
+      </div>
+    `;
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+    const close = (val) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+    const row = overlay.querySelector('.modal-actions');
+    for (const b of buttons) {
+      const el = document.createElement('button');
+      el.className = b.danger ? 'btn-sm btn-danger-fill' : (b.accent ? 'btn-sm btn-accent' : 'btn-sm');
+      el.textContent = b.label;
+      el.addEventListener('click', () => close(b.id));
+      row.appendChild(el);
+    }
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    setTimeout(() => row.querySelector('button')?.focus(), 0);
   });
 },
 

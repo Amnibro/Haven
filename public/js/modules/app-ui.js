@@ -201,9 +201,15 @@ _setupUI() {
       if (e.key === 'Escape') { this._hideFerryDropdown(); return; }
     }
 
+    // Ctrl + Enter opens scheduled send modal
+    // Just Enter sends the message
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      this._sendMessage();
+      if (e.ctrlKey) {
+        this._openScheduleModal();
+      } else {
+        e.preventDefault();
+        this._sendMessage();
+      }
     }
 
     // Up arrow on empty input → edit last own message (toggleable)
@@ -268,6 +274,20 @@ _setupUI() {
   document.getElementById('schedule-cancel')?.addEventListener('click', () => { document.getElementById('schedule-modal').style.display = 'none'; });
   document.getElementById('schedule-save')?.addEventListener('click', () => this._submitSchedule());
   document.getElementById('schedule-modal')?.addEventListener('click', (e) => { if (e.target.id === 'schedule-modal') e.target.style.display = 'none'; });
+
+  const sendLaterText = document.getElementById('schedule-text');
+  sendLaterText.addEventListener('keydown', (e) => {
+    // Markdown Formatting shortcuts
+    if (this._handleMarkdownShortcuts(sendLaterText, e)) {
+      e.preventDefault();
+    }
+  });
+  sendLaterText.addEventListener('paste', (e) => {
+    // insert a markdown link when a link is pasted over selected text
+    if (this._handleMarkdownLinkPaste(sendLaterText, e)) {
+      e.preventDefault();
+    }
+  });
 
   // Join channel
   const joinBtn = document.getElementById('join-channel-btn');
@@ -518,6 +538,11 @@ _setupUI() {
       const newVal = ch && ch.soundboard_enabled === 0 ? 1 : 0;
       optimistic({ soundboard_enabled: newVal });
       this.socket.emit('toggle-channel-permission', { code, permission: 'soundboard' });
+    } else if (fn === 'reactions') {
+      const newVal = ch && ch.reactions_enabled === 0 ? 1 : 0;
+      optimistic({ reactions_enabled: newVal });
+      if (code === this.currentChannel) this._applyReactionLock?.();
+      this.socket.emit('toggle-channel-permission', { code, permission: 'reactions' });
     } else if (fn === 'read-only') {
       const newVal = ch && ch.read_only ? 0 : 1;
       optimistic({ read_only: newVal });
@@ -1815,7 +1840,9 @@ _setupUI() {
     if (!this._mediaGalleryData || !this._mediaGallerySelectMode) return;
     const tab = this._mediaGalleryActiveTab || 'photos';
     if (tab === 'links') return; // not deletable
-    const items = this._mediaGalleryData[tab] || [];
+    // Only the items currently visible under the active tag filter, so Select
+    // all never reaches attachments hidden by the filter.
+    const items = this._filterMediaItemsByTags(this._mediaGalleryData[tab] || [], tab);
     const selected = this._mediaGallerySelected || (this._mediaGallerySelected = new Map());
     // Toggle: if everything in this tab is already selected, clear; else add all
     const allSelected = items.length > 0 && items.every(it => selected.has(this._mediaItemKey(it)));
@@ -1866,6 +1893,38 @@ _setupUI() {
       this.socket.emit('get-channel-media', { code: this.currentChannel });
     });
   });
+
+  // ── Tag filter (#tagging phase 3b) ──
+  // Opens a body-level picker; selecting one or more tags filters the current
+  // tab to attachments carrying ALL of them (exact match), respecting the sort.
+  const tagFilterBtn = document.getElementById('media-gallery-tagfilter-btn');
+  if (tagFilterBtn) tagFilterBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (document.getElementById('media-tag-filter-popup')) this._closeMediaTagFilter();
+    else this._openMediaTagFilter(tagFilterBtn);
+  });
+
+  // ── Bulk tag management (#tagging phase 3b) ──
+  // In select mode, manage_tags holders get a dropdown to Append or Replace
+  // tags across the selected attachments, confirmed in a tag picker.
+  const tagManageBtn = document.getElementById('media-gallery-tagmanage-btn');
+  const tagManageMenu = document.getElementById('media-tagmanage-menu');
+  if (tagManageBtn && tagManageMenu) {
+    tagManageBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      tagManageMenu.style.display = tagManageMenu.style.display !== 'none' ? 'none' : '';
+    });
+    tagManageMenu.querySelectorAll('.media-tagmanage-opt').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        tagManageMenu.style.display = 'none';
+        this._openMediaTagManage(opt.dataset.mode);
+      });
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#media-gallery-tagmanage')) tagManageMenu.style.display = 'none';
+    });
+  }
 
   // Right sidebar collapse toggle (persisted to localStorage)
   const sidebarToggle = document.getElementById('sidebar-toggle-btn');
@@ -2165,11 +2224,29 @@ _setupUI() {
       el.addEventListener('contextmenu', (e) => {
         if (e.target.classList.contains('chat-image')) {
           e.preventDefault();
-          this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src);
+          this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, { sourceImg: e.target });
         }
       });
     }
   }
+  // Middle click on a picture opens it in a new tab, like a link (#5663).
+  // One handler for every message list: the pop-out DM and the thread panel
+  // had ended up with two each, so one click asked for two tabs. The
+  // mousedown half stops Windows from starting its middle-button autoscroll
+  // on the picture, which swallows the click before it gets here.
+  const MIDCLICK_LISTS = '#messages, #thread-messages, #dm-pip-messages, #search-panel-list';
+  const midClickImage = (e) => {
+    if (e.button !== 1 || !e.target || !e.target.closest) return null;
+    const img = e.target.closest('img.chat-image');
+    return img && img.closest(MIDCLICK_LISTS) ? img : null;
+  };
+  document.addEventListener('mousedown', (e) => { if (midClickImage(e)) e.preventDefault(); });
+  document.addEventListener('auxclick', (e) => {
+    const img = midClickImage(e);
+    if (!img) return;
+    e.preventDefault();
+    this._openImageInNewTab(img);
+  });
 
   // Image right-click — custom context menu for chat thumbnails. Forum cards
   // open their own menus, so both menus no longer stack up there (#5650).
@@ -2177,7 +2254,7 @@ _setupUI() {
     if (e.target.closest('.forum-topic')) return;
     if (e.target.classList.contains('chat-image')) {
       e.preventDefault();
-      this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src);
+      this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, { sourceImg: e.target });
     }
   });
 
@@ -2237,6 +2314,17 @@ _setupUI() {
     const replyMsgId = banner.dataset.replyMsgId;
     if (!replyMsgId) return;
     this._jumpToMessage(parseInt(replyMsgId, 10));
+  });
+
+  // Tag chip click (message footer / search result) — run a search for exactly
+  // that tag. Delegated on document so it works in every surface that renders a
+  // Tags footer without per-container wiring. (#tagging phase 2)
+  document.addEventListener('click', (e) => {
+    const chip = e.target.closest('.message-tag[data-tag]');
+    if (!chip) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this._searchByTag?.(chip.dataset.tag);
   });
 
   // #channel-name link click — switch to the referenced channel.
@@ -2349,6 +2437,40 @@ _setupUI() {
       e.preventDefault();
     }
   });
+
+  // A paperclip and drag-and-drop in the pop-out DM, since paste was the
+  // only way to send a picture from it, and middle-click opens a picture
+  // there and in a thread like it does in chat (#5663).
+  const dmPipUploadBtn = document.getElementById('dm-pip-upload-btn');
+  const dmPipFileInput = document.getElementById('dm-pip-file-input');
+  const dmPipTakeFiles = (files) => {
+    const targetCode = this._activeDMPip;
+    if (!files || !files.length || !targetCode) return false;
+    for (const file of files) {
+      if (file.type.startsWith('image/')) this._queueImageForPiP(file, targetCode);
+      else this._uploadGeneralFile(file, targetCode);
+    }
+    return true;
+  };
+  if (dmPipUploadBtn && dmPipFileInput) {
+    dmPipUploadBtn.addEventListener('click', (e) => { e.stopPropagation(); dmPipFileInput.click(); });
+    dmPipFileInput.addEventListener('change', () => {
+      dmPipTakeFiles(dmPipFileInput.files);
+      dmPipFileInput.value = '';
+    });
+  }
+  const dmPipPanel = document.getElementById('dm-pip-panel');
+  if (dmPipPanel) {
+    dmPipPanel.addEventListener('dragover', (e) => {
+      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+    });
+    dmPipPanel.addEventListener('drop', (e) => {
+      if (!e.dataTransfer?.files?.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dmPipTakeFiles(e.dataTransfer.files);
+    });
+  }
 
   // PiP emoji button — positions the picker above the button and targets the PiP input
   const dmPipEmojiBtn = document.getElementById('dm-pip-emoji-btn');
@@ -2517,10 +2639,15 @@ _setupUI() {
     });
 
     // Drag & drop parity with the other composers — queue, never insta-post.
-    const threadArea = threadInput.closest('.thread-input-area') || threadInput;
-    threadArea.addEventListener('dragover', (e) => { e.preventDefault(); threadArea.classList.add('drag-over'); });
-    threadArea.addEventListener('dragleave', () => threadArea.classList.remove('drag-over'));
+    // The whole panel takes the drop, not only the reply box: in a forum topic
+    // people drop pictures onto the replies the way they would onto a chat
+    // (#5684).
+    const threadArea = threadInput.closest('.thread-panel') || threadInput.closest('.thread-input-area') || threadInput;
+    const hasFiles = (e) => !!e.dataTransfer?.types?.includes('Files');
+    threadArea.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); threadArea.classList.add('drag-over'); });
+    threadArea.addEventListener('dragleave', (e) => { if (!threadArea.contains(e.relatedTarget)) threadArea.classList.remove('drag-over'); });
     threadArea.addEventListener('drop', (e) => {
+      if (!hasFiles(e)) return;
       e.preventDefault();
       threadArea.classList.remove('drag-over');
       if (!this._activeThreadParent) return;
@@ -2674,40 +2801,7 @@ _setupUI() {
   // We set both `height` and `min-height` inline so the auto-grow `input`
   // handler (which sets `height = 'auto'` then caps at a small default) can't
   // collapse the textarea back down after the user has manually expanded it.
-  document.querySelectorAll('.pip-input-resizer').forEach(handle => {
-    let startY = 0;
-    let startHeight = 0;
-    let ta = null;
-    let cap = 600;
-
-    const onMove = (e) => {
-      if (!ta) return;
-      const delta = startY - e.clientY; // positive when dragging up
-      const newHeight = Math.max(34, Math.min(cap, startHeight + delta));
-      ta.style.height = `${newHeight}px`;
-      ta.style.minHeight = `${newHeight}px`;
-      ta.style.maxHeight = `${cap}px`;
-    };
-
-    const onUp = () => {
-      ta = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-
-    handle.addEventListener('mousedown', (e) => {
-      ta = handle.parentElement?.querySelector('textarea');
-      if (!ta) return;
-      startY = e.clientY;
-      startHeight = ta.getBoundingClientRect().height;
-      // Cap manual expansion at ~60% of viewport so the textarea can never
-      // swallow the entire chat pane. Min 200px on tiny windows.
-      cap = Math.max(200, Math.floor(window.innerHeight * 0.6));
-      e.preventDefault();
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  });
+  document.querySelectorAll('.pip-input-resizer').forEach(handle => this._bindInputResizer(handle));
 
   // Emoji picker toggle
   document.getElementById('emoji-btn').addEventListener('click', () => {
@@ -3091,10 +3185,12 @@ _setupUI() {
       const di = document.getElementById('tsm-cal-input');
       if (!di) return;
       const cur = this._tsmBuildDate();
-      // Seed the native picker with the fields' current date so it opens there.
+      // Seed the native picker with the fields' current date so it opens there,
+      // decomposed in the same zone the wall-clock fields are read in.
       if (cur) {
         const p = n => String(n).padStart(2, '0');
-        di.value = `${cur.getFullYear()}-${p(cur.getMonth() + 1)}-${p(cur.getDate())}`;
+        const parts = this._zonedParts(cur);
+        di.value = `${parts.year}-${p(parts.monthIndex + 1)}-${p(parts.day)}`;
       }
       try { di.showPicker(); } catch { di.focus(); di.click(); }
     });
@@ -3543,6 +3639,77 @@ _setupUI() {
   });
   this._buildLanguagePicker();
 
+  // ── Voice messages (#5665) ────────────────────────────
+  document.getElementById('voice-btn')?.addEventListener('click', () => this._toggleVoiceMessage());
+  document.getElementById('voice-rec-cancel')?.addEventListener('click', () => this._stopVoiceMessage(false));
+  document.getElementById('voice-rec-send')?.addEventListener('click', () => this._stopVoiceMessage(true));
+
+  // ── One + button in place of the toolbar (#5654) ──────
+  // With the setting on, the toolbar is hidden and becomes the menu the +
+  // opens; the buttons keep their own handlers, only their home moves.
+  const plusBtn = document.getElementById('composer-plus-btn');
+  const actionsBox = document.querySelector('#message-input-area .input-actions-box');
+  this._closeComposerMenu = () => {
+    actionsBox?.classList.remove('open');
+    plusBtn?.setAttribute('aria-expanded', 'false');
+  };
+  if (plusBtn && actionsBox) {
+    plusBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = !actionsBox.classList.contains('open');
+      actionsBox.classList.toggle('open', open);
+      plusBtn.setAttribute('aria-expanded', String(open));
+    });
+    // Picking a tool closes the menu; the tool's own picker takes over.
+    actionsBox.addEventListener('click', (e) => {
+      if (document.documentElement.hasAttribute('data-compact-composer') && e.target.closest('button')) setTimeout(() => this._closeComposerMenu(), 0);
+    });
+    document.addEventListener('click', (e) => {
+      if (actionsBox.classList.contains('open') && !e.target.closest('.input-actions-box') && e.target !== plusBtn) this._closeComposerMenu();
+    });
+  }
+
+  // ── Formatting guide and command list (#5654) ─────────
+  const formatBtn = document.getElementById('format-btn');
+  const formatPicker = document.getElementById('format-picker');
+  if (formatBtn && formatPicker) {
+    let formatTab = 'markdown';
+    const renderFormatPicker = () => {
+      formatPicker.querySelectorAll('.gif-tab').forEach(b => b.classList.toggle('active', b.dataset.formatTab === formatTab));
+      const list = document.getElementById('format-picker-list');
+      if (list) list.innerHTML = formatTab === 'markdown' ? this._formatGuideHtml() : this._commandGuideHtml();
+    };
+    formatBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = formatPicker.style.display === 'none';
+      const emojiPicker = document.getElementById('emoji-picker');
+      const gifPicker = document.getElementById('gif-picker');
+      if (emojiPicker) emojiPicker.style.display = 'none';
+      if (gifPicker) gifPicker.style.display = 'none';
+      formatPicker.style.display = open ? 'flex' : 'none';
+      if (open) renderFormatPicker();
+    });
+    formatPicker.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tab = e.target.closest('[data-format-tab]');
+      if (tab) { formatTab = tab.dataset.formatTab; renderFormatPicker(); return; }
+      const row = e.target.closest('.format-row');
+      if (!row) return;
+      if (row.dataset.cmd) this._insertSlashCommand(row.dataset.cmd);
+      else this._wrapComposerSelection(row.dataset.before || '', row.dataset.after || '', row.dataset.sample || '', row.dataset.block === '1');
+      formatPicker.style.display = 'none';
+    });
+    document.addEventListener('click', (e) => {
+      if (formatPicker.style.display !== 'none' && !e.target.closest('#format-picker') && !e.target.closest('#format-btn')) formatPicker.style.display = 'none';
+    });
+  }
+
+  // ── Timezone (Configure Time) ────────────────────────
+  document.getElementById('configure-time-btn')?.addEventListener('click', () => {
+    this._openTimezoneModal({ firstRun: false });
+  });
+  this._updateTimezoneSummary?.();
+
   // ── Password change ──────────────────────────────────
   document.getElementById('change-password-btn').addEventListener('click', async () => {
     const cur  = document.getElementById('current-password').value;
@@ -3581,8 +3748,9 @@ _setupUI() {
       this.socket.auth.token = data.token;
 
       // Re-wrap E2E private key with a key derived from the NEW password
-      // so the server backup can be unlocked with the new credentials
-      if (this.e2e && this.e2e.ready && typeof HavenE2E !== 'undefined') {
+      // so the server backup can be unlocked with the new credentials. A
+      // backup locked with a separate passphrase stays as it is.
+      if (this.e2e && this.e2e.ready && typeof HavenE2E !== 'undefined' && !this.user?.e2ePassphrase) {
         try {
           const newWrap = await HavenE2E.deriveWrappingKey(np);
           await this.e2e.reWrapKey(this.socket, newWrap);
@@ -3607,6 +3775,12 @@ _setupUI() {
       hint.classList.add('error');
     }
   });
+
+  // ── Encryption passphrase ────────────────────────────
+  // The E2E key backup is normally locked with the login password, which the
+  // server receives at every sign-in. A passphrase of the user's own keeps the
+  // server from ever being able to open it.
+  this._setupE2EPassphraseSection();
 
   // ── Two-Factor Authentication settings ─────────────
   const totpStatusText     = document.getElementById('totp-status-text');
@@ -3658,6 +3832,7 @@ _setupUI() {
     settingsNav.addEventListener('click', (e) => {
       const item = e.target.closest('.settings-nav-item');
       if (item && item.dataset.target === 'section-2fa') loadTotpStatus();
+      if (item && item.dataset.target === 'section-tags-admin') this._loadAdminTags();
       if (item && item.dataset.target === 'section-sessions') this._refreshSessions();
       if (item && item.dataset.target === 'section-desktop-shortcuts') this._setupDesktopShortcuts();
       if (item && item.dataset.target === 'section-desktop-app') this._setupDesktopAppPrefs();
@@ -3988,6 +4163,51 @@ _setupUI() {
     });
   });
 
+  // Delete every message you wrote (#5686). Same shape as Delete Account:
+  // password, a second confirm, then the server does it and says how many.
+  document.getElementById('self-purge-btn')?.addEventListener('click', () => {
+    document.querySelector('.self-purge-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay self-purge-overlay';
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:380px">
+        <h3>🧹 ${t('settings.self_purge.title')}</h3>
+        <p class="modal-desc">${t('settings.self_purge.confirm_desc')}</p>
+        <div class="form-group compact">
+          <input type="password" id="self-purge-pw" placeholder="${t('settings.delete_account_section.password_placeholder')}" maxlength="128" autocomplete="current-password">
+        </div>
+        <small class="settings-hint self-purge-status" style="display:block;margin-bottom:8px"></small>
+        <div class="modal-actions">
+          <button class="btn-sm self-purge-cancel">${t('modals.common.cancel')}</button>
+          <button class="btn-sm btn-danger-fill self-purge-confirm">${t('settings.self_purge.btn')}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('.self-purge-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('.self-purge-confirm').addEventListener('click', async () => {
+      const pw = document.getElementById('self-purge-pw').value;
+      const status = overlay.querySelector('.self-purge-status');
+      if (!pw) { status.textContent = t('settings.delete_account_section.password_required'); return; }
+      const ok = await this._showConfirmModal(t('settings.self_purge.confirm_title'), t('settings.self_purge.confirm_body'), { danger: true, confirmLabel: t('settings.self_purge.btn') });
+      if (!ok) return;
+      status.textContent = t('settings.delete_account_section.deleting');
+      overlay.querySelector('.self-purge-confirm').disabled = true;
+      this.socket.emit('self-purge-messages', { password: pw }, (res) => {
+        if (!res || res.error) {
+          status.textContent = res?.error || t('settings.self_purge.failed');
+          overlay.querySelector('.self-purge-confirm').disabled = false;
+          return;
+        }
+        overlay.remove();
+        this._showToast(res.kept
+          ? t('settings.self_purge.done_kept', { n: res.deleted, kept: res.kept })
+          : t('settings.self_purge.done', { n: res.deleted }), 'success');
+      });
+    });
+  });
+
   // Member visibility select (admin) — saved via admin Save button
 
   // View bans button
@@ -4260,7 +4480,7 @@ _setupUI() {
       }
       listEl.innerHTML = files.map(f => {
         const safeName = f.name.replace(/[<>"&]/g, c => ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', '&': '&amp;' }[c]));
-        const when = new Date(f.mtime).toLocaleString();
+        const when = this._fmtDateTime(f.mtime);
         return `<div style="display:flex;gap:6px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:6px 8px;border-radius:4px">
           <div style="min-width:0;flex:1">
             <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.85em">${safeName}</div>
@@ -4655,11 +4875,17 @@ _setupUI() {
     host.innerHTML = html;
     const toggle = document.getElementById('guests-enabled');
     if (toggle) toggle.checked = (this.serverSettings?.guests_enabled === 'true');
+    const voiceToggle = document.getElementById('guests-allow-voice');
+    if (voiceToggle) voiceToggle.checked = (this.serverSettings?.guests_allow_voice !== 'false');
   };
   this._renderGuestChannels = _renderGuestChannels;
   document.getElementById('guests-enabled')?.addEventListener('change', (e) => {
     this.socket.emit('update-server-setting', { key: 'guests_enabled', value: e.target.checked ? 'true' : 'false' });
     this._showToast?.(t(e.target.checked ? 'settings.admin.guest_access.enabled' : 'settings.admin.guest_access.disabled'), 'success');
+  });
+  document.getElementById('guests-allow-voice')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', { key: 'guests_allow_voice', value: e.target.checked ? 'true' : 'false' });
+    this._showToast?.(t(e.target.checked ? 'settings.admin.guest_access.voice_on' : 'settings.admin.guest_access.voice_off'), 'success');
   });
   document.getElementById('guest-channels-all-btn')?.addEventListener('click', () => {
     document.querySelectorAll('.guest-channel-cb').forEach(cb => { cb.checked = true; });
@@ -4754,7 +4980,7 @@ _setupUI() {
           : 'settings.admin.invite_links.channel_other', { count: ic.channels.length }
       );
       const uses = ic.max_uses > 0 ? `${ic.use_count} / ${ic.max_uses}` : `${ic.use_count}`;
-      const expiry = ic.expires_at ? new Date(ic.expires_at).toLocaleString() : t('settings.admin.invite_links.never');
+      const expiry = ic.expires_at ? this._fmtDateTime(ic.expires_at) : t('settings.admin.invite_links.never');
       const label = ic.label ? this._escapeHtml(ic.label) : `<em style="opacity:.6">${t('settings.admin.invite_links.no_label')}</em>`;
       const editorChannels = _inviteChannelChecks('invite-edit-channel-cb', new Set(ic.channels || []));
       return `<div class="invite-code-card" data-id="${ic.id}" style="border:1px solid var(--border);border-radius:8px;padding:10px">
@@ -5044,7 +5270,7 @@ async _copyInviteCard(card) {
 
   if (invite?.expires_at) {
     const expiryDate = new Date(invite.expires_at);
-    if (!Number.isNaN(expiryDate.getTime())) expiryText = expiryDate.toLocaleString();
+    if (!Number.isNaN(expiryDate.getTime())) expiryText = this._fmtDateTime(expiryDate);
   }
 
   const invitedText = t('settings.admin.invite_links.card_invited', { server: brandText });
@@ -6490,6 +6716,9 @@ _openPollModal() {
   document.getElementById('poll-question-input').value = '';
   document.getElementById('poll-multi-vote').checked = false;
   document.getElementById('poll-anonymous').checked = false;
+  const colSel = document.getElementById('poll-columns');
+  if (colSel) colSel.value = '0';
+  this._updatePollColumnsVis();
   const list = document.getElementById('poll-options-list');
   list.innerHTML = '';
   for (let i = 0; i < 2; i++) {
@@ -6534,6 +6763,7 @@ _addPollOptionRow(list, index) {
       imgBtn.classList.remove('has-image');
       imgBtn.style.backgroundImage = '';
       imgBtn.title = t('modals.poll.add_image');
+      this._updatePollColumnsVis();
       return;
     }
     file.click();
@@ -6554,6 +6784,7 @@ _addPollOptionRow(list, index) {
       imgBtn.classList.add('has-image');
       imgBtn.style.backgroundImage = `url("${data.url}")`;
       imgBtn.title = t('modals.poll.remove_image');
+      this._updatePollColumnsVis();
     } catch (err) {
       if (!err?.aborted) this._showToast(err?.message || t('toasts.upload_failed'), 'error');
     }
@@ -6579,6 +6810,15 @@ _updatePollRemoveButtons() {
   const list = document.getElementById('poll-options-list');
   const btns = list.querySelectorAll('.poll-option-remove');
   btns.forEach(b => { b.style.display = list.children.length > 2 ? '' : 'none'; });
+  this._updatePollColumnsVis();
+},
+
+// The Columns choice only matters for a picture poll (#5648).
+_updatePollColumnsVis() {
+  const wrap = document.getElementById('poll-columns-wrap');
+  if (!wrap) return;
+  const any = [...document.querySelectorAll('#poll-options-list .poll-option-row')].some(r => r.dataset.image);
+  wrap.style.display = any ? '' : 'none';
 },
 
 _submitPoll() {
@@ -6592,9 +6832,238 @@ _submitPoll() {
   const images = rows.map(r => r.image);
   const multiVote = document.getElementById('poll-multi-vote').checked;
   const anonymous = document.getElementById('poll-anonymous').checked;
+  const hasImages = images.some(Boolean);
+  const columns = hasImages ? (parseInt(document.getElementById('poll-columns')?.value, 10) || 0) : 0;
 
-  this.socket.emit('create-poll', { question, options, multiVote, anonymous, ...(images.some(Boolean) && { images }) });
+  this.socket.emit('create-poll', { question, options, multiVote, anonymous, ...(hasImages && { images }), ...(columns > 1 && { columns }) });
   document.getElementById('poll-modal').style.display = 'none';
+},
+
+// The drag bar above a text box. Bound once per handle; the edit box makes
+// its own handle on the fly (#5662).
+// ── Formatting guide and command list (#5654) ─────────────
+// Every markdown trick the message formatter understands, in one place. A
+// click wraps the selection (or drops a sample) into the message box.
+_formatGuideRows() {
+  return [
+    { key: 'bold',      before: '**', after: '**' },
+    { key: 'italic',    before: '*',  after: '*' },
+    { key: 'underline', before: '__', after: '__' },
+    { key: 'strike',    before: '~~', after: '~~' },
+    { key: 'highlight', before: '==', after: '==' },
+    { key: 'spoiler',   before: '||', after: '||' },
+    { key: 'code',      before: '`',  after: '`' },
+    { key: 'codeblock', before: '```\n', after: '\n```', block: true },
+    { key: 'quote',     before: '> ',  after: '', block: true },
+    { key: 'heading',   before: '# ',  after: '', block: true },
+    { key: 'list',      before: '- ',  after: '', block: true },
+    { key: 'numbered',  before: '1. ', after: '', block: true },
+    { key: 'link',      before: '[',   after: '](https://example.com)' },
+    { key: 'colour',    before: 'c#FF00EF ', after: ' #c' },
+    { key: 'rule',      before: '---', after: '', block: true, sample: '' },
+    { key: 'table',     before: '| A | B |\n| --- | --- |\n| 1 | 2 |', after: '', block: true, sample: '' },
+    { key: 'mention',   before: '@',  after: '', sample: '' },
+    { key: 'channel',   before: '#',  after: '', sample: '' },
+    { key: 'emoji',     before: ':',  after: ':', sample: 'smile' },
+  ];
+},
+
+_formatGuideHtml() {
+  return this._formatGuideRows().map(r => {
+    const sample = r.sample !== undefined ? r.sample : t('format_picker.sample_text');
+    const syntax = r.before + sample + r.after;
+    const demo = (r.block || !sample) ? '' : `<span class="format-row-demo message-content">${this._formatContent(syntax)}</span>`;
+    return `<button type="button" class="format-row" data-before="${this._escapeHtml(r.before)}" data-after="${this._escapeHtml(r.after)}" data-sample="${this._escapeHtml(sample)}"${r.block ? ' data-block="1"' : ''}>
+      <span class="format-row-label">${this._escapeHtml(t(`format_picker.${r.key}`))}</span>
+      <code class="format-row-syntax">${this._escapeHtml(syntax)}</code>${demo}</button>`;
+  }).join('');
+},
+
+// The same list the / dropdown offers, for the current channel, including
+// the bot commands registered here.
+_commandGuideHtml() {
+  const code = this.currentChannel;
+  const cmds = (this.slashCommands || []).filter(c => c && c.cmd && (!Array.isArray(c.channelCodes) || c.channelCodes.includes(code)));
+  if (!cmds.length) return `<div class="format-picker-hint">${this._escapeHtml(t('format_picker.no_commands'))}</div>`;
+  const rows = cmds.map(c => {
+    const desc = (c.descByChannel && code && c.descByChannel[code]) || c.desc || '';
+    return `<button type="button" class="format-row format-row-command" data-cmd="${this._escapeHtml(c.cmd)}">
+      <span class="format-row-cmd">/${this._escapeHtml(c.cmd)}${c.args ? ' ' + this._escapeHtml(c.args) : ''}</span>
+      <span class="format-row-desc">${this._escapeHtml(desc)}</span></button>`;
+  }).join('');
+  return `<div class="format-picker-hint">${this._escapeHtml(t('format_picker.commands_hint'))}</div>${rows}`;
+},
+
+// Wrap the selection in the message box (or the box being edited) with a
+// markdown pair, or drop a sample in when nothing is selected. Block-level
+// syntax starts on its own line.
+_wrapComposerSelection(before, after, sample = '', block = false) {
+  const input = this._activeEditTextarea || document.getElementById('message-input');
+  if (!input) return;
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  const selected = input.value.slice(start, end);
+  const inner = selected || sample;
+  const lead = (block && start > 0 && input.value[start - 1] !== '\n') ? '\n' : '';
+  input.focus();
+  input.setRangeText(lead + before + inner + after, start, end, 'end');
+  if (!selected && sample) {
+    const s = start + lead.length + before.length;
+    input.setSelectionRange(s, s + sample.length);
+  }
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+},
+
+// Put a command at the front of the message box, replacing one already there.
+_insertSlashCommand(cmd) {
+  const input = document.getElementById('message-input');
+  if (!input) return;
+  input.value = '/' + cmd + ' ' + input.value.replace(/^\/\S*\s?/, '');
+  input.focus();
+  input.setSelectionRange(cmd.length + 2, cmd.length + 2);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+},
+
+// ── Voice messages (#5665) ─────────────────────────────────
+// Click the mic to record, click it again (or Send) to post the recording as
+// an audio attachment; Cancel or Escape throws it away. It goes out through
+// the same upload as any file, so in an encrypted DM it is encrypted like
+// one. Five minutes is the ceiling.
+_voiceMimeChoice() {
+  if (typeof MediaRecorder === 'undefined') return null;
+  const wants = [
+    ['audio/webm;codecs=opus', 'weba'], ['audio/webm', 'weba'],
+    ['audio/ogg;codecs=opus', 'ogg'], ['audio/mp4', 'm4a'],
+  ];
+  for (const [mime, ext] of wants) {
+    try { if (MediaRecorder.isTypeSupported(mime)) return { mime, ext }; } catch { /* next */ }
+  }
+  return null;
+},
+
+async _toggleVoiceMessage() {
+  if (this._voiceRec) { this._stopVoiceMessage(true); return; }
+  const ch = this.channels.find(c => c.code === this.currentChannel);
+  if (!ch) return;
+  if (ch.media_enabled === 0) { this._showToast(t('media.uploads_disabled'), 'error'); return; }
+  const choice = this._voiceMimeChoice();
+  if (!choice || !navigator.mediaDevices?.getUserMedia) { this._showToast(t('voice_message.unsupported'), 'error'); return; }
+  let stream;
+  try {
+    // The same microphone voice chat uses, when one was picked.
+    const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    const savedInputId = localStorage.getItem('haven_input_device') || '';
+    if (savedInputId) audio.deviceId = { exact: savedInputId };
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+    catch { delete audio.deviceId; stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+  } catch {
+    this._showToast(t('voice_message.mic_denied'), 'error');
+    return;
+  }
+  const chunks = [];
+  let recorder;
+  try { recorder = new MediaRecorder(stream, { mimeType: choice.mime }); }
+  catch { recorder = new MediaRecorder(stream); }
+  const rec = { recorder, stream, chunks, ext: choice.ext, mime: recorder.mimeType || choice.mime, startedAt: Date.now(), code: this.currentChannel, send: false, timer: null };
+  recorder.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) chunks.push(e.data); });
+  recorder.addEventListener('stop', () => this._finishVoiceMessage(rec));
+  try {
+    recorder.start(250);
+  } catch {
+    // A browser that has the API but cannot encode from this input.
+    try { stream.getTracks().forEach(tr => tr.stop()); } catch { /* nothing to stop */ }
+    this._showToast(t('voice_message.unsupported'), 'error');
+    return;
+  }
+  this._voiceRec = rec;
+  const bar = document.getElementById('voice-record-bar');
+  if (bar) bar.style.display = 'flex';
+  document.getElementById('voice-btn')?.classList.add('recording');
+  const tick = () => {
+    const s = Math.floor((Date.now() - rec.startedAt) / 1000);
+    const el = document.getElementById('voice-rec-time');
+    if (el) el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (s >= 300) this._stopVoiceMessage(true);
+  };
+  tick();
+  rec.timer = setInterval(tick, 250);
+  this._voiceRecKeyHandler = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this._stopVoiceMessage(false); } };
+  document.addEventListener('keydown', this._voiceRecKeyHandler, true);
+},
+
+_stopVoiceMessage(send) {
+  const rec = this._voiceRec;
+  if (!rec) return;
+  rec.send = !!send;
+  rec.seconds = Math.round((Date.now() - rec.startedAt) / 1000);
+  clearInterval(rec.timer);
+  if (this._voiceRecKeyHandler) {
+    document.removeEventListener('keydown', this._voiceRecKeyHandler, true);
+    this._voiceRecKeyHandler = null;
+  }
+  const bar = document.getElementById('voice-record-bar');
+  if (bar) bar.style.display = 'none';
+  document.getElementById('voice-btn')?.classList.remove('recording');
+  this._voiceRec = null;
+  try {
+    if (rec.recorder.state !== 'inactive') rec.recorder.stop();
+    else this._finishVoiceMessage(rec);
+  } catch { this._finishVoiceMessage(rec); }
+},
+
+_finishVoiceMessage(rec) {
+  try { rec.stream.getTracks().forEach(tr => tr.stop()); } catch { /* already stopped */ }
+  if (rec.done) return;
+  rec.done = true;
+  if (!rec.send || !rec.chunks.length) return;
+  if (!rec.seconds || rec.seconds < 1) { this._showToast(t('voice_message.too_short'), 'error'); return; }
+  const type = String(rec.mime || '').split(';')[0] || 'audio/webm';
+  const blob = new Blob(rec.chunks, { type });
+  const m = Math.floor(rec.seconds / 60), s = rec.seconds % 60;
+  // The length rides in the name so the message can show it without loading
+  // the audio: voice-message-1m05s.weba.
+  const file = new File([blob], `voice-message-${m}m${String(s).padStart(2, '0')}s.${rec.ext}`, { type });
+  this._uploadGeneralFile(file, rec.code);
+},
+
+_bindInputResizer(handle) {
+  if (!handle || handle._resizerBound) return;
+  handle._resizerBound = true;
+  // The composer's bar sits above its box, so up means taller; the edit
+  // box's bar sits below it, so there down means taller (#5662).
+  const below = handle.classList.contains('edit-resizer');
+  let startY = 0;
+  let startHeight = 0;
+  let ta = null;
+  let cap = 600;
+
+  const onMove = (e) => {
+    if (!ta) return;
+    const delta = below ? (e.clientY - startY) : (startY - e.clientY); // positive when growing
+    const newHeight = Math.max(34, Math.min(cap, startHeight + delta));
+    ta.style.height = `${newHeight}px`;
+    ta.style.minHeight = `${newHeight}px`;
+    ta.style.maxHeight = `${cap}px`;
+  };
+
+  const onUp = () => {
+    ta = null;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  };
+
+  handle.addEventListener('mousedown', (e) => {
+    ta = handle.parentElement?.querySelector('textarea');
+    if (!ta) return;
+    startY = e.clientY;
+    startHeight = ta.getBoundingClientRect().height;
+    // Cap manual expansion at ~60% of viewport so the textarea can never
+    // swallow the entire chat pane. Min 200px on tiny windows.
+    cap = Math.max(200, Math.floor(window.innerHeight * 0.6));
+    e.preventDefault();
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 },
 
 /* ── Send later (#5638) ─────────────────────────────── */
@@ -6604,13 +7073,13 @@ _openScheduleModal(prefill = '') {
   const ch = this.channels?.find(c => c.code === this.currentChannel);
   if (!ch || ch.is_dm) { this._showToast(t('modals.schedule.not_here'), 'error'); return; }
   const text = document.getElementById('schedule-text');
-  const when = document.getElementById('schedule-when');
   text.value = prefill || document.getElementById('message-input')?.value || '';
   text.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  // Default to one hour out, on the whole minute, seeded in the user's zone.
   const d = new Date(Date.now() + 60 * 60 * 1000);
   d.setSeconds(0, 0);
-  when.value = this._toLocalInputValue(d);
-  when.min = this._toLocalInputValue(new Date());
+  this._wireScheduleFields();
+  this._seedScheduleFields(d);
   this._scheduleEditingId = null;
   document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
   modal.style.display = 'flex';
@@ -6618,9 +7087,47 @@ _openScheduleModal(prefill = '') {
   this._loadScheduledList();
 },
 
-_toLocalInputValue(d) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+/** Load an instant into the Send-at fields, decomposed into the user's
+ *  confirmed timezone (device zone when none is set). */
+_seedScheduleFields(d) {
+  const parts = this._zonedParts(d);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('sch-year', parts.year);
+  set('sch-month', parts.monthIndex + 1);
+  set('sch-day', parts.day);
+  set('sch-minute', parts.minute);
+  set('sch-second', parts.second);
+  this._tsmSetMeridiem(this._tsm24hDefault() ? '24' : (parts.hour < 12 ? 'AM' : 'PM'), parts.hour, this._schScope());
+},
+
+/** Wire the Send-at picker once: meridiem toggle and the calendar helper,
+ *  reusing the /time picker's field logic under the schedule scope. */
+_wireScheduleFields() {
+  if (this._scheduleFieldsWired) return;
+  this._scheduleFieldsWired = true;
+  const scope = this._schScope();
+  document.querySelectorAll('#schedule-modal .tsm-mer-btn').forEach(b => {
+    b.addEventListener('click', () => this._tsmSetMeridiem(b.dataset.mer, undefined, scope));
+  });
+  document.getElementById('sch-cal-btn')?.addEventListener('click', () => {
+    const di = document.getElementById('sch-cal-input');
+    if (!di) return;
+    const cur = this._tsmBuildDate(scope);
+    if (cur) {
+      const p = n => String(n).padStart(2, '0');
+      const parts = this._zonedParts(cur);
+      di.value = `${parts.year}-${p(parts.monthIndex + 1)}-${p(parts.day)}`;
+    }
+    try { di.showPicker(); } catch { di.focus(); di.click(); }
+  });
+  document.getElementById('sch-cal-input')?.addEventListener('change', () => {
+    const v = document.getElementById('sch-cal-input')?.value; // YYYY-MM-DD
+    const m = v && v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return;
+    document.getElementById('sch-year').value = Number(m[1]);
+    document.getElementById('sch-month').value = Number(m[2]);
+    document.getElementById('sch-day').value = Number(m[3]);
+  });
 },
 
 _loadScheduledList() {
@@ -6639,7 +7146,7 @@ _renderScheduledList(items) {
   }
   list.innerHTML = items.map(it => `<div class="schedule-item" data-id="${it.id}">
     <div class="schedule-item-main">
-      <span class="schedule-item-when">${this._escapeHtml(new Date(it.sendAt).toLocaleString())}</span>
+      <span class="schedule-item-when">${this._escapeHtml(this._fmtDateTime(it.sendAt))}</span>
       <span class="schedule-item-chan">#${this._escapeHtml(it.channelName || '')}</span>
       <div class="schedule-item-text">${this._escapeHtml(it.content)}</div>
     </div>
@@ -6658,7 +7165,8 @@ _renderScheduledList(items) {
     }
     this._scheduleEditingId = id;
     document.getElementById('schedule-text').value = it.content;
-    document.getElementById('schedule-when').value = this._toLocalInputValue(new Date(it.sendAt));
+    this._wireScheduleFields();
+    this._seedScheduleFields(new Date(it.sendAt));
     document.getElementById('schedule-save').textContent = t('modals.common.save');
   }));
 },
@@ -6666,13 +7174,17 @@ _renderScheduledList(items) {
 _submitSchedule() {
   const textEl = document.getElementById('schedule-text');
   const content = textEl.value.trim();
-  const at = new Date(document.getElementById('schedule-when').value);
+  // Read the wall-clock in the user's confirmed zone (device fallback), so the
+  // absolute instant sent to the server is the moment the user actually meant,
+  // not whatever the browser's clock/zone claims. toISOString() below is still
+  // a plain UTC handoff; only the zone the fields are read in has changed.
+  const at = this._tsmBuildDate(this._schScope());
   if (!content) { textEl.focus(); return; }
-  if (isNaN(at.getTime()) || at.getTime() < Date.now() + 30000) { this._showToast(t('modals.schedule.in_past'), 'error'); return; }
+  if (!at || isNaN(at.getTime()) || at.getTime() < Date.now() + 30000) { this._showToast(t('modals.schedule.in_past'), 'error'); return; }
   const editing = this._scheduleEditingId;
   const done = (r) => {
     if (!r || r.error) { this._showToast((r && r.error) || t('toasts.role_server_no_response'), 'error'); return; }
-    this._showToast(t(editing ? 'modals.schedule.updated' : 'modals.schedule.scheduled', { when: at.toLocaleString() }), 'success');
+    this._showToast(t(editing ? 'modals.schedule.updated' : 'modals.schedule.scheduled', { when: this._fmtDateTime(at) }), 'success');
     if (!editing) {
       const input = document.getElementById('message-input');
       if (input && input.value.trim() === content) { input.value = ''; input.style.height = 'auto'; }
@@ -6694,6 +7206,10 @@ _submitSchedule() {
 /** True when the reader's locale keeps a 24-hour clock. Falls back to 24-hour
  *  when the browser cannot report an hour cycle, per the feature's default. */
 _tsm24hDefault() {
+  // A confirmed clock preference wins over the locale probe.
+  const h12 = this._userHour12?.();
+  if (h12 === true) return false;
+  if (h12 === false) return true;
   try {
     const hc = new Intl.DateTimeFormat(this._timeLocale?.(), { hour: 'numeric' })
       .resolvedOptions().hourCycle;
@@ -6708,35 +7224,44 @@ _tsm24hDefault() {
 _openTimeModal() {
   const modal = document.getElementById('time-modal');
   if (!modal) return;
-  const now = new Date();
+  // Seed "now" in the reader's confirmed zone (device zone when none is set),
+  // so a privacy browser reporting a false clock does not preset the wrong time.
+  const now = this._nowZonedParts();
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  set('tsm-year', now.getFullYear());
-  set('tsm-month', now.getMonth() + 1);
-  set('tsm-day', now.getDate());
-  set('tsm-minute', now.getMinutes());
-  set('tsm-second', now.getSeconds());
+  set('tsm-year', now.year);
+  set('tsm-month', now.monthIndex + 1);
+  set('tsm-day', now.day);
+  set('tsm-minute', now.minute);
+  set('tsm-second', now.second);
   // Default the clock mode to the reader's own convention, then seed the hour
   // field in whatever units that mode expects.
-  this._tsmSetMeridiem(this._tsm24hDefault() ? '24' : (now.getHours() < 12 ? 'AM' : 'PM'), now.getHours());
+  this._tsmSetMeridiem(this._tsm24hDefault() ? '24' : (now.hour < 12 ? 'AM' : 'PM'), now.hour);
   this._tsmRenderStyles();
   this._tsmUpdatePreview();
   modal.style.display = 'flex';
   document.getElementById('tsm-hour')?.focus();
 },
 
+/** The two wall-clock pickers that share this field logic. Each names its modal
+ *  (for the meridiem buttons), its field id prefix, and where its 24/AM/PM
+ *  state lives. Defaulting every function to the /time scope keeps that
+ *  picker's existing call sites untouched. */
+_tsmScope() { return { modalId: 'time-modal', prefix: 'tsm', meridiemKey: '_tsmMeridiem' }; },
+_schScope() { return { modalId: 'schedule-modal', prefix: 'sch', meridiemKey: '_schMeridiem' }; },
+
 /** Switch the 24HR / AM / PM segmented control. `seedHour24`, when given, is a
  *  0–23 hour to load into the field in the new mode's units. */
-_tsmSetMeridiem(mode, seedHour24) {
-  this._tsmMeridiem = mode;
-  document.querySelectorAll('#time-modal .tsm-mer-btn').forEach(b => {
+_tsmSetMeridiem(mode, seedHour24, scope = this._tsmScope()) {
+  this[scope.meridiemKey] = mode;
+  document.querySelectorAll(`#${scope.modalId} .tsm-mer-btn`).forEach(b => {
     b.classList.toggle('active', b.dataset.mer === mode);
   });
-  const hourEl = document.getElementById('tsm-hour');
+  const hourEl = document.getElementById(`${scope.prefix}-hour`);
   if (!hourEl) return;
   const cur = Number(hourEl.value);
   // Reuse whatever hour is already showing when the user flips the toggle, so
   // "8 PM" stays 8 PM going to 24-hour (→ 20) and back.
-  let h24 = Number.isFinite(seedHour24) ? seedHour24 : this._tsmReadHour24(cur);
+  let h24 = Number.isFinite(seedHour24) ? seedHour24 : this._tsmReadHour24(cur, scope);
   if (!Number.isFinite(h24)) h24 = 0;
   if (mode === '24') {
     hourEl.min = 0; hourEl.max = 23;
@@ -6748,27 +7273,32 @@ _tsmSetMeridiem(mode, seedHour24) {
 },
 
 /** Convert the hour field's current number into 0–23, honouring the mode. */
-_tsmReadHour24(raw) {
+_tsmReadHour24(raw, scope = this._tsmScope()) {
   const h = Number(raw);
   if (!Number.isFinite(h)) return NaN;
-  if (this._tsmMeridiem === '24') return h;
+  if (this[scope.meridiemKey] === '24') return h;
   const base = h % 12;
-  return this._tsmMeridiem === 'PM' ? base + 12 : base;
+  return this[scope.meridiemKey] === 'PM' ? base + 12 : base;
 },
 
-/** Read all fields into a Date in the sender's own timezone, or null if the
+/** Read all fields into a Date, interpreting the entered wall-clock in the
+ *  reader's confirmed timezone (device zone when none is set), or null if the
  *  combination is not a real calendar instant. */
-_tsmBuildDate() {
+_tsmBuildDate(scope = this._tsmScope()) {
   const num = id => Number(document.getElementById(id)?.value);
-  const y = num('tsm-year'), mo = num('tsm-month'), d = num('tsm-day');
-  const mi = num('tsm-minute'), se = num('tsm-second');
-  const h24 = this._tsmReadHour24(document.getElementById('tsm-hour')?.value);
+  const y = num(`${scope.prefix}-year`), mo = num(`${scope.prefix}-month`), d = num(`${scope.prefix}-day`);
+  const mi = num(`${scope.prefix}-minute`), se = num(`${scope.prefix}-second`);
+  const h24 = this._tsmReadHour24(document.getElementById(`${scope.prefix}-hour`)?.value, scope);
   if (![y, mo, d, mi, se, h24].every(Number.isFinite)) return null;
   if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
   if (h24 < 0 || h24 > 23 || mi < 0 || mi > 59 || se < 0 || se > 59) return null;
-  const when = new Date(y, mo - 1, d, h24, mi, se, 0);
-  // Reject dates JS silently rolls forward (e.g. 2026-02-31 → March).
-  if (when.getFullYear() !== y || when.getMonth() !== mo - 1 || when.getDate() !== d) return null;
+  // Interpret the entered wall-clock in the reader's confirmed zone (device
+  // zone when none is set), so the instant matches what the person meant.
+  const when = this._wallToInstant(y, mo - 1, d, h24, mi, se);
+  // Reject dates JS silently rolls forward (e.g. 2026-02-31 → March), checked
+  // in the same zone the wall-clock was read in.
+  const back = this._zonedParts(when);
+  if (back.year !== y || back.monthIndex !== mo - 1 || back.day !== d) return null;
   return when;
 },
 
@@ -7220,6 +7750,107 @@ _maybeRevealConcealed(e) {
   return false;
 },
 
+// Settings > Encryption: lock the E2E key backup with a passphrase of the
+// user's own instead of the login password, or go back. SSO accounts already
+// use a passphrase and guests have no password, so neither sees it.
+_setupE2EPassphraseSection() {
+  const section = document.getElementById('section-e2e-passphrase');
+  if (!section) return;
+  const navItem = document.querySelector('.settings-nav-item[data-target="section-e2e-passphrase"]');
+  const stateEl = document.getElementById('e2e-pp-state');
+  const statusEl = document.getElementById('e2e-pp-status');
+  const newEl = document.getElementById('e2e-pp-new');
+  const confirmEl = document.getElementById('e2e-pp-confirm');
+  const saveBtn = document.getElementById('e2e-pp-save-btn');
+  const revertArea = document.getElementById('e2e-pp-revert-area');
+  const pwEl = document.getElementById('e2e-pp-password');
+  const revertBtn = document.getElementById('e2e-pp-revert-btn');
+
+  const say = (msg, kind) => {
+    statusEl.textContent = msg || '';
+    statusEl.className = 'settings-hint' + (kind ? ` ${kind}` : '');
+  };
+  const render = () => {
+    const hidden = !!(this.user?.isSso || this.user?.isGuest);
+    section.style.display = hidden ? 'none' : '';
+    if (navItem) navItem.style.display = hidden ? 'none' : '';
+    const own = !!this.user?.e2ePassphrase;
+    stateEl.textContent = t(own ? 'settings.e2e_passphrase.state_own' : 'settings.e2e_passphrase.state_password');
+    saveBtn.textContent = t(own ? 'settings.e2e_passphrase.change_btn' : 'settings.e2e_passphrase.save_btn');
+    revertArea.style.display = own ? '' : 'none';
+  };
+  // session-info fills in the flags after this runs, so it re-renders too.
+  this._renderE2EPassphraseSection = render;
+  render();
+
+  // Either change re-locks the backup, so the key has to be unlocked first.
+  const whenUnlocked = (fn) => {
+    if (this.e2e?.ready) return fn();
+    say(t('settings.e2e_passphrase.unlock_first'), 'error');
+    this._requireE2E(fn);
+  };
+
+  // The backup is locked with wrapKey from now on, and the server list sync
+  // (which shares the key) follows it.
+  const adopt = async (wrapKey, own) => {
+    await this.e2e.reWrapKey(this.socket, wrapKey, { separatePassphrase: own });
+    this.user.e2ePassphrase = own;
+    try { localStorage.setItem('haven_user', JSON.stringify(this.user)); } catch { /* private mode */ }
+    this._e2eWrappingKey = wrapKey;
+    try { localStorage.setItem('haven_sync_key', wrapKey); } catch { /* private mode */ }
+    this._pushServerListToServer?.();
+    render();
+  };
+
+  saveBtn.addEventListener('click', () => {
+    const pass = newEl.value;
+    if (!pass || pass.length < 8) return say(t('settings.e2e_passphrase.too_short'), 'error');
+    if (pass !== confirmEl.value) return say(t('settings.e2e_passphrase.mismatch'), 'error');
+    whenUnlocked(async () => {
+      saveBtn.disabled = true;
+      say(t('settings.e2e_passphrase.saving'));
+      try {
+        await adopt(await HavenE2E.deriveWrappingKey(pass), true);
+        newEl.value = '';
+        confirmEl.value = '';
+        say('✅ ' + t('settings.e2e_passphrase.saved'), 'success');
+      } catch (err) {
+        console.warn('[E2E] Could not lock the backup with the passphrase:', err);
+        say(t('settings.e2e_passphrase.failed'), 'error');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  });
+
+  revertBtn.addEventListener('click', () => {
+    const password = pwEl.value;
+    if (!password) return say(t('settings.e2e_passphrase.enter_password'), 'error');
+    whenUnlocked(async () => {
+      revertBtn.disabled = true;
+      try {
+        // Checked first: a mistyped password would lock the backup with a
+        // key nobody can reproduce.
+        const res = await fetch('/api/auth/verify-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: this.user.username, password })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!data.valid) return say(t('settings.e2e_passphrase.wrong_password'), 'error');
+        await adopt(await HavenE2E.deriveWrappingKey(password), false);
+        pwEl.value = '';
+        say('✅ ' + t('settings.e2e_passphrase.reverted'), 'success');
+      } catch (err) {
+        console.warn('[E2E] Could not lock the backup with the password:', err);
+        say(t('settings.e2e_passphrase.failed'), 'error');
+      } finally {
+        revertBtn.disabled = false;
+      }
+    });
+  });
+},
+
 async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false, opts = {}) {
   if (!this.currentChannel && !targetCode) return;
   // The queue stores the per-image spoiler choice on the File object itself.
@@ -7233,13 +7864,12 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
   }
 
   // Detect E2E DM — encrypt file bytes before uploading
+  // A DM picture that can't be encrypted goes up only if the sender agrees.
   const ch = this.channels.find(c => c.code === targetChannel);
   const isDm = ch && ch.is_dm && ch.dm_target;
-  let partner = isDm ? this._getE2EPartnerFor(targetChannel) : null;
-  if (isDm && !partner && this.e2e && this.e2e.ready) {
-    const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-    if (jwk) { this._dmPublicKeys[ch.dm_target.id] = jwk; partner = this._getE2EPartnerFor(targetChannel); }
-  }
+  const gate = isDm ? await this._dmSendGate(targetChannel) : { partner: null };
+  if (!gate) { this._uploadsCancelled = true; return; }
+  const partner = gate.partner;
 
   if (partner) {
     // E2E path: encrypt file → upload as opaque blob → send encrypted text marker
@@ -7296,8 +7926,10 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
       code: targetChannel,
       content: line,
       isImage: true,
-      ...(bundled && { bundled: true })
+      ...(bundled && { bundled: true }),
+      ...(file && file._tags && file._tags.length ? { attachmentTags: file._tags } : {})
     });
+    if (file && file._tags && file._tags.length) this._recordFrequentTags(file._tags);
     this.notifications.play('sent');
   } catch (err) {
     if (err?.aborted) return;
@@ -7363,6 +7995,11 @@ _renderMediaGallery(data) {
   // Reset selection whenever fresh data comes in so stale picks don't linger
   this._mediaGallerySelected = new Map();
   this._mediaGallerySelectMode = false;
+  // Reset the tag filter and tear down any open tag popups on fresh data.
+  this._mediaTagFilter = [];
+  this._closeMediaTagFilter?.();
+  this._closeMediaTagManage?.();
+  this._updateTagFilterBadge?.();
   this._refreshMediaGalleryToolbar();
   this._applyMediaTileSize();
   this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
@@ -7448,9 +8085,16 @@ _refreshMediaGalleryToolbar() {
   const selAll  = document.getElementById('media-gallery-select-all');
   const delBtn  = document.getElementById('media-gallery-delete');
   const info    = document.getElementById('media-gallery-selection-info');
+  const manage  = document.getElementById('media-gallery-tagmanage');
   if (!actions || !toggle || !selAll || !delBtn || !info) return;
-  if (!this._canBulkDeleteMedia()) {
+  const canDelete = this._canBulkDeleteMedia();
+  const canTag    = this._canManageTags();
+  // Select mode is available to bulk-deleters and to tag managers; each
+  // capability lights up its own action, so a manager without delete rights
+  // can select-and-tag without ever seeing a Delete button.
+  if (!canDelete && !canTag) {
     actions.style.display = 'none';
+    if (manage) manage.style.display = 'none';
     return;
   }
   actions.style.display = '';
@@ -7458,17 +8102,24 @@ _refreshMediaGalleryToolbar() {
   const count = this._mediaGallerySelected ? this._mediaGallerySelected.size : 0;
   toggle.textContent = t(selectMode ? 'media_gallery.cancel_select' : 'media_gallery.select');
   selAll.style.display = selectMode ? '' : 'none';
-  delBtn.style.display = selectMode ? '' : 'none';
+  delBtn.style.display = (selectMode && canDelete) ? '' : 'none';
   delBtn.disabled = count === 0;
   info.style.display = selectMode ? '' : 'none';
   info.textContent = selectMode ? t('media_gallery.selected', { count }) : '';
+  if (manage) {
+    manage.style.display = (selectMode && canTag && count > 0) ? '' : 'none';
+    if (manage.style.display === 'none') {
+      const menu = document.getElementById('media-tagmanage-menu');
+      if (menu) menu.style.display = 'none';
+    }
+  }
 },
 
 _renderMediaGalleryTab(tab) {
   const body = document.getElementById('media-gallery-body');
   if (!body || !this._mediaGalleryData) return;
-  const rawItems = this._mediaGalleryData[tab] || [];
-  if (rawItems.length === 0) {
+  const allItems = this._mediaGalleryData[tab] || [];
+  if (allItems.length === 0) {
     const labels = {
       photos: t('media_gallery.empty_photos'),
       videos: t('media_gallery.empty_videos'),
@@ -7479,13 +8130,20 @@ _renderMediaGalleryTab(tab) {
     body.innerHTML = `<div class="media-gallery-empty muted-text">${labels[tab] || t('media_gallery.empty')}</div>`;
     return;
   }
+  // Tag filter: keep only items carrying EVERY selected tag (exact match, no
+  // partials). Links have no backing upload so they are never tag-filtered.
+  const rawItems = this._filterMediaItemsByTags(allItems, tab);
+  if (rawItems.length === 0) {
+    body.innerHTML = `<div class="media-gallery-empty muted-text">${t('media_gallery.filter_no_match')}</div>`;
+    return;
+  }
   const items = this._sortMediaItems(rawItems);
 
   const fmt = (iso) => {
     try {
       const d = new Date(iso);
       if (isNaN(d)) return '';
-      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      return this._fmtDate(d, { year: 'numeric', month: 'short', day: 'numeric' });
     } catch { return ''; }
   };
   const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -7505,6 +8163,12 @@ _renderMediaGalleryTab(tab) {
     const s = this._formatMediaSize(it.size);
     return s ? `<span class="media-size-badge">${esc(s)}</span>` : '';
   };
+  // Read-only tag chips shown on each tile/row (#tagging phase 3b).
+  const tileTags = (it) => {
+    const tags = Array.isArray(it.tags) ? it.tags : [];
+    if (!tags.length) return '';
+    return `<div class="media-tile-tags">${tags.map(tg => `<span class="media-tile-tag">${esc(tg)}</span>`).join('')}</div>`;
+  };
 
   if (tab === 'photos') {
     body.innerHTML = `<div class="media-gallery-grid${selectMode ? ' select-mode' : ''}">${items.map(it => `
@@ -7512,7 +8176,7 @@ _renderMediaGalleryTab(tab) {
         ${selBox(it)}
         <img src="${esc(it.url)}" loading="lazy" alt="">
         <button class="media-grid-jump" data-action="jump" data-msg-id="${it.message_id}" title="${t('app.actions.jump_to_message')}">↗</button>
-        <div class="media-grid-date">${esc(fmt(it.created_at))}${sizeBadge(it) ? ' • ' + sizeBadge(it) : ''}</div>
+        <div class="media-grid-meta">${tileTags(it)}<div class="media-grid-date">${esc(fmt(it.created_at))}${sizeBadge(it) ? ' • ' + sizeBadge(it) : ''}</div></div>
       </div>`).join('')}</div>`;
   } else if (tab === 'videos') {
     body.innerHTML = `<div class="media-gallery-grid${selectMode ? ' select-mode' : ''}">${items.map(it => `
@@ -7521,7 +8185,7 @@ _renderMediaGalleryTab(tab) {
         <video src="${esc(it.url)}" preload="metadata" muted></video>
         <div class="media-grid-play">▶</div>
         <button class="media-grid-jump" data-action="jump" data-msg-id="${it.message_id}" title="${t('app.actions.jump_to_message')}">↗</button>
-        <div class="media-grid-date">${esc(fmt(it.created_at))}${sizeBadge(it) ? ' • ' + sizeBadge(it) : ''}</div>
+        <div class="media-grid-meta">${tileTags(it)}<div class="media-grid-date">${esc(fmt(it.created_at))}${sizeBadge(it) ? ' • ' + sizeBadge(it) : ''}</div></div>
       </div>`).join('')}</div>`;
   } else if (tab === 'audios') {
     body.innerHTML = `<div class="media-list${selectMode ? ' select-mode' : ''}">${items.map(it => `
@@ -7532,6 +8196,7 @@ _renderMediaGalleryTab(tab) {
           <span class="media-list-name">${esc(it.name || it.url.split('/').pop())} ${sizeBadge(it)}</span>
           <span class="media-list-meta">${esc(it.username || '')} • ${esc(fmt(it.created_at))}</span>
           <audio class="media-list-audio" src="${esc(it.url)}" controls preload="none"></audio>
+          ${tileTags(it)}
         </div>
         <button class="media-list-jump" data-action="jump" data-msg-id="${it.message_id}" title="${t('app.actions.jump_to_message')}">↗</button>
       </div>`).join('')}</div>`;
@@ -7549,6 +8214,7 @@ _renderMediaGalleryTab(tab) {
         <div class="media-list-info">
           <span class="media-list-name">${esc(it.name || it.url.split('/').pop())} ${sizeBadge(it)}</span>
           <span class="media-list-meta">${esc(it.username || '')} • ${esc(fmt(it.created_at))}</span>
+          ${tileTags(it)}
         </div>
         <button class="media-list-jump" data-action="jump" data-msg-id="${it.message_id}" title="${t('app.actions.jump_to_message')}">↗</button>
       </${tag}>`;
@@ -7629,6 +8295,344 @@ _renderMediaGalleryTab(tab) {
       if (this._jumpToMessage) this._jumpToMessage(id);
     });
   });
+},
+
+// ── Media gallery tag filter + bulk management (#tagging phase 3b) ──────
+
+// True when the user may curate tags (admin or manage_tags). Gates the bulk
+// "Manage tags" dropdown and lets such users enter select mode for tagging
+// even without delete rights.
+_canManageTags() {
+  if (!this.user) return false;
+  if (this.user.isAdmin) return true;
+  return !!(this._hasPerm && this._hasPerm('manage_tags'));
+},
+
+// Keep only items carrying every selected filter tag (case-folded exact
+// match). Links are never tag-filtered (no backing upload).
+_filterMediaItemsByTags(items, tab) {
+  const filter = this._mediaTagFilter || [];
+  if (!filter.length || tab === 'links') return items;
+  const want = filter.map(n => String(n).toLocaleLowerCase());
+  return items.filter(it => {
+    const have = new Set((it.tags || []).map(x => String(x).toLocaleLowerCase()));
+    return want.every(w => have.has(w));
+  });
+},
+
+_updateTagFilterBadge() {
+  const badge = document.getElementById('media-gallery-tagfilter-count');
+  const btn = document.getElementById('media-gallery-tagfilter-btn');
+  const n = (this._mediaTagFilter || []).length;
+  if (badge) { badge.style.display = n ? '' : 'none'; badge.textContent = String(n); }
+  if (btn) btn.classList.toggle('is-active', n > 0);
+},
+
+_afterTagFilterChange() {
+  this._updateTagFilterBadge();
+  if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+},
+
+_toggleMediaTagFilter(name) {
+  const filter = this._mediaTagFilter || (this._mediaTagFilter = []);
+  const norm = String(name).toLocaleLowerCase();
+  const idx = filter.findIndex(x => String(x).toLocaleLowerCase() === norm);
+  if (idx >= 0) filter.splice(idx, 1); else filter.push(name);
+  this._afterTagFilterChange();
+},
+
+_closeMediaTagFilter() {
+  clearTimeout(this._mtfTimer);
+  document.getElementById('media-tag-filter-popup')?.remove();
+  if (this._mtfCloser) { document.removeEventListener('click', this._mtfCloser, true); this._mtfCloser = null; }
+},
+
+_openMediaTagFilter(anchor) {
+  this._closeMediaTagFilter();
+  if (!this._mediaTagFilter) this._mediaTagFilter = [];
+  const pop = document.createElement('div');
+  pop.id = 'media-tag-filter-popup';
+  pop.className = 'tag-editor-popup';
+  pop.innerHTML = `
+    <div class="tag-editor-head">
+      <span class="tag-editor-title">${t('media_gallery.filter_by_tag')}</span>
+      <button type="button" class="tag-editor-close" aria-label="${this._escapeHtml(t('modals.common.close'))}">×</button>
+    </div>
+    <input id="mtf-input" class="tag-popup-input" type="text" autocomplete="off" spellcheck="false"
+           maxlength="${this._maxTagLen()}" placeholder="${this._escapeHtml(t('tags.search_placeholder'))}">
+    <div id="mtf-list" class="tag-popup-list"></div>`;
+  document.body.appendChild(pop);
+  const rect = (anchor || document.body).getBoundingClientRect();
+  pop.style.left = Math.min(rect.left, window.innerWidth - pop.offsetWidth - 12) + 'px';
+  pop.style.top = Math.min(rect.bottom + 4, window.innerHeight - pop.offsetHeight - 12) + 'px';
+  pop.querySelector('.tag-editor-close').addEventListener('click', () => this._closeMediaTagFilter());
+  const input = pop.querySelector('#mtf-input');
+  input.addEventListener('input', () => {
+    clearTimeout(this._mtfTimer);
+    const q = input.value;
+    this._mtfTimer = setTimeout(() => this._mediaTagFilterSearch(q), 250);
+  });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); this._closeMediaTagFilter(); } });
+  this._mtfCloser = (ev) => {
+    if (!pop.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) this._closeMediaTagFilter();
+  };
+  setTimeout(() => document.addEventListener('click', this._mtfCloser, true), 0);
+  this._mediaTagFilterSearch('');
+  input.focus();
+},
+
+_mediaTagFilterSearch(query) {
+  const input = document.getElementById('mtf-input');
+  if (!input || !this.socket) return;
+  const q = query;
+  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+    if (input.value !== q) return;
+    if (res && res.error === 'rate_limited') return;
+    this._mediaTagFilterRenderList((res && res.tags) || []);
+  });
+},
+
+_mediaTagFilterRenderList(results) {
+  const list = document.getElementById('mtf-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const filter = this._mediaTagFilter || (this._mediaTagFilter = []);
+  const active = new Set(filter.map(x => String(x).toLocaleLowerCase()));
+  if (filter.length) {
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'tag-popup-item tag-popup-create';
+    clear.textContent = t('media_gallery.filter_clear');
+    clear.addEventListener('click', () => {
+      this._mediaTagFilter = [];
+      this._afterTagFilterChange();
+      this._mediaTagFilterRenderList(results);
+    });
+    list.appendChild(clear);
+  }
+  (results || []).forEach(tg => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'tag-popup-item';
+    const on = active.has(String(tg.name).toLocaleLowerCase());
+    if (on) item.classList.add('is-active');
+    item.textContent = (on ? '✓ ' : '') + tg.name;
+    item.addEventListener('click', () => {
+      this._toggleMediaTagFilter(tg.name);
+      this._mediaTagFilterRenderList(results);
+    });
+    list.appendChild(item);
+  });
+  if (!list.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tag-popup-empty';
+    empty.textContent = t('tags.none_yet');
+    list.appendChild(empty);
+  }
+},
+
+// Distinct message ids among the current selection (one edit per message).
+_mediaSelectedMessageIds() {
+  const ids = [];
+  if (!this._mediaGallerySelected) return ids;
+  for (const { message_id } of this._mediaGallerySelected.values()) {
+    if (!ids.includes(message_id)) ids.push(message_id);
+  }
+  return ids;
+},
+
+// Confirm-gated bulk tag picker: nothing is applied until Confirm (clicking
+// away discards). `mode` is 'append' or 'replace'.
+_openMediaTagManage(mode) {
+  this._closeMediaTagManage();
+  const ids = this._mediaSelectedMessageIds();
+  if (!ids.length) return;
+  this._mediaTagManage = { mode, tags: [] };
+  const titleKey = mode === 'replace' ? 'media_gallery.tag_apply_replace' : 'media_gallery.tag_apply_append';
+  const pop = document.createElement('div');
+  pop.id = 'media-tag-manage-popup';
+  pop.className = 'tag-editor-popup';
+  pop.innerHTML = `
+    <div class="tag-editor-head">
+      <span class="tag-editor-title">${this._escapeHtml(t(titleKey, { count: ids.length }))}</span>
+      <button type="button" class="tag-editor-close" aria-label="${this._escapeHtml(t('modals.common.close'))}">×</button>
+    </div>
+    <div class="tag-editor-chips" id="mtm-chips"></div>
+    <input id="mtm-input" class="tag-popup-input" type="text" autocomplete="off" spellcheck="false"
+           maxlength="${this._maxTagLen()}" placeholder="${this._escapeHtml(t('tags.search_placeholder'))}">
+    <div id="mtm-list" class="tag-popup-list"></div>
+    <div class="tag-manage-actions">
+      <button type="button" class="btn-sm btn-accent" id="mtm-confirm">${this._escapeHtml(t('media_gallery.tag_apply_confirm'))}</button>
+    </div>`;
+  document.body.appendChild(pop);
+  const anchor = document.getElementById('media-gallery-tagmanage-btn') || document.body;
+  const rect = anchor.getBoundingClientRect();
+  pop.style.left = Math.min(rect.left, window.innerWidth - pop.offsetWidth - 12) + 'px';
+  pop.style.top = Math.min(rect.bottom + 4, window.innerHeight - pop.offsetHeight - 12) + 'px';
+  pop.querySelector('.tag-editor-close').addEventListener('click', () => this._closeMediaTagManage());
+  const input = pop.querySelector('#mtm-input');
+  input.addEventListener('input', () => {
+    clearTimeout(this._mtmTimer);
+    const q = input.value;
+    this._mtmTimer = setTimeout(() => this._mediaTagManageSearch(q), 250);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); this._closeMediaTagManage(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const first = pop.querySelector('#mtm-list .tag-popup-item');
+      if (first) first.click();
+    }
+  });
+  pop.querySelector('#mtm-confirm').addEventListener('click', () => this._mediaTagManageApply());
+  // Clicking away discards (except the confirm modal overlay it may spawn).
+  this._mtmCloser = (ev) => {
+    if (ev.target.closest('.modal-overlay')) return;
+    if (!pop.contains(ev.target) && !ev.target.closest('#media-gallery-tagmanage')) this._closeMediaTagManage();
+  };
+  setTimeout(() => document.addEventListener('click', this._mtmCloser, true), 0);
+  this._mediaTagManageRenderChips();
+  this._mediaTagManageSearch('');
+  input.focus();
+},
+
+_closeMediaTagManage() {
+  clearTimeout(this._mtmTimer);
+  document.getElementById('media-tag-manage-popup')?.remove();
+  if (this._mtmCloser) { document.removeEventListener('click', this._mtmCloser, true); this._mtmCloser = null; }
+  this._mediaTagManage = null;
+},
+
+_mediaTagManageRenderChips() {
+  const wrap = document.getElementById('mtm-chips');
+  if (!wrap || !this._mediaTagManage) return;
+  wrap.innerHTML = '';
+  this._mediaTagManage.tags.forEach(name => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    const label = document.createElement('span');
+    label.className = 'tag-chip-label';
+    label.textContent = name;
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'tag-chip-remove';
+    rm.textContent = '×';
+    rm.addEventListener('click', () => this._mediaTagManageRemove(name));
+    chip.appendChild(label);
+    chip.appendChild(rm);
+    wrap.appendChild(chip);
+  });
+},
+
+_mediaTagManageSearch(query) {
+  const input = document.getElementById('mtm-input');
+  if (!input || !this.socket || !this._mediaTagManage) return;
+  const q = query;
+  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+    if (!this._mediaTagManage || input.value !== q) return;
+    if (res && res.error === 'rate_limited') return;
+    this._mediaTagManageRenderList(q, (res && res.tags) || []);
+  });
+},
+
+_mediaTagManageRenderList(query, results) {
+  const list = document.getElementById('mtm-list');
+  if (!list || !this._mediaTagManage) return;
+  list.innerHTML = '';
+  const applied = new Set(this._mediaTagManage.tags.map(x => x.toLocaleLowerCase()));
+  const norm = this._normalizeTag(query);
+  (results || []).filter(tg => !applied.has(String(tg.name).toLocaleLowerCase())).forEach(tg => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'tag-popup-item';
+    item.textContent = tg.name;
+    item.addEventListener('click', () => this._mediaTagManageAdd(tg.name));
+    list.appendChild(item);
+  });
+  const exact = norm && (applied.has(norm.norm) || (results || []).some(tg => String(tg.name).toLocaleLowerCase() === norm.norm));
+  if (norm && !exact && this._canManageTags()) {
+    const create = document.createElement('button');
+    create.type = 'button';
+    create.className = 'tag-popup-item tag-popup-create';
+    create.textContent = t('tags.add_new', { name: norm.name });
+    create.addEventListener('click', () => this._mediaTagManageAdd(norm.name));
+    list.appendChild(create);
+  }
+  if (!list.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tag-popup-empty';
+    empty.textContent = norm ? t('tags.none_found') : t('tags.none_yet');
+    list.appendChild(empty);
+  }
+},
+
+_mediaTagManageAdd(rawName) {
+  if (!this._mediaTagManage) return;
+  const norm = this._normalizeTag(rawName);
+  if (!norm) return this._showToast?.(t('tags.invalid'), 'error');
+  const tags = this._mediaTagManage.tags;
+  if (tags.some(x => x.toLocaleLowerCase() === norm.norm)) return;
+  if (tags.length >= this._maxTagsPerAttachment()) {
+    return this._showToast?.(t('tags.limit_reached', { n: this._maxTagsPerAttachment() }), 'error');
+  }
+  tags.push(norm.name);
+  const input = document.getElementById('mtm-input');
+  if (input) input.value = '';
+  this._mediaTagManageRenderChips();
+  this._mediaTagManageSearch('');
+},
+
+_mediaTagManageRemove(name) {
+  if (!this._mediaTagManage) return;
+  this._mediaTagManage.tags = this._mediaTagManage.tags.filter(x => x !== name);
+  this._mediaTagManageRenderChips();
+  this._mediaTagManageSearch(document.getElementById('mtm-input')?.value || '');
+},
+
+// Apply the working set to every selected message. Replace with an empty set
+// wipes all tags, so it gets a second explicit confirmation.
+_mediaTagManageApply() {
+  const st = this._mediaTagManage;
+  if (!st || !this.currentChannel || !this.socket) return;
+  const ids = this._mediaSelectedMessageIds();
+  if (!ids.length) { this._closeMediaTagManage(); return; }
+  const mode = st.mode;
+  const tags = st.tags.slice();
+
+  const doEmit = () => {
+    this.socket.emit('bulk-tag-messages', { code: this.currentChannel, messageIds: ids, mode, tags }, (res) => {
+      if (!res || res.error) {
+        this._showToast?.(res && res.error ? res.error : t('media_gallery.tags_update_failed'), 'error');
+        return;
+      }
+      // Optimistically reflect each message's new set in the gallery data so
+      // chips update without a full refetch (keeps the current selection).
+      const byId = new Map((res.results || []).map(r => [r.messageId, r.tags || []]));
+      if (this._mediaGalleryData) {
+        ['photos', 'videos', 'audios', 'files'].forEach(k => {
+          (this._mediaGalleryData[k] || []).forEach(it => {
+            if (byId.has(it.message_id)) {
+              const tg = byId.get(it.message_id);
+              if (tg.length) it.tags = tg; else delete it.tags;
+            }
+          });
+        });
+      }
+      this._showToast?.(t('media_gallery.tags_updated', { count: res.updated || 0 }), 'info');
+      this._closeMediaTagManage();
+      this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+    });
+  };
+
+  if (mode === 'replace' && tags.length === 0) {
+    this._showConfirmModal(
+      t('media_gallery.confirm_clear_title'),
+      t('media_gallery.confirm_clear_body', { count: ids.length }),
+      { danger: true, confirmLabel: t('media_gallery.confirm_clear_ok') }
+    ).then(ok => { if (ok) doEmit(); });
+    return;
+  }
+  doEmit();
 },
 
 // Lightbox-style overlay that plays a video (used by the media gallery

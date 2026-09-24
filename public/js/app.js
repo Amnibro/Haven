@@ -4,22 +4,22 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.8.1';
-import UIBindMethods   from './modules/app-ui.js?v=4.8.1';
-import MediaMethods    from './modules/app-media.js?v=4.8.2';
-import ContextMethods  from './modules/app-context.js?v=4.7.1';
-import ChannelMethods  from './modules/app-channels.js?v=4.8.1';
-import MessageMethods  from './modules/app-messages.js?v=4.8.1';
-import UserMethods     from './modules/app-users.js?v=4.7.1';
-import VoiceMethods    from './modules/app-voice.js?v=4.8.1';
-import UtilityMethods  from './modules/app-utilities.js?v=4.8.2';
-import AdminMethods    from './modules/app-admin.js?v=4.8.1';
-import PlatformMethods from './modules/app-platform.js?v=4.8.1';
-import SearchMethods   from './modules/app-search.js?v=3.49.0';
-import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
-import ForumMethods    from './modules/app-forum.js?v=4.8.1';
-import RoleToolMethods from './modules/app-role-tools.js?v=4.8.1';
-import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.8.1';
+import SocketMethods   from './modules/app-socket.js?v=4.12.1a';
+import UIBindMethods   from './modules/app-ui.js?v=4.12.1a';
+import MediaMethods    from './modules/app-media.js?v=4.12.1a';
+import ContextMethods  from './modules/app-context.js?v=4.9.1';
+import ChannelMethods  from './modules/app-channels.js?v=4.12.1a';
+import MessageMethods  from './modules/app-messages.js?v=4.12.1a';
+import UserMethods     from './modules/app-users.js?v=4.9.1';
+import VoiceMethods    from './modules/app-voice.js?v=4.12.1a';
+import UtilityMethods  from './modules/app-utilities.js?v=4.12.1a';
+import AdminMethods    from './modules/app-admin.js?v=4.12.1a';
+import PlatformMethods from './modules/app-platform.js?v=4.12.1a';
+import SearchMethods   from './modules/app-search.js?v=4.10.1';
+import FerryMethods    from './modules/app-ferry.js?v=4.10.1';
+import ForumMethods    from './modules/app-forum.js?v=4.12.1a';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.10.0';
+import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.10.0';
 
 class HavenApp {
   constructor() {
@@ -63,6 +63,10 @@ class HavenApp {
     this._e2eWrappingKey = null;   // wrapping key kept in memory for cross-device sync
     this._pendingKeyReqs = {};     // userId → [resolve] for promise-based partner key fetch
     this._pendingE2ENotice = null; // E2E notice text to re-append after message re-render
+    this._e2eNoKey = new Set();    // DM partners the server has no public key for
+    this._e2eKeyNotices = new Map(); // partner id -> key-change note shown in their DM this session
+    this._plainDmOk = new Set();   // DM codes the user agreed to send unencrypted this session
+    this._dmGateAsking = new Map(); // DM code -> the send question in progress
     this._oldestMsgId = null;      // oldest message ID in current view (for pagination)
     this._noMoreHistory = false;   // true when all history has been loaded
     this._loadingHistory = false;  // prevent concurrent history requests
@@ -407,14 +411,17 @@ class HavenApp {
         if (!cmd) continue;
         const key = cmd.toLowerCase();
         const channelCode = bc.channel_code || null;
+        const desc = `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`;
         const existing = known.get(key);
         if (existing) {
           // The same command registered by a second bot in another channel
           // keeps the one menu entry and adds its channel to it, so the
-          // suggestions show in every channel that has a bot for it. A
-          // built-in command of the same name stays as it is (#5635).
+          // suggestions show in every channel that has a bot for it, each
+          // naming its own bot. A built-in command of the same name stays as
+          // it is (#5635).
           if (channelCode && Array.isArray(existing.channelCodes) && !existing.channelCodes.includes(channelCode)) {
             existing.channelCodes.push(channelCode);
+            existing.descByChannel[channelCode] = desc;
           }
           continue;
         }
@@ -423,9 +430,10 @@ class HavenApp {
           // Bot commands can have arbitrary args; a hardcoded "<...>" makes
           // subcommand entries look broken and encourages base-command clicks.
           args: '',
-          desc: `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`,
+          desc,
           // A bot lives in one channel, so its commands are only offered there (#5635).
-          channelCodes: channelCode ? [channelCode] : null
+          channelCodes: channelCode ? [channelCode] : null,
+          descByChannel: channelCode ? { [channelCode]: desc } : {}
         };
         known.set(key, entry);
         this.slashCommands.push(entry);

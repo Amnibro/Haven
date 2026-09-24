@@ -3,9 +3,11 @@ const PERM_GROUPS = [
   { key: 'moderate', perms: ['delete_message', 'delete_lower_messages', 'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user', 'ban_ip', 'read_only_override'] },
   { key: 'channels', perms: ['rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels', 'manage_channel_settings', 'create_channel', 'create_temp_channel', 'delete_channel'] },
   { key: 'people', perms: ['invite_users', 'view_all_members', 'view_channel_members', 'view_all_channels', 'promote_user', 'manage_display_names'] },
-  { key: 'media', perms: ['manage_webhooks', 'use_ferry', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue'] },
+  { key: 'media', perms: ['manage_webhooks', 'use_ferry', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'manage_tags'] },
   { key: 'server', perms: ['manage_roles', 'manage_server', 'view_audit_log'] },
 ];
+
+const GRID_PERMS = PERM_GROUPS.flatMap(g => g.perms);
 
 const MEMBER_STARTER = [
   'edit_own_messages', 'delete_own_messages', 'upload_files',
@@ -137,7 +139,7 @@ _matrixRoles() {
 
 _sortedGroupPerms(group) {
   return [...(group.perms || [])].sort((a, b) =>
-    t('permissions.' + a).localeCompare(t('permissions.' + b), undefined, { sensitivity: 'base' })
+    t(`permissions.${a}`).localeCompare(t(`permissions.${b}`), undefined, { sensitivity: 'base' })
   );
 },
 
@@ -172,9 +174,9 @@ _renderPermMatrix() {
 
   let body = '';
   for (const group of PERM_GROUPS) {
-    body += `<tr class="perm-matrix-group"><td colspan="${roles.length + 2}">${esc(t('settings.admin.perm_matrix.group_' + group.key))}</td></tr>`;
+    body += `<tr class="perm-matrix-group"><td colspan="${roles.length + 2}">${esc(t(`settings.admin.perm_matrix.group_${group.key}`))}</td></tr>`;
     for (const perm of this._sortedGroupPerms(group)) {
-      body += `<tr><th scope="row">${esc(t('permissions.' + perm))}</th>`;
+      body += `<tr><th scope="row">${esc(t(`permissions.${perm}`))}</th>`;
       for (const role of roles) {
         const on = (role.permissions || []).includes(perm);
         body += `<td><input type="checkbox" data-role="${role.id}" data-perm="${perm}" ${on ? 'checked' : ''}></td>`;
@@ -288,7 +290,7 @@ _renderPermUsersList() {
     const active = u.id === this._permPanel.userId ? ' is-active' : '';
     const badge = u.isAdmin
       ? t('settings.admin.perm_matrix.admin')
-      : (this._matrixRoles().find(r => (u.roleIds || []).includes(r.id))?.name || t('settings.admin.perm_matrix.no_role'));
+      : (this._matrixRoles().filter(r => (u.roleIds || []).includes(r.id)).map(r => r.name).join(', ') || t('settings.admin.perm_matrix.no_role'));
     return `<button type="button" class="perm-user-row${active}" data-user="${u.id}">
       <span class="perm-user-name">${esc(u.displayName)}</span>
       <span class="perm-user-badge">${esc(badge)}</span>
@@ -325,12 +327,12 @@ _renderPermUserDetail() {
 
   let rows = '';
   for (const group of PERM_GROUPS) {
-    rows += `<div class="perm-user-group">${esc(t('settings.admin.perm_matrix.group_' + group.key))}</div>`;
+    rows += `<div class="perm-user-group">${esc(t(`settings.admin.perm_matrix.group_${group.key}`))}</div>`;
     for (const perm of this._sortedGroupPerms(group)) {
       const on = allOn || perms.includes(perm);
       rows += `<label class="perm-user-perm">
         <input type="checkbox" data-user-perm="${perm}" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''}>
-        <span>${esc(t('permissions.' + perm))}</span>
+        <span>${esc(t(`permissions.${perm}`))}</span>
       </label>`;
     }
   }
@@ -355,16 +357,18 @@ _renderPermUserDetail() {
   });
 },
 
+// One chip adds or removes that one role; people can hold several, and the
+// role menus hand them out, so the chips go through assign-role / revoke-role
+// (level checks and audit log included) instead of replacing the whole set.
 _setUserRole(userId, roleId) {
-  this._roleEmit('set-user-server-role', { userId, roleId }, (res) => {
+  const user = this._permPanel.users.find(u => u.id === userId);
+  const has = !!user && (user.roleIds || []).includes(roleId);
+  this._roleEmit(has ? 'revoke-role' : 'assign-role', { userId, roleId }, (res) => {
     if (res?.error) { this._showToast(res.error, 'error'); return; }
-    const user = this._permPanel.users.find(u => u.id === userId);
-    if (user) {
-      user.roleIds = res.roleIds || [roleId];
-      user.permissions = res.permissions || [];
-    }
+    if (user) user.roleIds = has ? (user.roleIds || []).filter(id => id !== roleId) : [...(user.roleIds || []), roleId];
     this._renderPermUsersList();
     this._renderPermUserDetail();
+    this._loadPermPanel();
   });
 },
 
@@ -372,7 +376,9 @@ _saveUserPerms(user, detailRoot) {
   const boxes = detailRoot.querySelectorAll('[data-user-perm]');
   const permissions = [];
   boxes.forEach(b => { if (b.checked) permissions.push(b.dataset.userPerm); });
-  this._roleEmit('set-user-server-perms', { userId: user.id, permissions }, (res) => {
+  // `known` is what the grid shows; the server keeps every other permission
+  // (transfer_admin, anything added later) exactly as it is.
+  this._roleEmit('set-user-server-perms', { userId: user.id, permissions, known: GRID_PERMS }, (res) => {
     if (res?.error) {
       this._showToast(res.error, 'error');
       this._loadPermPanel();

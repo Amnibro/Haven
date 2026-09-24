@@ -31,6 +31,10 @@ async _joinVoice() {
     this._showToast(t('voice.no_permission'), 'error');
     return;
   }
+  if (this.user?.isGuest && this.serverSettings?.guests_allow_voice === 'false') {
+    this._showToast(t('voice.guests_no_voice'), 'error');
+    return;
+  }
   this._joiningVoice = true;
   // Visually disable the join buttons while the async pipeline runs so a
   // human can't fire 15 of them. We restore disabled=false in finally.
@@ -318,7 +322,9 @@ _voiceJoinAvailable() {
   if (!this.currentChannel) return false;
   const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
   if (ch && ch.voice_enabled === 0) return false;
-  return !!(this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice'));
+  // Guests hold no roles, so voice for them is one server switch (#5687).
+  if (this.user?.isGuest) return this.serverSettings?.guests_allow_voice !== 'false';
+  return !!(this.user?.isAdmin || this._hasPerm('use_voice'));
 },
 
 _channelVoiceLeaveIcon() {
@@ -927,7 +933,7 @@ _popOutWebcamOverlay(tile, userId) {
     <div class="music-pip-embed stream-pip-video"></div>
     <div class="music-pip-controls">
       <button class="music-pip-btn stream-pip-popin" title="${t('media.pop_back_in')}">⧈</button>
-      <span class="music-pip-label">📷 ${this._escapeHtml(who)}</span>
+      <span class="music-pip-label"><span class="music-pip-label-icon" aria-hidden="true">📷</span> ${this._escapeHtml(who)}</span>
       <span class="music-pip-vol-icon" title="${t('voice_runtime.window_opacity')}">👁</span>
       <input type="range" class="music-pip-vol pip-opacity-slider" min="20" max="100" value="${savedOpacity}">
       <button class="music-pip-btn stream-pip-fullscreen" title="${t('media.fullscreen')}">⤢</button>
@@ -2067,7 +2073,7 @@ _popOutStreamWindow(tile, userId) {
     <div class="music-pip-embed stream-pip-video"></div>
     <div class="music-pip-controls">
       <button class="music-pip-btn stream-pip-popin" title="${t('media.pop_back_in')}">⧈</button>
-      <span class="music-pip-label">🖥️ ${this._escapeHtml(who)}</span>
+      <span class="music-pip-label"><span class="music-pip-label-icon" aria-hidden="true">🖥️</span> ${this._escapeHtml(who)}</span>
       <span class="music-pip-vol-icon stream-pip-opacity-icon" title="${t('voice_runtime.window_opacity')}">👁</span>
       <input type="range" class="music-pip-vol pip-opacity-slider stream-pip-opacity" min="20" max="100" value="${savedOpacity}">
       <button class="music-pip-btn stream-pip-maximize" title="${t('voice_runtime.maximize')}">⛶</button>
@@ -2408,14 +2414,13 @@ _handleMusicShared(data) {
   // YouTube reports as "Error 153" and other providers can reject too. The
   // origin alone is enough for them and carries no invite code.
   container.innerHTML = `<div class="music-embed-wrapper"><iframe id="music-iframe" src="${embedUrl}" width="100%" height="${iframeH}" frameborder="0" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>${needsOverlay ? '<div class="music-embed-overlay"></div>' : ''}</div>`;
-  if (data.resolvedFrom === 'spotify') {
-    label.textContent = t('voice.music_shared_spotify', { user: data.username || t('voice.someone') });
-  } else {
-    label.textContent = t('voice.music_shared', {
+  const labelText = data.resolvedFrom === 'spotify'
+    ? t('voice.music_shared_spotify', { user: data.username || t('voice.someone') })
+    : t('voice.music_shared', {
       platform: platform ? platform.name : t('voice.music'),
       user: data.username || t('voice.someone')
     });
-  }
+  label.innerHTML = `<span class="music-pip-label-icon" aria-hidden="true">🎶</span> ${this._escapeHtml(labelText)}`;
   panel.style.display = 'flex';
 
   // Update play/pause button — hide for Spotify (no external API)
@@ -3167,7 +3172,7 @@ _popOutMusicPlayer() {
       <div class="music-pip-header" id="music-pip-drag">
         <button class="music-pip-btn" id="music-pip-popin" title="${t('media.music_pip_minimize')}">─</button>
         <div class="music-pip-copy">
-          <span class="music-pip-label">🎵 ${platform}</span>
+          <span class="music-pip-label"><span class="music-pip-label-icon" aria-hidden="true">🎶</span> ${platform}</span>
           <span class="music-up-next music-pip-up-next" id="music-pip-up-next">${t('media.music_up_next_empty')}</span>
         </div>
         <span class="music-activity-hint" id="music-pip-activity-hint"></span>

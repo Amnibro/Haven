@@ -1,103 +1,153 @@
 'use strict';
 
-// ══════════════════════════════════════════════════════════════════════
-// SSRF-safe fetch for URLs that came from a user (link previews, the media
-// proxy). Global fetch() resolves the hostname itself, after any check we ran,
-// so a check-then-fetch pair can be beaten by a DNS answer that changes in
-// between (rebinding), and fetch's own redirect following never gets checked
-// at all. Here every hop is resolved once, every address is judged by the same
-// rules the webhook callbacks use (loopback, private, link-local, metadata,
-// IPv4-mapped IPv6, NAT64 ...), and the connection is pinned to the address
-// that was judged. Redirects are followed by hand so each target goes through
-// the same gate.
-//
-// Returns a WHATWG Response so callers can keep using .ok/.status/.headers/
-// .text()/.json()/.arrayBuffer() exactly as they did with fetch().
-// ══════════════════════════════════════════════════════════════════════
+/**
+ * GET a URL that a member chose (link previews, the media proxy) without
+ * letting it steer the server into its own network.
+ *
+ * Every hop is resolved once, every address it resolves to (IPv4 and IPv6) is
+ * checked against the blocked ranges the bot callbacks already use, and the
+ * connection goes to exactly the address that was checked. That covers the
+ * ways the old check could be walked around: a redirect to an internal host, a
+ * second DNS answer that changes between the check and the connect, a name
+ * with only an IPv6 record, and spellings of loopback such as 127.0.0.2 or
+ * [::ffff:7f00:1].
+ *
+ * The body is read up to a byte ceiling rather than buffered whole, and
+ * compressed bodies are inflated under the same ceiling.
+ */
 
 const http = require('node:http');
 const https = require('node:https');
 const zlib = require('node:zlib');
-const { Readable } = require('node:stream');
 const { resolveCallbackDestination, createPinnedLookup } = require('./webhookCallback');
 
-const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
+const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 
-// Same opt-in the link previews always had for self-hosters who want previews
-// of LAN services. Link-local and metadata ranges stay blocked regardless.
-function _allowPrivateDefault() {
-  return (process.env.ALLOW_PRIVATE_PREVIEWS || '').toLowerCase() === 'true';
+class UnsafeUrlError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'UnsafeUrlError';
+  }
 }
 
-function _decode(incoming) {
-  const enc = String(incoming.headers['content-encoding'] || '').trim().toLowerCase();
-  if (enc === 'gzip' || enc === 'x-gzip') return incoming.pipe(zlib.createGunzip());
-  if (enc === 'deflate') return incoming.pipe(zlib.createInflate());
-  if (enc === 'br') return incoming.pipe(zlib.createBrotliDecompress());
-  return incoming;
+function decoderFor(encoding) {
+  const enc = String(encoding || '').trim().toLowerCase();
+  if (enc === 'gzip' || enc === 'x-gzip') return zlib.createGunzip();
+  if (enc === 'deflate') return zlib.createInflate();
+  if (enc === 'br') return zlib.createBrotliDecompress();
+  return null;
 }
 
-async function _fetchOnce(urlString, opts) {
-  if (opts.signal?.aborted) throw opts.signal.reason || new Error('Aborted');
-  const destination = await resolveCallbackDestination(urlString, {
-    allowPrivateCallbacks: opts.allowPrivate
-  });
+function requestOnce(destination, headers, deadlineAt, maxBytes, truncate) {
   return new Promise((resolve, reject) => {
+    const remaining = deadlineAt - Date.now();
+    if (remaining <= 0) return reject(new Error('Request timed out'));
     const transport = destination.url.protocol === 'https:' ? https : http;
-    const request = transport.request(destination.url, {
+    let settled = false;
+    let timer;
+    let request;
+    let response;
+    const finish = (error, result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) {
+        try { response?.destroy(); } catch {}
+        try { request?.destroy(); } catch {}
+        reject(error);
+      } else {
+        resolve(result);
+      }
+    };
+
+    request = transport.request(destination.url, {
       method: 'GET',
       agent: false,
-      headers: opts.headers || {},
+      headers: { 'Accept-Encoding': 'gzip, deflate, br', ...headers },
       lookup: createPinnedLookup(destination.address, destination.family),
-      signal: opts.signal
-    }, incoming => {
-      const headers = new Headers();
-      for (const [key, value] of Object.entries(incoming.headers)) {
-        if (Array.isArray(value)) value.forEach(v => headers.append(key, v));
-        else if (value !== undefined) headers.set(key, String(value));
+    }, (incoming) => {
+      response = incoming;
+      const status = incoming.statusCode || 0;
+      if (REDIRECTS.has(status)) {
+        incoming.resume();
+        return finish(null, { status, headers: incoming.headers, body: Buffer.alloc(0) });
       }
-      const status = incoming.statusCode;
-      let body = null;
-      if (NULL_BODY_STATUSES.has(status)) incoming.resume();
-      else {
-        const decoded = _decode(incoming);
-        if (decoded !== incoming) incoming.on('error', err => decoded.destroy(err));
-        body = Readable.toWeb(decoded);
+
+      const declared = parseInt(incoming.headers['content-length'] || '0', 10);
+      const encoded = decoderFor(incoming.headers['content-encoding']);
+      if (!truncate && !encoded && Number.isFinite(declared) && declared > maxBytes) {
+        return finish(new Error('too large'));
       }
-      try {
-        resolve(new Response(body, { status, statusText: incoming.statusMessage || '', headers }));
-      } catch (err) {
-        incoming.destroy();
-        reject(err);
-      }
+
+      const source = encoded ? incoming.pipe(encoded) : incoming;
+      const chunks = [];
+      let size = 0;
+      const done = () => finish(null, { status, headers: incoming.headers, body: Buffer.concat(chunks, Math.min(size, maxBytes)) });
+      source.on('data', (chunk) => {
+        if (settled) return;
+        size += chunk.length;
+        if (size > maxBytes) {
+          if (!truncate) return finish(new Error('too large'));
+          chunks.push(chunk.subarray(0, chunk.length - (size - maxBytes)));
+          size = maxBytes;
+          return done();
+        }
+        chunks.push(chunk);
+      });
+      source.on('end', done);
+      source.on('error', (err) => finish(err));
+      incoming.on('error', (err) => finish(err));
     });
-    request.on('error', reject);
+
+    timer = setTimeout(() => finish(new Error('Request timed out')), remaining);
+    request.on('error', (err) => finish(err));
     request.end();
   });
 }
 
 /**
- * GET a user-supplied URL without letting it reach internal addresses.
- * opts: { headers, signal, redirect: 'manual' | 'follow', maxRedirects, allowPrivate }
+ * @param {string} urlString
+ * @param {object} [options]
+ * @param {boolean} [options.allowPrivate]  LAN and loopback allowed (link-local and metadata never are)
+ * @param {number}  [options.maxRedirects]
+ * @param {number}  [options.timeoutMs]     for the whole chain, DNS included
+ * @param {number}  [options.maxBytes]
+ * @param {boolean} [options.truncate]      keep the first maxBytes instead of failing
+ * @param {object}  [options.headers]
+ * @param {Function} [options.resolve]      for tests: (url, { allowPrivateCallbacks }) => destination
+ * @returns {Promise<{ status: number, headers: object, body: Buffer, url: string }>}
  */
-async function safeFetch(urlString, opts = {}) {
-  const options = {
-    ...opts,
-    allowPrivate: typeof opts.allowPrivate === 'boolean' ? opts.allowPrivate : _allowPrivateDefault()
-  };
-  const follow = options.redirect === 'follow';
-  const maxRedirects = Number.isInteger(options.maxRedirects) ? options.maxRedirects : 10;
-  let current = String(urlString);
-  for (let hop = 0; ; hop++) {
-    const res = await _fetchOnce(current, options);
-    if (!follow || !REDIRECT_STATUSES.has(res.status)) return res;
-    const location = res.headers.get('location');
-    if (!location) return res;
-    try { await res.body?.cancel(); } catch { /* already closed */ }
-    if (hop >= maxRedirects) throw new Error('Too many redirects');
-    current = new URL(location, current).href;
+async function safeGet(urlString, options = {}) {
+  const {
+    allowPrivate = false,
+    maxRedirects = 5,
+    timeoutMs = 8000,
+    maxBytes = 1024 * 1024,
+    truncate = false,
+    headers = {},
+    resolve = resolveCallbackDestination,
+  } = options;
+  const deadlineAt = Date.now() + timeoutMs;
+  let current = urlString;
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    let destination;
+    try {
+      destination = await Promise.race([
+        resolve(current, { allowPrivateCallbacks: allowPrivate }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), Math.max(1, deadlineAt - Date.now()))),
+      ]);
+    } catch (err) {
+      if (err && err.code === 'ERR_UNSAFE_CALLBACK_URL') throw new UnsafeUrlError('Private addresses not allowed');
+      throw err;
+    }
+    const result = await requestOnce(destination, headers, deadlineAt, maxBytes, truncate);
+    if (REDIRECTS.has(result.status) && result.headers.location) {
+      current = new URL(result.headers.location, destination.url).href;
+      continue;
+    }
+    return { ...result, url: current };
   }
+  throw new Error('Too many redirects');
 }
 
-module.exports = { safeFetch };
+module.exports = { safeGet, UnsafeUrlError };

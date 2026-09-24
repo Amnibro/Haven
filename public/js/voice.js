@@ -139,24 +139,20 @@ class VoiceManager {
     // probe must not overwrite those.
     this._adminIceServersLoaded = false;
 
-    // Fetch server-provided ICE config (may include TURN).
-    // Do not probe STUN until someone actually joins a call. A probe
-    // spins up RTCPeerConnection, which gathers LAN candidates, and
-    // Chrome now asks every public-site visitor for local-network
-    // access just because they opened chat.
+    // Fetch server-provided ICE config (may include TURN)
+    this._fetchIceServers();
+
+    // The STUN probe (prune dead servers so later peer connections do not
+    // wait on them) used to run on page load. It opens an RTCPeerConnection,
+    // which gathers LAN candidates, and Chrome now asks every visitor of a
+    // public site for local-network access the moment that happens, so
+    // opening chat at all raised the prompt. It waits for the first voice
+    // join instead. Amnibro traced it.
     this._stunProbeStarted = false;
     this._pendingConfiguredStun = null;
-    this._fetchIceServers();
 
     this._setupSocketListeners();
     this._setupNativeScreenBridge();
-  }
-
-  _ensureStunProbed() {
-    if (this._stunProbeStarted) return;
-    this._stunProbeStarted = true;
-    this._probeDefaultStun();
-    if (this._pendingConfiguredStun) this._probeConfiguredStun(this._pendingConfiguredStun);
   }
 
   // ── Fetch ICE servers from backend (STUN + optional TURN) ──
@@ -208,11 +204,25 @@ class VoiceManager {
         // srflx candidates, which relay-only discards on purpose, so running it
         // any earlier reports every server dead on a perfectly healthy setup.
         // Fire and forget; a dead entry here used to fail completely silently.
-        this._pendingConfiguredStun = data.iceServers;
-        if (this._stunProbeStarted) this._probeConfiguredStun(data.iceServers);
+        if (this._adminIceServersLoaded) {
+          if (this._stunProbeStarted) this._probeConfiguredStun(data.iceServers);
+          else this._pendingConfiguredStun = data.iceServers;
+        }
       }
     } catch (err) {
       console.warn('Could not fetch ICE servers, using defaults:', err && err.message);
+    }
+  }
+
+  // Run the STUN probes once, on the first voice join (see the constructor).
+  _ensureStunProbed() {
+    if (this._stunProbeStarted) return;
+    this._stunProbeStarted = true;
+    try { this._probeDefaultStun(); } catch { /* fire and forget */ }
+    if (this._pendingConfiguredStun) {
+      const list = this._pendingConfiguredStun;
+      this._pendingConfiguredStun = null;
+      try { this._probeConfiguredStun(list); } catch { /* fire and forget */ }
     }
   }
 
@@ -1944,10 +1954,10 @@ class VoiceManager {
   }
 
   async join(channelCode) {
-    this._ensureStunProbed();
     if (this._joinInFlight) return false;
     this._joinInFlight = true;
     this._joiningChannelCode = channelCode;
+    this._ensureStunProbed();
     try {
       const preservedMuteState = this.isMuted;
       const preservedDeafenState = this.isDeafened;
@@ -3630,16 +3640,33 @@ class VoiceManager {
     // restores voice audio often leaves screen video undelivered because
     // ontrack doesn't re-fire for an already-negotiated transceiver.
     setTimeout(() => { try { this._rearmScreenWatchdogs(); } catch {} }, 2500);
+    // Only a path that is actually broken gets restarted. This sweep used to
+    // restart every peer, healthy or not, and the other person's client ran
+    // the same sweep at the same moment: after a server restart or a channel
+    // code rotation both sides offered an ICE restart on a perfectly good
+    // connection, the two offers collided, and the call came out one-way
+    // (one person heard, the other sent nothing) until someone reloaded.
+    // A live peer-to-peer path does not care that signaling blinked.
+    const isBroken = (conn) => {
+      const cs = conn.connectionState, ics = conn.iceConnectionState;
+      return cs === 'failed' || cs === 'disconnected' || ics === 'failed' || ics === 'disconnected';
+    };
     let i = 0;
     for (const [userId, peer] of this.peers) {
       const conn = peer && peer.connection;
       if (!conn || conn.connectionState === 'closed') continue;
-      const delay = (i++) * 200;
+      if (!isBroken(conn)) continue;
+      // Both ends see the same broken path, so both would restart it at once
+      // and collide again. The side whose offer wins a collision goes first;
+      // the side that would yield gives it a few seconds and only steps in
+      // if the path is still down.
+      const delay = (i++) * 200 + (this._isPolite(userId) ? 4000 : 0);
       setTimeout(() => {
         const current = this.peers.get(userId);
         // Bail if the peer was torn down/replaced while we were waiting.
         if (!this.inVoice || !current || current.connection !== conn) return;
-        if (conn.connectionState === 'closed') return;
+        if (conn.connectionState === 'closed' || !isBroken(conn)) return;
+        if (current._makingOffer || current._awaitingAnswer || conn.signalingState !== 'stable') return;
         console.warn('[Voice] post-reconnect heal: ICE-restarting peer', userId,
           `(conn=${conn.connectionState}, ice=${conn.iceConnectionState})`);
         this._restartIce(userId, conn);

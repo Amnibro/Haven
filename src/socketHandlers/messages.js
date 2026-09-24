@@ -3,18 +3,62 @@
 const path = require('path');
 const fs   = require('fs');
 const crypto = require('crypto');
-const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions } = require('./helpers');
+const bcrypt = require('bcryptjs');
+const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
+const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
+
+// The length limit is on what people type. An encrypted DM reaches the
+// server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
+// up to about four times the typed length (a character can take three bytes
+// as UTF-8 and base64 adds a third). A DM near the limit was refused after
+// the message box had already cleared (#5691), so ciphertext gets that room.
+function encryptedDmCap(maxChars) {
+  return maxChars * 4 + 256;
+}
+function looksEncrypted(content) {
+  if (typeof content !== 'string' || content.charCodeAt(0) !== 123) return false;
+  try {
+    const o = JSON.parse(content);
+    return !!(o && (o.v === 1 || o.v === 2) && typeof o.iv === 'string' && typeof o.ct === 'string');
+  } catch { return false; }
+}
+function contentCap(maxChars, channel, content) {
+  return channel && channel.is_dm && looksEncrypted(content) ? encryptedDmCap(maxChars) : maxChars;
+}
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay,
-          UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, broadcastChannelLists } = ctx;
+          logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, broadcastChannelLists } = ctx;
   const { slowModeTracker } = state;
   // channelId → { at, n }: attachments this socket may still send under the
   // slow-mode slot its last text message used (see send-message).
   const slowBundleBudget = new Map();
+
+  // Membership alone is not access. A person can hold a membership row for a
+  // channel whose required roles they lack (joining with the server code adds
+  // every public channel, gate or not), and the gate is what hides it from
+  // them. Every handler that reads a channel or posts in it checks both;
+  // only get-messages, send-message and the thread handlers used to.
+  // @everyone, @here and @Role reach whole groups, so only people allowed
+  // mention_everyone may send them; for anyone else a zero-width space after
+  // the @ keeps the text and stops the ping. send-message has always done
+  // this; threads, polls and scheduled messages skipped it.
+  function pingSafe(content, userId, channelId) {
+    if (typeof content !== 'string' || !content.includes('@')) return content;
+    const u = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+    if ((u && u.is_admin) || userHasPermission(userId, 'mention_everyone', channelId)) return content;
+    const out = content.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
+    return stripRoleMentions(out, db.prepare('SELECT name FROM roles').all().map(r => r.name));
+  }
+
+  function hasChannelAccess(channelId) {
+    if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
+    if (socket.user.isAdmin) return true;
+    return ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId));
+  }
 
   const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
   const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
@@ -45,46 +89,6 @@ module.exports = function register(socket, ctx) {
     } catch { /* file locked or already moved */ }
   }
 
-  // An /uploads/ path in a message (or in the client-supplied attachment list
-  // for an E2E DM) is only a claim: anyone can type another person's file or
-  // avatar URL into a message and delete it. Move a file only when the
-  // message author uploaded it, or when nothing (legacy, unattributed) still
-  // points at it. `strict` (client-supplied DM list) skips that fallback,
-  // since other DMs are ciphertext and cannot be searched for references.
-  function mayMoveUploadFor(relPath, authorId, strict = false) {
-    try {
-      const own = db.prepare('SELECT user_id, scope FROM upload_ownership WHERE rel_path = ?').get(relPath);
-      if (own) return own.user_id != null && own.user_id === authorId && own.scope !== 'profile';
-      if (strict) return false;
-      const p = '/uploads/' + relPath;
-      const ref = db.prepare(`
-        SELECT 1 WHERE
-             EXISTS(SELECT 1 FROM messages WHERE instr(lower(content), lower(@p)) > 0 OR instr(lower(COALESCE(poll_data, '')), lower(@p)) > 0
-                    OR instr(lower(COALESCE(persona_avatar, '')), lower(@p)) > 0 OR instr(lower(COALESCE(webhook_avatar, '')), lower(@p)) > 0)
-          OR EXISTS(SELECT 1 FROM users WHERE instr(lower(COALESCE(avatar, '')), lower(@p)) > 0 OR instr(lower(COALESCE(border, '')), lower(@p)) > 0)
-          OR EXISTS(SELECT 1 FROM user_personas WHERE instr(lower(COALESCE(avatar, '')), lower(@p)) > 0)
-          OR EXISTS(SELECT 1 FROM webhooks WHERE instr(lower(COALESCE(avatar_url, '')), lower(@p)) > 0)
-          OR EXISTS(SELECT 1 FROM roles WHERE instr(lower(COALESCE(icon, '')), lower(@p)) > 0)
-          OR EXISTS(SELECT 1 FROM server_settings WHERE instr(lower(COALESCE(value, '')), lower(@p)) > 0)
-          OR EXISTS(SELECT 1 FROM scheduled_messages WHERE instr(lower(content), lower(@p)) > 0)
-          OR EXISTS(SELECT 1 FROM custom_sounds WHERE filename = @f)
-          OR EXISTS(SELECT 1 FROM custom_emojis WHERE filename = @f)
-          OR EXISTS(SELECT 1 FROM stickers WHERE filename = @f)
-      `).get({ p, f: relPath });
-      return !ref;
-    } catch { return false; }
-  }
-
-  // @everyone / @here / @Role pings for senders without mention_everyone:
-  // the text stays, a zero-width space stops the ping. Same rule send-message
-  // applies, shared with every other surface that posts text (#5579).
-  function stripMassMentions(content, userId, isAdmin, channelId) {
-    if (typeof content !== 'string' || !content.includes('@')) return content;
-    if (isAdmin || userHasPermission(userId, 'mention_everyone', channelId)) return content;
-    const stripped = content.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
-    return stripRoleMentions(stripped, db.prepare('SELECT name FROM roles').all().map(r => r.name));
-  }
-
   // The client renders a whole-message `[file:name](url|size)` as an
   // attachment card (download link / inline player). Real ones always point
   // at a file on this server; anything else is a disguised external link.
@@ -111,7 +115,7 @@ module.exports = function register(socket, ctx) {
   // means "less recently active than X".
   const FORUM_ACTIVITY = 'COALESCE((SELECT MAX(t.created_at) FROM messages t WHERE t.thread_id = m.id), m.created_at)';
   const FORUM_SELECT = `
-    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.title, m.tags, m.closed, m.request_status, m.topic_kind, m.subtasks,
+    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.title, m.tags, m.closed, m.request_status, m.topic_kind, m.subtasks, m.nsfw,
            COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
            COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile,
            ${FORUM_ACTIVITY} AS activity_at
@@ -362,6 +366,7 @@ module.exports = function register(socket, ctx) {
     const reactionMap = new Map();
     const pollVoteMap = new Map();
     const roleMenuMap = new Map();
+    const attachmentTagMap = new Map();
     let pinnedSet = null;
     if (msgIds.length > 0) {
       const ph = msgIds.map(() => '?').join(',');
@@ -389,6 +394,18 @@ module.exports = function register(socket, ctx) {
       `).all(...msgIds).forEach(v => {
         if (!pollVoteMap.has(v.message_id)) pollVoteMap.set(v.message_id, []);
         pollVoteMap.get(v.message_id).push(v);
+      });
+
+      // Attachment tags (#tagging): every tag across a message's attachments,
+      // folded into one deduped list per message for the message footer.
+      db.prepare(`
+        SELECT at.message_id, ut.name
+        FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
+        WHERE at.message_id IN (${ph}) ORDER BY ut.name_norm
+      `).all(...msgIds).forEach(r => {
+        if (!attachmentTagMap.has(r.message_id)) attachmentTagMap.set(r.message_id, []);
+        const arr = attachmentTagMap.get(r.message_id);
+        if (!arr.includes(r.name)) arr.push(r.name);
       });
     }
 
@@ -479,10 +496,13 @@ module.exports = function register(socket, ctx) {
         obj.thread = tinfo;
       }
       if ('tags' in m) obj.tags = parseTags(m.tags);
+      const atags = attachmentTagMap.get(m.id);
+      if (atags && atags.length) obj.attachmentTags = atags;
       if ('closed' in m) obj.closed = !!m.closed;
       if ('request_status' in m) obj.request_status = parseRequestStatus(m.request_status);
       if ('topic_kind' in m) obj.topic_kind = parseTopicKind(m.topic_kind);
       if ('subtasks' in m) obj.subtasks = parseSubtasks(m.subtasks);
+      if ('nsfw' in m) obj.nsfw = !!m.nsfw;
       if (m.poll_data) {
         try {
           obj.poll = JSON.parse(m.poll_data);
@@ -551,7 +571,7 @@ module.exports = function register(socket, ctx) {
   const SEARCH_PAGE_SIZE = 25;
   socket.on('search-messages', (data) => {
     if (!data || typeof data !== 'object') return;
-    let query = typeof data.query === 'string' ? data.query.trim() : '';
+    let query = typeof data.query === 'string' ? data.query.trim().slice(0, 300) : '';
     if (!query) return;
 
     // Per-account rate limit on the expensive FTS path. On trip we tell the
@@ -568,8 +588,11 @@ module.exports = function register(socket, ctx) {
     const token = data.token;
 
     // ── Parse filters out of the query text ──
-    const filters = { from: null, in: null, has: null, pinned: null, before: null, after: null, during: null };
+    const filters = { from: null, in: null, has: null, pinned: null, before: null, after: null, during: null, tag: null };
     query = query.replace(/\bfrom:(\S+)/gi, (_, v) => { filters.from = v; return ''; });
+    // tag: supports a quoted value so multi-word tags work (tags allow spaces);
+    // the filter picker and clickable message tags append the quoted form.
+    query = query.replace(/\btag:"([^"]+)"|\btag:(\S+)/gi, (_, quoted, bare) => { filters.tag = quoted || bare; return ''; });
     // A leading # means "this is a channel code" (unambiguous, what the filter
     // picker appends); without it, in: is treated as a channel name.
     query = query.replace(/\bin:(#?)(\S+)/gi, (_, hash, v) => { filters.in = v; filters.inIsCode = !!hash; return ''; });
@@ -598,7 +621,7 @@ module.exports = function register(socket, ctx) {
 
     // Never dump the whole corpus: require free text or at least one filter.
     const anyFilter = filters.from || filters.has || filters.in || filters.pinned ||
-                      filters.before || filters.after || filters.during;
+                      filters.before || filters.after || filters.during || filters.tag;
     if (!usesFts && !anyFilter) {
       return socket.emit('search-results', empty);
     }
@@ -608,33 +631,23 @@ module.exports = function register(socket, ctx) {
       // #code resolves by unique code (unambiguous); a bare name resolves by
       // name, which is not unique so it takes the first match.
       const target = filters.inIsCode
-        ? db.prepare('SELECT id, role_gate FROM channels WHERE code = ? AND is_dm = 0').get(filters.in)
-        : db.prepare('SELECT id, role_gate FROM channels WHERE name = ? COLLATE NOCASE AND is_dm = 0').get(filters.in);
+        ? db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(filters.in)
+        : db.prepare('SELECT id FROM channels WHERE name = ? COLLATE NOCASE AND is_dm = 0').get(filters.in);
       if (!target) return socket.emit('search-results', empty);
-      const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(target.id, socket.user.id);
-      if (!isMember) return socket.emit('search-results', empty);
-      if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, target)) return socket.emit('search-results', empty);
+      if (!hasChannelAccess(target.id)) return socket.emit('search-results', empty);
       conditions.push('m.channel_id = ?');
       params.push(target.id);
     } else {
-      conditions.push(`m.channel_id IN (
-        SELECT cm.channel_id FROM channel_members cm
+      const reachable = db.prepare(`
+        SELECT c.id, c.role_gate FROM channel_members cm
         JOIN channels c ON c.id = cm.channel_id
         WHERE cm.user_id = ? AND c.is_dm = 0
-      )`);
-      params.push(socket.user.id);
-      // Role-gated channels whose gate this member does not pass stay out,
-      // matching get-messages (hand-added rows keep membership, not access).
-      if (!socket.user.isAdmin) {
-        const gatedOut = db.prepare(`
-          SELECT c.id, c.role_gate FROM channel_members cm JOIN channels c ON c.id = cm.channel_id
-          WHERE cm.user_id = ? AND c.is_dm = 0 AND c.role_gate IS NOT NULL
-        `).all(socket.user.id).filter(c => !ctx.roleGateAllows(socket.user.id, c)).map(c => c.id);
-        if (gatedOut.length) {
-          conditions.push(`m.channel_id NOT IN (${gatedOut.map(() => '?').join(',')})`);
-          params.push(...gatedOut);
-        }
-      }
+      `).all(socket.user.id)
+        .filter(ch => socket.user.isAdmin || ctx.roleGateAllows(socket.user.id, ch))
+        .map(ch => ch.id);
+      if (!reachable.length) return socket.emit('search-results', empty);
+      conditions.push(`m.channel_id IN (${reachable.map(() => '?').join(',')})`);
+      params.push(...reachable);
     }
 
     // ── from:username filter ──
@@ -667,6 +680,17 @@ module.exports = function register(socket, ctx) {
     // ── pinned: filter ──
     if (filters.pinned === 'true') {
       conditions.push('m.id IN (SELECT message_id FROM pinned_messages)');
+    }
+
+    // ── tag: filter (non-strict, case-folded PREFIX match on an attachment
+    // tag) ── The value need not be a confirmed vocabulary tag; a typed prefix
+    // like "do" matches "dog", so partial queries still surface results. A
+    // message matches if any of its attachment tags starts with the value.
+    if (filters.tag) {
+      const norm = normalizeTagName(filters.tag);
+      if (!norm) return socket.emit('search-results', empty);
+      conditions.push("m.id IN (SELECT at.message_id FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id WHERE ut.name_norm LIKE ? ESCAPE '\\')");
+      params.push(escapeLike(norm.norm) + '%');
     }
 
     // ── date filters (created_at). during: is the whole named day. ──
@@ -720,6 +744,20 @@ module.exports = function register(socket, ctx) {
       ).all(...resultIds);
       const countMap = new Map(counts.map(c => [c.thread_id, c.n]));
       results.forEach(r => { r.thread_count = countMap.get(r.id) || 0; });
+
+      // Attachment tags for this page, so results render the same Tags footer as
+      // the channel view (and its chips are clickable). One deduped list per row.
+      const tagMap = new Map();
+      db.prepare(`
+        SELECT at.message_id, ut.name
+        FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
+        WHERE at.message_id IN (${ph}) ORDER BY ut.name_norm
+      `).all(...resultIds).forEach(row => {
+        if (!tagMap.has(row.message_id)) tagMap.set(row.message_id, []);
+        const arr = tagMap.get(row.message_id);
+        if (!arr.includes(row.name)) arr.push(row.name);
+      });
+      results.forEach(r => { const tg = tagMap.get(r.id); if (tg && tg.length) r.attachmentTags = tg; });
     }
 
     socket.emit('search-results', { results, total, page, query: data.query, filters, token });
@@ -739,18 +777,13 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, role_gate FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const member = hasChannelAccess(channel.id);
     if (!member && !socket.user.isAdmin) {
       return socket.emit('error-msg', 'Not a member of this channel');
     }
-    // Same gate as get-messages: a hand-added member without the channel's
-    // required roles does not get its history by another route.
-    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
     // Up to 5000 rows plus disk stats per call: share search's tighter bucket.
     if (floodCheck('search')) return;
 
@@ -875,6 +908,31 @@ module.exports = function register(socket, ctx) {
       httpRe.lastIndex = 0;
     }
 
+    // Attach upload tags to each media entry so the gallery can filter by tag
+    // and show chips. Tags key on (message_id, rel_path); links have no backing
+    // /uploads/ file so they never carry tags. One batched query for the page.
+    const withUrls = [...photos, ...videos, ...audios, ...files];
+    const mediaMsgIds = [...new Set(withUrls.map(e => e.message_id))];
+    if (mediaMsgIds.length) {
+      const ph = mediaMsgIds.map(() => '?').join(',');
+      const tagRows = db.prepare(
+        `SELECT at.message_id, at.rel_path, ut.name
+           FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
+          WHERE at.message_id IN (${ph})
+          ORDER BY ut.name_norm`
+      ).all(...mediaMsgIds);
+      const tagIndex = new Map();
+      for (const r of tagRows) {
+        const key = `${r.message_id}|${r.rel_path}`;
+        if (!tagIndex.has(key)) tagIndex.set(key, []);
+        tagIndex.get(key).push(r.name);
+      }
+      for (const e of withUrls) {
+        const tags = tagIndex.get(`${e.message_id}|${e.url}`);
+        if (tags && tags.length) e.tags = tags;
+      }
+    }
+
     socket.emit('channel-media', {
       channelCode: code,
       photos,
@@ -893,16 +951,13 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, role_gate FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const member = hasChannelAccess(channel.id);
     if (!member && !socket.user.isAdmin) {
       return socket.emit('error-msg', 'Not a member of this channel');
     }
-    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
 
     // A thread is a message that has replies hanging off it, so the join is
     // what defines one: no replies, no thread, nothing to list. Capped like
@@ -1020,28 +1075,29 @@ module.exports = function register(socket, ctx) {
       return cb({ error: 'Failed to delete items', detail: err && err.message });
     }
 
-    // Move attachment files to deleted-attachments/ for each deleted message
+    // Move attachment files to deleted-attachments/ for each deleted message,
+    // but only each author's own attachments (releasableUploads).
     const uploadRe = UPLOAD_PATH_RE;
     for (const r of deletable) {
+      const toRelease = [];
       uploadRe.lastIndex = 0;
       let m;
-      while ((m = uploadRe.exec(r.content || '')) !== null) {
-        if (mayMoveUploadFor(m[1], r.user_id)) moveUploadToDeleted(m[1]);
-      }
+      while ((m = uploadRe.exec(r.content || '')) !== null) toRelease.push(m[1]);
       // For E2E DMs the content is ciphertext; honor client-supplied URLs
       // the same way `delete-message` does. (`data.attachmentsByMessage`
       // is an object map { [messageId]: [url, url, ...] }.)
       if (channel.is_dm && data.attachmentsByMessage && typeof data.attachmentsByMessage === 'object') {
         const urls = data.attachmentsByMessage[r.id];
         if (Array.isArray(urls)) {
-          for (const url of urls) {
+          for (const url of urls.slice(0, 50)) {
             if (typeof url !== 'string') continue;
             const match = url.match(UPLOAD_PATH_EXACT_RE);
             if (!match || !isSafeUploadRelPath(match[1])) continue;
-            if (mayMoveUploadFor(match[1], r.user_id, true)) moveUploadToDeleted(match[1]);
+            toRelease.push(match[1]);
           }
         }
       }
+      for (const rel of releasableUploads(db, toRelease, [r.user_id])) moveUploadToDeleted(rel);
     }
 
     // Broadcast individual deletes so all clients' message lists, pin lists,
@@ -1055,6 +1111,80 @@ module.exports = function register(socket, ctx) {
 
     cb({ success: true, deleted: deletable.length, skipped: skipped.length });
   };
+
+  // ── Delete every message you wrote (#5686) ────────────────
+  // For someone leaving a server for good. Off unless an admin turned on
+  // "Members can delete all their own messages" under Members; that switch is
+  // the permission, so the per-role delete-own-messages rule does not apply.
+  // Messages a moderator protected stay, the same as the account deletion's
+  // scrub. Deleting a message takes its thread along, as a single delete does.
+  socket.on('self-purge-messages', async (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
+    const uid = socket.user.id;
+    const allowRow = db.prepare("SELECT value FROM server_settings WHERE key = 'allow_self_purge'").get();
+    if (!allowRow || allowRow.value !== 'true') return cb({ error: 'This server does not allow deleting all your messages at once' });
+    if (socket.user.isGuest) return cb({ error: 'Guest accounts cannot do this' });
+
+    const password = typeof data.password === 'string' ? data.password : '';
+    if (!password) return cb({ error: 'Password is required' });
+    const userRow = db.prepare('SELECT password_hash, COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(uid);
+    if (!userRow) return cb({ error: 'User not found' });
+    try {
+      if (!(await bcrypt.compare(password, userRow.password_hash))) return cb({ error: 'Incorrect password' });
+    } catch (err) {
+      console.error('Self-purge password verification error:', err);
+      return cb({ error: 'Password verification failed' });
+    }
+
+    if (!state.selfPurgeInFlight) state.selfPurgeInFlight = new Set();
+    if (state.selfPurgeInFlight.has(uid)) return cb({ error: 'Already deleting, give it a moment' });
+    state.selfPurgeInFlight.add(uid);
+    try {
+      const rows = db.prepare(`
+        SELECT m.id, m.content, c.code, c.is_dm
+        FROM messages m JOIN channels c ON c.id = m.channel_id
+        WHERE m.user_id = ? AND m.is_archived = 0
+      `).all(uid);
+      const kept = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE user_id = ? AND is_archived = 1').get(uid).n;
+      if (!rows.length) return cb({ success: true, deleted: 0, kept });
+
+      // Reactions, votes, tags and thread replies follow through the foreign
+      // keys; pins are cleared by hand, the way the bulk delete does it.
+      const delPin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
+      const delMsg = db.prepare('DELETE FROM messages WHERE id = ?');
+      db.transaction(() => {
+        for (const r of rows) { delPin.run(r.id); delMsg.run(r.id); }
+      })();
+
+      const toRelease = [];
+      for (const r of rows) {
+        UPLOAD_PATH_RE.lastIndex = 0;
+        let m;
+        while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) toRelease.push(m[1]);
+      }
+      for (const rel of releasableUploads(db, toRelease, [uid])) moveUploadToDeleted(rel);
+
+      // One event per channel rather than one per message: a person with
+      // years of history would otherwise send thousands of events to every
+      // open client. The client drops that author's rows and reloads the
+      // channel it has open.
+      const codes = new Set(rows.map(r => r.code));
+      for (const code of codes) {
+        io.to(`channel:${code}`).emit('messages-purged', { channelCode: code, userId: uid });
+      }
+      logAudit({ actor: socket.user, action: 'self_purge_messages',
+        target_type: 'user', target_id: uid, target_name: userRow.username,
+        details: { deleted: rows.length, kept, channels: codes.size } });
+      console.log(`🗑️  ${userRow.username} (id: ${uid}) deleted all their messages: ${rows.length} removed, ${kept} protected kept`);
+      cb({ success: true, deleted: rows.length, kept });
+    } catch (err) {
+      console.error('Self-purge error:', err);
+      cb({ error: 'Failed to delete messages' });
+    } finally {
+      state.selfPurgeInFlight.delete(uid);
+    }
+  });
 
   // ── Bulk delete from media gallery (#5375) ──────────────
   socket.on('delete-channel-media', (data, callback) => {
@@ -1082,7 +1212,8 @@ module.exports = function register(socket, ctx) {
     if (!content || content.trim().length === 0) return;
     const _maxCharsRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
     const _maxChars = parseInt(_maxCharsRow?.value) || 2000;
-    if (content.length > _maxChars) {
+    // Nothing could be this long; the exact check waits for the channel.
+    if (content.length > encryptedDmCap(_maxChars)) {
       return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
     }
 
@@ -1094,6 +1225,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
+    if (content.length > contentCap(_maxChars, channel, content)) {
+      return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
+    }
 
     // A moderation mute covers the server's channels, not private messages:
     // a muted person can still DM, which is also how they reach a mod about
@@ -1110,8 +1244,12 @@ module.exports = function register(socket, ctx) {
     let topicStatus = null;
     let topicKind = null;
     let topicSubtasks = null;
+    let topicNsfw = 0;
     if (channel.is_forum) {
-      if (typeof data.title === 'string' && data.title.trim()) topicTitle = data.title.trim().replace(/\s+/g, ' ').slice(0, 120);
+      if (typeof data.title === 'string' && data.title.trim()) topicTitle = sanitizeText(data.title.trim().replace(/\s+/g, ' ').slice(0, 120)) || null;
+      if (topicTitle && enforceAutomod(topicTitle, { surface: channel.is_dm ? 'dm' : 'message', channelId: channel.id })) return;
+      // The poster can mark the topic NSFW (#5633).
+      if (data.nsfw === true) topicNsfw = 1;
       const picked = parseTopicTagList(data.tags);
       if (picked.length) {
         topicTags = JSON.stringify(picked);
@@ -1171,14 +1309,17 @@ module.exports = function register(socket, ctx) {
     // as a separate socket event by the client. They've already consumed one
     // slow-mode slot (via the text message). Skip the check so the media
     // arrives with its parent message instead of being blocked. (#5342)
-    // The flag is client-supplied, so it only buys the attachments of a text
-    // message this socket just got through slow mode: media content, at most
-    // 50 of them (the composer's attachment cap), within 15 minutes of it.
+    // The flag comes from the client, so it only buys the attachments of a text
+    // message this socket just got through slow mode: media-only content
+    // (optionally after a persona prefix), at most 50 of them (the composer's
+    // attachment cap), within a minute of it.
     if (channel.slow_mode_interval > 0 && !socket.user.isAdmin && getUserEffectiveLevel(socket.user.id, channel.id) < 25) {
+      const _trimmed = String(content || '').trim();
+      const _mediaOnly = /^(?:::\S+\s+)?(?:spoiler-img:)?\/uploads\/\S+$/i.test(_trimmed) ||
+        /^(?:::\S+\s+)?\[file:[^\]]+\]\(\/uploads\//i.test(_trimmed) || (channel.is_dm && data.encrypted === true);
       const now = Date.now();
       const bundle = slowBundleBudget.get(channel.id);
-      const bundledOk = data.bundled === true && bundle && now - bundle.at < 15 * 60000 && bundle.n < 50 &&
-        (channel.is_dm || /\/uploads\//i.test(content));
+      const bundledOk = data.bundled === true && _mediaOnly && bundle && now - bundle.at < 60000 && bundle.n < 50;
       if (bundledOk) {
         bundle.n++;
       } else {
@@ -1345,8 +1486,30 @@ module.exports = function register(socket, ctx) {
 
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, request_status, topic_kind, subtasks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicStatus, topicKind, topicSubtasks);
+        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, request_status, topic_kind, subtasks, nsfw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicStatus, topicKind, topicSubtasks, topicNsfw);
+
+      // Attachment tags (#tagging): the composer sends `attachmentTags` alongside
+      // an upload's URL. Global vocabulary, applied to the file this message
+      // carries. Not on E2E DMs (server never sees their plaintext). Minting a
+      // new tag needs manage_tags; applying an existing one is open to uploaders.
+      // Tagging is non-critical — a failure here never sinks the message.
+      let appliedTags = [];
+      if (!channel.is_dm && Array.isArray(data.attachmentTags) && data.attachmentTags.length) {
+        try {
+          const canCreate = socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_tags', null);
+          const { maxTags, maxLen } = effectiveLimits(db);
+          appliedTags = applyTagsToMessage(db, {
+            messageId: result.lastInsertRowid,
+            content: finalContent,
+            tagNames: data.attachmentTags,
+            userId: socket.user.id,
+            canCreate,
+            maxTags,
+            maxLen,
+          }) || [];
+        } catch (e) { /* tags are best-effort */ }
+      }
 
       const message = {
         id: result.lastInsertRowid,
@@ -1356,6 +1519,7 @@ module.exports = function register(socket, ctx) {
         request_status: topicStatus || undefined,
         topic_kind: topicKind || undefined,
         subtasks: topicSubtasks ? JSON.parse(topicSubtasks) : undefined,
+        nsfw: topicNsfw ? true : undefined,
         created_at: new Date().toISOString(),
         username: personaUsername || socket.user.displayName,
         user_id: socket.user.id,
@@ -1376,6 +1540,7 @@ module.exports = function register(socket, ctx) {
         real_username: personaId ? socket.user.displayName : undefined,
         break_chain: breakChain || undefined,
         ferry_target: ferryLabel || undefined,
+        attachmentTags: appliedTags.length ? appliedTags : undefined,
       };
 
       if (replyTo) {
@@ -1416,6 +1581,117 @@ module.exports = function register(socket, ctx) {
       console.error('send-message error:', err.message);
       socket.emit('error-msg', 'Failed to send message — please try again');
     }
+  });
+
+  // ── Retroactively edit an attachment's tags (#tagging phase 3) ──────────────
+  // Replace the full tag set on a message that carries an upload. Editing your
+  // own message is always allowed; editing someone else's needs manage_tags.
+  // Minting a NEW tag needs manage_tags either way (same rule as the composer).
+  // Applying an existing tag to your own message is open. Broadcast so every
+  // viewer's Tags footer updates live. Not for DMs (E2E; server has no plaintext).
+  socket.on('set-message-tags', (data) => {
+    if (!data || typeof data !== 'object' || !isInt(data.messageId)) return;
+    if (!Array.isArray(data.tags)) return;
+    if (floodCheck('tagEdit')) return socket.emit('error-msg', 'Slow down a moment');
+
+    const msg = db.prepare('SELECT id, channel_id, user_id, content FROM messages WHERE id = ?').get(data.messageId);
+    if (!msg) return socket.emit('error-msg', 'Message not found');
+    if (!extractUploadPath(msg.content)) return socket.emit('error-msg', 'That message has no attachment to tag');
+
+    const channel = db.prepare('SELECT id, code, is_dm FROM channels WHERE id = ?').get(msg.channel_id);
+    if (!channel || channel.is_dm) return;   // DMs are E2E; no server-side tags
+
+    const isAdmin = socket.user.isAdmin;
+    const member = hasChannelAccess(channel.id);
+    if (!member && !isAdmin) return socket.emit('error-msg', 'Not a member of this channel');
+
+    const isOwn = msg.user_id === socket.user.id;
+    const canManage = isAdmin || userHasPermission(socket.user.id, 'manage_tags', channel.id);
+    if (!isOwn && !canManage) return socket.emit('error-msg', 'You cannot edit tags on this message');
+
+    try {
+      const { maxTags, maxLen } = effectiveLimits(db);
+      const applied = setMessageTags(db, {
+        messageId: msg.id,
+        content: msg.content,
+        tagNames: data.tags,
+        userId: socket.user.id,
+        canCreate: canManage,   // creating a new tag always needs manage_tags
+        maxTags,
+        maxLen,
+      });
+      io.to(`channel:${channel.code}`).emit('message-tags-updated', {
+        channelCode: channel.code,
+        messageId: msg.id,
+        tags: applied,
+      });
+    } catch (e) {
+      console.error('set-message-tags error:', e.message);
+      socket.emit('error-msg', 'Failed to update tags');
+    }
+  });
+
+  // ── Bulk tag management from the media gallery (#tagging phase 3b) ───
+  // Replace or append tags across many selected attachments in one action.
+  // Gated to manage_tags (or admin) — the curation permission — which also
+  // lets it mint new tags. Per message: replace clears then relinks (an empty
+  // list wipes all tags); append is additive and deduped. Broadcasts
+  // message-tags-updated per message so any open footers repaint live, and
+  // returns each message's full resulting set so the gallery updates in place.
+  socket.on('bulk-tag-messages', (data, cb) => {
+    const ack = typeof cb === 'function' ? cb : () => {};
+    if (!data || typeof data !== 'object') return ack({ error: 'Bad request' });
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return ack({ error: 'Bad channel' });
+    const mode = data.mode === 'append' ? 'append' : (data.mode === 'replace' ? 'replace' : null);
+    if (!mode) return ack({ error: 'Bad mode' });
+    if (!Array.isArray(data.tags)) return ack({ error: 'Bad request' });
+    const messageIds = Array.isArray(data.messageIds)
+      ? Array.from(new Set(data.messageIds.filter(isInt))).slice(0, 500)
+      : [];
+    if (!messageIds.length) return ack({ error: 'No messages selected' });
+    if (floodCheck('tagEdit')) return ack({ error: 'Slow down a moment' });
+
+    // Appending nothing is a deliberate no-op (replacing with nothing clears).
+    if (mode === 'append' && data.tags.length === 0) return ack({ ok: true, updated: 0, results: [] });
+
+    const channel = db.prepare('SELECT id, code, is_dm FROM channels WHERE code = ?').get(code);
+    if (!channel) return ack({ error: 'Channel not found' });
+    if (channel.is_dm) return ack({ error: 'Cannot tag in DMs' });
+
+    const isAdmin = socket.user.isAdmin;
+    const member = hasChannelAccess(channel.id);
+    if (!member && !isAdmin) return ack({ error: 'Not a member of this channel' });
+
+    const canManage = isAdmin || userHasPermission(socket.user.id, 'manage_tags', channel.id);
+    if (!canManage) return ack({ error: 'You need the manage tags permission' });
+
+    const readFull = db.prepare(
+      `SELECT ut.name FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
+        WHERE at.message_id = ? ORDER BY ut.name_norm`
+    );
+    const results = [];
+    const { maxTags, maxLen } = effectiveLimits(db);
+    try {
+      for (const id of messageIds) {
+        const msg = db.prepare('SELECT id, content, channel_id FROM messages WHERE id = ?').get(id);
+        if (!msg || msg.channel_id !== channel.id) continue;
+        if (!extractUploadPath(msg.content)) continue;
+        const args = { messageId: msg.id, content: msg.content, tagNames: data.tags, userId: socket.user.id, canCreate: true, maxTags, maxLen };
+        if (mode === 'replace') setMessageTags(db, args);
+        else applyTagsToMessage(db, args);
+        // Read the full current set (append's return is only the new names).
+        const full = readFull.all(msg.id).map(r => r.name);
+        results.push({ messageId: msg.id, tags: full });
+        io.to(`channel:${channel.code}`).emit('message-tags-updated', {
+          channelCode: channel.code, messageId: msg.id, tags: full,
+        });
+      }
+    } catch (e) {
+      console.error('bulk-tag-messages error:', e.message);
+      return ack({ error: 'Failed to update tags' });
+    }
+    ack({ ok: true, updated: results.length, results });
   });
 
   // ── Burn-after-read mark + sweep (#5280) ────────────────────
@@ -1512,11 +1788,11 @@ module.exports = function register(socket, ctx) {
     if (!channel) return cb({ error: 'Channel not found' });
     if (channel.is_dm) return cb({ error: 'Scheduled sends are not available in direct messages' });
     if (channel.text_enabled === 0) return cb({ error: 'Text messages are disabled in this channel' });
-    if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return cb({ error: 'Not a member of this channel' });
+    if (!hasChannelAccess(channel.id)) return cb({ error: 'Not a member of this channel' });
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) return cb({ error: 'This channel is read-only' });
     const mute = activeMuteNotice(socket.user.id);
     if (mute) return cb({ error: mute });
-    const content = sanitizeText(data.content.trim());
+    const content = sanitizeText(pingSafe(data.content.trim(), socket.user.id, channel.id));
     if (!content) return cb({ error: 'Nothing to send' });
     if (isForgedFileCard(content)) return cb({ error: 'Attachments must be uploaded to this server' });
     // The same checks a live send gets, at the moment it is queued.
@@ -1578,21 +1854,19 @@ module.exports = function register(socket, ctx) {
           const author = db.prepare('SELECT id, username, display_name, avatar, avatar_shape, border, border_transform, animate_profile, is_admin FROM users WHERE id = ?').get(row.user_id);
           const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, row.user_id);
           if (!author || !member) continue;
-          // Standing is re-read at send time: a ban, mute, read-only switch or
-          // role gate that arrived after queueing still applies, and mass
-          // mentions follow the author's permission as it is now.
-          const chRow = db.prepare('SELECT id, read_only, role_gate FROM channels WHERE id = ?').get(row.channel_id);
-          if (!chRow) continue;
-          if (!author.is_admin) {
-            if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(author.id)) continue;
-            if (db.prepare("SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").get(author.id)) continue;
-            if (!ctx.roleGateAllows(author.id, chRow)) continue;
-            if (chRow.read_only === 1 && !userHasPermission(author.id, 'read_only_override', chRow.id)) continue;
-          }
-          row.content = stripMassMentions(row.content, author.id, !!author.is_admin, chRow.id);
-          const result = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(row.channel_id, row.user_id, row.content);
+          // The rules at the moment it goes out, not when it was queued: a
+          // ban or a mute since then, a channel gone read-only or text-off,
+          // required roles lost, or mention_everyone taken away all count.
+          if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(author.id)) continue;
+          if (activeMuteNotice(author.id)) continue;
+          const chNow = db.prepare('SELECT id, read_only, text_enabled, role_gate FROM channels WHERE id = ?').get(row.channel_id);
+          if (!chNow || chNow.text_enabled === 0) continue;
+          if (!author.is_admin && chNow.read_only === 1 && !userHasPermission(author.id, 'read_only_override', chNow.id)) continue;
+          if (!author.is_admin && !ctx.roleGateAllows(author.id, chNow)) continue;
+          const sendContent = pingSafe(row.content, author.id, chNow.id);
+          const result = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(row.channel_id, row.user_id, sendContent);
           const message = {
-            id: result.lastInsertRowid, content: row.content, created_at: new Date().toISOString(),
+            id: result.lastInsertRowid, content: sendContent, created_at: new Date().toISOString(),
             username: author.display_name || author.username, user_id: author.id,
             avatar: author.avatar || null, avatar_shape: author.avatar_shape || 'circle',
             border: author.border || null, borderTransform: parseBorderTransform(author.border_transform),
@@ -1600,7 +1874,7 @@ module.exports = function register(socket, ctx) {
             reply_to: null, replyContext: null, reactions: [], edited_at: null, thread: null
           };
           io.to(`channel:${row.code}`).emit('new-message', { channelCode: row.code, message });
-          sendPushNotifications(row.channel_id, row.code, row.channel_name, author.id, message.username, row.content);
+          sendPushNotifications(row.channel_id, row.code, row.channel_name, author.id, message.username, sendContent);
           fireWebhookCallbacks(row.channel_id, row.code, message);
           for (const [, s] of io.sockets.sockets) {
             if (s.user && s.user.id === author.id) s.emit('scheduled-message-sent', { id: row.id, channelCode: row.code, channelName: row.channel_name });
@@ -1641,10 +1915,16 @@ module.exports = function register(socket, ctx) {
     const msg = db.prepare('SELECT m.id, m.user_id, m.channel_id, m.thread_id, c.code, c.is_forum, c.forum_tags FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?').get(data.messageId);
     if (!msg || !msg.is_forum || msg.thread_id) return socket.emit('error-msg', 'Not a forum topic');
     const mine = msg.user_id === socket.user.id;
-    if (!mine && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_messages', msg.channel_id)) {
+    // There is no manage_messages permission, so this used to let nobody but
+    // the author and admins in. delete_message is what moderators hold.
+    if (!mine && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_message', msg.channel_id)) {
       return socket.emit('error-msg', 'You don\'t have permission to edit this topic');
     }
-    const title = typeof data.title === 'string' ? data.title.trim().replace(/\s+/g, ' ').slice(0, 120) : null;
+    if (!socket.user.isAdmin && !hasChannelAccess(msg.channel_id)) return socket.emit('error-msg', 'Not a forum topic');
+    // A title is shown like message text, so it gets the same cleaning and
+    // the same automod check.
+    const title = typeof data.title === 'string' ? sanitizeText(data.title.trim().replace(/\s+/g, ' ').slice(0, 120)) : null;
+    if (title && enforceAutomod(title, { surface: 'edit', channelId: msg.channel_id })) return;
     const tags = parseTopicTagList(data.tags);
     if (tags.length) {
       const ch = db.prepare('SELECT id, forum_tags FROM channels WHERE id = ?').get(msg.channel_id);
@@ -1659,16 +1939,20 @@ module.exports = function register(socket, ctx) {
     const kindSent = data.topicKind === null || topicKind !== null;
     const subtasksSent = Array.isArray(data.subtasks) || typeof data.subtasks === 'string';
     const subtasks = subtasksSent ? parseSubtasks(data.subtasks) : null;
+    // Same rule for the NSFW flag (#5633).
+    const nsfw = typeof data.nsfw === 'boolean' ? (data.nsfw ? 1 : 0) : null;
     try {
       db.prepare('UPDATE messages SET title = ?, tags = ? WHERE id = ?').run(title || null, tags.length ? JSON.stringify(tags) : null, msg.id);
       if (closed !== null) db.prepare('UPDATE messages SET closed = ? WHERE id = ?').run(closed, msg.id);
       if (statusSent) db.prepare('UPDATE messages SET request_status = ? WHERE id = ?').run(requestStatus, msg.id);
       if (kindSent) db.prepare('UPDATE messages SET topic_kind = ? WHERE id = ?').run(topicKind, msg.id);
       if (subtasksSent) db.prepare('UPDATE messages SET subtasks = ? WHERE id = ?').run(subtasks.length ? JSON.stringify(subtasks) : null, msg.id);
-      const now = db.prepare('SELECT closed, request_status, topic_kind, subtasks FROM messages WHERE id = ?').get(msg.id);
+      if (nsfw !== null) db.prepare('UPDATE messages SET nsfw = ? WHERE id = ?').run(nsfw, msg.id);
+      const now = db.prepare('SELECT closed, nsfw, request_status, topic_kind, subtasks FROM messages WHERE id = ?').get(msg.id);
       io.to(`channel:${msg.code}`).emit('topic-updated', {
         channelCode: msg.code, messageId: msg.id, title: title || null, tags,
         closed: !!(closed !== null ? closed : now?.closed),
+        nsfw: !!(nsfw !== null ? nsfw : now?.nsfw),
         request_status: parseRequestStatus(now?.request_status),
         topic_kind: parseTopicKind(now?.topic_kind),
         subtasks: parseSubtasks(now?.subtasks),
@@ -1695,7 +1979,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const _editMaxRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
     const _editMax = parseInt(_editMaxRow?.value) || 2000;
-    if (!isInt(data.messageId) || !isString(data.content, 1, _editMax)) return;
+    if (!isInt(data.messageId) || !isString(data.content, 1, encryptedDmCap(_editMax))) return;
 
     // Accept an explicit channelCode from the client (e.g. DM PiP, where
     // socket.currentChannel is a different server channel). Fall back to
@@ -1706,6 +1990,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    if (data.content.length > contentCap(_editMax, channel, data.content)) {
+      return socket.emit('error-msg', `Message too long (max ${_editMax} characters)`);
+    }
 
     const msg = db.prepare(
       'SELECT id, user_id FROM messages WHERE id = ? AND channel_id = ?'
@@ -1721,7 +2008,7 @@ module.exports = function register(socket, ctx) {
     const editMute = channel.is_dm ? null : activeMuteNotice(socket.user.id);
     if (editMute) return socket.emit('error-msg', editMute);
 
-    const newContent = stripMassMentions(sanitizeText(data.content.trim()), socket.user.id, socket.user.isAdmin, channel.id);
+    const newContent = sanitizeText(pingSafe(data.content.trim(), socket.user.id, channel.id));
     if (!newContent) return;
     if (isForgedFileCard(newContent)) return socket.emit('error-msg', 'Attachments must be uploaded to this server');
 
@@ -1767,6 +2054,11 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // Deleting starts with being there. A DM belongs to its two people, so
+    // only they can delete in it, whatever server-wide delete permission
+    // someone else holds; anywhere else, a non-admin must be in the channel.
+    const _inChannel = !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    if (channel.is_dm ? !_inChannel : (!_inChannel && !socket.user.isAdmin)) return;
 
     const msg = db.prepare(
       'SELECT id, user_id, content FROM messages WHERE id = ? AND channel_id = ?'
@@ -1788,12 +2080,6 @@ module.exports = function register(socket, ctx) {
         } catch { /* table may not exist */ }
       }
     } else {
-      // Moderating someone else's message needs a seat in that channel, as the
-      // bulk path already requires; a server-wide delete_message must not reach
-      // into DMs or private channels by code.
-      if (!socket.user.isAdmin && !db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) {
-        return socket.emit('error-msg', 'Not a member of this channel');
-      }
       const canDeleteAny = socket.user.isAdmin || userHasPermission(socket.user.id, 'delete_message', channel.id);
       let canDeleteLower = false;
       if (!canDeleteAny && userHasPermission(socket.user.id, 'delete_lower_messages', channel.id)) {
@@ -1815,25 +2101,25 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Failed to delete message');
     }
 
+    const toRelease = [];
     const uploadRe = UPLOAD_PATH_RE;
+    uploadRe.lastIndex = 0;
     let m;
-    while ((m = uploadRe.exec(msg.content || '')) !== null) {
-      if (mayMoveUploadFor(m[1], msg.user_id)) moveUploadToDeleted(m[1]);
-    }
+    while ((m = uploadRe.exec(msg.content || '')) !== null) toRelease.push(m[1]);
 
     // For E2E DMs, the message content is encrypted ciphertext, so the
     // upload regex above can't find attachments. The client (which has the
-    // decrypted content) passes the URLs in `data.attachments`. We honor
-    // this for any DM channel — permission gating above already restricts
-    // who can delete the message (author or anyone with delete perm). (#5299)
+    // decrypted content) passes the URLs in `data.attachments`. (#5299)
+    // Either way, only the author's own attachments go (releasableUploads).
     if (channel.is_dm && Array.isArray(data.attachments)) {
-      for (const url of data.attachments) {
+      for (const url of data.attachments.slice(0, 50)) {
         if (typeof url !== 'string') continue;
         const match = url.match(UPLOAD_PATH_EXACT_RE);
         if (!match || !isSafeUploadRelPath(match[1])) continue;
-        if (mayMoveUploadFor(match[1], msg.user_id, true)) moveUploadToDeleted(match[1]);
+        toRelease.push(match[1]);
       }
     }
+    for (const rel of releasableUploads(db, toRelease, [msg.user_id])) moveUploadToDeleted(rel);
 
     io.to(`channel:${code}`).emit('message-deleted', {
       channelCode: code,
@@ -1862,17 +2148,17 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_message', fromCh.id)) {
       return cb({ error: 'You need message management permissions to move messages' });
     }
-    // Both ends need a seat (the picker only offers the mover's own channels),
-    // and a read-only destination needs the right to post there. Without this
-    // a mod could drop messages into any private channel by its code.
+    // Moving is reading one channel and posting into another, so the mover
+    // needs to be able to do both: access to each end, and the right to post
+    // at the destination. A Channel Mod of their own channel could otherwise
+    // push messages into #announcements or any channel whose code they knew,
+    // and a Mod could pull a private channel's messages out into one they read.
     if (!socket.user.isAdmin) {
-      const isMem = (id) => !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(id, socket.user.id);
-      const toRow = db.prepare('SELECT id, read_only, role_gate FROM channels WHERE id = ?').get(toCh.id);
-      if (!isMem(fromCh.id) || !isMem(toCh.id) || !ctx.roleGateAllows(socket.user.id, toRow)) {
-        return cb({ error: 'Not a member of both channels' });
-      }
-      if (toRow.read_only === 1 && !userHasPermission(socket.user.id, 'read_only_override', toCh.id)) {
-        return cb({ error: 'The destination channel is read-only' });
+      if (!hasChannelAccess(fromCh.id) || !hasChannelAccess(toCh.id)) return cb({ error: 'Channel not found' });
+      const dest = db.prepare('SELECT read_only, text_enabled FROM channels WHERE id = ?').get(toCh.id);
+      if (dest && dest.text_enabled === 0) return cb({ error: 'Text messages are disabled in that channel' });
+      if (dest && dest.read_only === 1 && !userHasPermission(socket.user.id, 'read_only_override', toCh.id)) {
+        return cb({ error: 'That channel is read-only' });
       }
     }
 
@@ -2067,14 +2353,11 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, role_gate FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const member = hasChannelAccess(channel.id);
     if (!member) return;
-    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return;
 
     const pins = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar,
@@ -2125,7 +2408,7 @@ module.exports = function register(socket, ctx) {
       // channel — using socket.currentChannel made the reaction silently
       // fail because the message wouldn't be found in that channel. (#bug-#4)
       const msg = db.prepare(
-        'SELECT m.id, c.code, c.id as channel_id, c.is_dm FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+        'SELECT m.id, c.code, c.id as channel_id, c.is_dm, c.reactions_enabled FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
       ).get(data.messageId);
       if (!msg) return;
       const code = msg.code;
@@ -2135,10 +2418,11 @@ module.exports = function register(socket, ctx) {
       }
 
       // Verify membership of the channel the message lives in.
-      const member = db.prepare(
-        'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-      ).get(msg.channel_id, socket.user.id);
+      const member = hasChannelAccess(msg.channel_id);
       if (!member && !socket.user.isAdmin) return;
+      if (msg.reactions_enabled === 0) {
+        return socket.emit('error-msg', 'Reactions are disabled in this channel');
+      }
 
       db.prepare(
         'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
@@ -2176,15 +2460,16 @@ module.exports = function register(socket, ctx) {
 
       // Look up the channel from the message (see add-reaction comment).
       const msgRow = db.prepare(
-        'SELECT m.id, c.code, c.id as channel_id FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+        'SELECT m.id, c.code, c.id as channel_id, c.reactions_enabled FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
       ).get(data.messageId);
       if (!msgRow) return;
       const code = msgRow.code;
 
-      const member = db.prepare(
-        'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-      ).get(msgRow.channel_id, socket.user.id);
+      const member = hasChannelAccess(msgRow.channel_id);
       if (!member && !socket.user.isAdmin) return;
+      if (msgRow.reactions_enabled === 0) {
+        return socket.emit('error-msg', 'Reactions are disabled in this channel');
+      }
 
       db.prepare(
         'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
@@ -2228,6 +2513,8 @@ module.exports = function register(socket, ctx) {
         return UPLOAD_PATH_EXACT_RE.test(u) ? u : null;
       }).filter((_, i) => options[i] && typeof options[i] === 'string' && options[i].trim());
       const hasImages = images.some(Boolean);
+      // A picture poll can be laid out in columns (#5648).
+      const columns = hasImages ? Math.min(5, Math.max(0, parseInt(data.columns, 10) || 0)) : 0;
 
       if (floodCheck('message')) {
         return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
@@ -2243,24 +2530,24 @@ module.exports = function register(socket, ctx) {
 
       const code = socket.currentChannel;
       if (!code) return;
-      const channel = db.prepare('SELECT id, name, text_enabled, read_only, role_gate FROM channels WHERE code = ?').get(code);
+      const channel = db.prepare('SELECT id, name, text_enabled, read_only, is_dm FROM channels WHERE code = ?').get(code);
       if (!channel) return;
+      // A poll's question and answers are stored and sent as plain text, so
+      // a DM, which is encrypted end to end, cannot have one.
+      if (channel.is_dm) return socket.emit('error-msg', 'Polls are not available in direct messages');
       if (channel.text_enabled === 0) return socket.emit('error-msg', 'Polls are not allowed when text is disabled');
-      const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+      const member = hasChannelAccess(channel.id);
       if (!member) return socket.emit('error-msg', 'Not a member of this channel');
-      // A poll is a post: the same gates send-message applies.
-      if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
       if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
         return socket.emit('error-msg', 'This channel is read-only');
       }
+      if (enforceAutomod([question, ...cleanOptions].join('\n'), { surface: 'message', channelId: channel.id })) return;
+      for (let i = 0; i < cleanOptions.length; i++) cleanOptions[i] = pingSafe(cleanOptions[i], socket.user.id, channel.id);
 
-      const safeQuestion = stripMassMentions(sanitizeText(question), socket.user.id, socket.user.isAdmin, channel.id);
+      const safeQuestion = sanitizeText(pingSafe(question, socket.user.id, channel.id));
       if (!safeQuestion) return;
-      for (let i = 0; i < cleanOptions.length; i++) {
-        cleanOptions[i] = stripMassMentions(cleanOptions[i], socket.user.id, socket.user.isAdmin, channel.id);
-      }
 
-      const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }) });
+      const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }), ...(columns > 1 && { columns }) });
       const content = `📊 Poll: ${safeQuestion}`;
       const result = db.prepare(
         'INSERT INTO messages (channel_id, user_id, content, poll_data) VALUES (?, ?, ?, ?)'
@@ -2282,7 +2569,7 @@ module.exports = function register(socket, ctx) {
         reactions: [],
         edited_at: null,
         thread: null,
-        poll: { question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }), votes: {}, totalVotes: 0 }
+        poll: { question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }), ...(columns > 1 && { columns }), votes: {}, totalVotes: 0 }
       };
       cleanOptions.forEach((_, i) => { message.poll.votes[i] = []; });
 
@@ -2313,8 +2600,7 @@ module.exports = function register(socket, ctx) {
       const code = socket.currentChannel;
       if (!code) return;
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-      if (!channel) return;
-      if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return;
+      if (!channel || !hasChannelAccess(channel.id)) return;
 
       const msg = db.prepare('SELECT id, poll_data FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
       if (!msg || !msg.poll_data) return;
@@ -2365,8 +2651,7 @@ module.exports = function register(socket, ctx) {
       const code = socket.currentChannel;
       if (!code) return;
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-      if (!channel) return;
-      if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return;
+      if (!channel || !hasChannelAccess(channel.id)) return;
       const msg = db.prepare('SELECT id, poll_data FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
       if (!msg || !msg.poll_data) return;
 
@@ -2449,6 +2734,34 @@ module.exports = function register(socket, ctx) {
       `).run(socket.user.id, channel.id, latest.maxId);
     } catch (err) {
       console.error('Mark read channel error:', err);
+    }
+  });
+
+  // Mark everything read (#5683): every channel and DM this account belongs
+  // to moves to its latest message, including ones the sidebar is not showing,
+  // which is where a badge nobody can reach to clear comes from.
+  socket.on('mark-all-read', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    try {
+      const rows = db.prepare(`
+        SELECT cm.channel_id AS channelId, MAX(m.id) AS latest
+        FROM channel_members cm
+        JOIN messages m ON m.channel_id = cm.channel_id AND m.thread_id IS NULL
+        WHERE cm.user_id = ?
+        GROUP BY cm.channel_id
+      `).all(socket.user.id);
+      const upsert = db.prepare(`
+        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
+      `);
+      db.transaction(() => {
+        for (const r of rows) if (r.latest) upsert.run(socket.user.id, r.channelId, r.latest);
+      })();
+      cb({ ok: true, channels: rows.length });
+    } catch (err) {
+      console.error('Mark all read error:', err);
+      cb({ error: 'Could not mark everything read' });
     }
   });
 
@@ -2583,8 +2896,26 @@ module.exports = function register(socket, ctx) {
       });
     }
 
+    // Attachment tags on the replies' pictures, for their footers and the
+    // Edit tags entry on the image menu (#5682).
+    const threadTagMap = new Map();
+    if (msgIds.length > 0) {
+      const ph = msgIds.map(() => '?').join(',');
+      db.prepare(`
+        SELECT at.message_id, ut.name
+        FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
+        WHERE at.message_id IN (${ph}) ORDER BY ut.name_norm
+      `).all(...msgIds).forEach(r => {
+        if (!threadTagMap.has(r.message_id)) threadTagMap.set(r.message_id, []);
+        const arr = threadTagMap.get(r.message_id);
+        if (!arr.includes(r.name)) arr.push(r.name);
+      });
+    }
+
     const enriched = messages.map(m => {
       const obj = { ...m };
+      const atags = threadTagMap.get(m.id);
+      if (atags && atags.length) obj.attachmentTags = atags;
       // Border fit travels with the message (like avatar) so it renders even when
       // the author is offline. Parse the stored JSON into the op array the client folds.
       obj.borderTransform = parseBorderTransform(m.border_transform);
@@ -2666,8 +2997,7 @@ module.exports = function register(socket, ctx) {
 
     if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return;
 
-    // Thread replies ping the whole channel room like top-level sends (#5579).
-    const safeContent = stripMassMentions(sanitizeText(content), socket.user.id, socket.user.isAdmin, channel.id);
+    const safeContent = sanitizeText(pingSafe(content, socket.user.id, channel.id));
     if (!safeContent) return;
     if (isForgedFileCard(safeContent)) return socket.emit('error-msg', 'Attachments must be uploaded to this server');
 

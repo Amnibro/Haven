@@ -15,26 +15,15 @@ module.exports = function register(socket, ctx) {
   const { channelUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
-  // Rank guard for acting on another member's roles or permissions: a
-  // non-admin may only touch people strictly below them (in the channel's
-  // context when the change is channel-scoped), and never the admin. Mirrors
-  // the filter get-role-assignment-data already applies to what it lists.
-  function outranksTarget(targetId, channelId = null) {
-    if (socket.user.isAdmin) return true;
-    const t = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(targetId);
-    if (t && t.is_admin) return false;
-    return getUserEffectiveLevel(targetId, channelId || null) < getUserEffectiveLevel(socket.user.id, channelId || null);
-  }
-  const _outrankError = 'You can only change the roles of people below your level';
-
   // ── Helper: apply role-linked channel access ────────────
   function applyRoleChannelAccess(roleId, userId, direction) {
     const role = db.prepare('SELECT link_channel_access FROM roles WHERE id = ?').get(roleId);
     if (!role || !role.link_channel_access) return;
 
     const col = direction === 'grant' ? 'grant_on_promote' : 'revoke_on_demote';
+    // Never a DM, whatever an older version let someone store.
     const channelRows = db.prepare(
-      `SELECT channel_id FROM role_channel_access WHERE role_id = ? AND ${col} = 1`
+      `SELECT rca.channel_id FROM role_channel_access rca JOIN channels c ON c.id = rca.channel_id WHERE rca.role_id = ? AND rca.${col} = 1 AND c.is_dm = 0`
     ).all(roleId);
 
     if (direction === 'grant') {
@@ -211,6 +200,17 @@ module.exports = function register(socket, ctx) {
   // The role/emoji pairs of a menu, checked for this user: known roles only,
   // no repeats, and nothing at or above the poster's own level. Shared by
   // posting a menu and editing one (#5644).
+  // A role manager acts only on people ranked below them: never an admin
+  // (getUserEffectiveLevel reports 100 for one), never a peer or anyone
+  // higher. The interface hid those people; the server did not check, so a
+  // Mod could strip or reshape another Mod's or a higher staffer's roles.
+  function canActOnUser(targetId, channelId = null) {
+    if (socket.user.isAdmin) return true;
+    const t = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(targetId);
+    if (t && t.is_admin) return false;
+    return getUserEffectiveLevel(targetId, channelId) < getUserEffectiveLevel(socket.user.id, channelId);
+  }
+
   function roleMenuEntries(raw) {
     const emojiOk = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]{1,8}$/u;
     const wanted = Array.isArray(raw) ? raw.slice(0, 20) : [];
@@ -236,6 +236,15 @@ module.exports = function register(socket, ctx) {
   function canManageRoleMenus() {
     return socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_roles') || userHasPermission(socket.user.id, 'promote_user');
   }
+  // A posted menu is a message that keeps its author's name, so only its
+  // author, an admin, or someone in its channel who outranks the author may
+  // read it back for editing or change it.
+  function canEditRoleMenu(channelId, createdBy) {
+    if (socket.user.isAdmin) return true;
+    if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
+    if (createdBy === socket.user.id) return true;
+    return getUserEffectiveLevel(socket.user.id) > getUserEffectiveLevel(createdBy || 0);
+  }
   function messageReactions(messageId) {
     return db.prepare(`
       SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
@@ -249,17 +258,11 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object' || !isInt(data.messageId)) return cb({ error: 'Invalid request' });
     if (!canManageRoleMenus()) return cb({ error: 'You lack permission to hand out roles' });
     const row = db.prepare(`
-      SELECT rm.message_id, rm.title, rm.data, m.content, c.code
+      SELECT rm.message_id, rm.title, rm.data, rm.channel_id, rm.created_by, m.content, c.code
       FROM role_menus rm JOIN messages m ON m.id = rm.message_id JOIN channels c ON c.id = rm.channel_id
       WHERE rm.message_id = ?
     `).get(data.messageId);
-    if (!row) return cb({ error: 'That role menu is gone' });
-    if (!socket.user.isAdmin) {
-      const rmCh = db.prepare('SELECT channel_id FROM role_menus WHERE message_id = ?').get(data.messageId);
-      if (!rmCh || !db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(rmCh.channel_id, socket.user.id)) {
-        return cb({ error: 'Not a member of this channel' });
-      }
-    }
+    if (!row || !canEditRoleMenu(row.channel_id, row.created_by)) return cb({ error: 'That role menu is gone' });
     let roles = [];
     try { roles = JSON.parse(row.data || '{}').roles || []; } catch { /* malformed row: start empty */ }
     cb({
@@ -276,18 +279,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object' || !isInt(data.messageId)) return cb({ error: 'Invalid request' });
     if (!canManageRoleMenus()) return cb({ error: 'You lack permission to hand out roles' });
     const row = db.prepare('SELECT rm.*, c.code FROM role_menus rm JOIN channels c ON c.id = rm.channel_id WHERE rm.message_id = ?').get(data.messageId);
-    if (!row) return cb({ error: 'That role menu is gone' });
-    // The edit rewrites the posted message, which is shown under its
-    // creator's name: only a channel member, and only on their own menu or
-    // one posted by someone below them.
-    if (!socket.user.isAdmin) {
-      if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, socket.user.id)) {
-        return cb({ error: 'Not a member of this channel' });
-      }
-      if (row.created_by !== socket.user.id && row.created_by != null && !outranksTarget(row.created_by)) {
-        return cb({ error: 'You can only edit role menus posted by you or someone below your level' });
-      }
-    }
+    if (!row || !canEditRoleMenu(row.channel_id, row.created_by)) return cb({ error: 'That role menu is gone' });
     const parsed = roleMenuEntries(data.roles);
     if (parsed.error) return cb({ error: parsed.error });
     const { sanitizeText } = require('./helpers');
@@ -668,7 +660,9 @@ module.exports = function register(socket, ctx) {
           finalPerms = requested;
         } else {
           const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
-          const callerPerms = new Set(getUserPermissions(socket.user.id));
+          // Server-wide permissions only: one held in a single channel does not
+          // entitle the editor to put it on a role.
+          const callerPerms = new Set(getUserGlobalPermissions(socket.user.id));
           const controllable = (p) => !adminOnlyPerms.includes(p) && (callerPerms.has('*') || callerPerms.has(p));
           const lockedKept = currentPerms.filter(p => !controllable(p));
           const controlledChosen = requested.filter(p => controllable(p));
@@ -730,15 +724,12 @@ module.exports = function register(socket, ctx) {
 
     const roleId = isInt(data.roleId) ? data.roleId : null;
     if (!roleId) return;
-
-    // Same hierarchy rule as update-role: a non-admin may only delete roles
-    // strictly below their own level.
     if (!socket.user.isAdmin) {
-      const delRole = db.prepare('SELECT level FROM roles WHERE id = ?').get(roleId);
+      // Same line as editing: a role at or above your level is not yours to
+      // delete (deleting one demotes everyone who holds it).
+      const target = db.prepare('SELECT level FROM roles WHERE id = ?').get(roleId);
       const myLevel = getUserEffectiveLevel(socket.user.id);
-      if (delRole && delRole.level >= myLevel) {
-        return cb({ error: `You can only delete roles below your level (${myLevel})` });
-      }
+      if (!target || target.level >= myLevel) return cb({ error: `You can only delete roles below your level (${myLevel})` });
     }
 
     // Read the holders first: after the delete there is nothing left to ask.
@@ -839,45 +830,6 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('set-user-server-role', (data, callback) => {
-    const cb = typeof callback === 'function' ? callback : () => {};
-    if (!canManagePermPanel(socket)) return cb({ error: 'Only admins can manage permissions' });
-    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
-    const userId = isInt(data.userId) ? data.userId : null;
-    const roleId = isInt(data.roleId) ? data.roleId : null;
-    if (!userId || !roleId) return cb({ error: 'Missing user or role' });
-    if (userId === socket.user.id) return cb({ error: 'You cannot change your own role here' });
-    const target = db.prepare('SELECT id, is_admin FROM users WHERE id = ?').get(userId);
-    if (!target) return cb({ error: 'User not found' });
-    if (target.is_admin) return cb({ error: 'The host keeps Admin. Transfer admin from Server settings.' });
-    if (!outranksTarget(userId)) return cb({ error: _outrankError });
-    const role = db.prepare("SELECT * FROM roles WHERE id = ? AND scope = 'server' AND level > 0").get(roleId);
-    if (!role) return cb({ error: 'Role not found' });
-    if (!socket.user.isAdmin && role.level >= getUserEffectiveLevel(socket.user.id)) {
-      return cb({ error: `You can only assign roles below your level` });
-    }
-    try {
-      db.prepare(`
-        DELETE FROM user_role_perms WHERE user_id = ? AND channel_id IS NULL
-          AND role_id IN (SELECT id FROM roles WHERE scope = 'server')
-      `).run(userId);
-      db.prepare(`
-        DELETE FROM user_roles WHERE user_id = ? AND channel_id IS NULL
-          AND role_id IN (SELECT id FROM roles WHERE scope = 'server')
-      `).run(userId);
-      db.prepare(
-        'INSERT INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, ?)'
-      ).run(userId, roleId, socket.user.id);
-      applyRoleChannelAccess(roleId, userId, 'grant');
-      refreshUserRoles(userId);
-      io.except('bot-sockets').emit('roles-updated');
-      cb({ success: true, permissions: getUserGlobalPermissions(userId), roleIds: [roleId] });
-    } catch (err) {
-      console.error('set-user-server-role error:', err);
-      cb({ error: 'Failed to set role' });
-    }
-  });
-
   socket.on('set-user-server-perms', (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
     if (!canManagePermPanel(socket)) return cb({ error: 'Only admins can manage permissions' });
@@ -888,7 +840,6 @@ module.exports = function register(socket, ctx) {
     const target = db.prepare('SELECT id, is_admin FROM users WHERE id = ?').get(userId);
     if (!target) return cb({ error: 'User not found' });
     if (target.is_admin) return cb({ error: 'The host already has every permission' });
-    if (!outranksTarget(userId)) return cb({ error: 'You can only edit people below your level' });
 
     let role = primaryServerRole(userId);
     if (!role) {
@@ -899,33 +850,57 @@ module.exports = function register(socket, ctx) {
       ).run(userId, auto.id, socket.user.id);
       role = auto;
     }
-    if (!socket.user.isAdmin && role.level >= getUserEffectiveLevel(socket.user.id)) {
-      return cb({ error: 'You can only edit people below your level' });
+    if (!socket.user.isAdmin) {
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      if (role.level >= myLevel) return cb({ error: `You can only edit people below your level (${myLevel})` });
+      if (getUserEffectiveLevel(userId) >= myLevel) return cb({ error: `You can only edit people below your level (${myLevel})` });
     }
 
-    const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
-    const requested = data.permissions.filter(p => {
-      if (typeof p !== 'string' || !VALID_ROLE_PERMS.includes(p)) return false;
-      if (!socket.user.isAdmin && (adminOnlyPerms.includes(p) || !userHasPermission(socket.user.id, p))) return false;
-      return true;
-    });
     const rolePerms = db.prepare(
       'SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1'
     ).all(role.id).map(r => r.permission);
+    // What this role currently gives the person, overrides included, so a
+    // permission the editor did not send (one the grid does not show, or one
+    // the editor may not touch) keeps its current state instead of being
+    // switched off as a side effect.
+    const overrides = db.prepare(
+      'SELECT permission, allowed FROM user_role_perms WHERE user_id = ? AND role_id = ? AND channel_id IS NULL'
+    ).all(userId, role.id);
+    const current = new Set(rolePerms);
+    for (const o of overrides) { if (o.allowed) current.add(o.permission); else current.delete(o.permission); }
+
+    const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
+    const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserGlobalPermissions(socket.user.id));
+    const canTouch = (p) => socket.user.isAdmin || (!adminOnlyPerms.includes(p) && (callerPermsSet.has('*') || callerPermsSet.has(p)));
+    const requested = data.permissions.filter(p => typeof p === 'string' && VALID_ROLE_PERMS.includes(p) && canTouch(p));
+    const known = Array.isArray(data.known)
+      ? data.known.filter(p => typeof p === 'string' && VALID_ROLE_PERMS.includes(p) && canTouch(p))
+      : requested;
+    // Same idea as assign-role: inherit every permission the editor is not
+    // authorised to change, plus any the grid never showed.
+    for (const p of current) {
+      if (!known.includes(p) && !requested.includes(p)) requested.push(p);
+    }
+    const added = requested.filter(p => !rolePerms.includes(p));
+    const removed = rolePerms.filter(p => !requested.includes(p));
 
     try {
       db.prepare('DELETE FROM user_role_perms WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').run(userId, role.id);
       const insert = db.prepare(
         'INSERT INTO user_role_perms (user_id, role_id, channel_id, permission, allowed) VALUES (?, ?, NULL, ?, ?)'
       );
-      for (const p of requested) {
-        if (!rolePerms.includes(p)) insert.run(userId, role.id, p, 1);
-      }
-      for (const p of rolePerms) {
-        if (!requested.includes(p)) insert.run(userId, role.id, p, 0);
-      }
+      for (const p of added) insert.run(userId, role.id, p, 1);
+      for (const p of removed) insert.run(userId, role.id, p, 0);
       refreshUserRoles(userId);
       cb({ success: true, permissions: getUserGlobalPermissions(userId), roleIds: [role.id] });
+      try {
+        const tgt = db.prepare('SELECT COALESCE(display_name, username) AS u FROM users WHERE id = ?').get(userId);
+        const granted = [...requested].filter(p => !current.has(p));
+        const denied = [...current].filter(p => !requested.includes(p));
+        _audit({ actor: socket.user, action: 'user_perms_update',
+          target_type: 'user', target_id: userId, target_name: tgt ? tgt.u : null,
+          details: { roleId: role.id, roleName: role.name, granted, denied } });
+      } catch {}
     } catch (err) {
       console.error('set-user-server-perms error:', err);
       cb({ error: 'Failed to update permissions' });
@@ -1123,7 +1098,9 @@ module.exports = function register(socket, ctx) {
     }
 
     const channelId = isInt(data.channelId) ? data.channelId : null;
-    if (!outranksTarget(userId, channelId)) return cb({ error: _outrankError });
+    if (!canActOnUser(userId, channelId)) {
+      return cb({ error: 'You can only change roles for people ranked below you' });
+    }
 
     let assignLevel = role.level;
     if (data.customLevel !== undefined && data.customLevel !== null) {
@@ -1166,7 +1143,9 @@ module.exports = function register(socket, ctx) {
         // This prevents a non-admin promoter from escalating perms via a
         // crafted customPerms payload.
         const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
-        const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserPermissions(socket.user.id));
+        // Server-wide permissions only: one held in a single channel is not
+        // the caller's to hand out across the server.
+        const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserGlobalPermissions(socket.user.id));
         const customPerms = data.customPerms.filter(p => {
           if (typeof p !== 'string') return false;
           if (!VALID_ROLE_PERMS.includes(p)) return false;
@@ -1235,14 +1214,20 @@ module.exports = function register(socket, ctx) {
     }
 
     const channelId = isInt(data.channelId) ? data.channelId : null;
-    if (!outranksTarget(userId, channelId)) return cb({ error: _outrankError });
+    if (!canActOnUser(userId, channelId)) {
+      return cb({ error: 'You can only change roles for people ranked below you' });
+    }
 
     applyRoleChannelAccess(roleId, userId, 'revoke');
 
+    // The per-person overrides that came with the role go with it; left
+    // behind, they kept granting (or denying) its permissions without it.
     if (channelId) {
       db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id = ?').run(userId, roleId, channelId);
+      db.prepare('DELETE FROM user_role_perms WHERE user_id = ? AND role_id = ? AND channel_id = ?').run(userId, roleId, channelId);
     } else {
       db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').run(userId, roleId);
+      db.prepare('DELETE FROM user_role_perms WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').run(userId, roleId);
     }
 
     const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
@@ -1312,20 +1297,27 @@ module.exports = function register(socket, ctx) {
     const roleId = isInt(data.roleId) ? data.roleId : null;
     if (!roleId) return cb({ error: 'Invalid role ID' });
     if (!Array.isArray(data.access)) return cb({ error: 'Invalid access data' });
+    // Channel access decides which channels a role's holders are put in, so
+    // it follows the role hierarchy, never names a DM, and for anyone but an
+    // admin only names channels the editor is in themselves. Otherwise it was
+    // a way into private channels, and into other people's DMs.
+    if (!socket.user.isAdmin) {
+      const target = db.prepare('SELECT level FROM roles WHERE id = ?').get(roleId);
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      if (!target || target.level >= myLevel) return cb({ error: `You can only edit roles below your level (${myLevel})` });
+    }
+    const accessChannelOk = (chId) => {
+      const ch = db.prepare('SELECT id, is_dm FROM channels WHERE id = ?').get(chId);
+      if (!ch || ch.is_dm) return false;
+      if (socket.user.isAdmin) return true;
+      return !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(chId, socket.user.id);
+    };
 
-    // A non-admin may only edit roles below their level, and may only link
-    // channels they are a member of themselves. Otherwise they could attach
-    // any private channel to a role they (or a friend) hold and walk in via
-    // reapply-role-access. Existing links to channels they are not in are
-    // kept exactly as they were.
-    let myChannels = null;
+    // Existing links to channels a non-admin editor is not in are kept
+    // exactly as they were, since the editor cannot see or change them.
     let keptRows = [];
     if (!socket.user.isAdmin) {
-      const accRole = db.prepare('SELECT level FROM roles WHERE id = ?').get(roleId);
-      if (!accRole) return cb({ error: 'Role not found' });
-      const myLevel = getUserEffectiveLevel(socket.user.id);
-      if (accRole.level >= myLevel) return cb({ error: `You can only edit roles below your level (${myLevel})` });
-      myChannels = new Set(db.prepare('SELECT channel_id FROM channel_members WHERE user_id = ?').all(socket.user.id).map(r => r.channel_id));
+      const myChannels = new Set(db.prepare('SELECT channel_id FROM channel_members WHERE user_id = ?').all(socket.user.id).map(r => r.channel_id));
       keptRows = db.prepare('SELECT channel_id, grant_on_promote, revoke_on_demote FROM role_channel_access WHERE role_id = ?')
         .all(roleId).filter(r => !myChannels.has(r.channel_id));
     }
@@ -1335,10 +1327,9 @@ module.exports = function register(socket, ctx) {
         db.prepare('DELETE FROM role_channel_access WHERE role_id = ?').run(roleId);
         const ins = db.prepare('INSERT INTO role_channel_access (role_id, channel_id, grant_on_promote, revoke_on_demote) VALUES (?, ?, ?, ?)');
         keptRows.forEach(r => ins.run(roleId, r.channel_id, r.grant_on_promote, r.revoke_on_demote));
-        data.access.forEach(a => {
+        data.access.slice(0, 500).forEach(a => {
           const chId = isInt(a && a.channelId) ? a.channelId : null;
-          if (!chId) return;
-          if (myChannels && !myChannels.has(chId)) return;
+          if (!chId || !accessChannelOk(chId)) return;
           const grant = a.grant ? 1 : 0;
           const revoke = a.revoke ? 1 : 0;
           if (grant || revoke) ins.run(roleId, chId, grant, revoke);
@@ -1368,9 +1359,14 @@ module.exports = function register(socket, ctx) {
     const role = db.prepare('SELECT * FROM roles WHERE id = ?').get(roleId);
     if (!role) return cb({ error: 'Role not found' });
     if (!role.link_channel_access) return cb({ error: 'Channel access linking is not enabled for this role' });
+    if (!socket.user.isAdmin) {
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      if (role.level >= myLevel) return cb({ error: `You can only edit roles below your level (${myLevel})` });
+    }
 
     const roleUsers = db.prepare('SELECT DISTINCT user_id FROM user_roles WHERE role_id = ?').all(roleId);
-    const grantChannels = db.prepare('SELECT channel_id FROM role_channel_access WHERE role_id = ? AND grant_on_promote = 1').all(roleId);
+    // Never into a DM, whatever an older version stored.
+    const grantChannels = db.prepare('SELECT rca.channel_id FROM role_channel_access rca JOIN channels c ON c.id = rca.channel_id WHERE rca.role_id = ? AND rca.grant_on_promote = 1 AND c.is_dm = 0').all(roleId);
     const ins = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
 
     const txn = db.transaction(() => {
@@ -1405,7 +1401,9 @@ module.exports = function register(socket, ctx) {
     }
 
     const channelId = isInt(data.channelId) ? data.channelId : null;
-    if (!outranksTarget(userId, channelId)) return cb({ error: _outrankError });
+    if (!canActOnUser(userId, channelId)) {
+      return cb({ error: 'You can only change roles for people ranked below you' });
+    }
     try {
       if (channelId) {
         db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id = ?').run(userId, roleId, channelId);

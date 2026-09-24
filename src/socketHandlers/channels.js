@@ -56,7 +56,7 @@ function isUploadStillReferenced(db, relPath) {
   }
 }
 
-const { isString, isInt } = require('./helpers');
+const { isString, isInt, releasableUploads } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
 
 // Failed join-by-code attempts per user, so channel codes (32-bit) and custom
@@ -71,7 +71,7 @@ module.exports = function register(socket, ctx) {
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
     applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
-    rotateChannelCode, botAudioManager
+    rotateChannelCode, rotatePrivateCodesAfterRemoval, botAudioManager
   } = ctx;
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -438,9 +438,12 @@ module.exports = function register(socket, ctx) {
       const joinedChannelIds = [];
       let joinedCount = 0;
       const txn = db.transaction(() => {
+        // Rooms are joined by the channel list sent right after this, which
+        // leaves out any channel whose required roles the person lacks.
+        // Joining them here put the live feed of gated channels in front of
+        // people the gate is meant to keep out.
         for (const parent of parents) {
           insertMember.run(parent.id, socket.user.id);
-          if (_gateOk(parent)) socket.join(`channel:${parent.code}`);
           joinedChannelIds.push(parent.id);
           joinedCount++;
           // Sub-channels: never grant private subs via invite. When a
@@ -449,7 +452,6 @@ module.exports = function register(socket, ctx) {
           const subs = db.prepare('SELECT id, code, role_gate FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(parent.id);
           for (const sub of subs) {
             insertMember.run(sub.id, socket.user.id);
-            if (_gateOk(sub)) socket.join(`channel:${sub.code}`);
             joinedChannelIds.push(sub.id);
             joinedCount++;
           }
@@ -695,13 +697,8 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const ch = db.prepare('SELECT id, is_dm, role_gate FROM channels WHERE code = ?').get(code);
+    const ch = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!ch) return;
-    // The gate hides a channel from members who fail it; entering would still
-    // put them in the room and stream its messages to them.
-    if (!socket.user.isAdmin && !ch.is_dm && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, ch)) {
-      return socket.emit('error-msg', 'This channel needs a role you do not hold');
-    }
     const isMember = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(ch.id, socket.user.id);
@@ -711,6 +708,11 @@ module.exports = function register(socket, ctx) {
       } else {
         return socket.emit('error-msg', 'Not a member of this channel');
       }
+    }
+    // Entering joins the channel's live room, which is reading it, so its
+    // required roles apply here as they do to its history.
+    if (!socket.user.isAdmin && !ch.is_dm && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(ch.id))) {
+      return socket.emit('error-msg', 'This channel needs a role you do not hold');
     }
 
     if (socket.currentChannel && socket.currentChannel !== code) {
@@ -758,6 +760,9 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // A DM is removed by its own people through delete-dm, never here: a
+    // server-wide delete_channel is not a key to other people's DMs.
+    if (channel.is_dm) return socket.emit('error-msg', 'Channel not found');
 
     // A parent goes with everything under it. The parent link is ON DELETE
     // SET NULL, so sub-channels used to survive their parent's deletion as
@@ -981,7 +986,16 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Sub-channel not found');
     }
 
-    if (!_canManageSubsOf(channel.parent_channel_id)) {
+    // Deleting a sub-channel destroys its history, so create_channel alone is
+    // not enough: it takes delete_channel or managing that parent's
+    // sub-channels, and you have to be in the sub-channel you delete (a
+    // private one you cannot see is not yours to remove).
+    const _canDeleteSub = socket.user.isAdmin || (
+      !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id) &&
+      (userHasPermission(socket.user.id, 'delete_channel', channel.id) ||
+       userHasPermission(socket.user.id, 'manage_sub_channels', channel.parent_channel_id))
+    );
+    if (!_canDeleteSub) {
       return socket.emit('error-msg', 'You don\'t have permission to delete sub-channels');
     }
 
@@ -996,6 +1010,9 @@ module.exports = function register(socket, ctx) {
       clearChannelRuntimeState(state, code);
       broadcastChannelLists();
       socket.emit('error-msg', 'Sub-channel deleted');
+      _audit({ actor: socket.user, action: 'channel_delete',
+        target_type: 'channel', target_id: channel.id, target_name: channel.name,
+        details: { code, sub_channel: true } });
     } catch (err) {
       console.error('Delete sub-channel error:', err);
       socket.emit('error-msg', 'Failed to delete sub-channel');
@@ -1049,7 +1066,9 @@ module.exports = function register(socket, ctx) {
     const tile = Number.isFinite(tileN) ? Math.min(28, Math.max(7, Math.round(tileN * 2) / 2)) : 11;
     const shapes = ['square', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'];
     const shape = shapes.includes(data.shape) ? data.shape : 'square';
-    const layout = { view, tile, shape, at: Date.now() };
+    // Locked: only people who can change the channel's settings may switch
+    // the view or shape; the size slider stays for everyone (#5656).
+    const layout = { view, tile, shape, locked: !!data.locked, at: Date.now() };
     try {
       db.prepare('UPDATE channels SET forum_layout = ? WHERE id = ?').run(JSON.stringify(layout), channel.id);
       broadcastChannelLists();
@@ -1067,14 +1086,14 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
     const permission = typeof data.permission === 'string' ? data.permission.trim() : '';
-    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'private', 'nsfw'];
+    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'private', 'nsfw', 'reactions'];
     if (!validPerms.includes(permission)) return socket.emit('error-msg', 'Invalid permission');
 
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to toggle channel permissions');
 
-    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', private: 'is_private', nsfw: 'is_nsfw' };
+    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', private: 'is_private', nsfw: 'is_nsfw', reactions: 'reactions_enabled' };
     const colName = colMap[permission];
     const current = channel[colName];
     const newVal = current ? 0 : 1;
@@ -1112,7 +1131,7 @@ module.exports = function register(socket, ctx) {
         }
       }
 
-      const labelMap = { streams: 'Screen sharing', music: 'Music sharing', media: 'Media uploads', voice: 'Voice chat', text: 'Text chat', read_only: 'Read-only mode', soundboard: 'Soundboard', forum: 'Forum mode', private: 'Private', nsfw: 'NSFW' };
+      const labelMap = { streams: 'Screen sharing', music: 'Music sharing', media: 'Media uploads', voice: 'Voice chat', text: 'Text chat', read_only: 'Read-only mode', soundboard: 'Soundboard', forum: 'Forum mode', private: 'Private', nsfw: 'NSFW', reactions: 'Reactions' };
       broadcastChannelLists();
       io.to(`channel:${code}`).emit('channel-permission-updated', { code, permission, enabled: !!newVal });
       socket.emit('toast', { message: `${labelMap[permission]} ${newVal ? 'enabled' : 'disabled'} for this channel`, type: 'success' });
@@ -1202,13 +1221,14 @@ module.exports = function register(socket, ctx) {
       }
       const role = db.prepare('SELECT id, name, level FROM roles WHERE id = ?').get(parsed);
       if (!role) return socket.emit('error-msg', 'Role not found');
-      // Same rank rule as assign-role: the default role is granted to every
-      // member (the setter included), so without it manage_roles could hand
-      // out, and take, a role above the setter's own level.
+      // A default role is handed to every member of the channel, the person
+      // setting it included, so it follows the same line as assigning a role:
+      // only roles below your own level, and only in a channel you are in.
       if (!socket.user.isAdmin) {
         const myLevel = getUserEffectiveLevel(socket.user.id);
-        if (role.level >= myLevel) {
-          return socket.emit('error-msg', `You can only set a default role below your level (${myLevel})`);
+        if (role.level >= myLevel) return socket.emit('error-msg', `You can only use roles below your level (${myLevel})`);
+        if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) {
+          return socket.emit('error-msg', 'Channel not found');
         }
       }
       roleId = role.id;
@@ -1576,6 +1596,13 @@ module.exports = function register(socket, ctx) {
         if (!_canManageSubsScoped(newParent.id) || !_canManageSubsScoped(channel.parent_channel_id)) {
           return socket.emit('error-msg', 'You don\'t have permission to move channels');
         }
+        // A top-level channel moved under a parent becomes one that parent's
+        // sub-channel managers can delete, while deleting a top-level channel
+        // is otherwise delete_channel's business (admin-only by default). So
+        // pulling one in takes delete_channel on that channel.
+        if (!channel.parent_channel_id && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_channel', channel.id)) {
+          return socket.emit('error-msg', "You don't have permission to move a top-level channel under another");
+        }
         const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id = ?').get(newParent.id);
         const position = (maxPos && maxPos.mp != null) ? maxPos.mp + 1 : 0;
         db.prepare('UPDATE channels SET parent_channel_id = ?, position = ?, category = NULL WHERE id = ?').run(newParent.id, position, channel.id);
@@ -1780,6 +1807,7 @@ module.exports = function register(socket, ctx) {
       channelRoom.delete(targetUserId);
       emitOnlineUsers(channel.code);
     }
+    if (typeof rotatePrivateCodesAfterRemoval === 'function') rotatePrivateCodesAfterRemoval(channelId);
     cb({ success: true });
     socket.emit('error-msg', `Removed ${targetUser.username} from #${channel.name}`);
   });
@@ -1876,13 +1904,8 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    // Anyone can open a DM (even with themselves), and both the message scan
-    // and the client's list can name any file in uploads/. Only files a member
-    // of this DM uploaded, and that nothing else still uses, may go.
-    const dmMemberIds = new Set(
-      db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id).map(r => r.user_id)
-    );
-    const ownerOf = db.prepare('SELECT user_id FROM upload_ownership WHERE rel_path = ?');
+    // Only the DM's own participants' attachments go with it.
+    const participants = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id).map(r => r.user_id);
 
     const deleteAll = db.transaction((chId) => {
       db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
@@ -1893,14 +1916,7 @@ module.exports = function register(socket, ctx) {
     });
     deleteAll(channel.id);
 
-    for (const name of filenames) {
-      try {
-        const owner = ownerOf.get(name);
-        if (!owner || !dmMemberIds.has(owner.user_id)) continue;
-        if (isUploadStillReferenced(db, name)) continue;
-        moveUploadToDeleted(name);
-      } catch { /* best-effort cleanup */ }
-    }
+    for (const name of releasableUploads(db, filenames, participants)) moveUploadToDeleted(name);
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
     clearChannelRuntimeState(state, code);

@@ -1690,13 +1690,15 @@
 }
 
 /* Win95 settings modal — full blue title bar like real Win95 */
-[data-theme="win95"] .settings-header {
+[data-theme="win95"] .settings-header,
+[data-theme="win95"] .forum-modal-header {
   background: linear-gradient(90deg, #000080, #1084d0);
   padding: 0.25rem 0.5rem;
   border-bottom: none;
   min-height: 1.5rem;
 }
-[data-theme="win95"] .settings-header h3 {
+[data-theme="win95"] .settings-header h3,
+[data-theme="win95"] .forum-modal-header h3 {
   color: #fff;
   font-size: 0.75rem;
   font-weight: 700;
@@ -1705,7 +1707,8 @@
   padding: 0;
   background: none;
 }
-[data-theme="win95"] .settings-close-btn {
+[data-theme="win95"] .settings-close-btn,
+[data-theme="win95"] .modal-close {
   width: 1.125rem; height: 1.125rem;
   background: #bfbfbf;
   border: 2px outset #fff;
@@ -1715,7 +1718,8 @@
   padding: 0;
   line-height: 1;
 }
-[data-theme="win95"] .settings-close-btn:hover { background: #dfdfdf; }
+[data-theme="win95"] .settings-close-btn:hover,
+[data-theme="win95"] .modal-close:hover { background: #dfdfdf; }
 
 /* Win95 admin save bar — beveled gray box with black text */
 [data-theme="win95"] .admin-save-bar {
@@ -2192,6 +2196,118 @@ html[data-braid-layout="1"].braid-status-open[data-desktop-app] #status-bar {
 
 /* User preference: no Send button, Enter sends (#5654) */
 [data-hide-send-btn] #send-btn { display: none !important; }
+/* One + button in place of the toolbar (#5654). The toolbar itself becomes
+   the menu that opens above the +, with each button's title as its label. */
+.btn-composer-plus { display: none; }
+[data-compact-composer] .btn-composer-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.625rem;
+  height: 2.625rem;
+  flex-shrink: 0;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 0.5rem;
+  background: var(--bg-tertiary, rgba(255,255,255,0.03));
+  color: var(--text-secondary);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+[data-compact-composer] .btn-composer-plus:hover,
+[data-compact-composer] .btn-composer-plus[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+[data-compact-composer] .input-actions-box {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 1.25rem;
+  margin-bottom: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.125rem;
+  padding: 0.375rem;
+  min-width: 13rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 1050;
+}
+[data-compact-composer] .input-actions-box.open { display: flex; }
+[data-compact-composer] .input-actions-box .input-actions-divider { display: none !important; }
+[data-compact-composer] .input-actions-box > button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+}
+[data-compact-composer] .input-actions-box > button::after {
+  content: attr(title);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Voice messages (#5665) */
+.btn-voice-msg.recording { color: #e74c5f; animation: voice-rec-pulse 1s ease-in-out infinite; }
+@keyframes voice-rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.voice-record-bar {
+  position: absolute;
+  left: 1.25rem;
+  right: 1.25rem;
+  bottom: 100%;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 1050;
+}
+.voice-rec-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: #e74c5f; animation: voice-rec-pulse 1s ease-in-out infinite; flex-shrink: 0; }
+.voice-rec-time { font-variant-numeric: tabular-nums; font-weight: 700; }
+.voice-rec-hint { flex: 1; font-size: 0.8rem; color: var(--text-muted); }
+.file-attachment.voice-message { max-width: 22rem; }
+.file-attachment.voice-message .file-audio { width: 100%; margin-top: 0.4rem; }
+
+/* Formatting guide and command list (#5654) */
+.format-picker { width: 24rem; max-height: 28rem; }
+.format-picker-list {
+  overflow-y: auto;
+  padding: 0.4rem 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.format-row {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 0.15rem 0.6rem;
+  align-items: center;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+}
+.format-row:hover { background: var(--bg-tertiary); }
+.format-row-label { font-size: 0.82rem; font-weight: 600; }
+.format-row-syntax { font-size: 0.74rem; color: var(--text-muted); white-space: pre-wrap; word-break: break-word; }
+.format-row-demo { grid-column: 2; font-size: 0.8rem; }
+.format-row-command { grid-template-columns: 1fr; }
+.format-row-cmd { font-size: 0.82rem; font-weight: 600; color: var(--accent); }
+.format-row-desc { font-size: 0.74rem; color: var(--text-muted); }
+.format-picker-hint { padding: 0.5rem 0.75rem 0; font-size: 0.72rem; color: var(--text-muted); }
 /* No GIF provider is configured on this server, so the button would only
    open an empty picker (#5654) */
 [data-no-gif] #gif-btn { display: none !important; }
@@ -3908,6 +4024,12 @@ html[data-braid-layout="1"].braid-status-open[data-desktop-app] #status-bar {
   justify-content: center;
   z-index: 2;
 }
+/* The edit box's bar sits under the box, in the flow, so dragging down grows it (#5662) */
+.pip-input-resizer.edit-resizer {
+  position: static;
+  height: 0.875rem;
+  margin: 0.1rem 0 0.15rem;
+}
 .pip-input-resizer::before {
   content: '';
   width: 2.25rem;
@@ -3921,6 +4043,8 @@ html[data-braid-layout="1"].braid-status-open[data-desktop-app] #status-bar {
   opacity: 1;
   background: var(--accent, #5865f2);
 }
+/* The same bar on the message edit box (#5662) */
+.message.editing .message-content, .message-compact.editing .message-content { position: relative; padding-top: 0.875rem; }
 
 /* Emoji picker trigger button shared by DM PiP and thread input areas */
 .pip-input-emoji-btn {
@@ -5368,6 +5492,9 @@ details.sound-section:not([open]) .sound-section-label::before {
 }
 
 .message-content a { color: var(--text-link); }
+/* A thin underline so a link reads as one on any palette, not only by its
+   colour; a coloured span around it cannot repaint it (#5661). */
+.message-content a:not(.file-download-link) { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
 
 .message-compact {
   display: flex;
@@ -6212,10 +6339,10 @@ html[data-haven-original-layout] .channel-join-voice,
 html[data-haven-original-layout] #people-dock-btn { display: none !important; }
 .channel-join-voice.is-leave {
   background: var(--danger, #ed4245);
-  color: #fff;
+  color: var(--danger-text, #fff);
   border-color: var(--danger, #ed4245);
 }
-.channel-join-voice.is-leave:hover { filter: brightness(1.08); color: #fff; }
+.channel-join-voice.is-leave:hover { filter: brightness(1.08); color: var(--danger-text, #fff); }
 #sidebar-members-btn[hidden] { display: none !important; }
 #people-dock-btn[aria-pressed="true"] {
   background: var(--bg-active, var(--bg-hover));
@@ -7315,7 +7442,8 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 
 .btn-upload:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
-.message-area.drag-over {
+.message-area.drag-over,
+.thread-panel.drag-over {
   outline: 2px dashed var(--accent);
   outline-offset: -4px;
   background: rgba(124, 92, 252, 0.04);
@@ -8161,6 +8289,11 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
   color: var(--text-primary);
 }
 
+.reactions-locked .reaction-badge {
+  cursor: default;
+  pointer-events: none;
+}
+
 /* ── Reaction popout (who reacted) ────────────────────── */
 .reaction-popout {
   position: fixed;
@@ -8789,6 +8922,39 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .thread-panel.pip .thread-panel-resizer {
   display: none;
 }
+/* A forum topic opens across the whole chat column with a title bar (#5659).
+   --thread-forum-left is set from the chat column's left edge by the app. */
+.thread-panel.thread-panel-forum:not(.pip) {
+  left: var(--thread-forum-left, 0px);
+  width: auto;
+  max-width: none;
+  animation: none;
+}
+.thread-panel.thread-panel-forum:not(.pip) .thread-panel-resizer { display: none; }
+.thread-panel-forum .thread-parent-meta,
+.thread-panel-forum .thread-parent-preview { display: none; }
+.thread-forum-bar { display: flex; gap: 0.75rem; align-items: flex-start; margin-top: 0.6rem; }
+.thread-forum-thumb {
+  flex: 0 0 4.5rem;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+  background: var(--bg-input);
+}
+.thread-forum-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thread-forum-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.thread-forum-title { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+.thread-forum-meta { font-size: 0.75rem; color: var(--text-muted); }
+.thread-forum-layout { flex: none; white-space: nowrap; }
+.thread-topic-body {
+  padding: 0.75rem 1rem 0.9rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.thread-panel:not(.thread-panel-forum) .thread-topic-body { font-size: 0.85rem; }
 @keyframes thread-slide-in {
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }
@@ -9111,6 +9277,357 @@ html[data-braid-layout="1"][data-desktop-app] {
   border-top: 1px solid var(--border);
   overflow-x: auto;
   flex-wrap: nowrap;
+}
+
+/* ── Attachment tagging (composer) — (#tagging) ─────── */
+/* The active attachment (the one the tag bar edits) gets an accent ring; any
+   attachment carrying tags gets a subtle accent underline. */
+.image-queue-thumb.is-active,
+.file-queue-chip.is-active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.image-queue-thumb.has-tags::after,
+.file-queue-chip.has-tags::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+.file-queue-chip { position: relative; }
+
+.tag-queue-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.tag-queue-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.tag-queue-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.25rem 0.125rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  max-width: 12rem;
+}
+.tag-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+.tag-chip-remove:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+.tag-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 1rem;
+  border: 1px dashed var(--border);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.tag-add-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.tag-add-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Frequent tags: a quick-pick row under the Tags row (browser-storage only). */
+.tag-frequent-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.75rem;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.tag-frequent-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.tag-frequent-chip {
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.tag-frequent-chip:hover { color: var(--accent); border-color: var(--accent); }
+
+.tag-popup {
+  position: absolute;
+  left: 0.75rem;
+  bottom: calc(100% + 0.25rem);
+  z-index: 40;
+  width: 27rem;
+  max-width: calc(100% - 1.5rem);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.3);
+  padding: 0.375rem;
+}
+.tag-popup-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  outline: none;
+}
+.tag-popup-input:focus { border-color: var(--accent); }
+/* Columns, so a long tag list is a short scroll instead of a tall narrow
+   one. Rows keep their own height: as flex children with overflow hidden they
+   were being squeezed once the list overflowed, which cut the text (#5682). */
+.tag-popup-list {
+  margin-top: 0.375rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  align-content: start;
+  gap: 1px 0.25rem;
+}
+.tag-popup-list > .tag-popup-create,
+.tag-popup-list > .tag-popup-empty { grid-column: 1 / -1; }
+.tag-popup-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.375rem 0.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  min-height: 1.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-popup-item:hover { background: var(--bg-tertiary); }
+.tag-popup-create { color: var(--accent); font-weight: 600; }
+.tag-popup-empty {
+  padding: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* ── Tags footer on messages carrying tagged attachments (#tagging) ─── */
+.message-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+.message-tags-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.message-tags-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 0.125rem;
+}
+.message-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: var(--text-secondary, var(--text-primary));
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.message-tag:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ── Retroactive tag editor popup (#tagging phase 3) ─── */
+.tag-editor-popup {
+  position: fixed;
+  z-index: 1000;
+  width: 27rem;
+  max-width: calc(100vw - 1.5rem);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.3);
+  padding: 0.5rem;
+}
+.tag-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.375rem;
+}
+.tag-editor-title {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.tag-editor-close {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+.tag-editor-close:hover { color: var(--text-primary); }
+.tag-editor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
+}
+.tag-editor-chips:empty { display: none; }
+.tag-editor-popup .tag-popup-list { margin-top: 0.375rem; }
+
+/* ── Media gallery tag filter + bulk management (#tagging phase 3b) ─── */
+/* These popups live at body level but must sit ABOVE the gallery modal-overlay
+   (z-index 100001), unlike the message-list tag editor that shares the class.
+   Kept below the confirm dialog (100002, appended later) so replace-empty's
+   warning still stacks on top. */
+#media-tag-filter-popup,
+#media-tag-manage-popup { z-index: 100002; }
+.media-gallery-tagfilter { display: inline-flex; align-items: center; gap: 0.375rem; }
+.media-gallery-tagfilter-count,
+.media-gallery-tagmanage { display: inline-flex; align-items: center; }
+.media-gallery-tagfilter-count {
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 0.75rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  justify-content: center;
+}
+/* Toolbar buttons share the Sort/Size select controls' height so the whole row
+   sits on one line. Default .btn-sm padding is taller and left the buttons
+   (Tags, Select, etc.) bulging above the dropdowns. */
+.media-gallery-toolbar .btn-sm { padding: 0.25rem 0.625rem; font-size: 0.8rem; }
+#media-gallery-tagfilter-btn.is-active { border-color: var(--accent); color: var(--accent); }
+.tag-popup-item.is-active { color: var(--accent); font-weight: 600; }
+
+/* Manage-tags dropdown menu */
+.media-gallery-tagmanage { position: relative; }
+.media-tagmanage-menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  z-index: 50;
+  min-width: 10rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.3);
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.media-tagmanage-opt {
+  text-align: left;
+  padding: 0.4375rem 0.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8125rem;
+}
+.media-tagmanage-opt:hover { background: var(--bg-tertiary); }
+
+/* Confirm row inside the bulk tag picker */
+.tag-manage-actions { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
+
+/* Read-only tag chips on gallery tiles/rows */
+.media-tile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+.media-grid-item .media-grid-meta .media-tile-tags { margin: 0; padding: 0; }
+.media-tile-tag {
+  display: inline-block;
+  max-width: 8rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  font-size: 0.6875rem;
+  color: var(--text-secondary, var(--text-primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Upload progress bar ────────────────────────────── */
@@ -10165,6 +10682,18 @@ html.forum-thread-open .message-input-area {
   font-size: 0.8125rem;
 }
 
+/* "Search removed tags" fallback in the tag: picker (#tagging phase 2). */
+.sfp-search-removed {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .search-result-item {
   padding: 0.625rem 0.875rem;
   border-bottom: 1px solid var(--border-light);
@@ -10461,6 +10990,12 @@ html.forum-thread-open .message-input-area {
 .e2e-menu-wrapper {
   position: relative;
 }
+/* The lock stands out when a DM is not encrypted or the partner's key changed. */
+#e2e-menu-btn.e2e-off,
+#e2e-menu-btn.e2e-changed {
+  background: rgba(231, 76, 60, 0.15);
+  border-radius: var(--radius-sm, 4px);
+}
 .e2e-dropdown {
   position: absolute;
   top: 100%;
@@ -10646,6 +11181,9 @@ html.forum-thread-open .message-input-area {
 .spoiler:not(.revealed) .custom-emoji {
   visibility: hidden;
 }
+/* Coloured text and links set their own colour, which showed straight
+   through the spoiler box (#5661). */
+.spoiler:not(.revealed) * { color: transparent !important; }
 
 /* Inline code sets its own color and background, so `color: transparent`
    can't hide it and it would show through an unrevealed spoiler. It's a
@@ -11060,6 +11598,13 @@ html.forum-thread-open .message-input-area {
   border-bottom: 1px solid var(--border);
 }
 
+.forum-modal-header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
 .settings-tab-bar {
   display: flex;
   gap: 0.25rem;
@@ -11087,8 +11632,10 @@ html.forum-thread-open .message-input-area {
   border-color: var(--accent);
 }
 .settings-close-btn { margin-left: 0; }
+.modal-close { margin-left: auto; }
 
-.settings-header h3 {
+.settings-header h3,
+.forum-modal-header h3 {
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-primary);
@@ -11096,7 +11643,8 @@ html.forum-thread-open .message-input-area {
   margin: 0;
 }
 
-.settings-close-btn {
+.settings-close-btn,
+.modal-close {
   width: 2rem;
   height: 2rem;
   display: flex;
@@ -11110,7 +11658,8 @@ html.forum-thread-open .message-input-area {
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.settings-close-btn:hover {
+.settings-close-btn:hover,
+.modal-close:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
@@ -14050,6 +14599,24 @@ video:-webkit-full-screen {
   border-color: var(--accent);
 }
 
+/* Admin Tags panel (#tagging phase 4) */
+.tag-admin-add { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.tag-admin-add .settings-text-input { flex: 1; min-width: 0; }
+.tag-admin-list { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.tag-admin-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.tag-admin-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-admin-uses { font-size: 0.72rem; color: var(--text-muted); }
+.tag-admin-row-actions { margin-left: auto; display: flex; gap: 0.375rem; flex-shrink: 0; }
+.tag-admin-edit-input { flex: 1; min-width: 0; }
+
 .whitelist-list {
   max-height: 12.5rem;
   overflow-y: auto;
@@ -15070,6 +15637,8 @@ ul.chat-list { list-style-type: disc; }
   margin: 0.25rem 0 0.5rem;
 }
 
+.profile-activity-link { color: inherit; text-decoration: none; cursor: pointer; }
+.profile-activity-link:hover .profile-activity-name { text-decoration: underline; }
 .profile-activity-row {
   display: flex;
   align-items: center;
@@ -17066,7 +17635,7 @@ body.is-guest #dm-dock-btn {
   padding: 0 0.25rem;
   border-radius: 999px;
   background: var(--danger, #d35a5a);
-  color: #fff;
+  color: var(--danger-text, #fff);
   font-size: 0.62rem;
   font-weight: 700;
   line-height: 1rem;
@@ -17311,6 +17880,16 @@ body.is-guest #dm-dock-btn {
   cursor: pointer; font-size: 0.9rem; line-height: 1;
 }
 .poll-option-imgbtn.has-image { color: transparent; border-color: var(--accent); }
+/* A big picture poll in columns, square thumbnails, so 16 options fit on a
+   screen instead of one tall scroll (#5648) */
+.poll-options.poll-grid { display: grid; grid-template-columns: repeat(var(--poll-cols, 2), minmax(0, 1fr)); gap: 0.4rem; }
+.poll-grid .poll-option { flex-direction: column; align-items: stretch; }
+/* A picture of any shape fits inside its square instead of being cropped to
+   it, and a grid gets more room on a wide screen (#5648) */
+.poll-grid .poll-option-img { aspect-ratio: 1 / 1; height: auto; max-height: none; object-fit: contain; background: var(--bg-input, rgba(0,0,0,0.25)); }
+.poll-widget:has(.poll-grid) { max-width: min(100%, 42rem); }
+.poll-grid .poll-option-text { white-space: normal; }
+.poll-grid .poll-option-count { margin-left: 0; }
 .poll-option.poll-voted {
   border-color: var(--accent, #5865f2);
 }
@@ -19576,16 +20155,25 @@ html.dms-open .sidebar-split .dm-section-pane,
   object-fit: cover;
   display: block;
 }
-.media-grid-item .media-grid-date {
+/* Bottom overlay holding the tags (top) and the date/size line (bottom). A
+   grid tile is a fixed aspect-ratio box with overflow:hidden and a 100%-height
+   image, so normal-flow children get clipped off the tile -- the meta must be
+   an absolute overlay to show over the image (#tagging phase 3b). */
+.media-grid-item .media-grid-meta {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(to top, rgba(0,0,0,.75), transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 0.375rem 0.3125rem;
+  background: linear-gradient(to top, rgba(0,0,0,.78), transparent);
+  pointer-events: none;
+}
+.media-grid-item .media-grid-date {
   color: #fff;
   font-size: 0.68rem;
-  padding: 0.875rem 0.375rem 0.3125rem;
-  pointer-events: none;
   text-shadow: 0 1px 2px rgba(0,0,0,.6);
 }
 .media-grid-item .media-grid-play {
@@ -19666,13 +20254,17 @@ html.dms-open .sidebar-split .dm-section-pane,
 .media-gallery-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
   padding: 0.5rem 0.875rem;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
+/* Group the filter controls (Sort, Tags) on the left; push the view controls
+   (Size, Select) to the right. space-between used to spread all four edge-to-
+   edge, orphaning the Tags button in the empty middle of the row. */
+.media-gallery-toolbar > .media-gallery-tile-label,
+.media-gallery-toolbar > #media-gallery-tile-wrap { margin-left: auto; }
 .media-gallery-sort-label {
   display: inline-flex;
   align-items: center;
@@ -20098,6 +20690,32 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 .forum-tag-closed { color: var(--text-muted); }
 .forum-topic-closed, .forum-topic-complete { opacity: 0.55; }
 .forum-topic-closed:hover, .forum-topic-complete:hover { opacity: 0.85; }
+/* NSFW topics (#5633): the picture and preview sit blurred behind a label until
+   clicked, like a spoiler, and the title stays readable. Anyone who hides NSFW
+   channels does not get the card at all. */
+.forum-tag-nsfw { color: #e74c5f; }
+.forum-topic-nsfw:not(.revealed) .forum-topic-thumb { position: relative; }
+.messages.forum-gallery .forum-topic-nsfw:not(.revealed) .forum-topic-thumb { position: absolute; }
+.forum-topic-nsfw:not(.revealed) .forum-topic-thumb img.forum-thumb-img,
+.forum-topic-nsfw:not(.revealed) .forum-topic-thumb-empty span { filter: blur(18px); transform: scale(1.1); }
+.forum-topic-nsfw:not(.revealed) .forum-topic-thumb::after {
+  content: attr(data-nsfw-label);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.3rem;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.forum-topic-nsfw:not(.revealed) .forum-topic-snippet { filter: blur(6px); user-select: none; }
 .forum-field-closed span { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
 .forum-topic-title { font-weight: 700; font-size: 1rem; color: var(--text-primary); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 /* Unread dot on a forum card: a topic you have not opened, or new replies since you did (#5641). */
@@ -20194,6 +20812,14 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 .forum-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
 .forum-field input, .forum-field textarea { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.6rem; font: inherit; }
 .forum-tag-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+/* Pictures and files in a post's body (#5689, #5690) */
+.forum-attach-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin: -0.35rem 0 0.75rem; }
+.forum-attach-row .settings-hint { margin: 0; }
+.forum-post-modal.drag-over { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.forum-post-modal .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 0.4rem; }
+.forum-post-modal .modal-footer .forum-post-delete { margin-right: auto; font-size: 0.85rem; }
+.content-media-part { margin: 0.3rem 0; }
+.content-media-part:first-child { margin-top: 0; }
 /* Settings search */
 .settings-search-wrap { padding: 0.5rem 0.75rem 0.25rem; }
 .settings-search { width: 100%; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.4rem 0.6rem; font-size: 0.82rem; }
@@ -20260,7 +20886,7 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 }
 .perm-view-btn.is-active {
   background: var(--accent, #6b4fdb);
-  color: #fff;
+  color: var(--accent-text, #fff);
 }
 #perm-roles-pane,
 #perm-users-pane {
@@ -20409,7 +21035,7 @@ html.forum-channel .channel-topic-bar { display: none !important; }
   font-size: 0.78rem;
   cursor: pointer;
 }
-.perm-user-chip.is-on { background: var(--accent, #6b4fdb); color: #fff; border-color: transparent; }
+.perm-user-chip.is-on { background: var(--accent, #6b4fdb); color: var(--accent-text, #fff); border-color: transparent; }
 .perm-user-chip:disabled { opacity: 0.55; cursor: default; }
 .perm-user-group {
   margin: 10px 0 4px;

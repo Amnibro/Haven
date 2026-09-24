@@ -142,6 +142,25 @@ _clearChannelCodeMap() {
 
 // ── Socket Event Listeners ────────────────────────────
 
+// A message refused for being too long used to vanish: the box clears on
+// send. Put the text back so it can be trimmed, unless something new has
+// been typed since or the channel changed (#5691).
+_restoreRefusedDraft(msg) {
+  const d = this._lastSendDraft;
+  if (!d || typeof msg !== 'string' || !/^Message too long/.test(msg)) return;
+  this._lastSendDraft = null;
+  const inputId = d.inputId || 'message-input';
+  const open = inputId === 'dm-pip-input' ? this._activeDMPip
+    : inputId === 'thread-input' ? this._activeThreadParent
+    : this.currentChannel;
+  if (Date.now() - d.at > 15000 || d.code !== open) return;
+  const input = document.getElementById(inputId);
+  if (!input || input.value.trim()) return;
+  input.value = d.text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.focus();
+},
+
 _setupSocketListeners() {
   this._setupFerrySocket();
   // Authoritative user info pushed by server on every connect
@@ -151,6 +170,7 @@ _setupSocketListeners() {
     this.user.effectiveLevel = data.effectiveLevel || 0;
     this.user.permissions = data.permissions || [];
     this.user.globalPermissions = data.globalPermissions || [];
+    this._renderE2EPassphraseSection?.();
     if (this.voice && data.id) this.voice.localUserId = data.id;
     if (data.status) {
       this.userStatus = data.status;
@@ -915,6 +935,7 @@ _setupSocketListeners() {
         // Per-channel, same reasoning as the composer gate in app-channels.js (#5468)
         const _isReadOnly = curCh.read_only === 1 && !this.user?.isAdmin && !curCh.canOverrideReadOnly;
         if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+        this._applyReactionLock?.();
       }
     }
 
@@ -1613,6 +1634,7 @@ _setupSocketListeners() {
     // A refused channel-functions toggle arrives here and nowhere else, so
     // this is the only chance to put the row back where it was.
     this._revertPendingChannelToggle();
+    this._restoreRefusedDraft(msg);
     this._showToast(msg, 'error');
   });
 
@@ -1676,6 +1698,8 @@ _setupSocketListeners() {
     const container = document.getElementById('thread-messages');
     if (!container) return;
     container.innerHTML = '';
+    // A forum topic shows its whole first post above the replies (#5659).
+    this._forumThreadRenderTopic?.();
     if (data.messages) {
       data.messages.forEach(msg => this._appendThreadMessage(msg));
     }
@@ -2085,7 +2109,7 @@ _setupSocketListeners() {
         if (!editedTag) {
           editedTag = document.createElement('span');
           editedTag.className = 'edited-tag';
-          editedTag.title = t('header.messages.edited_at', { date: new Date(data.editedAt).toLocaleString() });
+          editedTag.title = t('header.messages.edited_at', { date: this._fmtDateTime(data.editedAt) });
           editedTag.textContent = t('header.messages.edited');
           contentEl.appendChild(editedTag);
         }
@@ -2131,6 +2155,41 @@ _setupSocketListeners() {
     // open — results are cross-channel and this only fires on a confirmed
     // delete, so removal stays truthful. (search-overhaul phase 3)
     this._searchRemoveResult?.(data.channelCode, data.messageId);
+  });
+
+  // Someone deleted every message they wrote (#5686): one event per channel.
+  // Their rows go from whatever is on screen, and the open channel is loaded
+  // again so the compact chains and the history cursor come out right.
+  this.socket.on('messages-purged', (data) => {
+    if (!data || !data.channelCode || !data.userId) return;
+    const uid = String(data.userId);
+    const views = [
+      ['messages', this.currentChannel], ['thread-messages', this.currentChannel],
+      ['dm-pip-messages', this._activeDMPip],
+    ];
+    for (const [id, code] of views) {
+      if (code !== data.channelCode) continue;
+      document.getElementById(id)?.querySelectorAll(`[data-msg-id][data-user-id="${uid}"]`).forEach(el => el.remove());
+    }
+    if (data.channelCode === this.currentChannel) {
+      this._oldestMsgId = null;
+      this._noMoreHistory = false;
+      this._loadingHistory = false;
+      this._historyBefore = null;
+      this._newestMsgId = null;
+      this._noMoreFuture = true;
+      this._loadingFuture = false;
+      this._historyAfter = null;
+      this.socket.emit('get-messages', { code: this.currentChannel });
+    }
+  });
+
+  // Attachment tags edited (#tagging phase 3). Repaint the Tags footer on every
+  // rendered copy of the message. Fires cross-channel (users are joined to all
+  // their channel rooms), so search results update too, wherever they're shown.
+  this.socket.on('message-tags-updated', (data) => {
+    if (!data || !data.messageId) return;
+    this._updateMessageTagsFooter?.(data.messageId, data.tags || []);
   });
 
   // ── Low disk warning (admins only, #5505) ────────
@@ -2487,6 +2546,10 @@ _setupSocketListeners() {
     // Activity toggles live entirely server-side (other clients must honour
     // them), so the UI can only be correct once prefs land.
     this._syncActivityUI?.();
+    // Reflect any saved timezone/format in the settings row now that prefs are
+    // known. The first-run modal itself is gated separately via the welcome
+    // popup sequencer (_shouldShowTzPrompt).
+    this._updateTimezoneSummary?.();
   });
 
   // Server's verdict on the recovery-codes notice (see the connect handler's

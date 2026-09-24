@@ -15,7 +15,7 @@ const ALL_PERMS = [
   // see and manage only the links they made.
   'create_channel', 'create_temp_channel', 'invite_users',
   'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'use_ferry', 'mention_everyone', 'view_history',
-  'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
+  'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'manage_tags', 'promote_user',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log', 'manage_display_names'
 ];
 // Permissions only the server owner (admin) may grant. Highlighted in the
@@ -56,6 +56,7 @@ const PERM_LABELS = {
   get manage_stickers() { return t('permissions.manage_stickers'); },
   get manage_soundboard() { return t('permissions.manage_soundboard'); },
   get manage_music_queue() { return t('permissions.manage_music_queue'); },
+  get manage_tags() { return t('permissions.manage_tags'); },
   get promote_user() { return t('permissions.promote_user'); },
   get manage_roles() { return t('permissions.manage_roles'); },
   get manage_server() { return t('permissions.manage_server'); },
@@ -483,6 +484,14 @@ _applyServerSettings() {
     if (maxAttach) {
       maxAttach.value = this.serverSettings.max_attachments || '10';
     }
+    const maxTagsPer = document.getElementById('max-tags-per-attachment');
+    if (maxTagsPer) {
+      maxTagsPer.value = this.serverSettings.max_tags_per_attachment || '3';
+    }
+    const maxTagLen = document.getElementById('max-tag-len');
+    if (maxTagLen) {
+      maxTagLen.value = this.serverSettings.max_tag_len || '20';
+    }
     const maxSoundKb = document.getElementById('max-sound-kb');
     if (maxSoundKb) {
       maxSoundKb.value = this.serverSettings.max_sound_kb || '1024';
@@ -553,6 +562,11 @@ _applyServerSettings() {
     if (updateBannerAdminOnly) {
       updateBannerAdminOnly.checked = this.serverSettings.update_banner_admin_only === 'true';
     }
+    const allowSelfPurge = document.getElementById('allow-self-purge');
+    if (allowSelfPurge) allowSelfPurge.checked = this.serverSettings.allow_self_purge === 'true';
+    // The member-facing button follows the switch (#5686).
+    const selfPurgeBlock = document.getElementById('self-purge-block');
+    if (selfPurgeBlock) selfPurgeBlock.style.display = (this.serverSettings.allow_self_purge === 'true' && !this.user?.isGuest) ? '' : 'none';
     const hideDisabledBadges = document.getElementById('hide-disabled-badges');
     if (hideDisabledBadges) hideDisabledBadges.checked = this.serverSettings.hide_disabled_channel_badges === 'true';
     const defaultTheme = document.getElementById('default-theme-select');
@@ -632,6 +646,12 @@ _applyServerSettings() {
   const _maxMsgChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
   const msgInput = document.getElementById('message-input');
   if (msgInput) msgInput.maxLength = _maxMsgChars;
+  // The thread and pop-out DM boxes had no cap, so a long reply was only
+  // refused after sending (#5691).
+  for (const id of ['thread-input', 'dm-pip-input']) {
+    const el = document.getElementById(id);
+    if (el) el.maxLength = _maxMsgChars;
+  }
   document.querySelectorAll('.edit-textarea').forEach(el => { el.maxLength = _maxMsgChars; });
 
   // Refresh DM cleanup notice (#5340) when cleanup_enabled / cleanup_max_age_days
@@ -659,6 +679,8 @@ _applyServerSettings() {
   // Show/hide the banner display section in user settings
   const bannerSection = document.getElementById('section-banner-display');
   if (bannerSection) bannerSection.style.display = hasBanner ? '' : 'none';
+  const bannerNavItem = document.querySelector('.settings-nav-item[data-target="section-banner-display"]');
+  if (bannerNavItem) bannerNavItem.style.display = hasBanner ? '' : 'none';
   if (bannerDisplay && bannerImg) {
     if (hasBanner) {
       bannerImg.src = this.serverSettings.server_banner;
@@ -738,10 +760,10 @@ _renderWebhooksList(webhooks) {
   }
   // Simple preview list for server settings — full management is in the bot modal
   container.innerHTML = webhooks.map(wh => {
-    const statusDot = wh.is_active ? '🟢' : '🔴';
+    const statusDot = `<span class="webhook-status-icon" aria-hidden="true">${wh.is_active ? '🟢' : '🔴'}</span>`;
     const avatarHtml = wh.avatar_url
       ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:20px;height:20px;border-radius:50%;object-fit:cover">`
-      : '🤖';
+      : '<span class="webhook-avatar-icon" aria-hidden="true">🤖</span>';
     return `<div class="role-preview-item">${avatarHtml} <span style="font-weight:600">${this._escapeHtml(wh.name)}</span> <span style="opacity:0.5;font-size:0.6875rem">#${this._escapeHtml(wh.channel_name)}</span> ${statusDot}</div>`;
   }).join('');
 },
@@ -769,6 +791,7 @@ _syncSettingsNav() {
     'section-cleanup':      ['manage_server'],
     'section-backup':       ['manage_server'],
     'section-uploads':      ['manage_server'],
+    'section-tags-admin':   ['manage_tags'],
     'section-connectivity': [],
     'section-tunnel':       ['manage_server'],
     'section-bots':         ['manage_server', 'manage_webhooks'],
@@ -917,6 +940,8 @@ _snapshotAdminSettings() {
     whitelist_enabled: this.serverSettings.whitelist_enabled || 'false',
     max_upload_mb: this.serverSettings.max_upload_mb || '25',
     max_attachments: this.serverSettings.max_attachments || '10',
+    max_tags_per_attachment: this.serverSettings.max_tags_per_attachment || '3',
+    max_tag_len: this.serverSettings.max_tag_len || '20',
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_sticker_kb: this.serverSettings.max_sticker_kb || '1024',
@@ -924,6 +949,7 @@ _snapshotAdminSettings() {
     session_duration_days: this.serverSettings.session_duration_days || '7',
     max_message_chars: this.serverSettings.max_message_chars || '2000',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
+    allow_self_purge: this.serverSettings.allow_self_purge || 'false',
     hide_disabled_channel_badges: this.serverSettings.hide_disabled_channel_badges || 'false',
     admin_password_reset_enabled: this.serverSettings.admin_password_reset_enabled || 'false',
     unicode_emoji_auto_update: this.serverSettings.unicode_emoji_auto_update || 'false',
@@ -1068,6 +1094,18 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const maxTagsPer = String(Math.max(1, Math.min(10, parseInt(document.getElementById('max-tags-per-attachment')?.value) || 3)));
+  if (maxTagsPer !== (snap.max_tags_per_attachment || '3')) {
+    this.socket.emit('update-server-setting', { key: 'max_tags_per_attachment', value: maxTagsPer });
+    changed = true;
+  }
+
+  const maxTagLen = String(Math.max(1, Math.min(50, parseInt(document.getElementById('max-tag-len')?.value) || 20)));
+  if (maxTagLen !== (snap.max_tag_len || '20')) {
+    this.socket.emit('update-server-setting', { key: 'max_tag_len', value: maxTagLen });
+    changed = true;
+  }
+
   const maxSoundKb = String(Math.max(256, Math.min(10240, parseInt(document.getElementById('max-sound-kb')?.value) || 1024)));
   if (maxSoundKb !== (snap.max_sound_kb || '1024')) {
     this.socket.emit('update-server-setting', { key: 'max_sound_kb', value: maxSoundKb });
@@ -1108,6 +1146,11 @@ _saveAdminSettings() {
   const updateBannerAdminOnly = document.getElementById('update-banner-admin-only')?.checked ? 'true' : 'false';
   if (updateBannerAdminOnly !== (snap.update_banner_admin_only || 'false')) {
     this.socket.emit('update-server-setting', { key: 'update_banner_admin_only', value: updateBannerAdminOnly });
+    changed = true;
+  }
+  const allowSelfPurge = document.getElementById('allow-self-purge')?.checked ? 'true' : 'false';
+  if (allowSelfPurge !== (snap.allow_self_purge || 'false')) {
+    this.socket.emit('update-server-setting', { key: 'allow_self_purge', value: allowSelfPurge });
     changed = true;
   }
   const hideDisabledBadges = document.getElementById('hide-disabled-badges')?.checked ? 'true' : 'false';
@@ -1274,6 +1317,10 @@ _cancelAdminSettings() {
     if (mu) mu.value = snap.max_upload_mb || '25';
     const ma = document.getElementById('max-attachments');
     if (ma) ma.value = snap.max_attachments || '10';
+    const mtpa = document.getElementById('max-tags-per-attachment');
+    if (mtpa) mtpa.value = snap.max_tags_per_attachment || '3';
+    const mtl = document.getElementById('max-tag-len');
+    if (mtl) mtl.value = snap.max_tag_len || '20';
     const msk = document.getElementById('max-sound-kb');
     if (msk) msk.value = snap.max_sound_kb || '1024';
     const mek = document.getElementById('max-emoji-kb');
@@ -1288,6 +1335,8 @@ _cancelAdminSettings() {
     if (mmc) mmc.value = snap.max_message_chars || '2000';
     const uba = document.getElementById('update-banner-admin-only');
     if (uba) uba.checked = snap.update_banner_admin_only === 'true';
+    const asp = document.getElementById('allow-self-purge');
+    if (asp) asp.checked = snap.allow_self_purge === 'true';
     const hdb = document.getElementById('hide-disabled-badges');
     if (hdb) hdb.checked = snap.hide_disabled_channel_badges === 'true';
     const dt = document.getElementById('default-theme-select');
@@ -1639,10 +1688,10 @@ _renderBanList(bans) {
       <div class="ban-info">
         <strong>${this._escapeHtml(b.username)}</strong>
         <span class="ban-reason">${b.reason ? this._escapeHtml(b.reason) : t('settings.admin.no_reason')}</span>
-        <span class="ban-date">${new Date(b.created_at).toLocaleDateString()}</span>
+        <span class="ban-date">${this._fmtDate(b.created_at)}</span>
         ${b.appeal ? `
         <div class="ban-appeal">
-          <span class="ban-appeal-label">📝 ${t('settings.admin.ban_appeal_label')}${b.appeal_at ? ' · ' + new Date(b.appeal_at).toLocaleDateString() : ''}</span>
+          <span class="ban-appeal-label">📝 ${t('settings.admin.ban_appeal_label')}${b.appeal_at ? ' · ' + this._fmtDate(b.appeal_at) : ''}</span>
           <span class="ban-appeal-text">${this._escapeHtml(b.appeal)}</span>
         </div>` : ''}
       </div>
@@ -1688,7 +1737,7 @@ _renderIpBanList(bans) {
       <div class="ban-info">
         <strong>${this._escapeHtml(b.ip)}</strong>
         <span class="ban-reason">${b.reason ? this._escapeHtml(b.reason) : t('settings.admin.no_reason')}</span>
-        <span class="ban-date">${new Date(b.created_at).toLocaleDateString()}${b.banned_by_name ? ` — ${this._escapeHtml(b.banned_by_name)}` : ''}</span>
+        <span class="ban-date">${this._fmtDate(b.created_at)}${b.banned_by_name ? ` — ${this._escapeHtml(b.banned_by_name)}` : ''}</span>
       </div>
       <div class="ban-actions">
         <button class="btn-sm btn-unban" data-ip="${this._escapeHtml(b.ip)}">${t('settings.admin.unban_btn')}</button>
@@ -1715,7 +1764,7 @@ _renderDeletedUsersList(entries) {
         <strong>${this._escapeHtml(e.display_name || e.username)}</strong>
         ${e.display_name ? `<span class="ban-reason">@${this._escapeHtml(e.username)}</span>` : ''}
         <span class="ban-reason">${e.reason ? this._escapeHtml(e.reason) : t('settings.admin.no_reason')}</span>
-        <span class="ban-date">${new Date(e.deleted_at).toLocaleDateString()}${e.deleted_by_name ? ` ${t('settings.admin.deleted_by', { name: this._escapeHtml(e.deleted_by_name) })}` : ''}</span>
+        <span class="ban-date">${this._fmtDate(e.deleted_at)}${e.deleted_by_name ? ` ${t('settings.admin.deleted_by', { name: this._escapeHtml(e.deleted_by_name) })}` : ''}</span>
       </div>
     </div>
   `).join('');
@@ -1988,7 +2037,7 @@ _renderAllMembers(members) {
     const bannedBadge = m.banned ? `<span class="aml-banned-badge">${t('settings.admin.badge_banned')}</span>` : '';
     const onlineDot = m.online && !m.banned ? 'aml-online' : 'aml-offline';
     const created = m.createdAt ? new Date(m.createdAt.endsWith('Z') ? m.createdAt : m.createdAt + 'Z') : null;
-    const joinedStr = created ? created.toLocaleDateString() : '';
+    const joinedStr = created ? this._fmtDate(created) : '';
     const isNew = created && (Date.now() - created.getTime()) < 7 * 24 * 60 * 60 * 1000;
     const newBadge = isNew ? `<span class="aml-new-badge">${t('settings.admin.badge_new')}</span>` : '';
 
@@ -2340,7 +2389,7 @@ async _runConnectivityTest() {
 
   const line = (icon, text, muted) =>
     `<div style="display:flex;gap:6px;align-items:flex-start;margin:3px 0${muted ? ';opacity:0.75' : ''}">` +
-    `<span style="flex:none">${icon}</span><span>${text}</span></div>`;
+    `<span class="connectivity-test-icon" style="flex:none">${icon}</span><span>${text}</span></div>`;
 
   btn.disabled = true;
   box.style.display = '';
@@ -2570,12 +2619,30 @@ _showMentionDropdown() {
     }
   }
 
-  const filtered = (this.channelMembers || []).filter(m => {
-    const dn = (m.username || '').toLowerCase();
-    const ln = (m.loginName || '').toLowerCase();
-    const nk = (m.id && this._nicknames && this._nicknames[m.id] || '').toLowerCase();
-    return dn.startsWith(query) || ln.startsWith(query) || (nk && nk.startsWith(query));
-  }).slice(0, 8);
+  // Any part of a name matches, so "dan" finds TheDannister and "tanee"
+  // finds LADY TANEE. Names that start with the letters come first, then
+  // names where a word starts with them, then the rest. (#5674)
+  const mentionRank = (m) => {
+    const names = [
+      (m.username || '').toLowerCase(),
+      (m.loginName || '').toLowerCase(),
+      (m.id && this._nicknames && this._nicknames[m.id] || '').toLowerCase(),
+    ].filter(Boolean);
+    let best = -1;
+    for (const n of names) {
+      const at = n.indexOf(query);
+      if (at < 0) continue;
+      const rank = at === 0 ? 0 : (/[\s._-]/.test(n[at - 1]) ? 1 : 2);
+      if (best < 0 || rank < best) best = rank;
+    }
+    return best;
+  };
+  const filtered = (this.channelMembers || [])
+    .map((m, i) => ({ m, i, rank: mentionRank(m) }))
+    .filter(x => x.rank >= 0)
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .slice(0, 8)
+    .map(x => x.m);
 
   // Offer @everyone / @here as mention options when the query matches and
   // the user has the mention_everyone permission (admins implicitly have it).
@@ -2587,7 +2654,7 @@ _showMentionDropdown() {
   }
   // Roles sit behind the same permission, since a role ping fans out the same way. (#5579)
   const roleOptions = canMentionEveryone
-    ? (this._mentionableRoles || []).filter(r => r && r.name && r.name.toLowerCase().startsWith(query)).slice(0, 5)
+    ? (this._mentionableRoles || []).filter(r => r && r.name && r.name.toLowerCase().includes(query)).slice(0, 5)
     : [];
 
   if (filtered.length === 0 && everyoneOptions.length === 0 && roleOptions.length === 0) {
@@ -2988,7 +3055,7 @@ _showSlashDropdown(query) {
     `<div class="slash-item${i === 0 ? ' active' : ''}" data-cmd="${c.cmd}">
       <span class="slash-cmd">/${c.cmd}</span>
       ${c.args ? `<span class="slash-args">${this._escapeHtml(c.args)}</span>` : ''}
-      <span class="slash-desc">${this._escapeHtml(c.desc)}</span>
+      <span class="slash-desc">${this._escapeHtml((c.descByChannel && c.descByChannel[this.currentChannel]) || c.desc)}</span>
     </div>`
   ).join('');
 
@@ -3379,8 +3446,10 @@ _uploadGeneralFile(file, targetCode) {
       this.socket.emit('send-message', {
         code,
         content,
-        replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null
+        replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null,
+        ...(file && file._tags && file._tags.length ? { attachmentTags: file._tags } : {})
       });
+      if (file && file._tags && file._tags.length) this._recordFrequentTags(file._tags);
       this.notifications.play('sent');
       if (code === this.currentChannel) this._clearReply();
     })
@@ -3394,19 +3463,15 @@ _uploadGeneralFile(file, targetCode) {
 /**
  * If `code` is an E2E DM and the partner key is available, encrypt `file`,
  * upload as an opaque blob, then send the metadata as an encrypted
- * `e2e-file:{json}` text message. Returns true if handled, false otherwise
- * (so the caller can fall back to the plaintext upload path). (#5310, #5308)
+ * `e2e-file:{json}` text message. Returns true if handled (sent, or the
+ * sender backed out of sending it unencrypted), false when the caller should
+ * upload it as it is. (#5310, #5308)
  */
 async _maybeUploadEncryptedDmFile(file, code, ch) {
   if (!ch || !ch.is_dm || !ch.dm_target) return false;
-  let partner = this._getE2EPartnerFor ? this._getE2EPartnerFor(code) : this._getE2EPartner();
-  if (!partner && this.e2e && this.e2e.ready) {
-    const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-    if (jwk) {
-      this._dmPublicKeys[ch.dm_target.id] = jwk;
-      partner = this._getE2EPartnerFor ? this._getE2EPartnerFor(code) : this._getE2EPartner();
-    }
-  }
+  const gate = await this._dmSendGate(code);
+  if (!gate) return true;
+  const partner = gate.partner;
   if (!partner) return false;
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -3972,7 +4037,7 @@ async _importPickGuild(guild) {
       row.innerHTML = `
         <label>
           <input type="checkbox" checked>
-          <span class="import-ch-name">${icon} ${this._escapeHtml(ch.name)}${tagHint}</span>
+          <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">${icon}</span> ${this._escapeHtml(ch.name)}${tagHint}</span>
         </label>
         <span class="import-ch-count import-type-badge">${ch.type}</span>
       `;
@@ -3994,7 +4059,7 @@ async _importPickGuild(guild) {
           tRow.innerHTML = `
             <label>
               <input type="checkbox" checked>
-              <span class="import-ch-name">🧵 ${this._escapeHtml(t.name)}${tagStr}</span>
+              <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">🧵</span> ${this._escapeHtml(t.name)}${tagStr}</span>
             </label>
             <span class="import-ch-count import-type-badge">${t('settings.admin.import_thread')}</span>
           `;
@@ -4022,7 +4087,7 @@ async _importPickGuild(guild) {
           tRow.innerHTML = `
             <label>
               <input type="checkbox" checked>
-              <span class="import-ch-name">🧵 ${this._escapeHtml(t.name)}${t.parentName ? ` <span class="muted-text" style="font-size:0.625rem">${window.t('settings.admin.import_in_channel', { name: this._escapeHtml(t.parentName) })}</span>` : ''}</span>
+              <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">🧵</span> ${this._escapeHtml(t.name)}${t.parentName ? ` <span class="muted-text" style="font-size:0.625rem">${window.t('settings.admin.import_in_channel', { name: this._escapeHtml(t.parentName) })}</span>` : ''}</span>
             </label>
             <span class="import-ch-count import-type-badge">${window.t('settings.admin.import_thread')}</span>
           `;
@@ -6155,7 +6220,7 @@ _setupAuditLog() {
     if (!iso) return '';
     try {
       const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
-      return d.toLocaleString();
+      return this._fmtDateTime(d);
     } catch { return iso; }
   };
 
@@ -6561,6 +6626,143 @@ _renderAutomodLog(data) {
       </span>
     </div>
   `).join('');
+},
+
+// ── Admin Tags panel (#tagging phase 4) ────────────────
+// Manage the upload-tag vocabulary: add, rename, delete. Rename and delete are
+// destructive and non-reversible (they propagate to every attachment), so both
+// go through a danger confirm. Bound once; the list re-fetches after each change.
+_ensureAdminTagsBound() {
+  if (this._adminTagsBound) return;
+  this._adminTagsBound = true;
+  const addBtn = document.getElementById('tag-admin-add-btn');
+  const input = document.getElementById('tag-admin-new');
+  addBtn?.addEventListener('click', () => this._adminTagAdd());
+  input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this._adminTagAdd(); } });
+  const list = document.getElementById('tag-admin-list');
+  list?.addEventListener('click', (e) => {
+    const row = e.target.closest('.tag-admin-row');
+    if (!row) return;
+    if (e.target.closest('.tag-admin-rename')) this._adminTagStartRename(row);
+    else if (e.target.closest('.tag-admin-delete')) this._adminTagDelete(row);
+    else if (e.target.closest('.tag-admin-save')) this._adminTagSaveRename(row);
+    else if (e.target.closest('.tag-admin-cancel')) this._renderAdminTagList(this._adminTags || []);
+  });
+  list?.addEventListener('keydown', (e) => {
+    if (!e.target.classList?.contains('tag-admin-edit-input')) return;
+    if (e.key === 'Enter') { e.preventDefault(); this._adminTagSaveRename(e.target.closest('.tag-admin-row')); }
+    else if (e.key === 'Escape') this._renderAdminTagList(this._adminTags || []);
+  });
+},
+
+_loadAdminTags() {
+  this._ensureAdminTagsBound();
+  const input = document.getElementById('tag-admin-new');
+  if (input) input.maxLength = this._maxTagLen();
+  this.socket.emit('admin-list-tags', {}, (res) => {
+    const list = document.getElementById('tag-admin-list');
+    if (!res || res.error) {
+      if (list) list.innerHTML = `<p class="muted-text">${t('settings.admin.tags_error')}</p>`;
+      return;
+    }
+    this._adminTags = res.tags || [];
+    this._renderAdminTagList(this._adminTags);
+  });
+},
+
+_renderAdminTagList(tags) {
+  const list = document.getElementById('tag-admin-list');
+  if (!list) return;
+  if (!tags.length) {
+    list.innerHTML = `<p class="muted-text">${t('settings.admin.tags_none')}</p>`;
+    return;
+  }
+  const esc = (s) => this._escapeHtml(s);
+  list.innerHTML = tags.map(tg => `
+    <div class="tag-admin-row" data-tag-id="${tg.id}">
+      <span class="tag-admin-name">${esc(tg.name)}</span>
+      <span class="tag-admin-uses">${t('settings.admin.tags_uses', { n: tg.uses || 0 })}</span>
+      <span class="tag-admin-row-actions">
+        <button class="btn-sm tag-admin-rename">${t('settings.admin.tags_rename_btn')}</button>
+        <button class="btn-sm btn-danger-fill tag-admin-delete">${t('settings.admin.tags_delete_btn')}</button>
+      </span>
+    </div>`).join('');
+},
+
+_adminTagAdd() {
+  const input = document.getElementById('tag-admin-new');
+  const name = (input?.value || '').trim();
+  if (!name) return;
+  this.socket.emit('admin-create-tag', { name }, (res) => {
+    if (res && res.ok) {
+      if (input) input.value = '';
+      this._showToast?.(t('settings.admin.tags_added', { name: res.tag.name }), 'info');
+      this._loadAdminTags();
+    } else if (res && res.error === 'exists') {
+      this._showToast?.(t('settings.admin.tags_exists'), 'error');
+    } else if (res && res.error === 'invalid') {
+      this._showToast?.(t('settings.admin.tags_invalid'), 'error');
+    } else {
+      this._showToast?.(t('settings.admin.tags_error'), 'error');
+    }
+  });
+},
+
+_adminTagStartRename(row) {
+  const name = row.querySelector('.tag-admin-name')?.textContent || '';
+  row.innerHTML = `
+    <input type="text" class="tag-admin-edit-input settings-text-input" maxlength="${this._maxTagLen()}" value="${this._escapeHtml(name)}" autocomplete="off">
+    <span class="tag-admin-row-actions">
+      <button class="btn-sm btn-accent tag-admin-save">${t('settings.admin.tags_save_btn')}</button>
+      <button class="btn-sm tag-admin-cancel">${t('modals.common.cancel')}</button>
+    </span>`;
+  const input = row.querySelector('.tag-admin-edit-input');
+  input.dataset.orig = name;
+  input.focus();
+  input.select();
+},
+
+async _adminTagSaveRename(row) {
+  if (!row) return;
+  const id = parseInt(row.dataset.tagId, 10);
+  const input = row.querySelector('.tag-admin-edit-input');
+  const newName = (input?.value || '').trim();
+  const orig = input?.dataset.orig || '';
+  if (!newName || newName === orig) { this._renderAdminTagList(this._adminTags || []); return; }
+  const ok = await this._showConfirmModal(
+    t('settings.admin.tags_rename_title'),
+    t('settings.admin.tags_rename_body', { from: orig, to: newName }),
+    { danger: true, confirmLabel: t('settings.admin.tags_rename_confirm') }
+  );
+  if (!ok) { this._renderAdminTagList(this._adminTags || []); return; }
+  this.socket.emit('admin-rename-tag', { tagId: id, newName }, (res) => {
+    if (res && res.ok) {
+      this._showToast?.(t('settings.admin.tags_renamed'), 'info');
+    } else if (res && res.error === 'invalid') {
+      this._showToast?.(t('settings.admin.tags_invalid'), 'error');
+    } else {
+      this._showToast?.(t('settings.admin.tags_error'), 'error');
+    }
+    this._loadAdminTags();
+  });
+},
+
+async _adminTagDelete(row) {
+  const id = parseInt(row.dataset.tagId, 10);
+  const name = row.querySelector('.tag-admin-name')?.textContent || '';
+  const tag = (this._adminTags || []).find(x => x.id === id);
+  const uses = tag ? (tag.uses || 0) : 0;
+  const ok = await this._showConfirmModal(
+    t('settings.admin.tags_delete_title'),
+    t('settings.admin.tags_delete_body', { name, n: uses }),
+    { danger: true, confirmLabel: t('settings.admin.tags_delete_confirm') }
+  );
+  if (!ok) return;
+  this.socket.emit('admin-delete-tag', { tagId: id }, (res) => {
+    if (res && res.ok) this._showToast?.(t('settings.admin.tags_deleted'), 'info');
+    else this._showToast?.(t('settings.admin.tags_error'), 'error');
+    this._loadAdminTags();
+  });
 },
 
 // ═══════════════════════════════════════════════════════

@@ -51,6 +51,7 @@ const registerRoles      = require('./roles');
 const registerAdmin      = require('./admin');
 const registerFerry      = require('./ferry');
 const registerGroupE2E   = require('./groupE2E');
+const registerTags       = require('./tags');
 const {
   NATIVE_SCREEN_SIGNAL_EVENTS,
   clearNativeScreenOfferWindows,
@@ -412,7 +413,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
-               c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
+               c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
                c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout
         FROM channels c WHERE c.is_dm = 0
@@ -420,7 +421,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
-               c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
+               c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
                c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout
         FROM channels c
@@ -437,7 +438,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
-               c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
+               c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
                c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout
         FROM channels c
@@ -482,7 +483,7 @@ function setupSocketHandlers(io, db, opts = {}) {
               SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                      c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                      c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
-                     c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
+                     c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                      c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
                      c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout
               FROM channels c
@@ -743,6 +744,14 @@ function setupSocketHandlers(io, db, opts = {}) {
     return removed;
   }
 
+  // The channels a user belongs to, for the voice counts sent on request:
+  // members only, for the same reason broadcastVoiceUsers sends to members.
+  function voiceCodesVisibleTo(userId) {
+    return new Set(db.prepare(
+      'SELECT c.code FROM channels c JOIN channel_members cm ON cm.channel_id = c.id WHERE cm.user_id = ?'
+    ).all(userId).map(r => r.code));
+  }
+
   // ── broadcastVoiceUsers ─────────────────────────────────
   function broadcastVoiceUsers(code) {
     pruneStaleVoiceUsers(code);
@@ -767,36 +776,17 @@ function setupSocketHandlers(io, db, opts = {}) {
         })
       : [];
     io.to(`voice:${code}`).to(`channel:${code}`).emit('voice-users-update', { channelCode: code, users });
-    // Only people who can see this channel get its count. Broadcasting it to
-    // every socket handed out the code of every private channel and DM with
-    // someone in voice (a private channel's code is its join secret), plus who
-    // was on each DM call.
-    const countPayload = {
+    // Only the channel's members hear about its voice room. The code in this
+    // event is the channel's join code, so sending it to every socket leaked
+    // private channels' codes, and who was on which DM call.
+    io.to(`channel:${code}`).except('bot-sockets').emit('voice-count-update', {
       code, count: users.length,
       users: users.map(u => ({
         id: u.id, username: u.username,
         isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
         isBot: !!u.isBot, isListening: !!u.isListening
       }))
-    };
-    const viewerIds = getVoiceCountViewerIds(code);
-    for (const [, s] of io.of('/').sockets) {
-      if (!s.user || s.user.isBot) continue;
-      if (viewerIds.members.has(s.user.id) || (s.user.isAdmin && viewerIds.nonDm)) {
-        s.emit('voice-count-update', countPayload);
-      }
-    }
-  }
-
-  // Who may receive a channel's voice-count-update: its members, plus admins
-  // for any non-DM channel (they see every channel in the sidebar).
-  function getVoiceCountViewerIds(code) {
-    const ch = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
-    if (!ch) return { members: new Set(), nonDm: false };
-    const members = new Set(
-      db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(ch.id).map(r => r.user_id)
-    );
-    return { members, nonDm: !ch.is_dm };
+    });
   }
 
   // A user agent is long, spoofable and full of history nobody wants to read.
@@ -804,20 +794,21 @@ function setupSocketHandlers(io, db, opts = {}) {
   // notice one you do not recognise, so it reduces to browser plus platform.
   function _describeUserAgent(ua) {
     if (!ua || typeof ua !== 'string') return 'Unknown device';
+    // The desktop app's user agent also names Chrome, so it is checked first.
     const browser =
-      /Edg\//.test(ua)                        ? 'Edge'
-      : /OPR\/|Opera/.test(ua)            ? 'Opera'
-      : /Firefox\//.test(ua)                  ? 'Firefox'
-      : /Chrome\//.test(ua)                   ? 'Chrome'
-      : /Safari\//.test(ua)                   ? 'Safari'
-      : /Haven|Electron/i.test(ua)              ? 'Haven Desktop'
+      /Haven|Electron/i.test(ua)                ? 'Haven Desktop'
+      : /\bEdg\//.test(ua)                      ? 'Edge'
+      : /\bOPR\/|\bOpera\b/.test(ua)            ? 'Opera'
+      : /\bFirefox\//.test(ua)                  ? 'Firefox'
+      : /\bChrome\//.test(ua)                   ? 'Chrome'
+      : /\bSafari\//.test(ua)                   ? 'Safari'
       : 'Browser';
     const platform =
-      /Android/.test(ua)                    ? 'Android'
-      : /iPhone|iPad|iOS/.test(ua)  ? 'iOS'
-      : /Windows/.test(ua)                  ? 'Windows'
-      : /Mac OS X|Macintosh/.test(ua)   ? 'macOS'
-      : /Linux/.test(ua)                    ? 'Linux'
+      /\bAndroid\b/.test(ua)                    ? 'Android'
+      : /\biPhone\b|\biPad\b|\biOS\b/.test(ua)  ? 'iOS'
+      : /\bWindows\b/.test(ua)                  ? 'Windows'
+      : /\bMac OS X\b|\bMacintosh\b/.test(ua)   ? 'macOS'
+      : /\bLinux\b/.test(ua)                    ? 'Linux'
       : '';
     return platform ? `${browser} on ${platform}` : browser;
   }
@@ -1262,6 +1253,9 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   function fireWebhookEvent(channelId, channelCode, eventType, body) {
     try {
+      // DMs are between their two people; no bot callback ever hears them.
+      const _whCh = db.prepare('SELECT is_dm FROM channels WHERE id = ?').get(channelId);
+      if (!_whCh || _whCh.is_dm) return;
       const bots = db.prepare(
         'SELECT id, callback_url, callback_secret, subscribed_events FROM webhooks WHERE channel_id = ? AND is_active = 1 AND callback_url IS NOT NULL'
       ).all(channelId);
@@ -1570,6 +1564,23 @@ function setupSocketHandlers(io, db, opts = {}) {
     } catch { /* column may not exist yet */ }
   }, 60 * 1000);
 
+  // Someone removed from a private channel still knows its code, and a code
+  // is enough to join. So removal rotates the code of the private channel
+  // and of its private sub-channels; members still inside are sent the new
+  // one by the rotation broadcast, and the removed person, already out of
+  // the room, is not. Call it after their memberships and rooms are gone.
+  function rotatePrivateCodesAfterRemoval(channelId) {
+    const rows = db.prepare(`
+      SELECT id, code FROM channels
+      WHERE (id = ? OR parent_channel_id = ?) AND is_dm = 0
+        AND (is_private = 1 OR code_visibility = 'private')
+    `).all(channelId, channelId);
+    for (const ch of rows) {
+      try { rotateChannelCode(ch.id, ch.code); } catch (err) { console.error('Code rotation after removal failed:', err.message); }
+    }
+    if (rows.length) broadcastChannelLists();
+  }
+
   function rotateChannelCode(channelId, oldCode) {
     const newCode = generateUniqueSharedCode(oldCode);
     if (persistChannelCodeRotation(db, channelId, oldCode, newCode)) automod.invalidate();
@@ -1685,7 +1696,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     try {
       // created_at feeds the automod new-account link gate (v3.42.0).
-      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject FROM users WHERE id = ?').get(user.id);
+      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase FROM users WHERE id = ?').get(user.id);
       if (!uRow || uRow.username !== user.username) {
         return next(new Error('Session expired'));
       }
@@ -1705,6 +1716,8 @@ function setupSocketHandlers(io, db, opts = {}) {
       // (#12) The client needs this to ask for the right secret: an SSO
       // account unlocks E2E with its encryption passphrase, not a password.
       socket.user.isSso = !!uRow.oidc_subject;
+      // Likewise an account whose key backup has its own passphrase.
+      socket.user.e2ePassphrase = !!uRow.e2e_passphrase;
 
       const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
       if (!anyAdmin && uRow.username.toLowerCase() === ADMIN_USERNAME && !uRow.is_admin) {
@@ -1870,6 +1883,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       id: socket.user.id, username: socket.user.username,
       isAdmin: socket.user.isAdmin,
       isSso: !!socket.user.isSso,
+      e2ePassphrase: !!socket.user.e2ePassphrase,
       displayName: socket.user.displayName,
       avatar: socket.user.avatar || null,
       avatarShape: socket.user.avatar_shape || 'circle',
@@ -1894,12 +1908,10 @@ function setupSocketHandlers(io, db, opts = {}) {
     // here because that races the upcoming voice-rejoin broadcast and can
     // re-seed every other client's sidebar with this socket's pre-rejoin
     // view of the room. (#5347 v3.15.4.)
+    const _visibleVoice = voiceCodesVisibleTo(socket.user.id);
     for (const code of Array.from(voiceUsers.keys())) {
       pruneStaleVoiceUsers(code);
-      // Same visibility rule as broadcastVoiceUsers: members only (admins
-      // also see non-DM channels), so private codes and DM calls stay private.
-      const viewers = getVoiceCountViewerIds(code);
-      if (!viewers.members.has(socket.user.id) && !(socket.user.isAdmin && viewers.nonDm)) continue;
+      if (!_visibleVoice.has(code)) continue;
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(u => ({
@@ -1932,6 +1944,13 @@ function setupSocketHandlers(io, db, opts = {}) {
       // 10s of use (refine + a run of pagination + a sort or two); the input
       // is debounced 400ms so typing can't spam it. (search-overhaul)
       search:  { max: 10, windowMs: 10000 },
+      // The composer's tag picker hits the DB per keystroke. The input is
+      // debounced, but a scripted client could still hammer it, so it gets its
+      // own per-account cap on top of the shared event budget. (#tagging)
+      tagSearch: { max: 20, windowMs: 10000 },
+      // Retroactive tag edits write to the DB and broadcast; infrequent by
+      // nature, so a modest per-account cap is plenty. (#tagging phase 3)
+      tagEdit: { max: 20, windowMs: 10000 },
       // A Ferry member lookup is not a local query: each one fans out to up to
       // five Discord REST calls. Discord bans tokens that generate a burst of
       // 429s, so this is the cap that protects the bot, not the database. The
@@ -2245,9 +2264,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
       parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships,
       // Broadcast helpers
-      broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers, emitDmPresence,
-      getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers, getVoiceCountViewerIds,
-      broadcastStreamInfo, touchVoiceActivity, rotateChannelCode,
+      broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence,
+      getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
+      broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent,
       // Ferry (Discord bridge)
@@ -2299,6 +2318,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerAdmin(socket, ctx);
     registerFerry(socket, ctx);
     registerGroupE2E(socket, ctx);
+    registerTags(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made
@@ -2428,7 +2448,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity, state };
+  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext };

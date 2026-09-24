@@ -44,27 +44,30 @@ module.exports = function register(socket, ctx) {
     { key: 'preferred_gif_search', env: 'PREFERRED_GIF_SEARCH' }
   ];
 
-  // Settings only admins may read. Changes to these are pushed to admins (and
-  // the socket that made the change) rather than broadcast to every client.
-  const SENSITIVE_SETTING_KEYS = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'server_code', 'registration_token', 'turn_password', 'turnstile_secret_key'];
-  // Stored in server_settings by Ferry but never sent to any client, admins
-  // included (ferry.js only ever shows a masked hint of it).
-  const NEVER_SENT_SETTING_KEYS = ['ferry_bot_token'];
-
-  function emitPrivateSettingChange(payload) {
-    for (const [, s] of io.of('/').sockets) {
-      if (s === socket || (s.user && s.user.isAdmin)) s.emit('server-setting-changed', payload);
-    }
-  }
-
   // ── Server settings ─────────────────────────────────────
+  // Secrets are stored next to ordinary settings. The Discord bridge's bot
+  // token goes to nobody, admins included: its settings screen only ever
+  // shows a masked hint. The rest go to admins only, here and in every live
+  // update below, and the audit log records that they changed, not the value.
+  const NEVER_SENT_SETTINGS = new Set(['ferry_bot_token']);
+  const ADMIN_ONLY_SETTINGS = new Set([
+    'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'server_code', 'registration_token',
+    'turn_password', 'turnstile_secret_key',
+    // A channel code, and usually a private staff channel's.
+    'automod_log_channel',
+  ]);
+  const emitSettingChanged = (key, value) => {
+    if (NEVER_SENT_SETTINGS.has(key)) return;
+    const target = ADMIN_ONLY_SETTINGS.has(key) ? io.to('admins') : io.except('bot-sockets');
+    target.emit('server-setting-changed', { key, value });
+  };
+
   socket.on('get-server-settings', () => {
     const rows = db.prepare('SELECT key, value FROM server_settings').all();
     const settings = {};
-    const sensitiveKeys = SENSITIVE_SETTING_KEYS;
     rows.forEach(r => {
-      if (NEVER_SENT_SETTING_KEYS.includes(r.key)) return;
-      if (sensitiveKeys.includes(r.key) && !socket.user.isAdmin) return;
+      if (NEVER_SENT_SETTINGS.has(r.key)) return;
+      if (ADMIN_ONLY_SETTINGS.has(r.key) && !socket.user.isAdmin) return;
       settings[r.key] = r.value;
     });
 
@@ -133,7 +136,9 @@ module.exports = function register(socket, ctx) {
       'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
       'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
+      'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
       'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'hide_disabled_channel_badges',
+      'allow_self_purge', // (#5686) members may delete every message they wrote
       'default_theme', 'published_themes', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code', 'default_locale',
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
@@ -143,6 +148,7 @@ module.exports = function register(socket, ctx) {
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
       'ios_latest_version', // version string the iOS app compares itself against for its update prompt
       'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
+      'guests_allow_voice', // (#5687) whether guests may join voice and video
       'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
       'registration_captcha_enabled', 'turnstile_site_key', 'turnstile_secret_key', // opt-in Cloudflare Turnstile on registration
       'registration_rate_limit_enabled', 'registration_rate_limit_per_hour', // opt-in global new-account velocity cap
@@ -259,6 +265,8 @@ module.exports = function register(socket, ctx) {
     if (key === 'cleanup_max_size_mb') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100000) return; }
     if (key === 'max_upload_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 102400) return; }
     if (key === 'max_attachments') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 50) return; } // (#5561)
+    if (key === 'max_tags_per_attachment') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 10) return; } // (#tagging phase 4)
+    if (key === 'max_tag_len') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 50) return; } // (#tagging phase 4)
     if (key === 'max_poll_options') { const n = parseInt(value); if (isNaN(n) || n < 2 || n > 25) return; }
     if (key === 'max_message_chars') { const n = parseInt(value); if (isNaN(n) || n < 200 || n > 100000) return; }
     if (key === 'max_sound_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
@@ -284,6 +292,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'tunnel_provider' && !['localtunnel', 'cloudflared'].includes(value)) return;
     if (key === 'setup_wizard_complete' && !['true', 'false'].includes(value)) return;
     if (key === 'update_banner_admin_only' && !['true', 'false'].includes(value)) return;
+    if (key === 'allow_self_purge' && !['true', 'false'].includes(value)) return;
     if (key === 'hide_disabled_channel_badges' && !['true', 'false'].includes(value)) return;
     if (key === 'admin_password_reset_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'ios_latest_version' && value && !/^\d{1,3}(\.\d{1,4}){0,3}$/.test(value)) return;
@@ -377,7 +386,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'invites_bypass_registration_token') {
       if (!['true', 'false'].includes(value)) return;
     }
-    if (key === 'guests_enabled') {
+    if (key === 'guests_enabled' || key === 'guests_allow_voice') {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'guest_channels') {
@@ -425,6 +434,21 @@ module.exports = function register(socket, ctx) {
           if (!VALID_ROLE_PERMS.includes(k)) return;
           if (!Number.isInteger(v) || v < 1 || v > 100) return;
         }
+        // A threshold hands a permission to everyone at or above a level, the
+        // person setting it included. Anyone but an admin sets them only for
+        // permissions they hold server-wide and that are not admin-only; the
+        // rest keep whatever an admin set.
+        if (!socket.user.isAdmin) {
+          const adminOnly = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
+          const mine = new Set(ctx.getUserGlobalPermissions(socket.user.id));
+          const mayTouch = (perm) => !adminOnly.includes(perm) && (mine.has('*') || mine.has(perm));
+          let prev = {};
+          try { prev = JSON.parse(db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get()?.value || '{}') || {}; } catch { prev = {}; }
+          const merged = {};
+          for (const [k, v] of Object.entries(prev)) if (!mayTouch(k)) merged[k] = v;
+          for (const [k, v] of Object.entries(obj)) if (mayTouch(k)) merged[k] = v;
+          value = JSON.stringify(merged);
+        }
       } catch { return; }
     }
 
@@ -442,17 +466,13 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Failed to save setting — database write error');
     }
 
-    if (SENSITIVE_SETTING_KEYS.includes(key)) {
-      emitPrivateSettingChange({ key, value });
-      // Non-admins only need to know whether a GIF provider exists (#5654).
-      if (['giphy_api_key', 'klipy_api_key', 'tenor_api_key'].includes(key)) {
-        const gifRows = db.prepare("SELECT value FROM server_settings WHERE key IN ('giphy_api_key', 'klipy_api_key', 'tenor_api_key')").all();
-        const available = gifRows.some(r => !!r.value)
-          || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY);
-        io.except('bot-sockets').emit('server-setting-changed', { key: 'gif_search_available', value: String(available) });
-      }
-    } else {
-      io.except('bot-sockets').emit('server-setting-changed', { key, value });
+    emitSettingChanged(key, value);
+    // Non-admins only need to know whether a GIF provider exists (#5654).
+    if (['giphy_api_key', 'klipy_api_key', 'tenor_api_key'].includes(key)) {
+      const gifRows = db.prepare("SELECT value FROM server_settings WHERE key IN ('giphy_api_key', 'klipy_api_key', 'tenor_api_key')").all();
+      const available = gifRows.some(r => !!r.value)
+        || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY);
+      io.except('bot-sockets').emit('server-setting-changed', { key: 'gif_search_available', value: String(available) });
     }
     if (clearDefaultTheme) {
       io.except('bot-sockets').emit('server-setting-changed', { key: 'default_theme', value: '' });
@@ -479,10 +499,11 @@ module.exports = function register(socket, ctx) {
     const _quietKeys = new Set(['channel_cat_order', 'channel_cat_sort', 'channel_tag_sorts', 'channel_sort_mode']);
     if (!_quietKeys.has(key) && typeof logAudit === 'function') {
       const _short = (v) => typeof v === 'string' && v.length > 120 ? v.slice(0, 117) + '...' : v;
+      const _secret = NEVER_SENT_SETTINGS.has(key) || ADMIN_ONLY_SETTINGS.has(key);
       logAudit({
         actor: socket.user, action: 'server_setting_update',
         target_type: 'setting', target_name: key,
-        details: { key, value: SENSITIVE_SETTING_KEYS.includes(key) ? (value ? '[redacted]' : '') : _short(value) }
+        details: { key, value: _secret ? (value ? '(hidden)' : '') : _short(value) }
       });
     }
 
@@ -562,7 +583,7 @@ module.exports = function register(socket, ctx) {
     }
     const code = generateUniqueSharedCode();
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', code);
-    emitPrivateSettingChange({ key: 'server_code', value: code });
+    emitSettingChanged('server_code', code);
     socket.emit('error-msg', `Server invite code generated: ${code}`);
   });
 
@@ -571,7 +592,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage server codes');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', '');
-    emitPrivateSettingChange({ key: 'server_code', value: '' });
+    emitSettingChanged('server_code', '');
     socket.emit('error-msg', 'Server invite code cleared');
   });
 
@@ -806,7 +827,7 @@ module.exports = function register(socket, ctx) {
     }
     const token = crypto.randomBytes(8).toString('hex');
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', token);
-    emitPrivateSettingChange({ key: 'registration_token', value: token });
+    emitSettingChanged('registration_token', token);
     socket.emit('error-msg', `Registration token generated: ${token}`);
   });
 
@@ -815,7 +836,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage the registration token');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', '');
-    emitPrivateSettingChange({ key: 'registration_token', value: '' });
+    emitSettingChanged('registration_token', '');
     socket.emit('error-msg', 'Registration token cleared');
   });
 
@@ -837,23 +858,24 @@ module.exports = function register(socket, ctx) {
   //   Bot-manager modal: uses data.channel_id (integer), data.id for delete/toggle
   //   Per-channel modal: uses data.channelCode (string), data.webhookId for delete/toggle
 
-  const visibleWebhookRows = rows => rows.map(webhook =>
-    socket.user.isAdmin || webhook.created_by === socket.user.id
-      ? webhook
-      : { ...webhook, token: null }
-  );
-
-  // A non-admin with manage_webhooks may only attach bots to channels they can
-  // read themselves: a bot's callback receives every message posted in its
-  // channel and its token posts into it, so an arbitrary channel id would
-  // open private channels and DMs to them.
-  const _canUseWebhookChannel = (channelId) => {
-    if (socket.user.isAdmin) return true;
-    const ch = db.prepare('SELECT is_dm FROM channels WHERE id = ?').get(channelId);
+  // A bot reads and posts in its channel, so managing one takes the same
+  // reach as a member there: never a DM, and for anyone but an admin only a
+  // channel they belong to. manage_webhooks is a default Mod permission, and
+  // without this a Mod could hang a bot on a private channel or a DM and have
+  // its callback receive every message posted there.
+  const canBotChannel = (channelId) => {
+    const ch = db.prepare('SELECT id, is_dm FROM channels WHERE id = ?').get(channelId);
     if (!ch || ch.is_dm) return false;
-    return !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id);
+    if (socket.user.isAdmin) return true;
+    return !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(ch.id, socket.user.id);
   };
-  const _webhookChannelDenied = 'You can only manage bots in channels you are a member of';
+  const visibleWebhookRows = rows => rows
+    .filter(webhook => socket.user.isAdmin || canBotChannel(webhook.channel_id))
+    .map(webhook =>
+      socket.user.isAdmin || webhook.created_by === socket.user.id
+        ? webhook
+        : { ...webhook, token: null }
+    );
 
   socket.on('create-webhook', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -866,8 +888,7 @@ module.exports = function register(socket, ctx) {
       if (!channelCode || !/^[a-f0-9]{8}$/i.test(channelCode)) return;
 
       const channel = db.prepare('SELECT id, code FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
-      if (!channel) return socket.emit('error-msg', 'Channel not found');
-      if (!_canUseWebhookChannel(channel.id)) return socket.emit('error-msg', _webhookChannelDenied);
+      if (!channel || !canBotChannel(channel.id)) return socket.emit('error-msg', 'Channel not found');
 
       const name = typeof data.name === 'string' ? data.name.trim().slice(0, 32) : 'Bot';
       if (!name) return socket.emit('error-msg', 'Webhook name is required');
@@ -895,8 +916,7 @@ module.exports = function register(socket, ctx) {
       if (!name || isNaN(channelId)) return socket.emit('error-msg', 'Name and channel required');
 
       const channel = db.prepare('SELECT id, name FROM channels WHERE id = ?').get(channelId);
-      if (!channel) return socket.emit('error-msg', 'Channel not found');
-      if (!_canUseWebhookChannel(channel.id)) return socket.emit('error-msg', _webhookChannelDenied);
+      if (!channel || !canBotChannel(channel.id)) return socket.emit('error-msg', 'Channel not found');
 
       const token = crypto.randomBytes(32).toString('hex');
       db.prepare(
@@ -927,7 +947,7 @@ module.exports = function register(socket, ctx) {
       if (!channelCode || !/^[a-f0-9]{8}$/i.test(channelCode)) return;
 
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(channelCode);
-      if (!channel) return;
+      if (!channel || !canBotChannel(channel.id)) return;
 
       const webhooks = visibleWebhookRows(db.prepare(
         'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, created_by, callback_url, callback_secret, subscribed_events, last_delivery_status, last_delivery_at, last_delivery_error, failure_count, can_moderate, can_use_voice FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
@@ -956,8 +976,8 @@ module.exports = function register(socket, ctx) {
     // Per-channel variant uses webhookId, bot-manager uses id
     const webhookId = parseInt(data.webhookId || data.id);
     if (!webhookId || isNaN(webhookId)) return;
-    const delWh = db.prepare('SELECT channel_id FROM webhooks WHERE id = ?').get(webhookId);
-    if (delWh && !_canUseWebhookChannel(delWh.channel_id)) return socket.emit('error-msg', _webhookChannelDenied);
+    const _delWh = db.prepare('SELECT channel_id FROM webhooks WHERE id = ?').get(webhookId);
+    if (!_delWh || !canBotChannel(_delWh.channel_id)) return socket.emit('error-msg', 'Webhook not found');
 
     revokeBotVoiceAccess?.(webhookId, 'Webhook was deleted');
     db.prepare('DELETE FROM webhooks WHERE id = ?').run(webhookId);
@@ -990,8 +1010,7 @@ module.exports = function register(socket, ctx) {
     if (!webhookId || isNaN(webhookId)) return;
 
     const wh = db.prepare('SELECT is_active, channel_id FROM webhooks WHERE id = ?').get(webhookId);
-    if (!wh) return socket.emit('error-msg', 'Webhook not found');
-    if (!_canUseWebhookChannel(wh.channel_id)) return socket.emit('error-msg', _webhookChannelDenied);
+    if (!wh || !canBotChannel(wh.channel_id)) return socket.emit('error-msg', 'Webhook not found');
     const newState = wh.is_active ? 0 : 1;
     db.prepare('UPDATE webhooks SET is_active = ? WHERE id = ?').run(newState, webhookId);
     if (!newState) revokeBotVoiceAccess?.(webhookId, 'Webhook was disabled');
@@ -1021,7 +1040,7 @@ module.exports = function register(socket, ctx) {
     if (isNaN(webhookId)) return;
 
     const wh = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(webhookId);
-    if (!wh) return socket.emit('error-msg', 'Webhook not found');
+    if (!wh || !canBotChannel(wh.channel_id)) return socket.emit('error-msg', 'Webhook not found');
 
     if (data.can_use_voice !== undefined && !socket.user.isAdmin) {
       return socket.emit('error-msg', 'Only admins can change a bot\'s voice permission');
@@ -1032,11 +1051,10 @@ module.exports = function register(socket, ctx) {
       if (!socket.user.isAdmin && requestedChannelId !== wh.channel_id && (wh.can_use_voice || wh.can_moderate)) {
         return socket.emit('error-msg', 'Only admins can move a bot with privileged permissions');
       }
-      if (!isNaN(requestedChannelId) && requestedChannelId !== wh.channel_id && !_canUseWebhookChannel(requestedChannelId)) {
-        return socket.emit('error-msg', _webhookChannelDenied);
+      if (!isNaN(requestedChannelId) && requestedChannelId !== wh.channel_id && !canBotChannel(requestedChannelId)) {
+        return socket.emit('error-msg', 'Channel not found');
       }
     }
-    if (!_canUseWebhookChannel(wh.channel_id)) return socket.emit('error-msg', _webhookChannelDenied);
 
     if (typeof data.name === 'string' && data.name.trim()) {
       db.prepare('UPDATE webhooks SET name = ? WHERE id = ?').run(data.name.trim().slice(0, 32), webhookId);
@@ -1045,7 +1063,7 @@ module.exports = function register(socket, ctx) {
       const channelId = parseInt(data.channel_id);
       if (!isNaN(channelId)) {
         const channel = db.prepare('SELECT id FROM channels WHERE id = ?').get(channelId);
-        if (channel) {
+        if (channel && canBotChannel(channel.id)) {
           db.prepare('UPDATE webhooks SET channel_id = ? WHERE id = ?').run(channelId, webhookId);
           if (channelId !== wh.channel_id) revokeBotVoiceAccess?.(webhookId, 'Webhook voice channel scope changed');
         }
@@ -1124,7 +1142,7 @@ module.exports = function register(socket, ctx) {
       WHERE w.id = ? AND w.is_active = 1
     `).get(webhookId);
     if (!wh) return socket.emit('error-msg', 'Webhook not found or inactive');
-    if (!_canUseWebhookChannel(wh.channel_id)) return socket.emit('error-msg', _webhookChannelDenied);
+    if (!canBotChannel(wh.channel_id)) return socket.emit('error-msg', 'Webhook not found or inactive');
     if (!wh.callback_url) return socket.emit('error-msg', 'Webhook has no callback URL');
 
     if (typeof fireWebhookEvent === 'function') {
@@ -1384,6 +1402,15 @@ module.exports = function register(socket, ctx) {
     // `password_hash`, at which point DM history becomes unrecoverable.
     db.prepare('UPDATE users SET temp_password_hash = ?, password_version = ?, must_change_password = 1 WHERE id = ?')
       .run(hash, newPwv, target.id);
+    // The version bump stops old tokens within seconds; open connections
+    // close now as well, the way signing out everywhere does, rather than
+    // carrying on under the old session until they happen to drop.
+    for (const [, sk] of io.sockets.sockets) {
+      if (sk.user && sk.user.id === target.id) {
+        sk.emit('force-logout', { reason: 'sessions_revoked' });
+        sk.disconnect(true);
+      }
+    }
 
     if (typeof logAudit === 'function') {
       logAudit({

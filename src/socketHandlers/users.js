@@ -322,7 +322,8 @@ module.exports = function register(socket, ctx) {
       for (const [, s] of io.of('/').sockets) {
         if (s.user && s.user.id === data.userId) { isOnline = true; break; }
       }
-      // Invisible means offline to everyone else, here as in the member list.
+      // Invisible means offline to everyone else, here as in the member
+      // list: reporting online next to status 'invisible' gave it away.
       const hidden = row.status === 'invisible' && data.userId !== socket.user.id;
       if (hidden) isOnline = false;
 
@@ -365,19 +366,23 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Push Notifications ──────────────────────────────────
-  socket.on('push-subscribe', (data) => {
+  socket.on('push-subscribe', async (data) => {
     if (!data || typeof data !== 'object') return;
     const { endpoint, keys } = data;
-    if (typeof endpoint !== 'string' || !endpoint) return;
+    if (typeof endpoint !== 'string' || !endpoint || endpoint.length > 2048) return;
     if (!keys || typeof keys !== 'object') return;
-    if (typeof keys.p256dh !== 'string' || !keys.p256dh) return;
-    if (typeof keys.auth !== 'string' || !keys.auth) return;
+    if (typeof keys.p256dh !== 'string' || !keys.p256dh || keys.p256dh.length > 512) return;
+    if (typeof keys.auth !== 'string' || !keys.auth || keys.auth.length > 512) return;
 
     try { const u = new URL(endpoint); if (u.protocol !== 'https:') return; } catch { return; }
-    // web-push POSTs to this URL server-side, so it must not name a local or
-    // private address (SSRF).
+    // web-push POSTs to this URL server-side, so it must be a public push
+    // service: a client-chosen endpoint on the server's own network was a way
+    // to make it send requests there (SSRF).
     if (endpoint.length > 1024 || keys.p256dh.length > 256 || keys.auth.length > 256) return;
     if (!validateCallbackUrl(endpoint, false)) return;
+    try {
+      await require('../webhookCallback').resolveCallbackDestination(endpoint);
+    } catch { return; }
 
     try {
       // One endpoint is one browser/device, and only one account is signed
@@ -537,8 +542,17 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Encrypted key data too large');
     }
     try {
-      db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ? WHERE id = ?')
-        .run(encryptedKey, salt, socket.user.id);
+      // separatePassphrase says what this backup is locked with, when the
+      // client is switching between its login password and a passphrase of
+      // its own; the two are saved together so they never disagree.
+      if (typeof data.separatePassphrase === 'boolean') {
+        db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ?, e2e_passphrase = ? WHERE id = ?')
+          .run(encryptedKey, salt, data.separatePassphrase ? 1 : 0, socket.user.id);
+        socket.user.e2ePassphrase = data.separatePassphrase;
+      } else {
+        db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ? WHERE id = ?')
+          .run(encryptedKey, salt, socket.user.id);
+      }
       socket.emit('encrypted-key-stored');
     } catch (err) {
       console.error('Store encrypted key error:', err);
@@ -604,6 +618,10 @@ module.exports = function register(socket, ctx) {
       'promo_seen_desktop', 'promo_seen_android', 'recovery_notice_seen',
       // The top-bar Android banner, closed once (#5594).
       'android_banner_seen',
+      // Persisted localization. timezone is an IANA zone id (e.g.
+      // "America/New_York") so DST is resolved per-instant by Intl, never a
+      // frozen offset. time_format is '12' or '24'.
+      'timezone', 'time_format',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
     const maxLen = key === 'effects' ? 400 : 50;
@@ -624,6 +642,19 @@ module.exports = function register(socket, ctx) {
     if ((key === 'hide_score_badge' || ACTIVITY_KEYS.includes(key)) && socket.currentChannel) {
       emitOnlineUsers(socket.currentChannel);
     }
+  });
+
+  // Clear a preference back to unset. Only the localization keys are erasable
+  // (the Erase button in the timezone modal), which returns the account to the
+  // browser-default behaviour. set-preference never writes empty values, so a
+  // dedicated delete is the way to remove a row.
+  socket.on('delete-preference', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const key = typeof data.key === 'string' ? data.key.trim() : '';
+    const deletableKeys = ['timezone', 'time_format'];
+    if (!deletableKeys.includes(key)) return;
+    db.prepare('DELETE FROM user_preferences WHERE user_id = ? AND key = ?').run(socket.user.id, key);
+    socket.emit('preference-deleted', { key });
   });
 
   // ── Recovery-codes notice gating ────────────────────────

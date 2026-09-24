@@ -137,6 +137,7 @@ async switchChannel(code) {
   // Upload button tied to media toggle
   const _uploadBtn = document.getElementById('upload-btn');
   if (_uploadBtn) _uploadBtn.style.display = _mediaOff ? 'none' : '';
+  this._applyReactionLock?.();
   // Dividers: first one only if both upload and text buttons visible, rest if text is on
   const _dividers = document.querySelectorAll('.input-actions-box .input-actions-divider');
   if (_dividers[0]) _dividers[0].style.display = (!_textOff && !_mediaOff) ? '' : 'none';
@@ -252,6 +253,7 @@ async switchChannel(code) {
   // Show E2E encryption menu only in DM channels
   const e2eWrapper = document.getElementById('e2e-menu-wrapper');
   if (e2eWrapper) e2eWrapper.style.display = isDm ? '' : 'none';
+  if (isDm) this._updateE2EIndicator();
   // Close dropdown when switching channels
   const e2eDropdown = document.getElementById('e2e-dropdown');
   if (e2eDropdown) e2eDropdown.style.display = 'none';
@@ -678,6 +680,32 @@ _revertPendingChannelToggle() {
   }
 },
 
+
+_channelAllowsReactions(code) {
+  const ch = (this.channels || []).find(c => c.code === (code || this.currentChannel));
+  if (!ch) return true;
+  return ch.reactions_enabled !== 0;
+},
+
+_applyReactionLock() {
+  const allowed = this._channelAllowsReactions(this.currentChannel);
+  const lockRoots = [
+    document.getElementById('messages'),
+    document.getElementById('thread-messages')
+  ];
+  for (const root of lockRoots) {
+    if (!root) continue;
+    root.classList.toggle('reactions-locked', !allowed);
+    root.querySelectorAll('[data-action="react"], [data-thread-action="react"]').forEach(el => {
+      el.hidden = !allowed;
+    });
+  }
+  if (!allowed) {
+    document.querySelectorAll('#messages .reaction-picker, #thread-messages .reaction-picker, .reaction-full-picker').forEach(el => el.remove());
+    document.querySelectorAll('#messages .showing-picker, #thread-messages .showing-picker').forEach(el => el.classList.remove('showing-picker'));
+  }
+},
+
 _updateChannelFunctionsPanel(ch) {
   if (!ch) return;
   // Voice & text toggles
@@ -690,6 +718,7 @@ _updateChannelFunctionsPanel(ch) {
   this._setCfnBadge('music', ch.music_enabled !== 0, t(ch.music_enabled !== 0 ? 'channel_functions.on' : 'channel_functions.off'));
   this._setCfnBadge('media', ch.media_enabled !== 0, t(ch.media_enabled !== 0 ? 'channel_functions.on' : 'channel_functions.off'));
   this._setCfnBadge('soundboard', ch.soundboard_enabled !== 0, t(ch.soundboard_enabled !== 0 ? 'channel_functions.on' : 'channel_functions.off'));
+  this._setCfnBadge('reactions', ch.reactions_enabled !== 0, t(ch.reactions_enabled !== 0 ? 'channel_functions.on' : 'channel_functions.off'));
   // Read-only toggle
   const isReadOnly = ch.read_only === 1;
   this._setCfnBadge('read-only', isReadOnly, t(isReadOnly ? 'channel_functions.on' : 'channel_functions.off'));
@@ -799,6 +828,26 @@ _closeChannelCtxMenu() {
 _initDmContextMenu() {
   this._dmCtxMenuEl = document.getElementById('dm-ctx-menu');
   this._dmCtxMenuCode = null;
+
+  // Mark everything as read, from either menu (#5683). The counts are zeroed
+  // here for every channel the client knows about, shown or not, and the
+  // server moves each read position so they do not come back on reconnect.
+  document.querySelectorAll('[data-action="mark-all-read"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      this._closeChannelCtxMenu?.();
+      this._closeDmCtxMenu?.();
+      this.socket.emit('mark-all-read', {}, (res) => {
+        if (!res || res.error) return this._showToast(res?.error || t('context_menu.channel.mark_all_read_failed'), 'error');
+        const codes = new Set([...Object.keys(this.unreadCounts || {}), ...(this.channels || []).map(c => c.code)]);
+        codes.forEach(code => { this.unreadCounts[code] = 0; });
+        (this.channels || []).forEach(c => { c.unreadCount = 0; });
+        this._renderChannels();
+        this._updateTabTitle();
+        this._updateDesktopBadge();
+        this._showToast(t('context_menu.channel.mark_all_read_done'), 'success');
+      });
+    });
+  });
 
   // Mark DM as read
   document.querySelector('[data-action="dm-mark-read"]')?.addEventListener('click', () => {
@@ -1662,7 +1711,7 @@ _renderDmOrganizeList() {
   let html = '';
   for (const group of grouped) {
     if (group.tag) {
-      html += `<div class="organize-tag-header">🏷️ ${this._escapeHtml(group.tag)}</div>`;
+      html += `<div class="organize-tag-header"><span class="organize-tag-icon" aria-hidden="true">🏷️</span> ${this._escapeHtml(group.tag)}</div>`;
     } else if (hasTags) {
       html += `<div class="organize-tag-header" style="opacity:0.5">${t('channels.uncategorized')}</div>`;
     }
@@ -1944,7 +1993,7 @@ _renderChannels() {
       ? `<button type="button" class="channel-join-voice${inThisVoice ? ' is-live is-leave' : ''}" data-join-voice="${ch.code}" title="${inThisVoice ? t('voice.disconnect') : t('voice.join_ctx')}" aria-label="${inThisVoice ? t('voice.disconnect') : t('voice.join_ctx')}">${inThisVoice ? this._channelVoiceLeaveIcon() : '🎤'}</button>`
       : '';
 
-    const expiryTitle = isTemporary ? ` title="${t('channels.temporary_expires', { date: new Date(ch.expires_at).toLocaleString() })}"` : '';
+    const expiryTitle = isTemporary ? ` title="${t('channels.temporary_expires', { date: this._fmtDateTime(ch.expires_at) })}"` : '';
     el.innerHTML = `
       ${hasSubs ? `<span class="channel-collapse-arrow${isCollapsed ? ' collapsed' : ''}" title="${t('channels.expand_collapse')}">▾</span>` : ''}
       <span class="channel-hash"${expiryTitle}>${hashIcon}</span>
@@ -2004,7 +2053,12 @@ _renderChannels() {
       el.appendChild(bell);
     }
 
-    el.addEventListener('click', () => this.switchChannel(ch.code));
+    el.addEventListener('click', () => {
+      // Clicking the forum you are already in, with one of its topics open,
+      // goes back to the topic list (#5688).
+      if (ch.code === this.currentChannel && this._activeThreadParent && this._isForumChannel?.(ch.code)) this._closeThread();
+      this.switchChannel(ch.code);
+    });
     el.querySelector('[data-join-voice]')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();

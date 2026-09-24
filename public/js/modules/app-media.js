@@ -61,6 +61,7 @@ _queueImage(file) {
     return this._showToast(t('media.max_attachments_n', { n: this._maxAttachments() }), 'error');
   }
   this._imageQueue.push(file);
+  this._activeAttachment = file;   // newest attachment is the one the tag bar edits
   this._renderImageQueue();
   document.getElementById('message-input').focus();
 },
@@ -73,6 +74,7 @@ _renderImageQueue() {
   if (!hasImages && !hasFiles) {
     bar.style.display = 'none';
     bar.innerHTML = '';
+    this._renderTagBar();
     return;
   }
   bar.style.display = 'flex';
@@ -80,16 +82,21 @@ _renderImageQueue() {
   if (hasImages) {
     this._imageQueue.forEach((file, idx) => {
       const thumb = document.createElement('div');
-      thumb.className = 'image-queue-thumb' + (file._spoiler ? ' is-spoiler' : '');
+      thumb.className = 'image-queue-thumb' + (file._spoiler ? ' is-spoiler' : '')
+        + (file === this._activeAttachment ? ' is-active' : '');
+      if (file._tags && file._tags.length) thumb.classList.add('has-tags');
       const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
       img.alt = file.name;
       img.onload = () => URL.revokeObjectURL(img.src);
+      // Clicking a queued attachment makes it the one the tag bar edits (#tagging).
+      thumb.addEventListener('click', () => this._selectAttachment(file));
       const removeBtn = document.createElement('button');
       removeBtn.className = 'image-queue-remove';
       removeBtn.title = t('media.remove');
       removeBtn.textContent = '×';
-      removeBtn.addEventListener('click', () => {
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         this._imageQueue.splice(idx, 1);
         this._renderImageQueue();
       });
@@ -102,7 +109,8 @@ _renderImageQueue() {
   if (hasFiles) {
     this._fileQueue.forEach((file, idx) => {
       const chip = document.createElement('div');
-      chip.className = 'file-queue-chip';
+      chip.className = 'file-queue-chip' + (file === this._activeAttachment ? ' is-active' : '');
+      if (file._tags && file._tags.length) chip.classList.add('has-tags');
       chip.title = file.name + ' — ' + this._formatFileSize(file.size);
       const icon = document.createElement('span');
       icon.className = 'file-queue-chip-icon';
@@ -113,11 +121,13 @@ _renderImageQueue() {
       const size = document.createElement('span');
       size.className = 'file-queue-chip-size';
       size.textContent = this._formatFileSize(file.size);
+      chip.addEventListener('click', () => this._selectAttachment(file));
       const removeBtn = document.createElement('button');
       removeBtn.className = 'image-queue-remove';
       removeBtn.title = t('media.remove');
       removeBtn.textContent = '×';
-      removeBtn.addEventListener('click', () => {
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         this._fileQueue.splice(idx, 1);
         this._renderImageQueue();
       });
@@ -140,6 +150,347 @@ _renderImageQueue() {
     });
     bar.appendChild(clearAll);
   }
+  this._renderTagBar();
+},
+
+// ── Attachment tagging (composer) — (#tagging) ──────────────────────────────
+// A row below the image-queue bar tags the *active* attachment. Tags ride on
+// the File object (`_tags`), same trick as `_spoiler`, so the flush loop can
+// read them without extra state. Applying an existing tag is open to any
+// uploader; minting a new one needs manage_tags and is committed on send.
+
+// Admin-configurable (server_settings), clamped to the same hard ceilings the
+// server enforces in src/uploadTags.js; falls back to the defaults.
+_maxTagsPerAttachment() {
+  const n = parseInt(this.serverSettings?.max_tags_per_attachment, 10);
+  return Number.isFinite(n) ? Math.max(1, Math.min(10, n)) : 3;
+},
+_maxTagLen() {
+  const n = parseInt(this.serverSettings?.max_tag_len, 10);
+  return Number.isFinite(n) ? Math.max(1, Math.min(50, n)) : 20;
+},
+
+// Every queued attachment, images first, in the order they appear in the bar.
+_composerAttachments() {
+  return [...(this._imageQueue || []), ...(this._fileQueue || [])];
+},
+
+// Tagging is for plaintext channel uploads: DMs are E2E (the server never sees
+// their bytes, so it can't index a tag). Forums take it too: their topic tags
+// live in the New Post window, not in this message box (#5682).
+_tagBarEligible() {
+  const ch = this.channels?.find(c => c.code === this.currentChannel);
+  return !!(ch && !ch.is_dm);
+},
+
+// Point the tag bar at a different queued attachment.
+_selectAttachment(file) {
+  if (!file) return;
+  this._activeAttachment = file;
+  this._closeTagPopup();
+  this._renderImageQueue();   // repaints active highlight + the tag bar
+},
+
+_renderTagBar() {
+  const bar = document.getElementById('tag-queue-bar');
+  if (!bar) return;
+  const items = this._composerAttachments();
+  // Keep the active pointer valid as the queue changes underneath it.
+  if (!items.includes(this._activeAttachment)) this._activeAttachment = items[0] || null;
+
+  if (!items.length || !this._tagBarEligible()) {
+    bar.style.display = 'none';
+    this._closeTagPopup();
+    this._renderFrequentTags();
+    return;
+  }
+  // Someone who cannot make tags has nothing to pick until one exists, so on
+  // a server with no tags the bar stays out of their way. Asked again every
+  // so often, since a tag can turn up while they are connected.
+  if (!this._canManageTags?.() && this._uploadTagsExist !== true) {
+    bar.style.display = 'none';
+    this._closeTagPopup();
+    this._renderFrequentTags();
+    const now = Date.now();
+    if (this.socket && now - (this._uploadTagsProbedAt || 0) > 15000) {
+      this._uploadTagsProbedAt = now;
+      this.socket.emit('search-upload-tags', { query: '' }, (res) => {
+        if (!res || res.error || !(res.tags || []).length) return;
+        this._uploadTagsExist = true;
+        this._renderTagBar();
+      });
+    }
+    return;
+  }
+  bar.style.display = 'flex';
+  this._ensureTagComposerBound();
+
+  const chips = document.getElementById('tag-queue-chips');
+  const file = this._activeAttachment;
+  const tags = (file && file._tags) || [];
+  if (chips) {
+    chips.innerHTML = '';
+    tags.forEach(name => {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      const label = document.createElement('span');
+      label.className = 'tag-chip-label';
+      label.textContent = name;
+      const rm = document.createElement('button');
+      rm.className = 'tag-chip-remove';
+      rm.type = 'button';
+      rm.title = t('media.remove');
+      rm.textContent = '×';
+      rm.addEventListener('click', (e) => { e.stopPropagation(); this._removeTagFromActive(name); });
+      chip.appendChild(label);
+      chip.appendChild(rm);
+      chips.appendChild(chip);
+    });
+  }
+  // Disable "Add tag" once this attachment hit the cap.
+  const addBtn = document.getElementById('tag-add-btn');
+  if (addBtn) {
+    const full = tags.length >= this._maxTagsPerAttachment();
+    addBtn.disabled = full;
+    addBtn.title = full ? t('tags.limit_reached', { n: this._maxTagsPerAttachment() }) : t('tags.add_tag');
+  }
+  this._renderFrequentTags();
+},
+
+// Wire the Add-tag button, the popup input and the outside-click closer exactly
+// once — the tag bar is re-rendered constantly, so per-render binding would
+// stack listeners.
+_ensureTagComposerBound() {
+  if (this._tagComposerBound) return;
+  this._tagComposerBound = true;
+  const addBtn = document.getElementById('tag-add-btn');
+  const input = document.getElementById('tag-popup-input');
+  addBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const popup = document.getElementById('tag-popup');
+    if (popup && popup.style.display !== 'none') this._closeTagPopup();
+    else this._openTagPopup();
+  });
+  input?.addEventListener('input', () => {
+    clearTimeout(this._tagSearchTimer);
+    const q = input.value;
+    this._tagSearchTimer = setTimeout(() => this._tagPopupSearch(q), 250);
+  });
+  input?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); this._closeTagPopup(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      // Enter applies the first offered row (an existing match, or the new-tag
+      // row when the user may create one).
+      const first = document.querySelector('#tag-popup-list .tag-popup-item');
+      if (first) first.click();
+    }
+  });
+  // Clicking anywhere outside the bar dismisses the popup without closing the
+  // composer.
+  this._tagOutsideClick = (e) => {
+    const bar = document.getElementById('tag-queue-bar');
+    if (bar && !bar.contains(e.target)) this._closeTagPopup();
+  };
+  document.addEventListener('click', this._tagOutsideClick, true);
+},
+
+_openTagPopup() {
+  if (!this._activeAttachment) return;
+  const tags = this._activeAttachment._tags || [];
+  if (tags.length >= this._maxTagsPerAttachment()) {
+    return this._showToast(t('tags.limit_reached', { n: this._maxTagsPerAttachment() }), 'error');
+  }
+  const popup = document.getElementById('tag-popup');
+  const input = document.getElementById('tag-popup-input');
+  if (!popup || !input) return;
+  popup.style.display = 'block';
+  input.value = '';
+  input.maxLength = this._maxTagLen();
+  this._tagPopupSearch('');   // show a first page of existing tags
+  input.focus();
+},
+
+_closeTagPopup() {
+  const popup = document.getElementById('tag-popup');
+  if (popup) popup.style.display = 'none';
+  clearTimeout(this._tagSearchTimer);
+},
+
+// Client mirror of src/uploadTags.normalizeTagName — same rules so the picker
+// rejects what the server would. Returns { name, norm } or null.
+_normalizeTag(raw) {
+  if (typeof raw !== 'string') return null;
+  const name = raw.trim().replace(/\s+/g, ' ');
+  if (!name || name.length > this._maxTagLen()) return null;
+  if (!/^[\p{L}\p{N} _-]+$/u.test(name)) return null;
+  return { name, norm: name.toLocaleLowerCase() };
+},
+
+// Debounced server lookup for the popup. Guards against a stale response
+// overwriting the list after the user has typed on.
+_tagPopupSearch(query) {
+  const input = document.getElementById('tag-popup-input');
+  if (!input || !this.socket) return;
+  const q = query;
+  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+    if (input.value !== q) return;                 // user moved on
+    if (res && res.error === 'rate_limited') return;
+    this._renderTagPopupList(q, (res && res.tags) || []);
+  });
+},
+
+_renderTagPopupList(query, results) {
+  const list = document.getElementById('tag-popup-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const active = this._activeAttachment;
+  const applied = new Set(((active && active._tags) || []).map(x => x.toLocaleLowerCase()));
+  const norm = this._normalizeTag(query);
+
+  // Existing tags that aren't already on this attachment.
+  const rows = (results || []).filter(tag => !applied.has(String(tag.name).toLocaleLowerCase()));
+  rows.forEach(tag => {
+    const item = document.createElement('button');
+    item.className = 'tag-popup-item';
+    item.type = 'button';
+    item.textContent = tag.name;
+    item.addEventListener('click', () => this._applyTagToActive(tag.name));
+    list.appendChild(item);
+  });
+
+  // Offer to mint a new tag only to manage_tags holders, only when the typed
+  // name is valid and isn't an exact existing match already shown/applied.
+  const exact = norm && (
+    applied.has(norm.norm) ||
+    (results || []).some(tag => String(tag.name).toLocaleLowerCase() === norm.norm)
+  );
+  if (norm && !exact && this._hasPerm && this._hasPerm('manage_tags')) {
+    const create = document.createElement('button');
+    create.className = 'tag-popup-item tag-popup-create';
+    create.type = 'button';
+    create.textContent = t('tags.add_new', { name: norm.name });
+    create.addEventListener('click', () => this._applyTagToActive(norm.name));
+    list.appendChild(create);
+  }
+
+  if (!list.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tag-popup-empty';
+    empty.textContent = norm ? t('tags.none_found') : t('tags.none_yet');
+    list.appendChild(empty);
+  }
+},
+
+_applyTagToActive(rawName) {
+  const file = this._activeAttachment;
+  if (!file) return;
+  const norm = this._normalizeTag(rawName);
+  if (!norm) return this._showToast(t('tags.invalid'), 'error');
+  if (!file._tags) file._tags = [];
+  if (file._tags.some(x => x.toLocaleLowerCase() === norm.norm)) { this._closeTagPopup(); return; }
+  if (file._tags.length >= this._maxTagsPerAttachment()) {
+    return this._showToast(t('tags.limit_reached', { n: this._maxTagsPerAttachment() }), 'error');
+  }
+  file._tags.push(norm.name);
+  this._closeTagPopup();
+  this._renderImageQueue();
+},
+
+_removeTagFromActive(name) {
+  const file = this._activeAttachment;
+  if (!file || !file._tags) return;
+  file._tags = file._tags.filter(x => x !== name);
+  this._renderImageQueue();
+},
+
+// ── Frequent tags ──────────────────────────────────────────────────────────
+// A quick-access row of the tags used most on this browser's uploads, saved to
+// localStorage (never the DB, since it is a per-person convenience). Most used
+// first; recorded on send. Clicking one applies it to the active attachment.
+_FREQ_TAGS_KEY: 'havenFrequentTags',
+
+_getFrequentTags() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(this._FREQ_TAGS_KEY) || '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter(e => e && typeof e.name === 'string')
+      .sort((a, b) => (b.count || 0) - (a.count || 0) || (b.ts || 0) - (a.ts || 0));
+  } catch { return []; }
+},
+
+_saveFrequentTags(list) {
+  try { localStorage.setItem(this._FREQ_TAGS_KEY, JSON.stringify(list.slice(0, 50))); } catch { /* storage full/blocked */ }
+},
+
+// Bump the use count for tags that just went out on an upload. Keyed
+// case-insensitively; display casing follows the latest use.
+_recordFrequentTags(names) {
+  if (!Array.isArray(names) || !names.length) return;
+  const list = this._getFrequentTags();
+  const now = Date.now();
+  for (const raw of names) {
+    const norm = this._normalizeTag(raw);
+    if (!norm) continue;
+    const existing = list.find(e => e.name.toLocaleLowerCase() === norm.norm);
+    if (existing) { existing.count = (existing.count || 0) + 1; existing.ts = now; existing.name = norm.name; }
+    else list.push({ name: norm.name, count: 1, ts: now });
+  }
+  this._saveFrequentTags(list);
+},
+
+_removeFrequentTag(name) {
+  const norm = this._normalizeTag(name);
+  if (!norm) return;
+  this._saveFrequentTags(this._getFrequentTags().filter(e => e.name.toLocaleLowerCase() !== norm.norm));
+},
+
+_renderFrequentTags() {
+  const bar = document.getElementById('tag-frequent-bar');
+  if (!bar) return;
+  const file = this._activeAttachment;
+  const barVisible = document.getElementById('tag-queue-bar')?.style.display !== 'none';
+  const applied = new Set(((file && file._tags) || []).map(x => x.toLocaleLowerCase()));
+  const full = ((file && file._tags) || []).length >= this._maxTagsPerAttachment();
+  const freq = (file && barVisible && !full)
+    ? this._getFrequentTags().filter(e => !applied.has(e.name.toLocaleLowerCase())).slice(0, 10)
+    : [];
+  if (!freq.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  bar.innerHTML = '';
+  const label = document.createElement('span');
+  label.className = 'tag-frequent-label';
+  label.textContent = t('tags.frequent');
+  bar.appendChild(label);
+  freq.forEach(e => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'tag-frequent-chip';
+    chip.textContent = e.name;
+    chip.addEventListener('click', (ev) => { ev.stopPropagation(); this._applyFrequentTag(e.name); });
+    bar.appendChild(chip);
+  });
+  bar.style.display = 'flex';
+},
+
+// Because the frequent list lives in storage it can outlive the tag itself. So
+// verify the tag still exists in the vocabulary before applying it: if it was
+// deleted, tell the user, drop it from storage, and refresh the row instead of
+// applying a phantom tag the server would silently ignore.
+_applyFrequentTag(name) {
+  if (!this._activeAttachment || !this.socket) return;
+  const norm = this._normalizeTag(name);
+  if (!norm) { this._removeFrequentTag(name); this._renderFrequentTags(); return; }
+  this.socket.emit('search-upload-tags', { query: norm.name }, (res) => {
+    const exists = ((res && res.tags) || []).some(tg => String(tg.name).toLocaleLowerCase() === norm.norm);
+    if (!exists) {
+      this._showToast(t('tags.deleted_removed', { name: norm.name }), 'error');
+      this._removeFrequentTag(norm.name);
+      this._renderFrequentTags();
+      return;
+    }
+    this._applyTagToActive(norm.name);
+  });
 },
 
 _clearImageQueue() {
@@ -175,6 +526,8 @@ _makeSpoilerToggle(file, isPip = false) {
 
 async _flushImageQueue(bundled = false, personaPrefix = '') {
   if (!this._imageQueue || this._imageQueue.length === 0) return;
+  // A DM that can't be encrypted asks first; backing out keeps the queue.
+  if (!(await this._dmSendGate(this.currentChannel))) return;
   const files = [...this._imageQueue];
   this._clearImageQueue();
   this._uploadsCancelled = false;
@@ -204,6 +557,7 @@ _queueGeneralFile(file) {
     return this._showToast(t('media.max_attachments_n', { n: this._maxAttachments() }), 'error');
   }
   this._fileQueue.push(file);
+  this._activeAttachment = file;   // newest attachment is the one the tag bar edits
   this._renderImageQueue();
   document.getElementById('message-input')?.focus();
 },
@@ -215,6 +569,7 @@ _clearFileQueue() {
 
 async _flushFileQueue() {
   if (!this._fileQueue || this._fileQueue.length === 0) return;
+  if (!(await this._dmSendGate(this.currentChannel))) return;
   const files = [...this._fileQueue];
   this._clearFileQueue();
   for (const file of files) {
@@ -285,6 +640,7 @@ _renderPiPImageQueue() {
 
 async _flushPiPImageQueue(bundled = false) {
   if (!this._pipImageQueue || this._pipImageQueue.length === 0) return;
+  if (!(await this._dmSendGate(this._pipImageQueueTarget))) return;
   const files = [...this._pipImageQueue];
   const target = this._pipImageQueueTarget;
   this._pipImageQueue = [];
@@ -4178,12 +4534,20 @@ _setupToolbarIconPicker() {
     }
   };
 
+  // Glyphs is the Haven Glyphs plugin, switched on and off from here so it
+  // sits with the other two icon looks instead of on the plugin page. The
+  // plugin replaces emoji text, so the toolbars show their emoji twins under
+  // it and the plugin turns those into glyphs (#5673).
+  const GLYPHS_PLUGIN = 'HavenGlyphs.plugin.js';
+  const applyIconMode = (mode) => {
+    document.documentElement.dataset.toolbaricons = mode === 'glyphs' ? 'emoji' : mode;
+    picker.querySelectorAll('[data-toolbaricons]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.toolbaricons === mode);
+    });
+  };
   const savedMode = localStorage.getItem('haven-toolbar-icons') || 'mono';
   const normalizedMode = savedMode === 'color' ? 'emoji' : savedMode;
-  document.documentElement.dataset.toolbaricons = normalizedMode;
-  picker.querySelectorAll('[data-toolbaricons]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.toolbaricons === normalizedMode);
-  });
+  applyIconMode(normalizedMode);
 
   let savedSlots = parseInt(localStorage.getItem('haven-toolbar-visible-slots') || '3', 10);
   if (!Number.isFinite(savedSlots)) savedSlots = 3;
@@ -4223,11 +4587,21 @@ _setupToolbarIconPicker() {
   picker.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-toolbaricons]');
     if (!btn) return;
-    const mode = btn.dataset.toolbaricons;
-    document.documentElement.dataset.toolbaricons = mode;
+    let mode = btn.dataset.toolbaricons;
+    const loader = window.HavenPluginLoader;
+    if (mode === 'glyphs') {
+      const plugin = loader?.loadedPlugins?.get?.(GLYPHS_PLUGIN);
+      if (!plugin || !plugin.instance) {
+        this._showToast(t('settings.toolbar_icons.glyphs_missing'), 'error');
+        mode = 'emoji';
+      } else {
+        loader.enablePlugin(GLYPHS_PLUGIN);
+      }
+    } else if (loader?.loadedPlugins?.get?.(GLYPHS_PLUGIN)?.enabled) {
+      loader.disablePlugin(GLYPHS_PLUGIN);
+    }
     localStorage.setItem('haven-toolbar-icons', mode);
-    picker.querySelectorAll('[data-toolbaricons]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    applyIconMode(mode);
     refreshCurrentMessages();
   });
 
@@ -4563,6 +4937,61 @@ _revealHiddenImage(ph) {
   ph.replaceWith(img);
 },
 
+// A picture in an encrypted DM is decrypted in the browser, and the feed lets
+// go of the decrypted bytes once it has painted them, so the <img> src is a
+// dead object URL: opening or saving it gave a blank page. A fresh copy is
+// decrypted for the new tab or the download and released a minute later
+// (#5663).
+_freshImageUrl(img) {
+  if (img && img.dataset && img.dataset.e2eSrc && this._e2eImageBlob) {
+    return this._e2eImageBlob(img).then(blob => {
+      const url = URL.createObjectURL(blob);
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 60000);
+      return { url, blob, ephemeral: true };
+    });
+  }
+  return Promise.resolve({ url: this._lazyRealSrc ? this._lazyRealSrc(img) : (img && img.src) || '', blob: null, ephemeral: false });
+},
+
+_openImageInNewTab(img) {
+  this._freshImageUrl(img).then(async ({ url, blob, ephemeral }) => {
+    if (!url) return;
+    // An object URL only resolves for a tab that shares this page's session,
+    // so the decrypted copy opens without noopener; a plain link keeps it.
+    if (!ephemeral) { window.open(url, '_blank', 'noopener,noreferrer'); return; }
+    // The decrypted copy opens as a page on Haven's own origin, and the
+    // sender picked its type. An SVG there is a document that can run script
+    // as Haven, so anything but a plain raster picture is redrawn to a PNG
+    // first and only the PNG is opened.
+    const inert = await this._inertImageBlob(blob);
+    if (inert === blob) { window.open(url, '_blank'); return; }
+    try { URL.revokeObjectURL(url); } catch {}
+    const safeUrl = URL.createObjectURL(inert);
+    setTimeout(() => { try { URL.revokeObjectURL(safeUrl); } catch {} }, 60000);
+    window.open(safeUrl, '_blank');
+  }).catch(() => this._showToast?.(t('media_runtime.image.open_failed'), 'error'));
+},
+
+// A picture that is safe to open as a page: raster types as they are,
+// anything else (SVG above all) drawn onto a canvas and taken back as a PNG,
+// which keeps how it looks and drops anything it could run.
+async _inertImageBlob(blob) {
+  if (blob && /^image\/(png|jpeg|gif|webp|avif|bmp)$/.test(blob.type || '')) return blob;
+  const src = URL.createObjectURL(blob);
+  try {
+    const pic = new Image();
+    pic.src = src;
+    await pic.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.min(pic.naturalWidth || 1024, 8192);
+    canvas.height = Math.min(pic.naturalHeight || 1024, 8192);
+    canvas.getContext('2d').drawImage(pic, 0, 0, canvas.width, canvas.height);
+    return await new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('not drawable'))), 'image/png'));
+  } finally {
+    try { URL.revokeObjectURL(src); } catch {}
+  }
+},
+
 _suggestedImageFilename(src, blob) {
   let name = '';
   try {
@@ -4573,25 +5002,40 @@ _suggestedImageFilename(src, blob) {
   if (!name || name === 'media-proxy' || name === 'proxy' || name.length > 80 || !/\.[a-z0-9]{2,5}$/i.test(name)) {
     const ext = ((blob?.type || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
     name = `haven-image.${ext}`;
+  } else if (/^image\/(png|jpeg|gif|webp|avif|bmp)$/.test(blob?.type || '')) {
+    // The name follows the bytes: a fallback copy is a PNG whatever the
+    // picture was called, and a .gif name on PNG bytes opens as a broken file.
+    const ext = blob.type.split('/')[1].replace('jpeg', 'jpg');
+    const cur = name.split('.').pop().toLowerCase().replace('jpeg', 'jpg');
+    if (cur !== ext) name = name.replace(/\.[a-z0-9]{2,5}$/i, '.' + ext);
   }
   return name;
 },
 
-async _blobForContextImage(src) {
-  if (this._ctxImageBlob && this._ctxImageBlobSrc === src) {
-    try {
-      const warmed = await this._ctxImageBlob;
-      if (warmed) return warmed;
-    } catch { /* fall through */ }
+// The bytes to save. An encrypted DM picture is decrypted again, since the
+// feed has let go of its copy (#5663). Anything else is fetched as the server
+// has it. The copy warmed for Copy Image is a PNG re-encode, so it is only a
+// fallback: saving it turned an animated GIF into one still frame.
+async _blobForContextImage(src, sourceImg) {
+  if (sourceImg?.dataset?.e2eSrc && this._e2eImageBlob) {
+    try { return await this._e2eImageBlob(sourceImg); } catch { /* fall back to what is on screen */ }
   }
+  const realSrc = (sourceImg && this._lazyRealSrc ? this._lazyRealSrc(sourceImg) : '') || src;
   try {
-    const resp = await fetch(src, { credentials: 'same-origin' });
+    const resp = await fetch(realSrc, { credentials: 'same-origin' });
     if (!resp.ok) throw new Error('fetch ' + resp.status);
     return await resp.blob();
   } catch (fetchErr) {
+    if (this._ctxImageBlob && this._ctxImageBlobSrc === src) {
+      try {
+        const warmed = await this._ctxImageBlob;
+        if (warmed) return warmed;
+      } catch { /* fall through */ }
+    }
     const candidates = [];
+    if (sourceImg) candidates.push(sourceImg);
     const lb = document.getElementById('lightbox-img');
-    if (lb?.src) candidates.push(lb);
+    if (lb?.src && lb.src === src) candidates.push(lb);
     document.querySelectorAll('img.chat-image').forEach(img => {
       if (img.src === src || this._normalizeImgSrc?.(img.getAttribute('src')) === this._normalizeImgSrc?.(src)) {
         candidates.push(img);
@@ -4613,9 +5057,9 @@ async _blobForContextImage(src) {
   }
 },
 
-async _saveContextImage(src) {
+async _saveContextImage(src, sourceImg) {
   try {
-    const blob = await this._blobForContextImage(src);
+    const blob = await this._blobForContextImage(src, sourceImg);
     const filename = this._suggestedImageFilename(src, blob);
     if (typeof window.havenDesktop?.saveImage === 'function') {
       const buf = await blob.arrayBuffer();
@@ -4676,6 +5120,29 @@ async _saveContextImage(src) {
   }
 },
 
+// The message a picture belongs to, for Edit tags on the image menu: a chat
+// message, a forum topic card, a topic open in full (its first post has no
+// message row of its own), or a reply in a thread. Returns the message id,
+// its author, the element to anchor the editor on and the tags it has.
+_imageTagTarget(img) {
+  if (!img || !img.closest) return null;
+  const topicBody = img.closest('#thread-messages .thread-topic-body');
+  if (topicBody) {
+    const id = this._activeThreadParent;
+    const topic = id && this._forumTopics ? this._forumTopics.get(id) : null;
+    return topic ? { msgId: topic.id, userId: topic.user_id, el: topicBody, tags: topic.attachmentTags || [] } : null;
+  }
+  const el = img.closest('#messages [data-msg-id], #thread-messages [data-msg-id]');
+  if (!el) return null;
+  const msgId = parseInt(el.dataset.msgId, 10);
+  if (!msgId) return null;
+  if (el.classList.contains('forum-topic')) {
+    const topic = this._forumTopics ? this._forumTopics.get(msgId) : null;
+    return { msgId, userId: el.dataset.userId, el, tags: (topic && topic.attachmentTags) || [] };
+  }
+  return { msgId, userId: el.dataset.userId, el, tags: null };
+},
+
 _showImageContextMenu(e, src, opts = {}) {
   this._hideImageContextMenu();
   const menu = document.createElement('div');
@@ -4683,11 +5150,25 @@ _showImageContextMenu(e, src, opts = {}) {
   menu.className = 'image-context-menu';
   // opts.viewImage: the <img> to open in the lightbox from a View entry, for
   // places where a left click does something else, like a forum card (#5646).
+  // opts.sourceImg: the <img> the menu was opened on, so an encrypted DM
+  // picture can be decrypted again for Open and Save (#5663).
+  const sourceImg = opts.sourceImg || opts.viewImage || null;
+  // A picture post is mostly picture, so right-clicking it lands here and not
+  // on the message menu where Edit tags lives. Offer it here too, under the
+  // same rule: your own upload, or anyone's with Manage Tags (#5682).
+  // In a forum that includes a topic's card, the topic open in full, and
+  // the replies under it (#5682).
+  const tagTarget = this._imageTagTarget(sourceImg);
+  const tagMsgEl = tagTarget && tagTarget.el;
+  const tagCh = this.channels?.find(c => c.code === this.currentChannel);
+  const canEditTags = !!tagTarget && !!tagCh && !tagCh.is_dm &&
+    (String(tagTarget.userId) === String(this.user?.id) || !!this.user?.isAdmin || !!this._hasPerm?.('manage_tags'));
   menu.innerHTML = `
     ${opts.viewImage ? `<button data-action="view">🔍 ${t('media_runtime.image.view')}</button>` : ''}
     <button data-action="save">💾 ${t('media_runtime.image.save')}</button>
     <button data-action="copy">📋 ${t('media_runtime.image.copy')}</button>
     <button data-action="open">🔗 ${t('media_runtime.image.open_new_tab')}</button>
+    ${canEditTags ? `<button data-action="edit-tags">🏷️ ${this._escapeHtml(t('tags.edit'))}</button>` : ''}
     <button data-action="hide">🙈 ${this._escapeHtml(t('app.messages.hide_image'))}</button>
   `;
   menu.style.left = e.clientX + 'px';
@@ -4722,7 +5203,8 @@ _showImageContextMenu(e, src, opts = {}) {
     const action = ev.target.dataset.action;
     if (action === 'save') {
       this._hideImageContextMenu();
-      this._saveContextImage(src);
+      this._saveContextImage(src, sourceImg);
+      return;
     } else if (action === 'copy') {
       // Hide the menu immediately so it doesn't sit on screen during
       // the async fetch + clipboard write. We still control the toast.
@@ -4891,12 +5373,17 @@ _showImageContextMenu(e, src, opts = {}) {
       this._openLightbox(src, opts.viewImage);
       return;
     } else if (action === 'open') {
-      if (/^(blob|data):/i.test(src)) {
+      if (/^(blob|data):/i.test(src) && !sourceImg?.dataset?.e2eSrc) {
         this._hideImageContextMenu();
         this._openLocalImageInNewTab(src);
         return;
       }
-      window.open(src, '_blank', 'noopener,noreferrer');
+      if (sourceImg) this._openImageInNewTab(sourceImg);
+      else window.open(src, '_blank', 'noopener,noreferrer');
+    } else if (action === 'edit-tags') {
+      this._hideImageContextMenu();
+      if (tagTarget) this._openMessageTagEditor?.(tagTarget.msgId, tagMsgEl, tagTarget.tags);
+      return;
     } else if (action === 'hide') {
       this._hideImage(src);
       // Collapse every live copy of this image to a placeholder right away.
@@ -4935,25 +5422,9 @@ _showImageContextMenu(e, src, opts = {}) {
 // anything else is redrawn to PNG first.
 async _openLocalImageInNewTab(src) {
   try {
-    let blob = await (await fetch(src)).blob();
-    if (!/^image\/(png|jpeg|gif|webp|avif|bmp)$/i.test(blob.type)) {
-      const tmpUrl = URL.createObjectURL(blob);
-      try {
-        const im = new Image();
-        im.src = tmpUrl;
-        await im.decode();
-        const canvas = document.createElement('canvas');
-        canvas.width = im.naturalWidth || 1;
-        canvas.height = im.naturalHeight || 1;
-        canvas.getContext('2d').drawImage(im, 0, 0);
-        blob = await new Promise((res, rej) =>
-          canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob null')), 'image/png'));
-      } finally {
-        URL.revokeObjectURL(tmpUrl);
-      }
-    }
+    const blob = await this._inertImageBlob(await (await fetch(src)).blob());
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank', 'noopener,noreferrer');
+    window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch { /* undecodable or revoked: nothing safe to open */ }
 },

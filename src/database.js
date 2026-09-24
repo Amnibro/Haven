@@ -248,6 +248,27 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_upload_ownership_user
       ON upload_ownership(user_id);
 
+    -- ── Attachment tagging (upload tags) ──────────────────
+    -- A GLOBAL tag vocabulary applied to file/image uploads. Separate from the
+    -- per-channel forum-topic tags (channels.forum_tags / messages.tags JSON).
+    -- upload_tags is the vocabulary; attachment_tags links a tag to the file a
+    -- message carries. name_norm is the case-folded uniqueness/lookup key.
+    CREATE TABLE IF NOT EXISTS upload_tags (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL,
+      name_norm  TEXT NOT NULL UNIQUE,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS attachment_tags (
+      message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      rel_path   TEXT NOT NULL,
+      tag_id     INTEGER NOT NULL REFERENCES upload_tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (message_id, rel_path, tag_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_attachment_tags_tag ON attachment_tags(tag_id);
+    CREATE INDEX IF NOT EXISTS idx_attachment_tags_msg ON attachment_tags(message_id);
+
     CREATE INDEX IF NOT EXISTS idx_messages_channel
       ON messages(channel_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_channel_code
@@ -436,6 +457,8 @@ function initDatabase() {
   insertSetting.run('max_invite_uses', '0');            // the maximum uses each non-admin/manage-server invite link can accept
   insertSetting.run('max_upload_mb', '25');             // max file upload size in MB
   insertSetting.run('max_attachments', '10');           // files one message may queue, images and other files together (1-50) (#5561)
+  insertSetting.run('max_tags_per_attachment', '3');    // upload tags allowed on one attachment (1-10) (#tagging phase 4)
+  insertSetting.run('max_tag_len', '20');               // max characters in an upload tag name (1-50) (#tagging phase 4)
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256–10240)
@@ -444,12 +467,14 @@ function initDatabase() {
   insertSetting.run('unicode_emoji_auto_update', 'false'); // monthly refresh of the built-in emoji set from unicode.org, opt-in, defaults off (UNICODE_EMOJI_AUTO_UPDATE env overrides)
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
+  insertSetting.run('allow_self_purge', 'false');         // (#5686) members may delete every message they wrote, in one go
   insertSetting.run('session_duration_days', '0');       // login token lifetime in days; 0 = never expire (default for new installs, #5391). Existing installs that were seeded with '7' keep that value until the admin changes it.
   insertSetting.run('published_themes', '[]');             // JSON array of *.theme.css filenames shown in the theme picker
   insertSetting.run('admin_password_reset_enabled', 'false'); // admin can reset user passwords (#5300), opt-in, defaults off
   insertSetting.run('ios_latest_version', '');           // version the iOS app compares itself against for its update prompt; empty = no prompt
   insertSetting.run('guests_enabled', 'false');          // (#5381) allow Join-as-Guest on the login page
   insertSetting.run('guest_channels', '');               // (#5381) CSV of channel IDs guests are auto-joined to (empty = none)
+  insertSetting.run('guests_allow_voice', 'true');       // (#5687) guests may join voice and video; false keeps them to text
   // (#5399) Voice connectivity. Admin-configurable STUN/TURN, served by
   // /api/ice-servers. All empty by default = use the built-in STUN pool.
   insertSetting.run('stun_urls', '');                    // newline/comma separated stun: URIs (empty = built-in defaults)
@@ -1096,6 +1121,7 @@ function initDatabase() {
     { name: 'voice_enabled',     sql: "ALTER TABLE channels ADD COLUMN voice_enabled INTEGER DEFAULT 1" },
     { name: 'text_enabled',      sql: "ALTER TABLE channels ADD COLUMN text_enabled INTEGER DEFAULT 1" },
     { name: 'soundboard_enabled', sql: "ALTER TABLE channels ADD COLUMN soundboard_enabled INTEGER DEFAULT 1" },
+    { name: 'reactions_enabled',  sql: "ALTER TABLE channels ADD COLUMN reactions_enabled INTEGER DEFAULT 1" },
     // Forum mode (#144): each top-level message is a topic, and the channel
     // lists topics by their latest thread activity instead of creation time.
     { name: 'is_forum',          sql: "ALTER TABLE channels ADD COLUMN is_forum INTEGER DEFAULT 0" },
@@ -1208,6 +1234,17 @@ function initDatabase() {
     db.prepare("SELECT e2e_secret FROM users LIMIT 0").get();
   } catch {
     db.exec("ALTER TABLE users ADD COLUMN e2e_secret TEXT DEFAULT NULL");
+  }
+
+  // ── Migration: separate encryption passphrase ──
+  // 1 when the E2E key backup is locked with a passphrase of the user's own
+  // instead of their login password, which the server receives at every
+  // sign-in. The client then asks for the passphrase rather than deriving
+  // the key from the password.
+  try {
+    db.prepare("SELECT e2e_passphrase FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN e2e_passphrase INTEGER DEFAULT 0");
   }
 
   // ── Migration: OIDC / SSO federated identity (#12) ──
@@ -1676,6 +1713,9 @@ function initDatabase() {
     { name: 'request_status', sql: "ALTER TABLE messages ADD COLUMN request_status TEXT DEFAULT NULL" },
     { name: 'topic_kind', sql: "ALTER TABLE messages ADD COLUMN topic_kind TEXT DEFAULT NULL" },
     { name: 'subtasks', sql: "ALTER TABLE messages ADD COLUMN subtasks TEXT DEFAULT NULL" },
+    // NSFW topics blur their picture and preview until clicked, and stay out
+    // of the list for anyone who hides NSFW channels (#5633).
+    { name: 'nsfw', sql: "ALTER TABLE messages ADD COLUMN nsfw INTEGER DEFAULT 0" },
   ]) {
     try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
   }

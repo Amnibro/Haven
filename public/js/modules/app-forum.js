@@ -41,11 +41,14 @@ _forumPrefs(code) {
   // from it again (#5656).
   const def = this._forumLayoutOf(code) || {};
   const own = (Number(saved.at) || 0) >= (Number(def.at) || 0);
+  // A locked layout keeps everyone but the channel's managers on the
+  // default view and shape; the size slider is still theirs (#5656).
+  const locked = !!def.locked && !this._forumCanManage();
   return {
     sort: saved.sort === 'created' ? 'created' : 'active',
-    view: this._forumParseView(own && saved.view ? saved.view : def.view),
+    view: this._forumParseView(!locked && own && saved.view ? saved.view : def.view),
     tile: this._forumParseTile(own && saved.tile != null ? saved.tile : def.tile),
-    shape: this._forumParseShape(own && saved.shape ? saved.shape : def.shape),
+    shape: this._forumParseShape(!locked && own && saved.shape ? saved.shape : def.shape),
     tags: Array.isArray(saved.tags) ? saved.tags : [],
     tagMode: saved.tagMode === 'all' ? 'all' : 'some',
     requestStatus: this._forumParseStatus(saved.requestStatus) || '',
@@ -54,6 +57,10 @@ _forumPrefs(code) {
 },
 
 _forumParseView(v) { return v === 'gallery' || v === 'feed' ? v : 'list'; },
+// Whoever can change the channel's settings can set and lock its layout.
+_forumCanManage() {
+  return !!(this.user?.isAdmin || (this._hasPerm && this._hasPerm('manage_channel_settings')));
+},
 // Tile shapes for the galleries: square, or a landscape/portrait pair at
 // 4:3, 3:2 and 16:9 (#5645). Shared with Files & Media.
 _tileShapes() {
@@ -328,7 +335,7 @@ _renderForum(messages) {
   container.classList.add('forum-view');
   this._applyForumChrome(container, p);
   container.innerHTML = '';
-  const topics = this._forumSortTopics((messages || []).filter(m => m && !m.thread_id && (m.type || 'user') === 'user'));
+  const topics = this._forumSortTopics((messages || []).filter(m => m && !m.thread_id && (m.type || 'user') === 'user' && !this._forumTopicHidden(m)));
   for (const m of topics) this._forumTopics.set(m.id, m);
   container.appendChild(this._forumToolbarEl(code));
   this._applyForumChrome(container, p);
@@ -368,25 +375,29 @@ _forumToolbarEl(code) {
   const kindOpts = this._forumKindOptions(p.topicKind, true);
   const statusOpts = [`<option value="">${t('forum.status_all')}</option>`, ...this._forumStatuses().map((s) => `<option value="${s}"${p.requestStatus === s ? ' selected' : ''}>${this._forumStatusLabel(s)}</option>`)].join('');
   // Whoever can change the channel's settings can make the current view and
-  // tile size the layout everyone opens the forum in (#5656).
-  const canSetDefault = !!(this.user?.isAdmin || (this._hasPerm && this._hasPerm('manage_channel_settings')));
+  // tile size the layout everyone opens the forum in, and lock it so nobody
+  // else switches the view or shape (#5656).
+  const canSetDefault = this._forumCanManage();
+  const layoutLocked = !!(this._forumLayoutOf(code) || {}).locked;
+  const showViewControls = canSetDefault || !layoutLocked;
   bar.innerHTML = `
     <div class="forum-toolbar-row forum-toolbar-hdr">
-      <div class="forum-view-toggle" role="group">
+      ${showViewControls ? `<div class="forum-view-toggle" role="group">
         <button type="button" class="forum-view-btn${p.view === 'list' ? ' active' : ''}" data-view="list">${t('forum.view_list')}</button>
         <button type="button" class="forum-view-btn${p.view === 'gallery' ? ' active' : ''}" data-view="gallery">${t('forum.view_gallery')}</button>
         <button type="button" class="forum-view-btn${p.view === 'feed' ? ' active' : ''}" data-view="feed">${t('forum.view_feed')}</button>
-      </div>
+      </div>` : ''}
       <label class="forum-tile-size"${p.view === 'gallery' ? '' : ' hidden'}>
         <span>${t('forum.tile_size')}</span>
         <input type="range" id="forum-tile-size" min="7" max="28" step="0.5" value="${p.tile}" aria-label="${t('forum.tile_size')}">
       </label>
-      <label class="forum-tile-size forum-tile-shape"${p.view === 'gallery' ? '' : ' hidden'}>
+      ${showViewControls ? `<label class="forum-tile-size forum-tile-shape"${p.view === 'gallery' ? '' : ' hidden'}>
         <span>${t('forum.shape')}</span>
         <select id="forum-shape" class="forum-select forum-select-small" aria-label="${t('forum.shape')}">${this._tileShapeOptionsHtml(p.shape)}</select>
-      </label>
+      </label>` : ''}
       <button type="button" class="btn-sm forum-mark-read" id="forum-mark-read" title="${t('forum.mark_all_read_title')}">${t('forum.mark_all_read')}</button>
-      ${canSetDefault ? `<button type="button" class="btn-sm forum-set-default" id="forum-set-default" title="${t('forum.set_default_title')}">${t('forum.set_default')}</button>` : ''}
+      ${canSetDefault ? `<button type="button" class="btn-sm forum-set-default" id="forum-set-default" title="${t('forum.set_default_title')}">${t('forum.set_default')}</button>
+      <button type="button" class="btn-sm forum-lock-layout" id="forum-lock-layout" title="${t(layoutLocked ? 'forum.unlock_layout_title' : 'forum.lock_layout_title')}">${layoutLocked ? '🔒' : '🔓'}</button>` : ''}
     </div>
     <div class="forum-toolbar-row forum-toolbar-controls">
       <button type="button" class="btn-sm btn-accent forum-new-post" id="forum-new-post">✏️ ${t('forum.new_post')}</button>
@@ -413,9 +424,21 @@ _forumToolbarEl(code) {
   });
   bar.querySelector('#forum-set-default')?.addEventListener('click', () => {
     const cur = this._forumPrefs(code);
-    this.socket.emit('set-forum-layout', { code, view: cur.view, tile: cur.tile, shape: cur.shape }, (r) => {
+    this.socket.emit('set-forum-layout', { code, view: cur.view, tile: cur.tile, shape: cur.shape, locked: layoutLocked }, (r) => {
       if (r?.error) return this._showToast(r.error, 'error');
       this._showToast(t('forum.default_saved'), 'success');
+    });
+  });
+  bar.querySelector('#forum-lock-layout')?.addEventListener('click', () => {
+    const cur = this._forumPrefs(code);
+    const def = this._forumLayoutOf(code) || {};
+    // Locking takes the default as it stands, or the manager's current view
+    // when no default was ever set.
+    this.socket.emit('set-forum-layout', {
+      code, view: def.view || cur.view, tile: def.tile != null ? def.tile : cur.tile, shape: def.shape || cur.shape, locked: !layoutLocked
+    }, (r) => {
+      if (r?.error) return this._showToast(r.error, 'error');
+      this._showToast(t(layoutLocked ? 'forum.layout_unlocked' : 'forum.layout_locked'), 'success');
     });
   });
   bar.querySelector('#forum-shape')?.addEventListener('change', (e) => {
@@ -432,7 +455,10 @@ _createForumTopicEl(msg) {
   const status = this._forumParseStatus(msg.request_status);
   const kind = this._forumParseKind(msg.topic_kind) || 'feature';
   const unread = !!(msg.thread && msg.thread.unread);
-  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '') + (status ? ` forum-topic-${status.replace('_', '-')}` : '') + ` forum-topic-kind-${kind}` + (unread ? ' forum-topic-unread' : '');
+  // Someone who has switched the blur off in Settings gets the card plain,
+  // with the 🔞 tag still on it (#5633).
+  const blurred = !!msg.nsfw && this._blurNsfw();
+  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '') + (status ? ` forum-topic-${status.replace('_', '-')}` : '') + ` forum-topic-kind-${kind}` + (unread ? ' forum-topic-unread' : '') + (msg.nsfw ? ' forum-topic-nsfw' : '') + (msg.nsfw && !blurred ? ' revealed' : '');
   el.dataset.msgId = msg.id;
   el.dataset.userId = msg.user_id;
   el.dataset.time = msg.created_at;
@@ -446,7 +472,10 @@ _createForumTopicEl(msg) {
   const thumb = this._forumThumbOf(msg);
   const count = msg.thread && msg.thread.count ? msg.thread.count : 0;
   const when = this._forumPrefs().sort === 'created' ? new Date(msg.created_at) : new Date(this._forumActivityOf(msg));
-  const canEdit = this.user && (msg.user_id === this.user.id || this.user.isAdmin || (this._hasPerm && this._hasPerm('manage_messages')));
+  const canEdit = this.user && (msg.user_id === this.user.id || this.user.isAdmin || (this._hasPerm && this._hasPerm('delete_message')));
+  // An NSFW topic blurs its picture and preview behind a label until clicked,
+  // like a spoiler; the title stays readable (#5633).
+  const cover = blurred ? ` data-nsfw-label="${this._escapeHtml(t('forum.nsfw_reveal'))}"` : '';
   const glyph = this._forumKindGlyph(kind) || this._forumGlyph(msg);
   const art = this._forumThumbArt(msg);
   const statusLabel = status ? this._forumStatusLabel(status) : '';
@@ -461,7 +490,7 @@ _createForumTopicEl(msg) {
     ${this._forumAvatarHtml(msg)}
     <div class="forum-topic-body">
       <div class="forum-topic-meta-top">${this._escapeHtml(msg.username || '')}  ·  ${this._forumAgo(when)}</div>
-      <div class="forum-topic-tags"><span class="forum-tag forum-tag-kind forum-tag-kind-${kind}">${this._forumKindGlyph(kind)} ${this._escapeHtml(kindLabel)}</span>${statusLabel ? `<span class="forum-tag forum-tag-status forum-tag-status-${status}">${this._escapeHtml(statusLabel)}</span>` : ''}${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tagLine}</div>
+      <div class="forum-topic-tags"><span class="forum-tag forum-tag-kind forum-tag-kind-${kind}">${this._forumKindGlyph(kind)} ${this._escapeHtml(kindLabel)}</span>${statusLabel ? `<span class="forum-tag forum-tag-status forum-tag-status-${status}">${this._escapeHtml(statusLabel)}</span>` : ''}${msg.nsfw ? `<span class="forum-tag forum-tag-nsfw" title="${this._escapeHtml(t('forum.nsfw'))}">🔞</span>` : ''}${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tagLine}</div>
       <div class="forum-topic-title">${unread ? `<span class="forum-unread-dot" title="${t('forum.unread')}"></span>` : ''}${this._escapeHtml(this._forumTitleOf(msg))}</div>
       <div class="forum-topic-snippet message-content">${this._escapeHtml(this._forumSnippetOf(msg))}</div>
       <div class="forum-topic-meta">
@@ -470,10 +499,13 @@ _createForumTopicEl(msg) {
         ${canEdit ? `<button type="button" class="forum-topic-edit" title="${t('forum.edit_post')}">✎</button>` : ''}
       </div>
     </div>
-    ${thumb ? `<div class="forum-topic-thumb"><img ${this._lazySrcAttr ? this._lazySrcAttr(this._imgSrcAttr ? this._imgSrcAttr(thumb) : `src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty" style="background:${art}"><span>${this._escapeHtml(glyph)}</span></div>`}`;
+    ${thumb ? `<div class="forum-topic-thumb"${cover}><img ${this._lazySrcAttr ? this._lazySrcAttr(this._imgSrcAttr ? this._imgSrcAttr(thumb) : `src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty" style="background:${art}"${cover}><span>${this._escapeHtml(glyph)}</span></div>`}`;
   el.addEventListener('click', (e) => {
     if (e.target.closest('.forum-topic-edit')) { e.stopPropagation(); this._forumEditTopicMeta(msg.id); return; }
     if (e.target.closest('.forum-tag-status') && canEdit) { e.stopPropagation(); this._forumCycleStatus(msg.id); return; }
+    // The first click on a blurred picture or preview shows it; the title and
+    // the rest of the card open the topic as usual.
+    if (msg.nsfw && !el.classList.contains('revealed') && e.target.closest('.forum-topic-thumb, .forum-topic-snippet')) { e.stopPropagation(); el.classList.add('revealed'); return; }
     if (e.target.closest('a')) return;
     this._openThread(msg.id);
   });
@@ -511,7 +543,7 @@ _showForumTopicContextMenu(e, msg) {
   this._hideMessageContextMenu?.();
   const msgId = msg.id;
   const isOwn = !!(this.user && msg.user_id === this.user.id);
-  const canEdit = !!(this.user && (isOwn || this.user.isAdmin || (this._hasPerm && this._hasPerm('manage_messages'))));
+  const canEdit = !!(this.user && (isOwn || this.user.isAdmin || (this._hasPerm && this._hasPerm('delete_message'))));
   const canPin = !!(this.user?.isAdmin || this._hasPerm('pin_message'));
   const canArchive = !!(this.user?.isAdmin || this._hasPerm('archive_messages'));
   const canShareLink = !!this._canShareChannelLink?.(this.currentChannel);
@@ -521,6 +553,7 @@ _showForumTopicContextMenu(e, msg) {
   if (canEdit) items.push(item('edit', '✏️', t('forum.edit_post')));
   if (canPin) items.push(msg.pinned ? item('unpin', '📌', t('msg_toolbar.unpin')) : item('pin', '📌', t('msg_toolbar.pin')));
   if (canEdit) items.push(msg.closed ? item('reopen', '🔓', t('forum.reopen_topic')) : item('close', '✔', t('forum.close_topic')));
+  if (canEdit) items.push(msg.nsfw ? item('unnsfw', '🔞', t('forum.unmark_nsfw')) : item('nsfw', '🔞', t('forum.mark_nsfw_menu')));
   const more = [];
   if (canShareLink) more.push(item('copy-link', '🔗', t('msg_toolbar.copy_link')));
   if (canArchive) more.push(msg.is_archived ? item('unarchive', '🛡️', t('app.messages.unprotect_btn')) : item('archive', '🛡️', t('app.messages.protect_btn')));
@@ -561,6 +594,8 @@ _showForumTopicContextMenu(e, msg) {
         topicKind: msg.topic_kind || null,
         subtasks: this._forumParseSubtasks(msg.subtasks),
       });
+    } else if (action === 'nsfw' || action === 'unnsfw') {
+      this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || this._forumTitleOf(msg), tags: Array.isArray(msg.tags) ? msg.tags : [], nsfw: action === 'nsfw' });
     } else if (action === 'copy-link') {
       this._copyChannelLink(this.currentChannel, msgId);
     } else if (action === 'archive') {
@@ -595,6 +630,7 @@ _forumApplyContentEdit(messageId, content) {
   if (!topic) return false;
   topic.content = content;
   topic.edited_at = new Date().toISOString();
+  if (this._activeThreadParent === messageId) this._forumThreadRenderTopic?.();
   const el = document.querySelector(`#forum-topics [data-msg-id="${messageId}"]`);
   if (el) el.replaceWith(this._createForumTopicEl(topic));
   this._lazyMedia && this._lazyPump && this._lazyPump();
@@ -607,7 +643,7 @@ _forumAgo(date) {
   if (s < 3600) return t('forum.minutes_ago', { n: Math.floor(s / 60) });
   if (s < 86400) return t('forum.hours_ago', { n: Math.floor(s / 3600) });
   if (s < 86400 * 30) return t('forum.days_ago', { n: Math.floor(s / 86400) });
-  return date.toLocaleDateString();
+  return this._fmtDate(date);
 },
 
 // A new top-level message in a forum is a new topic: it goes on top.
@@ -632,6 +668,7 @@ _forumInsertTopic(msg) {
     if ((!Array.isArray(msg.tags) || !msg.tags.length) && draft.tags && draft.tags.length) msg.tags = draft.tags;
     if (!msg.topic_kind && draft.topicKind) msg.topic_kind = draft.topicKind;
   }
+  if (this._forumTopicHidden(msg)) return;
   const p = this._forumPrefs();
   if (p.tags.length) {
     const has = Array.isArray(msg.tags) ? msg.tags : [];
@@ -706,6 +743,9 @@ _forumApplyTopicUpdate(data) {
   if ('topic_kind' in data) topic.topic_kind = data.topic_kind || null;
   if ('subtasks' in data) topic.subtasks = Array.isArray(data.subtasks) ? data.subtasks : [];
   if (this._activeThreadParent === topic.id) this._paintForumSubtasks(topic);
+  if (typeof data.nsfw === 'boolean') topic.nsfw = data.nsfw;
+  // Marked NSFW while this reader hides NSFW: the card goes away (#5633).
+  if (this._forumTopicHidden(topic)) { this._forumReload(); return; }
   // Closing or reopening moves the card between the open and closed groups,
   // so the list is rebuilt rather than the card swapped in place (#5624).
   if (!!topic.closed !== wasClosed || (topic.request_status || '') !== wasStatus || (topic.topic_kind || '') !== wasKind) { this._forumReload(); return; }
@@ -733,6 +773,7 @@ _forumAppendOlder(messages) {
   // client reverses them; a forum page arrives already in display order.
   for (const m of list) {
     if (grid.querySelector(`[data-msg-id="${m.id}"]`)) continue;
+    if (this._forumTopicHidden(m)) continue;
     this._forumTopics && this._forumTopics.set(m.id, m);
     grid.appendChild(this._createForumTopicEl(m));
   }
@@ -754,9 +795,15 @@ _openForumComposer(existing = null) {
   // ordinary edit path, so it gets the same checks as any message (#5650).
   const canEditBody = !!(existing && this.user && existing.user_id === this.user.id);
   const maxChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  // Pictures and files go into the body where the cursor is, each on a line
+  // of its own, so a post can be text with pictures between it (#5689, #5690).
+  const attachRow = `<div class="forum-attach-row"><button type="button" class="btn-sm forum-attach-btn" id="forum-post-attach">📎 ${t('forum.attach_file')}</button><input type="file" id="forum-post-file" multiple hidden><small class="settings-hint">${t('forum.attach_hint_inline')}</small></div>`;
   const bodyField = !existing
-    ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}"></textarea></label>`
-    : (canEditBody ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" maxlength="${maxChars}">${this._escapeHtml(existing.content || '')}</textarea></label>` : '');
+    ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}"></textarea></label>${attachRow}`
+    : (canEditBody ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" maxlength="${maxChars}">${this._escapeHtml(existing.content || '')}</textarea></label>${attachRow}` : '');
+  // Deleting a topic from here too: a gallery card is nearly all picture, and
+  // right-clicking the picture gets the image menu, not the topic's (#5690).
+  const canDelete = !!(existing && this.user && (existing.user_id === this.user.id || this.user.isAdmin || this._canModerate?.() || this._hasPerm?.('delete_message')));
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'forum-post-modal';
@@ -784,9 +831,10 @@ _openForumComposer(existing = null) {
           </div>
           <div class="forum-attach-thumbs" id="forum-attach-thumbs"></div>
         </div>`}
+        <label class="forum-field forum-field-closed forum-field-nsfw"><span><input type="checkbox" id="forum-post-nsfw"${existing && existing.nsfw ? ' checked' : ''}> 🔞 ${t('forum.mark_nsfw')}</span></label>
         ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : ''}
       </div>
-      <div class="modal-footer"><button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
+      <div class="modal-footer">${canDelete ? `<button type="button" class="btn-sm btn-danger forum-post-delete" id="forum-post-delete">🗑️ ${t('forum.delete_topic')}</button>` : ''}<button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
     </div>`;
   const modal = overlay.querySelector('.modal');
   modal.dataset.modalControlsInjected = '1';
@@ -905,9 +953,36 @@ _openForumComposer(existing = null) {
     else this._showToast?.(t('forum.gif_unavailable'), 'error');
   });
 
+  const bodyInput = overlay.querySelector('#forum-post-body');
+  if (bodyInput) {
+    const fileInput = overlay.querySelector('#forum-post-file');
+    overlay.querySelector('#forum-post-attach')?.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => { this._forumUploadIntoBody(fileInput.files, bodyInput, code); fileInput.value = ''; });
+    bodyInput.addEventListener('paste', (e) => {
+      const files = Array.from(e.clipboardData?.items || []).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+      if (!files.length) return;
+      e.preventDefault();
+      this._forumUploadIntoBody(files, bodyInput, code);
+    });
+    const modalEl = overlay.querySelector('.forum-post-modal');
+    modalEl.addEventListener('dragover', (e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); modalEl.classList.add('drag-over'); } });
+    modalEl.addEventListener('dragleave', (e) => { if (!modalEl.contains(e.relatedTarget)) modalEl.classList.remove('drag-over'); });
+    modalEl.addEventListener('drop', (e) => {
+      if (!e.dataTransfer?.files?.length) return;
+      e.preventDefault();
+      modalEl.classList.remove('drag-over');
+      this._forumUploadIntoBody(e.dataTransfer.files, bodyInput, code);
+    });
+  }
+  overlay.querySelector('#forum-post-delete')?.addEventListener('click', async () => {
+    if (!await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) return;
+    this.socket.emit('delete-message', { messageId: existing.id, attachments: this._getMessageAttachments?.(existing.id) });
+    close();
+  });
   const titleEl = overlay.querySelector('#forum-post-title');
   titleEl.focus();
   overlay.querySelector('#forum-post-go').addEventListener('click', async () => {
+    if (bodyInput && Number(bodyInput.dataset.uploading) > 0) { this._showToast(t('forum.wait_upload'), 'info'); return; }
     const title = titleEl.value.trim();
     const spec = this._forumTypeOf(kind);
     const subtasks = spec.subtasks
@@ -919,7 +994,8 @@ _openForumComposer(existing = null) {
       const kept = this._forumParseSubtasks(existing.subtasks);
       const byTitle = new Map(kept.map((x) => [x.title, x]));
       const merged = spec.subtasks ? subtasks.map((item) => byTitle.get(item.title) || item) : kept;
-      this.socket.emit('set-topic-meta', { messageId: existing.id, title, tags: [...picked], closed: closedBox ? closedBox.checked : undefined, requestStatus: spec.status ? status : null, topicKind: kind, subtasks: merged });
+      const nsfwBox = overlay.querySelector('#forum-post-nsfw');
+      this.socket.emit('set-topic-meta', { messageId: existing.id, title, tags: [...picked], closed: closedBox ? closedBox.checked : undefined, nsfw: nsfwBox ? nsfwBox.checked : undefined, requestStatus: spec.status ? status : null, topicKind: kind, subtasks: merged });
       const bodyEl = overlay.querySelector('#forum-post-body');
       if (bodyEl) {
         const body = bodyEl.value.trim();
@@ -953,10 +1029,53 @@ _openForumComposer(existing = null) {
     this.socket.emit('send-message', {
       code, content: body || title, title: title || undefined, tags: [...picked],
       requestStatus: spec.status ? status : null, topicKind: kind, subtasks: subtaskPayload,
+      nsfw: !!overlay.querySelector('#forum-post-nsfw')?.checked,
     });
     this.notifications && this.notifications.play && this.notifications.play('sent');
     close();
   });
+},
+
+// Upload files from the New Post or Edit post window and put each one in the
+// body at the cursor, on a line of its own: the picture's link, or a file line
+// in the same form the message box sends (#5689, #5690).
+async _forumUploadIntoBody(fileList, textarea, code) {
+  const files = Array.from(fileList || []);
+  if (!files.length || !textarea) return;
+  const ch = this.channels?.find(c => c.code === code);
+  if (ch && ch.media_enabled === 0) { this._showToast(t('media.uploads_disabled'), 'error'); return; }
+  const maxMb = this._uploadCapMb();
+  const busy = (d) => { textarea.dataset.uploading = String(Math.max(0, (Number(textarea.dataset.uploading) || 0) + d)); };
+  for (const file of files) {
+    if (file.size > maxMb * 1024 * 1024) { this._showToast(t('media.file_too_large', { maxMb }), 'error'); continue; }
+    busy(1);
+    try {
+      const raster = /^image\/(jpeg|png|gif|webp)$/.test(file.type || '');
+      const fd = new FormData();
+      fd.append('scope', 'channel');
+      fd.append(raster ? 'image' : 'file', file);
+      const data = await this._uploadWithProgress(raster ? '/api/upload' : '/api/upload-file', fd);
+      if (!data || data.error || !data.url) { this._showToast((data && data.error) || t('toasts.upload_failed'), 'error'); continue; }
+      let line = data.url;
+      if (!raster && !data.isImage) {
+        const name = String(data.originalName || file.name || 'file').replace(/[\[\]()|\r\n]/g, '_');
+        line = `[file:${name}](${data.url}|${this._formatFileSize(data.fileSize || file.size)})`;
+      }
+      if (!textarea.isConnected) continue;
+      const v = textarea.value;
+      const at = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : v.length;
+      const before = v.slice(0, at), after = v.slice(at);
+      const insert = (before && !before.endsWith('\n') ? '\n' : '') + line + (after.startsWith('\n') ? '' : '\n');
+      textarea.value = before + insert + after;
+      const caret = before.length + insert.length;
+      textarea.setSelectionRange(caret, caret);
+      textarea.focus();
+    } catch (err) {
+      if (!err?.aborted) this._showToast(err?.message || t('toasts.upload_failed'), 'error');
+    } finally {
+      busy(-1);
+    }
+  }
 },
 
 _forumEditTopicMeta(messageId) {
@@ -1010,10 +1129,111 @@ _setupSettingsSearch() {
   });
 },
 
+// ── Full-width topic view (#5659) ──────────────────────────
+// Opening a topic from a forum used to slide out the same narrow thread
+// panel a chat message gets, which read as a room inside a room. A forum
+// topic now takes the whole chat column, with a title bar naming the
+// channel, the topic, its tags and flags, and shows the whole first post
+// above the replies. A button on the bar switches back to the side panel,
+// and the choice sticks.
+
+_forumTopicFullPref() {
+  return localStorage.getItem('haven_forum_topic_full') !== '0';
+},
+
+_forumApplyThreadChrome(parentId) {
+  const panel = document.getElementById('thread-panel');
+  const bar = document.getElementById('thread-forum-bar');
+  const icon = panel && panel.querySelector('.thread-panel-icon');
+  if (!panel || !bar) return;
+  const topic = parentId && this._forumActive && this._forumTopics ? this._forumTopics.get(parentId) : null;
+  if (!topic) {
+    panel.classList.remove('thread-panel-forum');
+    panel.style.removeProperty('--thread-forum-left');
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    if (icon) icon.textContent = '🧵';
+    return;
+  }
+  const full = this._forumTopicFullPref();
+  panel.classList.toggle('thread-panel-forum', full);
+  if (!this._forumThreadResizeBound) {
+    this._forumThreadResizeBound = true;
+    window.addEventListener('resize', () => this._forumSyncThreadLeft());
+  }
+  this._forumSyncThreadLeft();
+
+  const ch = this.channels.find(c => c.code === this.currentChannel);
+  const title = document.getElementById('thread-panel-title');
+  if (title) title.textContent = ch ? ch.name : t('thread_runtime.title');
+  if (icon) icon.textContent = '🗂️';
+
+  const tagsOf = this._forumTagsOf();
+  const tags = Array.isArray(topic.tags) ? topic.tags : [];
+  const thumb = this._forumThumbOf(topic);
+  const flags = [
+    topic.nsfw ? `<span class="forum-tag forum-tag-nsfw" title="${this._escapeHtml(t('forum.nsfw'))}">🔞</span>` : '',
+    topic.is_archived ? `<span class="forum-tag forum-tag-protected" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : '',
+    topic.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : '',
+    topic.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : '',
+    ...tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }),
+  ].join('');
+  const when = new Date(topic.created_at);
+  bar.innerHTML = `
+    ${thumb ? `<div class="thread-forum-thumb"><img src="${this._escapeHtml(thumb)}" alt=""></div>` : ''}
+    <div class="thread-forum-text">
+      <div class="thread-forum-title">${this._escapeHtml(this._forumTitleOf(topic))}</div>
+      ${flags ? `<div class="forum-topic-tags thread-forum-tags">${flags}</div>` : ''}
+      <div class="thread-forum-meta">${this._escapeHtml(topic.username || '')} · <span title="${this._escapeHtml(this._fmtDateTime(when))}">${this._forumAgo(when)}</span></div>
+    </div>
+    <button type="button" class="btn-sm thread-forum-layout" title="${this._escapeHtml(t(full ? 'thread_runtime.forum_side_title' : 'thread_runtime.forum_full_title'))}">${t(full ? 'thread_runtime.forum_side' : 'thread_runtime.forum_full')}</button>`;
+  bar.style.display = 'flex';
+  bar.querySelector('.thread-forum-layout').addEventListener('click', () => {
+    localStorage.setItem('haven_forum_topic_full', full ? '0' : '1');
+    this._forumApplyThreadChrome(parentId);
+  });
+},
+
+// The panel is fixed to the window, so its left edge is set to the chat
+// column's left edge and kept there when the window changes size.
+_forumSyncThreadLeft() {
+  const panel = document.getElementById('thread-panel');
+  if (!panel || !panel.classList.contains('thread-panel-forum')) return;
+  const header = document.querySelector('.channel-header');
+  const left = header ? Math.max(0, Math.round(header.getBoundingClientRect().left)) : 0;
+  panel.style.setProperty('--thread-forum-left', left + 'px');
+},
+
+// The whole first post, rendered like a message, above the replies.
+_forumThreadRenderTopic() {
+  const container = document.getElementById('thread-messages');
+  if (!container) return;
+  container.querySelector('.thread-topic-body')?.remove();
+  const parentId = this._activeThreadParent;
+  const topic = parentId && this._forumActive && this._forumTopics ? this._forumTopics.get(parentId) : null;
+  if (!topic) return;
+  const body = document.createElement('div');
+  body.className = 'thread-topic-body message-content';
+  body.innerHTML = this._formatContent(topic.content || '') + (this._renderAttachmentTags ? this._renderAttachmentTags(topic.attachmentTags) : '');
+  container.prepend(body);
+  this._lazyMedia && this._lazyPump && this._lazyPump();
+},
+
 // ── NSFW channels ──────────────────────────────────────────
 
 _hideNsfw() {
   return localStorage.getItem('haven_hide_nsfw') === 'true';
+},
+
+// The blur on NSFW topics is on unless switched off in Settings (#5633).
+_blurNsfw() {
+  try { return localStorage.getItem('haven_blur_nsfw') !== 'false'; } catch { return true; }
+},
+
+// A topic marked NSFW is left out of the forum for anyone who hides NSFW
+// channels; it is the same switch (#5633).
+_forumTopicHidden(msg) {
+  return !!(msg && msg.nsfw && this._hideNsfw());
 },
 
 _setHideNsfw(v) {
@@ -1024,6 +1244,7 @@ _setHideNsfw(v) {
   const toggle = document.getElementById('hide-nsfw-channels');
   if (toggle) toggle.checked = !!v;
   if (this._renderChannels) this._renderChannels();
+  if (this._forumActive && this._forumReload) this._forumReload();
 },
 
 };

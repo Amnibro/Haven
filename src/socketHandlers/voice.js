@@ -22,7 +22,7 @@ function readNativeScreenClient(data) {
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getUserHighestRole,
-          broadcastVoiceUsers, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
+          broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
           pruneStaleVoiceUsers, getMentionableChannelMembers,
           getActiveMusicSyncState, getMusicQueuePayload, botAudioManager } = ctx;
   const { channelUsers, voiceUsers, voiceLastActivity, activeMusic,
@@ -159,17 +159,36 @@ module.exports = function register(socket, ctx) {
     io.to(`voice:${code}`).to(`channel:${code}`).emit('stream-viewers-update', { channelCode: code, streams });
   }
 
-  // The role-gate and use_voice checks voice-join applies. The rejoin and
-  // self-heal paths re-add a user to a room without going through voice-join,
-  // so they need the same gate or they become a way around it.
-  function voiceAccessAllowed(channelId) {
-    if (socket.user.isAdmin) return true;
-    if (ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId))) return false;
-    if (!socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', channelId)) return false;
-    return true;
+  // ── Voice join ──────────────────────────────────────────
+  // (#5687) On unless an admin switched it off under Guest Access.
+  function guestsMayUseVoice() {
+    try {
+      const row = db.prepare("SELECT value FROM server_settings WHERE key = 'guests_allow_voice'").get();
+      return !(row && row.value === 'false');
+    } catch { return true; }
   }
 
-  // ── Voice join ──────────────────────────────────────────
+  // Rejoining after a reconnect and the server's own heal put someone back in
+  // a voice room without going through voice-join, so they make the same
+  // checks it makes. They used to check only membership, so someone refused
+  // voice (no use_voice, missing the channel's required roles, a guest on a
+  // text-only server) could get in that way, and past a full room.
+  function voiceEntryRefusal(code, channelId) {
+    if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId))) {
+      return 'This channel needs a role you do not hold';
+    }
+    if (!socket.user.isAdmin && !socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', channelId)) {
+      return 'You don\'t have permission to use voice chat';
+    }
+    if (socket.user.isGuest && !guestsMayUseVoice()) return 'Guests cannot join voice on this server';
+    const lim = db.prepare('SELECT voice_user_limit FROM channels WHERE id = ?').get(channelId);
+    const room = voiceUsers.get(code);
+    if (lim && lim.voice_user_limit > 0 && !(room && room.has(socket.user.id)) && (room ? room.size : 0) >= lim.voice_user_limit) {
+      return `Voice is full (${room.size}/${lim.voice_user_limit})`;
+    }
+    return null;
+  }
+
   socket.on('voice-join', (data) => {
     if (!data || typeof data !== 'object') return;
     const nativeClient = readNativeScreenClient(data);
@@ -197,6 +216,11 @@ module.exports = function register(socket, ctx) {
     }
     if (!socket.user.isAdmin && !socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', vch.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to use voice chat');
+    }
+    // Guests skip the role permission above, since they hold no roles. An
+    // admin can keep them to text with one switch instead (#5687).
+    if (socket.user.isGuest && !guestsMayUseVoice()) {
+      return socket.emit('error-msg', 'Guests cannot join voice on this server');
     }
     if (vchSettings && vchSettings.voice_user_limit > 0) {
       const currentCount = voiceUsers.has(code) ? voiceUsers.get(code).size : 0;
@@ -734,6 +758,8 @@ module.exports = function register(socket, ctx) {
     }
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     const channelId = channel ? channel.id : null;
+    // A voice roster is for the channel's own members.
+    if (!channel || !db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return;
     const room = voiceUsers.get(code);
     const users = room
       ? Array.from(room.values()).map(u => serializeVoiceRosterUser(u, channelId))
@@ -776,8 +802,13 @@ module.exports = function register(socket, ctx) {
           const vMember = db.prepare(
             'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
           ).get(vch.id, socket.user.id);
-          if (!vMember || !voiceAccessAllowed(vch.id)) {
-            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — ${socket.user.username} is not a member of channel ${code} or lacks voice access; signalling client to clean up.`);
+          const healRefusal = vMember ? voiceEntryRefusal(code, vch.id) : null;
+          if (!vMember) {
+            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — ${socket.user.username} is not a member of channel ${code}; signalling client to clean up.`);
+            socket.emit('voice-channel-gone', { code });
+          } else if (healRefusal) {
+            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped for ${socket.user.username} on ${code}: ${healRefusal}`);
+            socket.emit('error-msg', healRefusal);
             socket.emit('voice-channel-gone', { code });
           } else {
             // Cancel any pending grace-period eviction for this slot.
@@ -931,9 +962,10 @@ module.exports = function register(socket, ctx) {
       socket.emit('voice-channel-gone', { code });
       return;
     }
-    if (!voiceAccessAllowed(vch.id)) {
-      console.warn(`[VoiceDiag] voice-rejoin from ${socket.user.username} (id=${socket.user.id}) on ${code} REJECTED — no voice access`);
-      socket.emit('error-msg', 'You don\'t have permission to use voice chat');
+    const rejoinRefusal = voiceEntryRefusal(code, vch.id);
+    if (rejoinRefusal) {
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED for ${socket.user.username} on ${code}: ${rejoinRefusal}`);
+      socket.emit('error-msg', rejoinRefusal);
       socket.emit('voice-channel-gone', { code });
       return;
     }
@@ -1174,18 +1206,12 @@ module.exports = function register(socket, ctx) {
     // Prune ghost entries first so the requesting client doesn't replace
     // an already-clean sidebar with a stale snapshot. If pruning actually
     // removed users, also rebroadcast the fresh roster so every other
-    // client reconciles too. (#5347 follow-up.)
+    // client reconciles too. (#5347 follow-up.) Only rooms of channels the
+    // user belongs to are reported.
+    const visible = voiceCodesVisibleTo(socket.user.id);
     for (const code of Array.from(voiceUsers.keys())) {
       const removed = pruneStaleVoiceUsers(code);
-      // Only channels this user may see: a private channel's code is its join
-      // secret, and DM call participants are nobody else's business.
-      if (typeof ctx.getVoiceCountViewerIds === 'function') {
-        const v = ctx.getVoiceCountViewerIds(code);
-        if (!(v && (v.members.has(socket.user.id) || (socket.user.isAdmin && v.nonDm)))) {
-          if (removed.length && voiceUsers.get(code)?.size) broadcastVoiceUsers(code);
-          continue;
-        }
-      }
+      if (!visible.has(code)) { if (removed.length) broadcastVoiceUsers(code); continue; }
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(serializeVoicePeer);
