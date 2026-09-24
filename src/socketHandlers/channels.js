@@ -31,7 +31,7 @@ function moveUploadToDeleted(relPath) {
     fs.renameSync(src, dst);
   } catch { /* file locked or already moved */ }
 }
-const { isString, isInt } = require('./helpers');
+const { isString, isInt, releasableUploads } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
 
 module.exports = function register(socket, ctx) {
@@ -1813,6 +1813,9 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // Only the DM's own participants' attachments go with it.
+    const participants = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id).map(r => r.user_id);
+
     const deleteAll = db.transaction((chId) => {
       db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
       db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
@@ -1822,7 +1825,7 @@ module.exports = function register(socket, ctx) {
     });
     deleteAll(channel.id);
 
-    for (const name of filenames) moveUploadToDeleted(name);
+    for (const name of releasableUploads(db, filenames, participants)) moveUploadToDeleted(name);
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
     clearChannelRuntimeState(state, code);

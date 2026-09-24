@@ -3,7 +3,7 @@
 const path = require('path');
 const fs   = require('fs');
 const bcrypt = require('bcryptjs');
-const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions } = require('./helpers');
+const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
 
@@ -953,28 +953,29 @@ module.exports = function register(socket, ctx) {
       return cb({ error: 'Failed to delete items', detail: err && err.message });
     }
 
-    // Move attachment files to deleted-attachments/ for each deleted message
+    // Move attachment files to deleted-attachments/ for each deleted message,
+    // but only each author's own attachments (releasableUploads).
     const uploadRe = UPLOAD_PATH_RE;
     for (const r of deletable) {
+      const toRelease = [];
       uploadRe.lastIndex = 0;
       let m;
-      while ((m = uploadRe.exec(r.content || '')) !== null) {
-        moveUploadToDeleted(m[1]);
-      }
+      while ((m = uploadRe.exec(r.content || '')) !== null) toRelease.push(m[1]);
       // For E2E DMs the content is ciphertext; honor client-supplied URLs
       // the same way `delete-message` does. (`data.attachmentsByMessage`
       // is an object map { [messageId]: [url, url, ...] }.)
       if (channel.is_dm && data.attachmentsByMessage && typeof data.attachmentsByMessage === 'object') {
         const urls = data.attachmentsByMessage[r.id];
         if (Array.isArray(urls)) {
-          for (const url of urls) {
+          for (const url of urls.slice(0, 50)) {
             if (typeof url !== 'string') continue;
             const match = url.match(UPLOAD_PATH_EXACT_RE);
             if (!match || !isSafeUploadRelPath(match[1])) continue;
-            moveUploadToDeleted(match[1]);
+            toRelease.push(match[1]);
           }
         }
       }
+      for (const rel of releasableUploads(db, toRelease, [r.user_id])) moveUploadToDeleted(rel);
     }
 
     // Broadcast individual deletes so all clients' message lists, pin lists,
@@ -1034,11 +1035,13 @@ module.exports = function register(socket, ctx) {
         for (const r of rows) { delPin.run(r.id); delMsg.run(r.id); }
       })();
 
+      const toRelease = [];
       for (const r of rows) {
         UPLOAD_PATH_RE.lastIndex = 0;
         let m;
-        while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) moveUploadToDeleted(m[1]);
+        while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) toRelease.push(m[1]);
       }
+      for (const rel of releasableUploads(db, toRelease, [uid])) moveUploadToDeleted(rel);
 
       // One event per channel rather than one per message: a person with
       // years of history would otherwise send thousands of events to every
@@ -1907,25 +1910,25 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Failed to delete message');
     }
 
+    const toRelease = [];
     const uploadRe = UPLOAD_PATH_RE;
+    uploadRe.lastIndex = 0;
     let m;
-    while ((m = uploadRe.exec(msg.content || '')) !== null) {
-      moveUploadToDeleted(m[1]);
-    }
+    while ((m = uploadRe.exec(msg.content || '')) !== null) toRelease.push(m[1]);
 
     // For E2E DMs, the message content is encrypted ciphertext, so the
     // upload regex above can't find attachments. The client (which has the
-    // decrypted content) passes the URLs in `data.attachments`. We honor
-    // this for any DM channel — permission gating above already restricts
-    // who can delete the message (author or anyone with delete perm). (#5299)
+    // decrypted content) passes the URLs in `data.attachments`. (#5299)
+    // Either way, only the author's own attachments go (releasableUploads).
     if (channel.is_dm && Array.isArray(data.attachments)) {
-      for (const url of data.attachments) {
+      for (const url of data.attachments.slice(0, 50)) {
         if (typeof url !== 'string') continue;
         const match = url.match(UPLOAD_PATH_EXACT_RE);
         if (!match || !isSafeUploadRelPath(match[1])) continue;
-        moveUploadToDeleted(match[1]);
+        toRelease.push(match[1]);
       }
     }
+    for (const rel of releasableUploads(db, toRelease, [msg.user_id])) moveUploadToDeleted(rel);
 
     io.to(`channel:${code}`).emit('message-deleted', {
       channelCode: code,
