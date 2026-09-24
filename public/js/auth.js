@@ -339,13 +339,20 @@
     const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
     if (!username || !password) return showError(t('auth.errors.enter_admin_credentials'));
+    const codeInput = document.getElementById('admin-recover-code');
+    const code = codeInput ? codeInput.value.trim() : '';
     try {
       const res = await fetch('/api/auth/admin-recover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, ...(code ? { code } : {}) })
       });
       const data = await res.json();
+      // An account with two-factor on asks for its code here too.
+      if (data && data.needsCode && codeInput) {
+        codeInput.style.display = '';
+        codeInput.focus();
+      }
       if (!res.ok) return showError(data.error || t('auth.errors.recovery_failed'));
       const e2eWrap = await deriveE2EWrappingKey(password);
       sessionStorage.setItem('haven_e2e_wrap', e2eWrap);

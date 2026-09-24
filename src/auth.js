@@ -1573,6 +1573,30 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
     if (!valid) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    // The password alone is not enough when the account has two-factor on:
+    // this route hands back a full admin session, so it asks for the code
+    // the normal login asks for, under the same per-account limit.
+    if (user.totp_enabled && user.totp_secret) {
+      if (_totpRecentFails(user.id).length >= TOTP_MAX_FAILS) {
+        return res.status(429).json({ error: 'Too many wrong codes. Wait a few minutes and try again.' });
+      }
+      const code = typeof req.body.code === 'string' ? req.body.code.replace(/\s/g, '') : '';
+      if (!code) return res.status(401).json({ error: 'Enter your two-factor code', needsCode: true });
+      const totp = new OTPAuth.TOTP({ issuer: 'Haven', label: user.username, algorithm: 'SHA1', digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(user.totp_secret) });
+      let ok = totp.validate({ token: code, window: 1 }) !== null;
+      if (!ok) {
+        const norm = code.toUpperCase().replace(/-/g, '');
+        const asBackup = norm.slice(0, 4) + '-' + norm.slice(4);
+        const wanted = crypto.createHash('sha256').update(asBackup).digest('hex');
+        const hit = db.prepare('SELECT id FROM totp_backup_codes WHERE user_id = ? AND used = 0 AND code_hash = ?').get(user.id, wanted);
+        if (hit) { db.prepare('UPDATE totp_backup_codes SET used = 1 WHERE id = ?').run(hit.id); ok = true; }
+      }
+      if (!ok) {
+        _totpFails.set(user.id, [..._totpRecentFails(user.id), Date.now()]);
+        return res.status(401).json({ error: 'Invalid code', needsCode: true });
+      }
+      _totpFails.delete(user.id);
+    }
 
     // Restore admin status
     db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
