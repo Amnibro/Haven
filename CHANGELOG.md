@@ -11,6 +11,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Security
+- **DMs ask before anything goes out unencrypted.** A DM went out readable
+  by the server, without asking, whenever encryption was locked on the
+  device or the other person had never set it up, and pictures and files
+  went up the same way. Now nothing is sent until you choose: send it
+  unencrypted, unlock encryption, or cancel, which puts the message back in
+  the box. The lock in a DM's header shows when messages there are not
+  encrypted, and a message that fails to encrypt is no longer sent anyway.
+- **A contact's changed encryption key is flagged.** Haven remembers each
+  contact's key on your device. If it changes, because they reset their
+  keys or because someone in between swapped it, the DM says so, the lock
+  turns into a warning, and nothing is encrypted to the new key until you
+  trust it. Show verification code opens the code to compare with them.
+- **Encryption passphrase, in Settings > Encryption.** The backup of your
+  encrypted-DM key is locked with your login password, which the server
+  receives every time you sign in. You can lock it with a separate
+  passphrase instead, one the server never sees. Sign-in then asks for it
+  once on each new device, and changing your password no longer touches the
+  backup. Nobody can reset the passphrase for you, including the server
+  admin.
+- **Forged proxy headers are ignored.** TRUST_PROXY now believes a proxy only
+  on the same machine or the local network (nginx, Caddy, Docker, the
+  built-in tunnel), so a server exposed straight to the internet ignores a
+  forged X-Forwarded-For and nobody can pick their own address to get past
+  login limits or IP bans. **If your proxy runs on another machine, such as
+  Cloudflare's proxy, set TRUST_PROXY=1**, or every visitor will look like
+  the proxy.
+- **Removing or kicking someone from a private channel changes its join
+  code**, and its private sub-channels' codes, so the code they already know
+  no longer lets them back in.
+- **Moving a top-level channel under another needs the delete-channel
+  permission on it**, since the move lets that parent's sub-channel managers
+  delete it.
+- **Flash games load their player from Haven itself.** The Ruffle player came
+  from unpkg, whichever version was newest that day, fetched from a third
+  party by every player, and the games pages allowed scripts from all of
+  unpkg. It is a pinned dependency now, and no page allows unpkg.
+
+### Fixed
+- **A too-long reply in a thread was still lost (#5691).** The 4.12.0 fix
+  covered the main message box and DMs. A thread reply comes back into the
+  thread box now too, and the thread and pop-out DM boxes stop at the length
+  limit like the main box does.
+- **start.sh installs new dependencies after an update**, not only the first
+  time it runs.
+
 ## [4.12.0] - 2026-09-23
 
 A security release: please update soon. A full review of the server and
