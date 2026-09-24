@@ -1169,8 +1169,18 @@ module.exports = function register(socket, ctx) {
       if (!Number.isFinite(parsed) || parsed <= 0) {
         return socket.emit('error-msg', 'Invalid role');
       }
-      const role = db.prepare('SELECT id, name FROM roles WHERE id = ?').get(parsed);
+      const role = db.prepare('SELECT id, name, level FROM roles WHERE id = ?').get(parsed);
       if (!role) return socket.emit('error-msg', 'Role not found');
+      // A default role is handed to every member of the channel, the person
+      // setting it included, so it follows the same line as assigning a role:
+      // only roles below your own level, and only in a channel you are in.
+      if (!socket.user.isAdmin) {
+        const myLevel = getUserEffectiveLevel(socket.user.id);
+        if (role.level >= myLevel) return socket.emit('error-msg', `You can only use roles below your level (${myLevel})`);
+        if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) {
+          return socket.emit('error-msg', 'Channel not found');
+        }
+      }
       roleId = role.id;
     }
 
