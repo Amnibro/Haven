@@ -4918,12 +4918,42 @@ _freshImageUrl(img) {
 },
 
 _openImageInNewTab(img) {
-  this._freshImageUrl(img).then(({ url, ephemeral }) => {
+  this._freshImageUrl(img).then(async ({ url, blob, ephemeral }) => {
     if (!url) return;
     // An object URL only resolves for a tab that shares this page's session,
     // so the decrypted copy opens without noopener; a plain link keeps it.
-    if (ephemeral) window.open(url, '_blank'); else window.open(url, '_blank', 'noopener,noreferrer');
+    if (!ephemeral) { window.open(url, '_blank', 'noopener,noreferrer'); return; }
+    // The decrypted copy opens as a page on Haven's own origin, and the
+    // sender picked its type. An SVG there is a document that can run script
+    // as Haven, so anything but a plain raster picture is redrawn to a PNG
+    // first and only the PNG is opened.
+    const inert = await this._inertImageBlob(blob);
+    if (inert === blob) { window.open(url, '_blank'); return; }
+    try { URL.revokeObjectURL(url); } catch {}
+    const safeUrl = URL.createObjectURL(inert);
+    setTimeout(() => { try { URL.revokeObjectURL(safeUrl); } catch {} }, 60000);
+    window.open(safeUrl, '_blank');
   }).catch(() => this._showToast?.(t('media_runtime.image.open_failed'), 'error'));
+},
+
+// A picture that is safe to open as a page: raster types as they are,
+// anything else (SVG above all) drawn onto a canvas and taken back as a PNG,
+// which keeps how it looks and drops anything it could run.
+async _inertImageBlob(blob) {
+  if (blob && /^image\/(png|jpeg|gif|webp|avif|bmp)$/.test(blob.type || '')) return blob;
+  const src = URL.createObjectURL(blob);
+  try {
+    const pic = new Image();
+    pic.src = src;
+    await pic.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.min(pic.naturalWidth || 1024, 8192);
+    canvas.height = Math.min(pic.naturalHeight || 1024, 8192);
+    canvas.getContext('2d').drawImage(pic, 0, 0, canvas.width, canvas.height);
+    return await new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('not drawable'))), 'image/png'));
+  } finally {
+    try { URL.revokeObjectURL(src); } catch {}
+  }
 },
 
 _suggestedImageFilename(src, blob) {

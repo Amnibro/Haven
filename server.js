@@ -608,6 +608,10 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // Decode the path, resolve it against the uploads root, and check containment,
 // so it is the real target on disk being judged rather than the spelling of
 // the URL. Compared case-insensitively because NTFS is.
+const UPLOAD_MEDIA_EXTS = new Set([
+  '.mp3', '.ogg', '.oga', '.wav', '.m4a', '.aac', '.flac', '.opus', '.weba',
+  '.mp4', '.webm', '.mov', '.m4v', '.ogv',
+]);
 const BLOCKED_UPLOAD_DIRS = ['deleted-attachments', 'bot-audio'].map(
   dir => path.resolve(UPLOADS_DIR, dir).toLowerCase()
 );
@@ -657,6 +661,13 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
       res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     } else {
       res.setHeader('Content-Disposition', 'attachment');
+      // Anyone can upload a file, and one served as JavaScript (or HTML, CSS,
+      // XML) from Haven's own origin counts as 'self' in the CSP: a <script
+      // src="/uploads/x.js"> anywhere would run it, whatever the disposition
+      // says. Only audio and video keep their real type, for the inline
+      // players; everything else is opaque bytes, which nosniff refuses to
+      // run as script.
+      if (!UPLOAD_MEDIA_EXTS.has(ext)) res.setHeader('Content-Type', 'application/octet-stream');
     }
   }
 }));
