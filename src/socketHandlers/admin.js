@@ -1389,6 +1389,15 @@ module.exports = function register(socket, ctx) {
     // `password_hash`, at which point DM history becomes unrecoverable.
     db.prepare('UPDATE users SET temp_password_hash = ?, password_version = ?, must_change_password = 1 WHERE id = ?')
       .run(hash, newPwv, target.id);
+    // The version bump stops old tokens within seconds; open connections
+    // close now as well, the way signing out everywhere does, rather than
+    // carrying on under the old session until they happen to drop.
+    for (const [, sk] of io.sockets.sockets) {
+      if (sk.user && sk.user.id === target.id) {
+        sk.emit('force-logout', { reason: 'sessions_revoked' });
+        sk.disconnect(true);
+      }
+    }
 
     if (typeof logAudit === 'function') {
       logAudit({
