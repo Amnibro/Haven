@@ -896,6 +896,22 @@ router.get('/validate', (req, res) => {
 });
 
 // ── TOTP Validate (second step of login) ─────────────────
+// Wrong authenticator codes are counted per account, not per address: the
+// address limit alone could be walked around wherever the client address is
+// taken from a forwarded header, and a six-digit code falls to a few hundred
+// thousand guesses. Someone who already has the password gets 10 tries in 15
+// minutes; after that the code step waits.
+const _totpFails = new Map();   // userId -> [timestamps]
+const TOTP_MAX_FAILS = 10;
+const TOTP_FAIL_WINDOW_MS = 15 * 60 * 1000;
+function _totpRecentFails(userId) {
+  const now = Date.now();
+  const list = (_totpFails.get(userId) || []).filter(t => now - t < TOTP_FAIL_WINDOW_MS);
+  if (list.length) _totpFails.set(userId, list); else _totpFails.delete(userId);
+  return list;
+}
+setInterval(() => { for (const id of [..._totpFails.keys()]) _totpRecentFails(id); }, TOTP_FAIL_WINDOW_MS).unref?.();
+
 router.post('/totp/validate', authLimiter, async (req, res) => {
   try {
     const challengeToken = typeof req.body.challengeToken === 'string' ? req.body.challengeToken : '';
@@ -914,6 +930,9 @@ router.post('/totp/validate', authLimiter, async (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(challenge.id);
     if (!user || !user.totp_enabled || !user.totp_secret) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    if (_totpRecentFails(user.id).length >= TOTP_MAX_FAILS) {
+      return res.status(429).json({ error: 'Too many wrong codes. Wait a few minutes and log in again.' });
     }
 
     // Try TOTP code first
@@ -952,8 +971,10 @@ router.post('/totp/validate', authLimiter, async (req, res) => {
     }
 
     if (!valid) {
+      _totpFails.set(user.id, [..._totpRecentFails(user.id), Date.now()]);
       return res.status(401).json({ error: 'Invalid code' });
     }
+    _totpFails.delete(user.id);
 
     // (#5300) Apply any deferred temp-reset state mutations now that TOTP
     // succeeded. If the user logged in with their original password,
