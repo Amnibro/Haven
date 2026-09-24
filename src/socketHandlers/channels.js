@@ -1546,6 +1546,13 @@ module.exports = function register(socket, ctx) {
         if (!_canManageSubsScoped(newParent.id) || !_canManageSubsScoped(channel.parent_channel_id)) {
           return socket.emit('error-msg', 'You don\'t have permission to move channels');
         }
+        // A top-level channel moved under a parent becomes one that parent's
+        // sub-channel managers can delete, while deleting a top-level channel
+        // is otherwise delete_channel's business (admin-only by default). So
+        // pulling one in takes delete_channel on that channel.
+        if (!channel.parent_channel_id && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_channel', channel.id)) {
+          return socket.emit('error-msg', "You don't have permission to move a top-level channel under another");
+        }
         const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id = ?').get(newParent.id);
         const position = (maxPos && maxPos.mp != null) ? maxPos.mp + 1 : 0;
         db.prepare('UPDATE channels SET parent_channel_id = ?, position = ?, category = NULL WHERE id = ?').run(newParent.id, position, channel.id);
