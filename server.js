@@ -751,22 +751,39 @@ const uploadStorage = multer.diskStorage({
   }
 });
 
-// Image-only upload — multer cap is generous; real limit enforced per-request from DB
-const upload = multer({
-  storage: uploadStorage,
-  limits: { fileSize: 100 * 1024 * 1024 * 1024 },  // 100 GB ceiling — admin DB setting is the real limit
-  fileFilter: (req, file, cb) => {
-    if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) cb(null, true);
-    else cb(new Error('Only images allowed (jpg, png, gif, webp)'));
-  }
-});
+// Uploads stop at the caller's own cap while they stream. The ceiling used to
+// be a nominal 100 GB with the real cap checked only once the whole file was
+// on disk, so anyone signed in could fill the disk with one request (the
+// avatar route needs no permission at all). Each route still checks its own,
+// often smaller, limit afterwards. Multer removes a file cut off this way.
+function uploadCapBytesFor(req) {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  const mb = user ? uploadCapMb(user) : 25;
+  return (Number.isFinite(mb) && mb > 0 ? mb : 25) * 1024 * 1024 + 1;
+}
+const imageOnlyFilter = (req, file, cb) => {
+  if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) cb(null, true);
+  else cb(new Error('Only images allowed (jpg, png, gif, webp)'));
+};
+
+// Image-only upload
+const upload = {
+  single: (field) => (req, res, next) => multer({
+    storage: uploadStorage,
+    limits: { fileSize: uploadCapBytesFor(req) },
+    fileFilter: imageOnlyFilter
+  }).single(field)(req, res, next)
+};
 
 // General file upload — no MIME restrictions; safety enforced via
 // Content-Disposition: attachment on non-image downloads (see /uploads handler)
-const fileUpload = multer({
-  storage: uploadStorage,
-  limits: { fileSize: 100 * 1024 * 1024 * 1024 },  // 100 GB ceiling — admin DB setting is the real limit
-});
+const fileUpload = {
+  single: (field) => (req, res, next) => multer({
+    storage: uploadStorage,
+    limits: { fileSize: uploadCapBytesFor(req) }
+  }).single(field)(req, res, next)
+};
 
 const botAudioUpload = multer({
   storage: multer.diskStorage({
@@ -944,6 +961,13 @@ app.get('/api/ice-servers', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  // TURN credentials relay traffic through the admin's server; a banned
+  // account gets none.
+  try {
+    if (require('./src/database').getDb().prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+  } catch { /* fall through to the normal answer */ }
 
   // Admin-configured STUN/TURN (#5399) live in server_settings and take
   // precedence over env vars, which in turn override the built-in pool.
