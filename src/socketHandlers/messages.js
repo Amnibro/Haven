@@ -1989,6 +1989,19 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_message', fromCh.id)) {
       return cb({ error: 'You need message management permissions to move messages' });
     }
+    // Moving is reading one channel and posting into another, so the mover
+    // needs to be able to do both: access to each end, and the right to post
+    // at the destination. A Channel Mod of their own channel could otherwise
+    // push messages into #announcements or any channel whose code they knew,
+    // and a Mod could pull a private channel's messages out into one they read.
+    if (!socket.user.isAdmin) {
+      if (!hasChannelAccess(fromCh.id) || !hasChannelAccess(toCh.id)) return cb({ error: 'Channel not found' });
+      const dest = db.prepare('SELECT read_only, text_enabled FROM channels WHERE id = ?').get(toCh.id);
+      if (dest && dest.text_enabled === 0) return cb({ error: 'Text messages are disabled in that channel' });
+      if (dest && dest.read_only === 1 && !userHasPermission(socket.user.id, 'read_only_override', toCh.id)) {
+        return cb({ error: 'That channel is read-only' });
+      }
+    }
 
     const placeholders = messageIds.map(() => '?').join(',');
     const count = db.prepare(
