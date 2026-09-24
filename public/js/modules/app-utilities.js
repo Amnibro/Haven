@@ -2512,8 +2512,10 @@ _sendGifMessage(url) {
   if (dmCh && dmCh.is_dm && input && typeof this._sendMessage === 'function') {
     const draft = input.value;
     input.value = url;
-    Promise.resolve(this._sendMessage()).finally(() => {
-      if (draft && !input.value) {
+    Promise.resolve(this._sendMessage()).catch(() => {}).then((sent) => {
+      // Backing out of an unencrypted send leaves the GIF's link in the box,
+      // and the draft is what belongs there.
+      if (sent === false || (draft && !input.value)) {
         input.value = draft;
         input.dispatchEvent(new Event('input', { bubbles: true }));
       }
@@ -2558,9 +2560,16 @@ _sendStickerMessage(url) {
   // pre-processing apply uniformly.
   const input = document.getElementById('message-input');
   if (!input || !this.currentChannel) return;
+  const draft = input.value;
   input.value = url;
-  if (typeof this._sendMessage === 'function') this._sendMessage();
-  else this.socket.emit('send-message', { code: this.currentChannel, content: url });
+  if (typeof this._sendMessage === 'function') {
+    // Backing out of an unencrypted send brings back the draft, not the link.
+    Promise.resolve(this._sendMessage()).then((sent) => {
+      if (sent !== false) return;
+      input.value = draft;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }).catch(() => {});
+  } else this.socket.emit('send-message', { code: this.currentChannel, content: url });
 },
 
 // /gif slash command — inline GIF search results above the input
@@ -3809,6 +3818,7 @@ _quoteDMPiPMessage(msgEl) {
 _sendDMPiPMessage() {
   const input = document.getElementById('dm-pip-input');
   if (!input || !this._activeDMPip) return;
+  const typed = input.value;
   let content = (input.value || '').trim();
   const hasPiPImages = this._pipImageQueue && this._pipImageQueue.length > 0;
   if (!content && !hasPiPImages) return;
@@ -3826,15 +3836,21 @@ _sendDMPiPMessage() {
   (async () => {
     const ch = this.channels.find(c => c.code === code);
     const isDm = ch && ch.is_dm && ch.dm_target;
-    let partner = isDm ? this._getE2EPartnerFor(code) : null;
-    if (isDm && !partner && this.e2e && this.e2e.ready) {
-      try {
-        const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-        if (jwk) {
-          this._dmPublicKeys[ch.dm_target.id] = jwk;
-          partner = this._getE2EPartnerFor(code);
-        }
-      } catch {}
+    // Not sent after all: the text and the reply go back in the box.
+    const putBack = () => {
+      if (this._activeDMPip !== code || input.value.trim()) return;
+      input.value = typed;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const replyEl = replyTo && document.querySelector(`#dm-pip-messages .message[data-msg-id="${replyTo}"], #dm-pip-messages .message-compact[data-msg-id="${replyTo}"]`);
+      if (replyEl) this._setDMPiPReply(replyEl, replyTo);
+      input.focus();
+    };
+    // Nothing goes out unencrypted, or to a changed key, without asking.
+    let partner = null;
+    if (isDm) {
+      const gate = await this._dmSendGate(code);
+      if (!gate) { putBack(); return; }
+      partner = gate.partner;
     }
 
     // Pre-process content-transforming slash commands client-side so they
@@ -3900,7 +3916,11 @@ _sendDMPiPMessage() {
           payload.content = encrypted;
           payload.encrypted = true;
         } catch (err) {
+          // This used to go out unencrypted without a word. It stays here now.
           console.warn('[E2E][PiP] Encryption failed:', err);
+          this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+          putBack();
+          return;
         }
       }
       this.socket.emit('send-message', payload);
@@ -5213,6 +5233,40 @@ _showConfirmModal(title, message, opts = {}) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
     document.addEventListener('keydown', onKey);
     setTimeout(() => okBtn.focus(), 0);
+  });
+},
+
+// A question with several answers. Resolves the id of the button pressed, or
+// null for Escape or a click outside. Focus starts on the first button and
+// Enter only presses the focused one, so a stray Enter (someone still sending)
+// cannot pick a risky answer.
+_askChoice(title, message, buttons) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.style.zIndex = '100002';
+    overlay.innerHTML = `
+      <div class="modal modal-confirm">
+        <h3 style="margin-top:0">${this._escapeHtml(title || '')}</h3>
+        ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
+        <div class="modal-actions" style="margin-top:12px;flex-wrap:wrap"></div>
+      </div>
+    `;
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+    const close = (val) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+    const row = overlay.querySelector('.modal-actions');
+    for (const b of buttons) {
+      const el = document.createElement('button');
+      el.className = b.danger ? 'btn-sm btn-danger-fill' : (b.accent ? 'btn-sm btn-accent' : 'btn-sm');
+      el.textContent = b.label;
+      el.addEventListener('click', () => close(b.id));
+      row.appendChild(el);
+    }
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    setTimeout(() => row.querySelector('button')?.focus(), 0);
   });
 },
 

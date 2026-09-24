@@ -526,6 +526,8 @@ _makeSpoilerToggle(file, isPip = false) {
 
 async _flushImageQueue(bundled = false, personaPrefix = '') {
   if (!this._imageQueue || this._imageQueue.length === 0) return;
+  // A DM that can't be encrypted asks first; backing out keeps the queue.
+  if (!(await this._dmSendGate(this.currentChannel))) return;
   const files = [...this._imageQueue];
   this._clearImageQueue();
   this._uploadsCancelled = false;
@@ -567,6 +569,7 @@ _clearFileQueue() {
 
 async _flushFileQueue() {
   if (!this._fileQueue || this._fileQueue.length === 0) return;
+  if (!(await this._dmSendGate(this.currentChannel))) return;
   const files = [...this._fileQueue];
   this._clearFileQueue();
   for (const file of files) {
@@ -637,6 +640,7 @@ _renderPiPImageQueue() {
 
 async _flushPiPImageQueue(bundled = false) {
   if (!this._pipImageQueue || this._pipImageQueue.length === 0) return;
+  if (!(await this._dmSendGate(this._pipImageQueueTarget))) return;
   const files = [...this._pipImageQueue];
   const target = this._pipImageQueueTarget;
   this._pipImageQueue = [];

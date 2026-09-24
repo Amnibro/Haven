@@ -7644,13 +7644,12 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
   }
 
   // Detect E2E DM — encrypt file bytes before uploading
+  // A DM picture that can't be encrypted goes up only if the sender agrees.
   const ch = this.channels.find(c => c.code === targetChannel);
   const isDm = ch && ch.is_dm && ch.dm_target;
-  let partner = isDm ? this._getE2EPartnerFor(targetChannel) : null;
-  if (isDm && !partner && this.e2e && this.e2e.ready) {
-    const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-    if (jwk) { this._dmPublicKeys[ch.dm_target.id] = jwk; partner = this._getE2EPartnerFor(targetChannel); }
-  }
+  const gate = isDm ? await this._dmSendGate(targetChannel) : { partner: null };
+  if (!gate) { this._uploadsCancelled = true; return; }
+  const partner = gate.partner;
 
   if (partner) {
     // E2E path: encrypt file → upload as opaque blob → send encrypted text marker

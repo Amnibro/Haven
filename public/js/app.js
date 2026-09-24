@@ -5,16 +5,16 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.12.1';
-import UIBindMethods   from './modules/app-ui.js?v=4.11.1';
-import MediaMethods    from './modules/app-media.js?v=4.11.1';
+import UIBindMethods   from './modules/app-ui.js?v=4.12.1';
+import MediaMethods    from './modules/app-media.js?v=4.12.1';
 import ContextMethods  from './modules/app-context.js?v=4.9.1';
-import ChannelMethods  from './modules/app-channels.js?v=4.11.1';
-import MessageMethods  from './modules/app-messages.js?v=4.11.2';
+import ChannelMethods  from './modules/app-channels.js?v=4.12.1';
+import MessageMethods  from './modules/app-messages.js?v=4.12.1';
 import UserMethods     from './modules/app-users.js?v=4.9.1';
 import VoiceMethods    from './modules/app-voice.js?v=4.10.1';
 import UtilityMethods  from './modules/app-utilities.js?v=4.12.1';
 import AdminMethods    from './modules/app-admin.js?v=4.12.1';
-import PlatformMethods from './modules/app-platform.js?v=4.9.2';
+import PlatformMethods from './modules/app-platform.js?v=4.12.1';
 import SearchMethods   from './modules/app-search.js?v=4.10.1';
 import FerryMethods    from './modules/app-ferry.js?v=4.10.1';
 import ForumMethods    from './modules/app-forum.js?v=4.11.1';
@@ -63,6 +63,10 @@ class HavenApp {
     this._e2eWrappingKey = null;   // wrapping key kept in memory for cross-device sync
     this._pendingKeyReqs = {};     // userId → [resolve] for promise-based partner key fetch
     this._pendingE2ENotice = null; // E2E notice text to re-append after message re-render
+    this._e2eNoKey = new Set();    // DM partners the server has no public key for
+    this._e2eKeyNotices = new Map(); // partner id -> key-change note shown in their DM this session
+    this._plainDmOk = new Set();   // DM codes the user agreed to send unencrypted this session
+    this._dmGateAsking = new Map(); // DM code -> the send question in progress
     this._oldestMsgId = null;      // oldest message ID in current view (for pagination)
     this._noMoreHistory = false;   // true when all history has been loaded
     this._loadingHistory = false;  // prevent concurrent history requests

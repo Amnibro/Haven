@@ -10823,6 +10823,12 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .e2e-menu-wrapper {
   position: relative;
 }
+/* The lock stands out when a DM is not encrypted or the partner's key changed. */
+#e2e-menu-btn.e2e-off,
+#e2e-menu-btn.e2e-changed {
+  background: rgba(231, 76, 60, 0.15);
+  border-radius: var(--radius-sm, 4px);
+}
 .e2e-dropdown {
   position: absolute;
   top: 100%;

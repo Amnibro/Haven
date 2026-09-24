@@ -10,6 +10,7 @@ async _sendMessage() {
   // `let` (not `const`) — DM slash commands like /me, /shrug rewrite this
   // before E2E encryption further down. (#5297)
   let content = input.value.trim();
+  const typed = input.value;
   // Kept for a moment so a refusal for length can put the text back (#5691).
   if (content) this._lastSendDraft = { text: input.value, code: this.currentChannel, at: Date.now() };
   const hasImages = this._imageQueue && this._imageQueue.length > 0;
@@ -212,7 +213,17 @@ async _sendMessage() {
     // E2E: encrypt DM messages
     const ch = this.channels.find(c => c.code === this.currentChannel);
     const isDm = ch && ch.is_dm && ch.dm_target;
-    let partner = this._getE2EPartner();
+    let partner = null;
+    // A DM that is not sent after all goes back in the box, with its reply.
+    const replyId = payload.replyTo;
+    const putBack = () => {
+      if (this.currentChannel !== payload.code || input.value.trim()) return;
+      input.value = typed;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const replyEl = replyId && document.querySelector(`#messages .message[data-msg-id="${replyId}"], #messages .message-compact[data-msg-id="${replyId}"]`);
+      if (replyEl) this._setReply(replyEl, replyId);
+      input.focus();
+    };
 
     // Pre-process content-transforming slash commands client-side so they
     // survive E2E encryption (server can't parse encrypted slash commands)
@@ -263,16 +274,11 @@ async _sendMessage() {
       }
     }
 
-    // If DM but partner key not yet cached, request it via promise
-    if (isDm && !partner && this.e2e && this.e2e.ready) {
-      const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-      if (jwk) {
-        this._dmPublicKeys[ch.dm_target.id] = jwk;
-        partner = this._getE2EPartner();
-      }
-      if (!partner) {
-        this._showToast(t('toasts.encryption_key_unavailable'), 'warning');
-      }
+    // Nothing goes out unencrypted, or to a changed key, without asking.
+    if (isDm) {
+      const gate = await this._dmSendGate(payload.code);
+      if (!gate) { putBack(); return false; }
+      partner = gate.partner;
     }
 
     // Warn before encrypting: once this is ciphertext the server cannot judge
@@ -303,8 +309,11 @@ async _sendMessage() {
         payload.content = encrypted;
         payload.encrypted = true;
       } catch (err) {
+        // It used to go out unencrypted after a warning. It stays here now.
         console.warn('[E2E] Encryption failed:', err);
-        this._showToast(t('toasts.encryption_failed'), 'warning');
+        this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+        putBack();
+        return false;
       }
     }
     this.socket.emit('send-message', payload);
@@ -490,6 +499,12 @@ _renderMessages(messages, lastReadMessageId) {
   if (this._isDmContainer((container))) {
     this._enforceDmLinkPolicy((container));
     this._maybeShowDmSafetyNotice?.(container);
+    // A partner's changed key stays noted in their DM for the session. It is
+    // added here because anything appended after a render is lost to the
+    // next one, and a DM can render several times while it opens.
+    const keyCh = this.channels?.find(c => c.code === this.currentChannel);
+    const keyNote = keyCh?.dm_target && this._e2eKeyNotices.get(keyCh.dm_target.id);
+    if (keyNote) this._appendE2ENotice(keyNote);
   }
   // Wire burn-after-read placeholders + countdowns (#5280)
   this._wireBurnMessages?.(container);

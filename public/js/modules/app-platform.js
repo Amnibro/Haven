@@ -919,6 +919,7 @@ async _initE2E() {
     }
     if (ok) {
       await this._e2eSetupListeners();
+      this._updateE2EIndicator();
       // If keys were auto-reset during init (backup unwrap failed), notify
       if (this.e2e.keysWereReset) {
         setTimeout(() => {
@@ -1017,21 +1018,26 @@ async _e2eSetupListeners() {
   this._e2eListenersAttached = true;
 
   this.socket.on('public-key-result', (data) => {
-    if (!data.jwk) return;
+    if (!data || !data.userId) return;
+    // Remembered so the DM header can say messages there are not encrypted.
+    if (!data.jwk) {
+      this._e2eNoKey.add(data.userId);
+      this._updateE2EIndicator();
+      return;
+    }
+    this._e2eNoKey.delete(data.userId);
     const oldKey = this._dmPublicKeys[data.userId];
     const changed = oldKey && (oldKey.x !== data.jwk.x || oldKey.y !== data.jwk.y);
+    // The first key seen for a partner is remembered on this device.
+    if (data.userId !== this.user?.id) this._e2ePinCheck(data.userId, data.jwk);
     this._dmPublicKeys[data.userId] = data.jwk;
+    this._updateE2EIndicator();
 
     if (changed && this.e2e) {
       this.e2e.clearSharedKey(data.userId);
       console.warn(`[E2E] Partner ${data.userId} key changed — cache invalidated`);
-
-      // Post a visible notice if we're currently viewing a DM with this partner.
-      // Store it so it survives the message re-render triggered by _retryDecryptForUser.
-      const ch = this.channels.find(c => c.code === this.currentChannel);
-      if (ch && ch.is_dm && ch.dm_target && ch.dm_target.id === data.userId) {
-        this._pendingE2ENotice = t('platform.e2e.partner_keys_changed', { name: ch.dm_target.username, date: this._fmtDateTime(new Date()) });
-      }
+      // Noted in their DM for the rest of the session (see _renderMessages).
+      this._noteE2EKeyChange(data.userId);
     }
 
     // Resolve any pending requestPartnerKey promises for this user
@@ -1331,6 +1337,7 @@ async _submitE2EPassword() {
     if (ok) {
       // Set up E2E listeners (handles publish + conflict resolution)
       await this._e2eSetupListeners();
+      this._updateE2EIndicator();
       this._closeE2EPasswordModal();
       this._showToast(t('platform.e2e.unlocked'), 'success');
 
@@ -1384,6 +1391,142 @@ _getE2EPartnerFor(code) {
   return jwk ? { userId: ch.dm_target.id, publicKeyJwk: jwk } : null;
 },
 
+// ── Partner key pinning ───────────────────────────────
+// The first key seen for each DM partner is remembered on this device. A
+// different one later means they reset their keys, or someone in between
+// swapped it, and nothing is encrypted to it until the sender accepts it.
+_e2ePinStore() {
+  return `haven_e2e_pins_${this.user?.id}`;
+},
+
+_e2ePinFingerprint(jwk) {
+  return `${jwk.x}.${jwk.y}`;
+},
+
+_e2ePins() {
+  try { return JSON.parse(localStorage.getItem(this._e2ePinStore()) || '{}') || {}; } catch { return {}; }
+},
+
+_e2ePinSet(userId, jwk) {
+  try {
+    const pins = this._e2ePins();
+    pins[userId] = this._e2ePinFingerprint(jwk);
+    localStorage.setItem(this._e2ePinStore(), JSON.stringify(pins));
+  } catch { /* no storage: nothing is remembered */ }
+},
+
+/** 'new' (and now remembered), 'same', or 'changed'. */
+_e2ePinCheck(userId, jwk) {
+  const pinned = this._e2ePins()[userId];
+  if (!pinned) { this._e2ePinSet(userId, jwk); return 'new'; }
+  return pinned === this._e2ePinFingerprint(jwk) ? 'same' : 'changed';
+},
+
+/** Web Crypto only exists on HTTPS (and localhost), so plain HTTP has no E2E. */
+_e2eSupported() {
+  return typeof HavenE2E !== 'undefined' && !!(window.crypto && window.crypto.subtle);
+},
+
+/**
+ * Every DM send asks here first. Resolves { partner } to encrypt for,
+ * { partner: null } to send as it is (not a DM, or the sender agreed to send
+ * it unencrypted), or null when the sender backed out. A DM used to go out
+ * unencrypted, without asking, whenever a key was missing, and a partner's
+ * key could be swapped without anyone noticing.
+ */
+_dmSendGate(code) {
+  const ch = this.channels?.find(c => c.code === code);
+  if (!ch || !ch.is_dm || !ch.dm_target) return Promise.resolve({ partner: null });
+  // One question per conversation at a time, so a batch of files asks once.
+  if (this._dmGateAsking.has(code)) return this._dmGateAsking.get(code);
+  const asking = this._dmSendGateAsk(ch).finally(() => this._dmGateAsking.delete(code));
+  this._dmGateAsking.set(code, asking);
+  return asking;
+},
+
+async _dmSendGateAsk(ch) {
+  const code = ch.code;
+  const partnerId = ch.dm_target.id;
+  const name = ch.dm_target.username;
+  const self = ch.is_self_dm || partnerId === this.user?.id;
+  let partner = this._getE2EPartnerFor(code);
+  if (!partner && this.e2e?.ready) {
+    try {
+      const jwk = await this.e2e.requestPartnerKey(this.socket, partnerId);
+      if (jwk) { this._dmPublicKeys[partnerId] = jwk; partner = this._getE2EPartnerFor(code); }
+    } catch { /* same as no key */ }
+  }
+  if (partner) {
+    if (self || this._e2ePinCheck(partnerId, partner.publicKeyJwk) !== 'changed') return { partner };
+    const choice = await this._askChoice(
+      t('platform.e2e.key_changed_title', { name }),
+      t('platform.e2e.key_changed_body', { name }),
+      [
+        { id: 'cancel', label: t('modals.common.cancel') },
+        { id: 'verify', label: t('platform.e2e.key_changed_verify') },
+        { id: 'trust', label: t('platform.e2e.key_changed_trust'), danger: true },
+      ]
+    );
+    if (choice === 'verify') this._showE2EVerification(code);
+    if (choice !== 'trust') return null;
+    this._e2ePinSet(partnerId, partner.publicKeyJwk);
+    this._updateE2EIndicator();
+    return { partner };
+  }
+  if (this._plainDmOk.has(code)) return { partner: null };
+  const supported = this._e2eSupported();
+  const locked = supported && !this.e2e?.ready;
+  const buttons = [{ id: 'cancel', label: t('modals.common.cancel') }];
+  if (locked) buttons.push({ id: 'unlock', label: t('platform.e2e.plain_unlock'), accent: true });
+  buttons.push({ id: 'send', label: t('platform.e2e.plain_send'), danger: true });
+  let why;
+  if (!supported) why = t('platform.e2e.plain_unsupported');
+  else if (locked) why = t('platform.e2e.plain_locked');
+  else why = t('platform.e2e.plain_no_key', { name });
+  const choice = await this._askChoice(t('platform.e2e.plain_title'), why, buttons);
+  if (choice === 'unlock') this._requireE2E(() => this._updateE2EIndicator());
+  if (choice !== 'send') return null;
+  this._plainDmOk.add(code);
+  return { partner: null };
+},
+
+/** A partner's key change is noted in their DM for the rest of the session. */
+_noteE2EKeyChange(userId) {
+  if (this._e2eKeyNotices.has(userId)) return;
+  const ch = this.channels?.find(c => c.is_dm && c.dm_target && c.dm_target.id === userId);
+  if (!ch) return;
+  this._e2eKeyNotices.set(userId, t('platform.e2e.partner_keys_changed', { name: ch.dm_target.username, date: this._fmtDateTime(new Date()) }));
+},
+
+/** The lock in a DM's header shows whether what you send there is encrypted. */
+_updateE2EIndicator() {
+  const btn = document.getElementById('e2e-menu-btn');
+  const ch = this.channels?.find(c => c.code === this.currentChannel);
+  if (!btn || !ch || !ch.is_dm || !ch.dm_target) return;
+  const id = ch.dm_target.id;
+  const name = ch.dm_target.username;
+  const jwk = this._dmPublicKeys[id];
+  const self = ch.is_self_dm || id === this.user?.id;
+  const pinned = jwk && !self ? this._e2ePins()[id] : null;
+  let icon = '🔐', off = false, changed = false, title = t('platform.e2e.status_on');
+  if (!this._e2eSupported()) {
+    icon = '🔓'; off = true; title = t('platform.e2e.status_off_unsupported');
+  } else if (!this.e2e?.ready) {
+    icon = '🔓'; off = true; title = t('platform.e2e.status_off_locked');
+  } else if (pinned && pinned !== this._e2ePinFingerprint(jwk)) {
+    icon = '⚠️'; changed = true; title = t('platform.e2e.status_changed', { name });
+    // Said in the conversation as well. After a reload the old key is not
+    // in memory, so this comparison is the only place the change shows up.
+    this._noteE2EKeyChange(id);
+  } else if (!jwk && this._e2eNoKey.has(id)) {
+    icon = '🔓'; off = true; title = t('platform.e2e.status_off_no_key', { name });
+  }
+  btn.textContent = icon;
+  btn.classList.toggle('e2e-off', off);
+  btn.classList.toggle('e2e-changed', changed);
+  btn.title = title;
+},
+
 /**
  * Re-fetch messages when a partner's key arrives (fixes key/message race).
  */
@@ -1416,15 +1559,15 @@ async _fetchDMPartnerKey(channel) {
 /**
  * Show E2E verification code modal for the current DM.
  */
-async _showE2EVerification() {
-  const partner = this._getE2EPartner();
+async _showE2EVerification(channelCode = this.currentChannel) {
+  const partner = this._getE2EPartnerFor(channelCode);
   if (!partner || !this.e2e?.ready) {
     this._showToast(t('platform.e2e.no_partner_key'), 'error');
     return;
   }
   try {
     const code = await this.e2e.getVerificationCode(this.e2e.publicKeyJwk, partner.publicKeyJwk);
-    const ch = this.channels.find(c => c.code === this.currentChannel);
+    const ch = this.channels.find(c => c.code === channelCode);
     const partnerName = ch?.dm_target?.username || t('platform.e2e.partner');
 
     let overlay = document.getElementById('e2e-verify-overlay');

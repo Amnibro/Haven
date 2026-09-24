@@ -3463,19 +3463,15 @@ _uploadGeneralFile(file, targetCode) {
 /**
  * If `code` is an E2E DM and the partner key is available, encrypt `file`,
  * upload as an opaque blob, then send the metadata as an encrypted
- * `e2e-file:{json}` text message. Returns true if handled, false otherwise
- * (so the caller can fall back to the plaintext upload path). (#5310, #5308)
+ * `e2e-file:{json}` text message. Returns true if handled (sent, or the
+ * sender backed out of sending it unencrypted), false when the caller should
+ * upload it as it is. (#5310, #5308)
  */
 async _maybeUploadEncryptedDmFile(file, code, ch) {
   if (!ch || !ch.is_dm || !ch.dm_target) return false;
-  let partner = this._getE2EPartnerFor ? this._getE2EPartnerFor(code) : this._getE2EPartner();
-  if (!partner && this.e2e && this.e2e.ready) {
-    const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-    if (jwk) {
-      this._dmPublicKeys[ch.dm_target.id] = jwk;
-      partner = this._getE2EPartnerFor ? this._getE2EPartnerFor(code) : this._getE2EPartner();
-    }
-  }
+  const gate = await this._dmSendGate(code);
+  if (!gate) return true;
+  const partner = gate.partner;
   if (!partner) return false;
   try {
     const arrayBuffer = await file.arrayBuffer();

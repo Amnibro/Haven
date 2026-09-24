@@ -275,6 +275,7 @@ async switchChannel(code) {
   // Show E2E encryption menu only in DM channels
   const e2eWrapper = document.getElementById('e2e-menu-wrapper');
   if (e2eWrapper) e2eWrapper.style.display = isDm ? '' : 'none';
+  if (isDm) this._updateE2EIndicator();
   // Close dropdown when switching channels
   const e2eDropdown = document.getElementById('e2e-dropdown');
   if (e2eDropdown) e2eDropdown.style.display = 'none';
