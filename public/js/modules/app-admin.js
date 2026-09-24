@@ -646,6 +646,12 @@ _applyServerSettings() {
   const _maxMsgChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
   const msgInput = document.getElementById('message-input');
   if (msgInput) msgInput.maxLength = _maxMsgChars;
+  // The thread and pop-out DM boxes had no cap, so a long reply was only
+  // refused after sending (#5691).
+  for (const id of ['thread-input', 'dm-pip-input']) {
+    const el = document.getElementById(id);
+    if (el) el.maxLength = _maxMsgChars;
+  }
   document.querySelectorAll('.edit-textarea').forEach(el => { el.maxLength = _maxMsgChars; });
 
   // Refresh DM cleanup notice (#5340) when cleanup_enabled / cleanup_max_age_days
