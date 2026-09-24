@@ -394,9 +394,12 @@ module.exports = function register(socket, ctx) {
       const joinedChannelIds = [];
       let joinedCount = 0;
       const txn = db.transaction(() => {
+        // Rooms are joined by the channel list sent right after this, which
+        // leaves out any channel whose required roles the person lacks.
+        // Joining them here put the live feed of gated channels in front of
+        // people the gate is meant to keep out.
         for (const parent of parents) {
           insertMember.run(parent.id, socket.user.id);
-          socket.join(`channel:${parent.code}`);
           joinedChannelIds.push(parent.id);
           joinedCount++;
           // Sub-channels: never grant private subs via invite. When a
@@ -405,7 +408,6 @@ module.exports = function register(socket, ctx) {
           const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(parent.id);
           for (const sub of subs) {
             insertMember.run(sub.id, socket.user.id);
-            socket.join(`channel:${sub.code}`);
             joinedChannelIds.push(sub.id);
             joinedCount++;
           }
@@ -655,6 +657,11 @@ module.exports = function register(socket, ctx) {
       } else {
         return socket.emit('error-msg', 'Not a member of this channel');
       }
+    }
+    // Entering joins the channel's live room, which is reading it, so its
+    // required roles apply here as they do to its history.
+    if (!socket.user.isAdmin && !ch.is_dm && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(ch.id))) {
+      return socket.emit('error-msg', 'This channel needs a role you do not hold');
     }
 
     if (socket.currentChannel && socket.currentChannel !== code) {

@@ -33,6 +33,17 @@ module.exports = function register(socket, ctx) {
           logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
 
+  // Membership alone is not access. A person can hold a membership row for a
+  // channel whose required roles they lack (joining with the server code adds
+  // every public channel, gate or not), and the gate is what hides it from
+  // them. Every handler that reads a channel or posts in it checks both;
+  // only get-messages, send-message and the thread handlers used to.
+  function hasChannelAccess(channelId) {
+    if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
+    if (socket.user.isAdmin) return true;
+    return ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId));
+  }
+
   const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
   const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
@@ -450,7 +461,7 @@ module.exports = function register(socket, ctx) {
   const SEARCH_PAGE_SIZE = 25;
   socket.on('search-messages', (data) => {
     if (!data || typeof data !== 'object') return;
-    let query = typeof data.query === 'string' ? data.query.trim() : '';
+    let query = typeof data.query === 'string' ? data.query.trim().slice(0, 300) : '';
     if (!query) return;
 
     // Per-account rate limit on the expensive FTS path. On trip we tell the
@@ -513,17 +524,20 @@ module.exports = function register(socket, ctx) {
         ? db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(filters.in)
         : db.prepare('SELECT id FROM channels WHERE name = ? COLLATE NOCASE AND is_dm = 0').get(filters.in);
       if (!target) return socket.emit('search-results', empty);
-      const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(target.id, socket.user.id);
-      if (!isMember) return socket.emit('search-results', empty);
+      if (!hasChannelAccess(target.id)) return socket.emit('search-results', empty);
       conditions.push('m.channel_id = ?');
       params.push(target.id);
     } else {
-      conditions.push(`m.channel_id IN (
-        SELECT cm.channel_id FROM channel_members cm
+      const reachable = db.prepare(`
+        SELECT c.id, c.role_gate FROM channel_members cm
         JOIN channels c ON c.id = cm.channel_id
         WHERE cm.user_id = ? AND c.is_dm = 0
-      )`);
-      params.push(socket.user.id);
+      `).all(socket.user.id)
+        .filter(ch => socket.user.isAdmin || ctx.roleGateAllows(socket.user.id, ch))
+        .map(ch => ch.id);
+      if (!reachable.length) return socket.emit('search-results', empty);
+      conditions.push(`m.channel_id IN (${reachable.map(() => '?').join(',')})`);
+      params.push(...reachable);
     }
 
     // ── from:username filter ──
@@ -656,9 +670,7 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const member = hasChannelAccess(channel.id);
     if (!member && !socket.user.isAdmin) {
       return socket.emit('error-msg', 'Not a member of this channel');
     }
@@ -830,9 +842,7 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const member = hasChannelAccess(channel.id);
     if (!member && !socket.user.isAdmin) {
       return socket.emit('error-msg', 'Not a member of this channel');
     }
@@ -1452,7 +1462,7 @@ module.exports = function register(socket, ctx) {
     if (!channel || channel.is_dm) return;   // DMs are E2E; no server-side tags
 
     const isAdmin = socket.user.isAdmin;
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    const member = hasChannelAccess(channel.id);
     if (!member && !isAdmin) return socket.emit('error-msg', 'Not a member of this channel');
 
     const isOwn = msg.user_id === socket.user.id;
@@ -1510,7 +1520,7 @@ module.exports = function register(socket, ctx) {
     if (channel.is_dm) return ack({ error: 'Cannot tag in DMs' });
 
     const isAdmin = socket.user.isAdmin;
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    const member = hasChannelAccess(channel.id);
     if (!member && !isAdmin) return ack({ error: 'Not a member of this channel' });
 
     const canManage = isAdmin || userHasPermission(socket.user.id, 'manage_tags', channel.id);
@@ -1638,7 +1648,7 @@ module.exports = function register(socket, ctx) {
     if (!channel) return cb({ error: 'Channel not found' });
     if (channel.is_dm) return cb({ error: 'Scheduled sends are not available in direct messages' });
     if (channel.text_enabled === 0) return cb({ error: 'Text messages are disabled in this channel' });
-    if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return cb({ error: 'Not a member of this channel' });
+    if (!hasChannelAccess(channel.id)) return cb({ error: 'Not a member of this channel' });
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) return cb({ error: 'This channel is read-only' });
     const mute = activeMuteNotice(socket.user.id);
     if (mute) return cb({ error: mute });
@@ -2152,9 +2162,7 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const member = hasChannelAccess(channel.id);
     if (!member) return;
 
     const pins = db.prepare(`
@@ -2216,9 +2224,7 @@ module.exports = function register(socket, ctx) {
       }
 
       // Verify membership of the channel the message lives in.
-      const member = db.prepare(
-        'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-      ).get(msg.channel_id, socket.user.id);
+      const member = hasChannelAccess(msg.channel_id);
       if (!member && !socket.user.isAdmin) return;
       if (msg.reactions_enabled === 0) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
@@ -2265,9 +2271,7 @@ module.exports = function register(socket, ctx) {
       if (!msgRow) return;
       const code = msgRow.code;
 
-      const member = db.prepare(
-        'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-      ).get(msgRow.channel_id, socket.user.id);
+      const member = hasChannelAccess(msgRow.channel_id);
       if (!member && !socket.user.isAdmin) return;
       if (msgRow.reactions_enabled === 0) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
@@ -2335,7 +2339,7 @@ module.exports = function register(socket, ctx) {
       const channel = db.prepare('SELECT id, name, text_enabled FROM channels WHERE code = ?').get(code);
       if (!channel) return;
       if (channel.text_enabled === 0) return socket.emit('error-msg', 'Polls are not allowed when text is disabled');
-      const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+      const member = hasChannelAccess(channel.id);
       if (!member) return socket.emit('error-msg', 'Not a member of this channel');
 
       const safeQuestion = sanitizeText(question);
@@ -2394,7 +2398,7 @@ module.exports = function register(socket, ctx) {
       const code = socket.currentChannel;
       if (!code) return;
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-      if (!channel) return;
+      if (!channel || !hasChannelAccess(channel.id)) return;
 
       const msg = db.prepare('SELECT id, poll_data FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
       if (!msg || !msg.poll_data) return;
@@ -2445,7 +2449,7 @@ module.exports = function register(socket, ctx) {
       const code = socket.currentChannel;
       if (!code) return;
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-      if (!channel) return;
+      if (!channel || !hasChannelAccess(channel.id)) return;
       const msg = db.prepare('SELECT id, poll_data FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
       if (!msg || !msg.poll_data) return;
 
