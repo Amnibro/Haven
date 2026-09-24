@@ -168,6 +168,27 @@ module.exports = function register(socket, ctx) {
     } catch { return true; }
   }
 
+  // Rejoining after a reconnect and the server's own heal put someone back in
+  // a voice room without going through voice-join, so they make the same
+  // checks it makes. They used to check only membership, so someone refused
+  // voice (no use_voice, missing the channel's required roles, a guest on a
+  // text-only server) could get in that way, and past a full room.
+  function voiceEntryRefusal(code, channelId) {
+    if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId))) {
+      return 'This channel needs a role you do not hold';
+    }
+    if (!socket.user.isAdmin && !socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', channelId)) {
+      return 'You don\'t have permission to use voice chat';
+    }
+    if (socket.user.isGuest && !guestsMayUseVoice()) return 'Guests cannot join voice on this server';
+    const lim = db.prepare('SELECT voice_user_limit FROM channels WHERE id = ?').get(channelId);
+    const room = voiceUsers.get(code);
+    if (lim && lim.voice_user_limit > 0 && !(room && room.has(socket.user.id)) && (room ? room.size : 0) >= lim.voice_user_limit) {
+      return `Voice is full (${room.size}/${lim.voice_user_limit})`;
+    }
+    return null;
+  }
+
   socket.on('voice-join', (data) => {
     if (!data || typeof data !== 'object') return;
     const nativeClient = readNativeScreenClient(data);
@@ -781,8 +802,13 @@ module.exports = function register(socket, ctx) {
           const vMember = db.prepare(
             'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
           ).get(vch.id, socket.user.id);
+          const healRefusal = vMember ? voiceEntryRefusal(code, vch.id) : null;
           if (!vMember) {
             console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — ${socket.user.username} is not a member of channel ${code}; signalling client to clean up.`);
+            socket.emit('voice-channel-gone', { code });
+          } else if (healRefusal) {
+            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped for ${socket.user.username} on ${code}: ${healRefusal}`);
+            socket.emit('error-msg', healRefusal);
             socket.emit('voice-channel-gone', { code });
           } else {
             // Cancel any pending grace-period eviction for this slot.
@@ -936,8 +962,10 @@ module.exports = function register(socket, ctx) {
       socket.emit('voice-channel-gone', { code });
       return;
     }
-    if (socket.user.isGuest && !guestsMayUseVoice()) {
-      socket.emit('error-msg', 'Guests cannot join voice on this server');
+    const rejoinRefusal = voiceEntryRefusal(code, vch.id);
+    if (rejoinRefusal) {
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED for ${socket.user.username} on ${code}: ${rejoinRefusal}`);
+      socket.emit('error-msg', rejoinRefusal);
       socket.emit('voice-channel-gone', { code });
       return;
     }
