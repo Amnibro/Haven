@@ -4312,14 +4312,46 @@ app.post('/api/webhooks/:token/sounds', webhookLimiter, express.json({ limit: '1
 const modLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Rate limit exceeded' } });
 
 // Helper: get authenticated user from Bearer token with admin/mod check
+// Moderation over HTTP follows the rules the app follows: the permission
+// must be held server-wide (a role held in one channel does not count; the
+// helper above counts it), the caller must not be banned, and the target must
+// rank below the caller. These routes skipped the rank checks, so a Mod, or
+// anyone who had created a channel, could mute or kick an admin.
 function getModUser(req, permission) {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return { error: 'Unauthorized', status: 401 };
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, permission)) {
+  const { getDb } = require('./src/database');
+  if (getDb().prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) {
     return { error: 'Insufficient permissions', status: 403 };
   }
-  return { user };
+  const isAdmin = verifyAdminFromDb(user);
+  if (!isAdmin && !(socketRuntime && socketRuntime.userHasPermission(user.id, permission))) {
+    return { error: 'Insufficient permissions', status: 403 };
+  }
+  return { user, isAdmin };
+}
+
+function modOutranks(auth, targetId) {
+  if (!auth || !auth.user || targetId === auth.user.id) return false;
+  const { getDb } = require('./src/database');
+  const target = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(targetId);
+  if (target && target.is_admin) return false;
+  if (auth.isAdmin) return true;
+  if (!socketRuntime) return false;
+  return socketRuntime.getUserEffectiveLevel(targetId) < socketRuntime.getUserEffectiveLevel(auth.user.id);
+}
+
+// Undoing a ban or mute: an admin's stands, as does one placed by someone of
+// equal or higher rank.
+function modMayUndo(auth, placedBy) {
+  if (!auth || !auth.user) return false;
+  if (auth.isAdmin || !placedBy || placedBy === auth.user.id) return true;
+  const { getDb } = require('./src/database');
+  const placer = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(placedBy);
+  if (placer && placer.is_admin) return false;
+  if (!socketRuntime) return false;
+  return socketRuntime.getUserEffectiveLevel(placedBy) < socketRuntime.getUserEffectiveLevel(auth.user.id);
 }
 
 // POST /api/moderation/kick
@@ -4338,6 +4370,7 @@ app.post('/api/moderation/kick', modLimiter, express.json({ limit: '16kb' }), (r
 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!modOutranks(auth, userId)) return res.status(403).json({ error: 'You can only kick people ranked below you' });
 
   db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channel.id, userId);
 
@@ -4367,6 +4400,7 @@ app.post('/api/moderation/ban', modLimiter, express.json({ limit: '16kb' }), (re
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot ban an admin' });
+  if (!modOutranks(auth, userId)) return res.status(403).json({ error: 'You can only ban people ranked below you' });
 
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
@@ -4397,6 +4431,10 @@ app.post('/api/moderation/unban', modLimiter, express.json({ limit: '16kb' }), (
   const db = getDb();
   const { userId } = req.body;
   if (!userId || !Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
+  const existingBan = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(userId);
+  if (existingBan && !modMayUndo(auth, existingBan.banned_by)) {
+    return res.status(403).json({ error: 'You can\'t undo a ban placed by an admin or by someone of equal or higher rank' });
+  }
 
   db.prepare('DELETE FROM bans WHERE user_id = ?').run(userId);
   const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
@@ -4415,8 +4453,10 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!modOutranks(auth, userId)) return res.status(403).json({ error: 'You can only mute people ranked below you' });
 
-  const durationMs = Number.isInteger(duration) && duration > 0 ? duration * 60 * 1000 : 10 * 60 * 1000;
+  // Same ceiling as the app: 30 days.
+  const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
   const expiresAt = new Date(Date.now() + durationMs).toISOString();
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
@@ -4443,6 +4483,10 @@ app.post('/api/moderation/unmute', modLimiter, express.json({ limit: '16kb' }), 
   const db = getDb();
   const { userId } = req.body;
   if (!userId || !Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
+  if (!auth.isAdmin && userId === auth.user.id) return res.status(403).json({ error: 'You can\'t unmute yourself' });
+  for (const { muted_by: by } of db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(userId)) {
+    if (!modMayUndo(auth, by)) return res.status(403).json({ error: 'You can\'t undo a mute placed by an admin or by someone of equal or higher rank' });
+  }
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);
   const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
