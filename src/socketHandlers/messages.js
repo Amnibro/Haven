@@ -38,6 +38,18 @@ module.exports = function register(socket, ctx) {
   // every public channel, gate or not), and the gate is what hides it from
   // them. Every handler that reads a channel or posts in it checks both;
   // only get-messages, send-message and the thread handlers used to.
+  // @everyone, @here and @Role reach whole groups, so only people allowed
+  // mention_everyone may send them; for anyone else a zero-width space after
+  // the @ keeps the text and stops the ping. send-message has always done
+  // this; threads, polls and scheduled messages skipped it.
+  function pingSafe(content, userId, channelId) {
+    if (typeof content !== 'string' || !content.includes('@')) return content;
+    const u = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+    if ((u && u.is_admin) || userHasPermission(userId, 'mention_everyone', channelId)) return content;
+    const out = content.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
+    return stripRoleMentions(out, db.prepare('SELECT name FROM roles').all().map(r => r.name));
+  }
+
   function hasChannelAccess(channelId) {
     if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
     if (socket.user.isAdmin) return true;
@@ -1652,7 +1664,7 @@ module.exports = function register(socket, ctx) {
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) return cb({ error: 'This channel is read-only' });
     const mute = activeMuteNotice(socket.user.id);
     if (mute) return cb({ error: mute });
-    const content = sanitizeText(data.content.trim());
+    const content = sanitizeText(pingSafe(data.content.trim(), socket.user.id, channel.id));
     if (!content) return cb({ error: 'Nothing to send' });
     // The same checks a live send gets, at the moment it is queued.
     if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return cb({ error: 'That message was blocked' });
@@ -1709,12 +1721,22 @@ module.exports = function register(socket, ctx) {
       for (const row of due) {
         try {
           db.prepare('DELETE FROM scheduled_messages WHERE id = ?').run(row.id);
-          const author = db.prepare('SELECT id, username, display_name, avatar, avatar_shape, border, border_transform, animate_profile FROM users WHERE id = ?').get(row.user_id);
+          const author = db.prepare('SELECT id, username, display_name, avatar, avatar_shape, border, border_transform, animate_profile, is_admin FROM users WHERE id = ?').get(row.user_id);
           const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, row.user_id);
           if (!author || !member) continue;
-          const result = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(row.channel_id, row.user_id, row.content);
+          // The rules at the moment it goes out, not when it was queued: a
+          // ban or a mute since then, a channel gone read-only or text-off,
+          // required roles lost, or mention_everyone taken away all count.
+          if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(author.id)) continue;
+          if (activeMuteNotice(author.id)) continue;
+          const chNow = db.prepare('SELECT id, read_only, text_enabled, role_gate FROM channels WHERE id = ?').get(row.channel_id);
+          if (!chNow || chNow.text_enabled === 0) continue;
+          if (!author.is_admin && chNow.read_only === 1 && !userHasPermission(author.id, 'read_only_override', chNow.id)) continue;
+          if (!author.is_admin && !ctx.roleGateAllows(author.id, chNow)) continue;
+          const sendContent = pingSafe(row.content, author.id, chNow.id);
+          const result = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(row.channel_id, row.user_id, sendContent);
           const message = {
-            id: result.lastInsertRowid, content: row.content, created_at: new Date().toISOString(),
+            id: result.lastInsertRowid, content: sendContent, created_at: new Date().toISOString(),
             username: author.display_name || author.username, user_id: author.id,
             avatar: author.avatar || null, avatar_shape: author.avatar_shape || 'circle',
             border: author.border || null, borderTransform: parseBorderTransform(author.border_transform),
@@ -1722,7 +1744,7 @@ module.exports = function register(socket, ctx) {
             reply_to: null, replyContext: null, reactions: [], edited_at: null, thread: null
           };
           io.to(`channel:${row.code}`).emit('new-message', { channelCode: row.code, message });
-          sendPushNotifications(row.channel_id, row.code, row.channel_name, author.id, message.username, row.content);
+          sendPushNotifications(row.channel_id, row.code, row.channel_name, author.id, message.username, sendContent);
           fireWebhookCallbacks(row.channel_id, row.code, message);
           for (const [, s] of io.sockets.sockets) {
             if (s.user && s.user.id === author.id) s.emit('scheduled-message-sent', { id: row.id, channelCode: row.code, channelName: row.channel_name });
@@ -2336,13 +2358,21 @@ module.exports = function register(socket, ctx) {
 
       const code = socket.currentChannel;
       if (!code) return;
-      const channel = db.prepare('SELECT id, name, text_enabled FROM channels WHERE code = ?').get(code);
+      const channel = db.prepare('SELECT id, name, text_enabled, read_only, is_dm FROM channels WHERE code = ?').get(code);
       if (!channel) return;
+      // A poll's question and answers are stored and sent as plain text, so
+      // a DM, which is encrypted end to end, cannot have one.
+      if (channel.is_dm) return socket.emit('error-msg', 'Polls are not available in direct messages');
       if (channel.text_enabled === 0) return socket.emit('error-msg', 'Polls are not allowed when text is disabled');
       const member = hasChannelAccess(channel.id);
       if (!member) return socket.emit('error-msg', 'Not a member of this channel');
+      if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
+        return socket.emit('error-msg', 'This channel is read-only');
+      }
+      if (enforceAutomod([question, ...cleanOptions].join('\n'), { surface: 'message', channelId: channel.id })) return;
+      for (let i = 0; i < cleanOptions.length; i++) cleanOptions[i] = pingSafe(cleanOptions[i], socket.user.id, channel.id);
 
-      const safeQuestion = sanitizeText(question);
+      const safeQuestion = sanitizeText(pingSafe(question, socket.user.id, channel.id));
       if (!safeQuestion) return;
 
       const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }), ...(columns > 1 && { columns }) });
@@ -2795,7 +2825,7 @@ module.exports = function register(socket, ctx) {
 
     if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return;
 
-    const safeContent = sanitizeText(content);
+    const safeContent = sanitizeText(pingSafe(content, socket.user.id, channel.id));
     if (!safeContent) return;
 
     let replyTo = isInt(data.replyTo) ? data.replyTo : null;
