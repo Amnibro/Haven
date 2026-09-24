@@ -3104,9 +3104,8 @@ function decodeHtmlEntities(str) {
     .replace(/&gt;/gi, '>')
     .replace(/&amp;/gi, '&');
 }
-const dns = require('dns');
-const { promisify } = require('util');
-const dnsResolve = promisify(dns.resolve4);
+const { resolveCallbackDestination } = require('./src/webhookCallback');
+const { safeGet } = require('./src/safeFetch');
 
 // Rate limit link preview fetches (per IP, separate from upload limiter).
 // Returns true when the request is within the window, false if the caller
@@ -3129,49 +3128,24 @@ function previewLimiterCheck(req) {
 }
 setInterval(() => { const now = Date.now(); for (const [ip, t] of previewLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) previewLimitStore.delete(ip); else previewLimitStore.set(ip, f); } }, 5 * 60 * 1000);
 
-// Check if an IP is private/internal
-function isPrivateIP(ip) {
-  if (!ip) return true;
-  return ip === '127.0.0.1' || ip === '0.0.0.0' || ip === '::1' || ip === '::' ||
-    ip.startsWith('10.') || ip.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
-    ip.startsWith('169.254.') || ip.startsWith('fc00:') || ip.startsWith('fd') ||
-    ip.startsWith('fe80:');
-}
-
-// Check if a hostname is private/internal (SSRF layer 1)
-function isPrivateHostname(hostname) {
-  const host = hostname.toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
-    host === '::1' || host === '[::1]' ||
-    host.startsWith('10.') || host.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    host === '169.254.169.254' ||
-    host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.localhost');
-}
-
-// Validate a URL is safe to fetch (not internal/private) — checks hostname + DNS
-// Set ALLOW_PRIVATE_PREVIEWS=true in .env to allow link previews for local/private services
+// Validate a URL a member asked Haven to fetch: http(s) only, and every
+// address the host resolves to (IPv4 and IPv6, any spelling of loopback)
+// outside the private, loopback, link-local and metadata ranges. This is an
+// early refusal only; the fetches themselves go through safeGet, which repeats
+// the check on every redirect and connects to exactly the address it checked.
+// Set ALLOW_PRIVATE_PREVIEWS=true in .env to allow link previews for local/private
+// services (link-local and cloud metadata addresses stay blocked either way).
 const allowPrivatePreviews = (process.env.ALLOW_PRIVATE_PREVIEWS || '').toLowerCase() === 'true';
 async function validateUrlSafe(urlStr) {
   const parsed = new URL(urlStr);
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     throw new Error('Only http/https URLs allowed');
   }
-  if (!allowPrivatePreviews) {
-    if (isPrivateHostname(parsed.hostname)) {
-      throw new Error('Private addresses not allowed');
-    }
-    // SSRF layer 2: DNS resolution check (defeats DNS rebinding)
-    try {
-      const addresses = await dnsResolve(parsed.hostname);
-      if (addresses.some(isPrivateIP)) {
-        throw new Error('Private addresses not allowed');
-      }
-    } catch (err) {
-      if (err.message === 'Private addresses not allowed') throw err;
-      // DNS resolution failed — could be IPv6-only or non-existent; allow fetch to fail naturally
-    }
+  try {
+    await resolveCallbackDestination(urlStr, { allowPrivateCallbacks: allowPrivatePreviews });
+  } catch (err) {
+    if (err && err.code === 'ERR_UNSAFE_CALLBACK_URL') throw new Error('Private addresses not allowed');
+    throw err;
   }
   return parsed;
 }
@@ -3245,7 +3219,7 @@ app.get('/api/media-proxy', async (req, res) => {
   if (cached) return send(cached);
 
   try {
-    const item = await mediaProxy.fetchAndCache(url, validateUrlSafe);
+    const item = await mediaProxy.fetchAndCache(url, { allowPrivate: allowPrivatePreviews });
     return send(item);
   } catch (err) {
     // A transparent 1x1 would silently hide broken images; a status code lets
@@ -3515,55 +3489,46 @@ app.get('/api/link-preview', async (req, res) => {
 
     // ── Generic OG scrape (manual redirect following with SSRF checks) ──
     if (!data) {
-      let currentUrl = url;
+      // safeGet follows up to five redirects, checking every hop and
+      // connecting to the address it checked, and stops reading at
+      // PREVIEW_MAX_SIZE rather than buffering the whole page first.
       let resp;
-      const MAX_REDIRECTS = 5;
-      for (let i = 0; i <= MAX_REDIRECTS; i++) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
-        resp = await fetch(currentUrl, {
-          signal: controller.signal,
+      try {
+        resp = await safeGet(url, {
+          allowPrivate: allowPrivatePreviews,
+          timeoutMs: 8000,
+          maxBytes: PREVIEW_MAX_SIZE,
+          truncate: true,
+          maxRedirects: 5,
           headers: {
             'User-Agent': PREVIEW_UA,
             'Accept': 'text/html,application/xhtml+xml',
             'Accept-Language': 'en-US,en;q=0.9'
-          },
-          redirect: 'manual'  // handle redirects manually to re-check SSRF
-        });
-        clearTimeout(timeout);
-        // If redirect, validate the new URL before following
-        if ([301, 302, 303, 307, 308].includes(resp.status)) {
-          const location = resp.headers.get('location');
-          if (!location) break;
-          // Resolve relative redirects
-          const nextUrl = new URL(location, currentUrl).href;
-          try {
-            await validateUrlSafe(nextUrl);
-          } catch {
-            // Redirect target is private/internal — abort (SSRF protection)
-            return res.json({ title: null, description: null, image: null, siteName: null });
           }
-          currentUrl = nextUrl;
-          continue;
-        }
-        break; // not a redirect, use this response
+        });
+      } catch {
+        // A hop pointed somewhere private, or the page never answered.
+        return res.json({ title: null, description: null, image: null, siteName: null });
       }
+      const currentUrl = resp.url;
 
-      const contentType = resp.headers.get('content-type') || '';
-      if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
+      const contentType = String(resp.headers['content-type'] || '');
+      if (resp.status < 200 || resp.status >= 300 ||
+          (!contentType.includes('text/html') && !contentType.includes('application/xhtml'))) {
         linkPreviewCache.set(url, { data: { title: null, description: null, image: null, siteName: null }, ts: Date.now() });
         return res.json({ title: null, description: null, image: null, siteName: null });
       }
 
-      const html = await resp.text();
-      const chunk = html.slice(0, PREVIEW_MAX_SIZE);
+      const chunk = resp.body.toString('utf8');
 
       // Regex helper — handles attributes spanning multiple lines and both
       // orderings: property before content, and content before property.
       // Decodes HTML entities so image URLs with &amp; etc. work correctly.
+      // Bounded quantifiers: a page full of unclosed tags would otherwise make
+      // these backtrack across the whole chunk, seconds of CPU per request.
       const getMetaContent = (property) => {
-        const re1 = new RegExp(`<meta[^>]*?(?:property|name)=["']${property}["'][^>]*?content=["']([^"']+)["']`, 'is');
-        const re2 = new RegExp(`<meta[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["']${property}["']`, 'is');
+        const re1 = new RegExp(`<meta[^>]{0,1000}?(?:property|name)=["']${property}["'][^>]{0,1000}?content=["']([^"']{1,4000})["']`, 'is');
+        const re2 = new RegExp(`<meta[^>]{0,1000}?content=["']([^"']{1,4000})["'][^>]{0,1000}?(?:property|name)=["']${property}["']`, 'is');
         const m = chunk.match(re1) || chunk.match(re2);
         return m ? decodeHtmlEntities(m[1].trim()) : null;
       };
@@ -3573,15 +3538,15 @@ app.get('/api/link-preview', async (req, res) => {
       // Decodes HTML entities in each value.
       const getAllMetaContent = (property) => {
         const seen = new Set();
-        const re1 = new RegExp(`<meta[^>]*?(?:property|name)=["']${property}["'][^>]*?content=["']([^"']+)["']`, 'gi');
-        const re2 = new RegExp(`<meta[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["']${property}["']`, 'gi');
+        const re1 = new RegExp(`<meta[^>]{0,1000}?(?:property|name)=["']${property}["'][^>]{0,1000}?content=["']([^"']{1,4000})["']`, 'gi');
+        const re2 = new RegExp(`<meta[^>]{0,1000}?content=["']([^"']{1,4000})["'][^>]{0,1000}?(?:property|name)=["']${property}["']`, 'gi');
         let m;
         while ((m = re1.exec(chunk)) !== null) seen.add(decodeHtmlEntities(m[1].trim()));
         while ((m = re2.exec(chunk)) !== null) seen.add(decodeHtmlEntities(m[1].trim()));
         return [...seen].slice(0, 4);
       };
 
-      const titleTag = chunk.match(/<title[^>]*>([^<]+)<\/title>/i);
+      const titleTag = chunk.match(/<title[^>]{0,200}>([^<]{1,1000})<\/title>/i);
 
       const ogImages = getAllMetaContent('og:image');
 
@@ -3610,18 +3575,20 @@ app.get('/api/link-preview', async (req, res) => {
       // site without needing a dedicated handler.
       if (!data.title && !data.image) {
         const oembedHref =
-          chunk.match(/<link[^>]*?type=["']application\/json\+oembed["'][^>]*?href=["']([^"']+)["']/i) ||
-          chunk.match(/<link[^>]*?href=["']([^"']+)["'][^>]*?type=["']application\/json\+oembed["']/i);
+          chunk.match(/<link[^>]{0,1000}?type=["']application\/json\+oembed["'][^>]{0,1000}?href=["']([^"']{1,2000})["']/i) ||
+          chunk.match(/<link[^>]{0,1000}?href=["']([^"']{1,2000})["'][^>]{0,1000}?type=["']application\/json\+oembed["']/i);
         if (oembedHref) {
           try {
-            const oembedEndpoint = new URL(oembedHref[1], currentUrl).href;
-            await validateUrlSafe(oembedEndpoint);
-            const oResp = await fetch(oembedEndpoint, {
-              signal: AbortSignal.timeout(5000),
-              headers: { 'User-Agent': PREVIEW_UA }
+            const oembedEndpoint = new URL(decodeHtmlEntities(oembedHref[1]), currentUrl).href;
+            const oResp = await safeGet(oembedEndpoint, {
+              allowPrivate: allowPrivatePreviews,
+              timeoutMs: 5000,
+              maxBytes: 256 * 1024,
+              maxRedirects: 3,
+              headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'application/json' }
             });
-            if (oResp.ok) {
-              const oj = await oResp.json();
+            if (oResp.status >= 200 && oResp.status < 300) {
+              const oj = JSON.parse(oResp.body.toString('utf8'));
               data.title = data.title || oj.title || null;
               data.image = data.image || oj.thumbnail_url || null;
               if (!data.siteName || data.siteName === parsed.hostname) {
