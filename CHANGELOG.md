@@ -11,7 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.14.0] - 2026-09-26
+
+Calls in DMs now ring: starting voice in a DM or group DM rings the others,
+with Answer and Decline. Newer emoji no longer show as boxes on Windows 10,
+animated WebP emoji stay animated, and server admins can post a batch of
+pictures without hitting the rate limits. Also: two new optional themes,
+single sign-on linking works again, and pop-ups set to Never stay quiet.
 
 ### Added
 - **Amni-Scient and Amni-Scient Light themes**, gold on ink and warm paper
