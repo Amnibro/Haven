@@ -78,3 +78,20 @@ test('a socket that connects mid-ring gets the call in its snapshot', () => {
   assert.equal(snap[0].ringing, true);
   t.leave('aaaaaaaa', 1);
 });
+test('rejoining a DM to ring someone again is held to one ring per 30 s, and six per 5 minutes across DMs', () => {
+  const t = setup();
+  for (let i = 0; i < 3; i++) {
+    t.enter('bbbbbbbb', 1);
+    t.calls.joined('bbbbbbbb', { id: 1, username: 'u1' });
+    t.leave('bbbbbbbb', 1);
+  }
+  assert.equal(t.events('dm-call-ring', 'user2').length, 2);
+  assert.equal(t.pushes.length, 1);
+  t.enter('bbbbbbbb', 1);
+  t.calls.joined('bbbbbbbb', { id: 1, username: 'u1' });
+  t.enter('bbbbbbbb', 2);
+  t.calls.joined('bbbbbbbb', { id: 2, username: 'u2' });
+  assert.equal(t.events('dm-call-unanswered').length, 0);
+  t.leave('bbbbbbbb', 1);
+  t.leave('bbbbbbbb', 2);
+});

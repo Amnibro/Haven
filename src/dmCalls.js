@@ -1,7 +1,18 @@
 'use strict';
 const RING_MS = 45000;
+const RING_COOLDOWN_MS = 30000;
+const RING_WINDOW_MS = 300000;
+const RING_WINDOW_MAX = 6;
 module.exports = function createDmCalls({ io, db, voiceUsers, sendPushNotifications }) {
   const calls = new Map();
+  const ringLog = new Map();
+  const mayRing = (userId, code, now) => {
+    const recent = (ringLog.get(userId) || []).filter(r => now - r.at < RING_WINDOW_MS);
+    ringLog.set(userId, recent);
+    if (recent.some(r => r.code === code && now - r.at < RING_COOLDOWN_MS) || recent.length >= RING_WINDOW_MAX) return false;
+    recent.push({ code, at: now });
+    return true;
+  };
   const channelOf = (code) => db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(code);
   const membersOf = (channelId) => db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channelId).map(r => r.user_id);
   const inRoom = (code) => new Set(voiceUsers.get(code)?.keys() || []);
@@ -33,11 +44,13 @@ module.exports = function createDmCalls({ io, db, voiceUsers, sendPushNotificati
     if (room.size !== 1 || !room.has(user.id)) return;
     const members = membersOf(ch.id);
     if (!members.includes(user.id)) return;
+    const now = Date.now();
     const call = {
       channelId: ch.id, name: ch.name, callerId: user.id, callerName: user.displayName || user.username,
-      isGroup: members.length > 2, startedAt: Date.now(), ringing: new Set(members.filter(id => id !== user.id)), timer: null,
+      isGroup: members.length > 2, startedAt: now, ringing: new Set(mayRing(user.id, code, now) ? members.filter(id => id !== user.id) : []), timer: null,
     };
     calls.set(code, call);
+    if (call.ringing.size === 0) return;
     const ring = describe(code, call);
     for (const userId of call.ringing) emitToUser(userId, 'dm-call-ring', ring);
     call.timer = setTimeout(() => ringTimeout(code), RING_MS);
