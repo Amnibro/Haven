@@ -3359,6 +3359,7 @@ _bindDmDock() {
 },
 
 _updateChannelVoiceIndicators() {
+  this._labelCallButton?.();
   document.querySelectorAll('.channel-item').forEach(el => {
     const code = el.dataset.code;
     let indicator = el.querySelector('.channel-voice-indicator');
@@ -3374,7 +3375,7 @@ _updateChannelVoiceIndicators() {
         if (moreBtn) el.insertBefore(indicator, moreBtn);
         else el.appendChild(indicator);
       }
-      indicator.innerHTML = `<span class="voice-icon">🔊</span>${count}`;
+      indicator.innerHTML = `<span class="voice-icon">${el.classList.contains('dm-item') ? '📞' : '🔊'}</span>${count}`;
 
       // Render voice user list below the channel item
       let userList = el.nextElementSibling;

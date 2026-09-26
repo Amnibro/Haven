@@ -351,6 +351,7 @@ _syncChannelVoiceButtons() {
 },
 
 _updateVoiceButtons(inVoice) {
+  this._labelCallButton?.();
   const original = typeof window.isHavenOriginalLayout === 'function'
     ? window.isHavenOriginalLayout()
     : document.documentElement.hasAttribute('data-haven-original-layout');
