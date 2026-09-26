@@ -18,6 +18,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   with the Archivo typeface. Like the other bundled themes they stay off
   until an admin publishes them. By @Amnibro. (#5695)
 
+- **Ringing for DM calls.** Starting voice in a DM or group DM rings the
+  other members with Answer and Decline, on every device they are signed in
+  on, with a missed-call notice after 45 seconds. By @Amnibro. (#5697)
+- **Server admins are not rate limited when posting.** A batch of about 60
+  pictures ran into the upload limit, and past it the "slow down" limit
+  refused the messages. Both still apply to everyone else. (#5698)
+
 ### Fixed
 - **Newer emoji showed as boxes on Windows 10.** Its emoji font stops at
   older emoji, so a melting face reaction was an empty square. Haven now
