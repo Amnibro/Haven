@@ -1866,6 +1866,12 @@ app.get('/api/port-check', async (req, res) => {
 // ── Upload rate limiting ─────────────────────────────────
 const uploadLimitStore = new Map();
 function uploadLimiter(req, res, next) {
+  // Server admins are not throttled: posting a batch of pictures for a guide
+  // or an example is a normal thing for them to do (#5698). The disk guard
+  // and size caps still apply.
+  const token = req.headers.authorization?.split(' ')[1];
+  const tokenUser = token ? verifyToken(token) : null;
+  if (tokenUser && verifyAdminFromDb(tokenUser)) return next();
   const ip = req.ip || req.socket.remoteAddress;
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 minute

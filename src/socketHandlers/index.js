@@ -1958,6 +1958,9 @@ function setupSocketHandlers(io, db, opts = {}) {
     };
 
     function floodCheck(bucket, scope = '') {
+      // Server admins can post as fast as they like, or a batch of pictures
+      // uploads fine and then half their messages are refused (#5698).
+      if (bucket === 'message' && socket.user.isAdmin) return false;
       const limit = FLOOD_LIMITS[bucket];
       const key = `${socket.user.id}:${bucket}:${scope}`;
       const now = Date.now();
