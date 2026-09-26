@@ -1871,15 +1871,7 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('delete-dm', (data) => {
-    if (!data || typeof data !== 'object') return;
-    const code = typeof data.code === 'string' ? data.code.trim() : '';
-    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
-    const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 1').get(code);
-    if (!channel) return socket.emit('error-msg', 'DM not found');
-    const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!isMember && !socket.user.isAdmin) return socket.emit('error-msg', 'Not authorized');
-
+  function purgeDmChannel(channel, attachments, extraOwners = []) {
     // Collect attachment filenames before we drop the message rows. We
     // scan plaintext message content server-side, and also accept a
     // `data.attachments` list from the client for E2E-encrypted DM
@@ -1897,8 +1889,8 @@ module.exports = function register(socket, ctx) {
         }
       }
     } catch { /* ignore scan errors — best-effort cleanup */ }
-    if (Array.isArray(data.attachments)) {
-      for (const url of data.attachments) {
+    if (Array.isArray(attachments)) {
+      for (const url of attachments) {
         if (typeof url !== 'string') continue;
         const match = url.match(UPLOAD_PATH_EXACT_RE);
         if (match && isSafeUploadRelPath(match[1])) filenames.add(match[1]);
@@ -1906,7 +1898,7 @@ module.exports = function register(socket, ctx) {
     }
 
     // Only the DM's own participants' attachments go with it.
-    const participants = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id).map(r => r.user_id);
+    const participants = [...new Set([...db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id).map(r => r.user_id), ...extraOwners])];
 
     const deleteAll = db.transaction((chId) => {
       db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
@@ -1918,6 +1910,19 @@ module.exports = function register(socket, ctx) {
     deleteAll(channel.id);
 
     for (const name of releasableUploads(db, filenames, participants)) moveUploadToDeleted(name);
+  }
+  ctx.purgeDmChannel = purgeDmChannel;
+  socket.on('delete-dm', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 1').get(code);
+    if (!channel) return socket.emit('error-msg', 'DM not found');
+    const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    if (!isMember && !socket.user.isAdmin) return socket.emit('error-msg', 'Not authorized');
+    if (isMember && channel.is_group && ctx.leaveGroupDm) return void ctx.leaveGroupDm(code, socket.user.id, data.attachments);
+
+    purgeDmChannel(channel, data.attachments);
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
     clearChannelRuntimeState(state, code);

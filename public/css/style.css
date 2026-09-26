@@ -21072,3 +21072,15 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 @keyframes call-ring-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(35, 165, 90, .55); } 50% { box-shadow: 0 0 0 10px transparent; } }
 @keyframes call-ring-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .call-ring, .call-ring-pulse { animation: none; } }
+.group-picker { width: min(420px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 10px; }
+.group-picker .gp-title { margin: 0; }
+.group-picker .gp-name, .group-picker .gp-search { width: 100%; box-sizing: border-box; font-size: 0.875rem; padding: 0.5rem 0.625rem; }
+.group-picker .gp-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm, 6px); padding: 4px; }
+.group-picker .gp-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius-sm, 6px); cursor: pointer; }
+.group-picker .gp-row:hover { background: var(--bg-hover, rgba(255, 255, 255, .05)); }
+.group-picker .gp-empty, .group-picker .gp-hint { margin: 0; font-size: 12px; color: var(--text-muted); }
+#group-invite-stack { position: fixed; right: 16px; bottom: 16px; z-index: 100001; display: flex; flex-direction: column; gap: 10px; width: min(380px, calc(100vw - 32px)); }
+.group-invite { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-md, 12px); box-shadow: 0 12px 32px rgba(0, 0, 0, .45); }
+.group-invite .gi-text { flex: 1; min-width: 0; }
+.group-invite .gi-title { font-weight: 700; }
+.group-invite .gi-sub { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

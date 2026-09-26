@@ -3911,7 +3911,7 @@ _sendDMPiPMessage() {
   // E2E-encrypt for the PiP's DM channel (not the active currentChannel).
   (async () => {
     const ch = this.channels.find(c => c.code === code);
-    const isDm = ch && ch.is_dm && ch.dm_target;
+    const isDm = ch && ch.is_dm && (ch.dm_target || ch.is_group);
     // Not sent after all: the text and the reply go back in the box.
     const putBack = () => {
       if (this._activeDMPip !== code || input.value.trim()) return;
@@ -3988,7 +3988,7 @@ _sendDMPiPMessage() {
     if (content) {
       if (partner) {
         try {
-          const encrypted = await this.e2e.encrypt(content, partner.userId, partner.publicKeyJwk);
+          const encrypted = await this._e2eEncryptText(partner, content);
           payload.content = encrypted;
           payload.encrypted = true;
         } catch (err) {
@@ -4555,7 +4555,7 @@ _startEditMessage(msgEl, msgId) {
     const partner = pipContext ? this._getE2EPartnerFor(pipContext) : this._getE2EPartner();
     if (partner) {
       try {
-        newContent = await this.e2e.encrypt(newContent, partner.userId, partner.publicKeyJwk);
+        newContent = await this._e2eEncryptText(partner, newContent);
       } catch (err) {
         console.warn('[E2E] Failed to encrypt edited message:', err);
       }

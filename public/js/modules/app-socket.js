@@ -164,6 +164,7 @@ _restoreRefusedDraft(msg) {
 _setupSocketListeners() {
   this._setupFerrySocket();
   this._setupCallListeners?.();
+  this._setupGroupListeners?.();
   // Authoritative user info pushed by server on every connect
   this.socket.on('session-info', (data) => {
     this.user = { ...this.user, ...data };
@@ -841,7 +842,7 @@ _setupSocketListeners() {
     // overwriting would wipe DM entries and break E2E decryption until the
     // user reopens the DM.
     const existingDMs = (this.channels || []).filter(c => c.is_dm);
-    this.channels = [...channels];
+    this.channels = channels.map(c => c.is_group ? { ...c, dm_target: null } : c);
     for (const dm of existingDMs) {
       if (!this.channels.find(c => c.code === dm.code)) {
         this.channels.push(dm);
@@ -1600,7 +1601,7 @@ _setupSocketListeners() {
       this._renderVoiceUsers([]);
       this.currentChannel = null;
       this._showWelcome();
-      this._showToast(t('toasts.channel_deleted'), 'error');
+      if (this._leavingGroup !== data.code) this._showToast(t('toasts.channel_deleted'), 'error');
     }
   });
 
@@ -2086,11 +2087,11 @@ _setupSocketListeners() {
       if (!msgEls.length) return;
       // E2E: decrypt once if needed (same content for both copies)
       let displayContent = data.content;
-      if (HavenE2E.isEncrypted(data.content)) {
+      if (HavenE2E.isEncrypted(data.content) || this._isGroupEnvelope?.(data.content) || this._isGroupDm?.(data.channelCode)) {
         const partner = this._getE2EPartnerFor(data.channelCode);
         if (partner) {
           try {
-            const plain = await this.e2e.decrypt(data.content, partner.userId, partner.publicKeyJwk);
+            const plain = await this._e2eDecryptText(partner, data.content, data.userId);
             if (plain !== null) displayContent = plain;
             else displayContent = t('header.messages.decrypt_failed');
           } catch { displayContent = t('header.messages.decrypt_failed'); }

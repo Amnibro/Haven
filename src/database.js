@@ -1200,6 +1200,16 @@ function initDatabase() {
       ON dm_group_keys (channel_id, recipient_id, epoch);
   `);
 
+  try {
+    db.prepare("SELECT signing_backup FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN signing_backup TEXT DEFAULT NULL");
+  }
+  try {
+    db.prepare("SELECT is_group FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN is_group INTEGER DEFAULT 0");
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS dm_group_invites (
       channel_id INTEGER NOT NULL,
@@ -1217,6 +1227,14 @@ function initDatabase() {
     );
   `);
 
+  db.exec(`
+    UPDATE channels SET is_group = 1
+    WHERE is_dm = 1 AND is_group = 0 AND (
+      EXISTS (SELECT 1 FROM dm_group_invites i WHERE i.channel_id = channels.id)
+      OR EXISTS (SELECT 1 FROM dm_group_keys k WHERE k.channel_id = channels.id)
+      OR (SELECT COUNT(*) FROM channel_members m WHERE m.channel_id = channels.id) > 2
+    )
+  `);
   // ── Migration: E2E encrypted private key (per-account sync) ──
   try {
     db.prepare("SELECT encrypted_private_key FROM users LIMIT 0").get();

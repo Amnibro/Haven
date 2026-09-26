@@ -13,7 +13,7 @@ module.exports = function createDmCalls({ io, db, voiceUsers, sendPushNotificati
     recent.push({ code, at: now });
     return true;
   };
-  const channelOf = (code) => db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(code);
+  const channelOf = (code) => db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
   const membersOf = (channelId) => db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channelId).map(r => r.user_id);
   const inRoom = (code) => new Set(voiceUsers.get(code)?.keys() || []);
   const emitToUser = (userId, event, data) => {
@@ -47,7 +47,7 @@ module.exports = function createDmCalls({ io, db, voiceUsers, sendPushNotificati
     const now = Date.now();
     const call = {
       channelId: ch.id, name: ch.name, callerId: user.id, callerName: user.displayName || user.username,
-      isGroup: members.length > 2, startedAt: now, ringing: new Set(mayRing(user.id, code, now) ? members.filter(id => id !== user.id) : []), timer: null,
+      isGroup: ch.is_group === undefined ? members.length > 2 : !!ch.is_group, startedAt: now, ringing: new Set(mayRing(user.id, code, now) ? members.filter(id => id !== user.id) : []), timer: null,
     };
     calls.set(code, call);
     if (call.ringing.size === 0) return;

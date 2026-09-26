@@ -21,7 +21,7 @@ async switchChannel(code) {
   if (jumpBtn) jumpBtn.classList.remove('visible');
   const channel = this.channels.find(c => c.code === code);
   const isDm = channel && channel.is_dm;
-  const displayName = isDm && channel.dm_target
+  const displayName = isDm && channel.is_group ? `👥 ${this._groupName(channel)}` : isDm && channel.dm_target
     ? `@ ${this._getNickname(channel.dm_target.id, channel.dm_target.username)}`
     : channel ? `# ${channel.name}` : code;
 
@@ -158,7 +158,7 @@ async switchChannel(code) {
   // Refresh thread-mention pill for the channel we just entered
   this._updateThreadMentionsPill?.();
 
-  document.getElementById('status-channel').textContent = isDm && channel.dm_target
+  document.getElementById('status-channel').textContent = isDm && channel.is_group ? this._groupName(channel) : isDm && channel.dm_target
     ? t('channels.dm_status', { name: channel.dm_target.username }) : channel ? channel.name : code;
 
   // Reset pagination state for the new channel
@@ -873,6 +873,8 @@ _initDmContextMenu() {
     this._syncChannelMutePref(code, willBeMuted);
   });
 
+  document.querySelector('[data-action="dm-group-add"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._openGroupPicker({ code }); });
+  document.querySelector('[data-action="dm-group-leave"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._leaveGroup(code); });
   // Delete DM
   document.querySelector('[data-action="dm-delete"]')?.addEventListener('click', async () => {
     const code = this._dmCtxMenuCode;
@@ -880,50 +882,7 @@ _initDmContextMenu() {
     this._closeDmCtxMenu();
     const ok = await this._showConfirmModal('⚠️ ' + t('channels.dm_delete_confirm'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') });
     if (!ok) return;
-    // Gather all attachment URLs from the (decrypted) cached messages
-    // for this DM so the server can move E2E ciphertext-hidden uploads
-    // to deleted-attachments. (#5299)
-    const attachments = [];
-    const _scanMsgsForAttachments = (msgs) => {
-      const re = /\/uploads\/((?!deleted-attachments)[\w\-.]+)/g;
-      for (const msg of msgs) {
-        if (!msg || typeof msg.content !== 'string') continue;
-        let m;
-        while ((m = re.exec(msg.content)) !== null) attachments.push('/uploads/' + m[1]);
-      }
-    };
-    // Paginate through ALL messages in the DM so we don't miss E2E
-    // attachment URLs in older messages that haven't been rendered yet. (#5299)
-    try {
-      const channel = this.channels?.find(c => c.code === code);
-      if (channel?.is_dm && channel.dm_target) {
-        await this._fetchDMPartnerKey(channel);
-      }
-      const PAGE_LIMIT = 100;
-      let before = null;
-      for (;;) {
-        const page = await new Promise((resolve) => {
-          const timer = setTimeout(() => {
-            this.socket.off('message-history', onHistory);
-            resolve([]);
-          }, 5000);
-          const onHistory = (data) => {
-            if (!data || data.channelCode !== code) return;
-            this.socket.off('message-history', onHistory);
-            clearTimeout(timer);
-            resolve(Array.isArray(data.messages) ? data.messages : []);
-          };
-          this.socket.on('message-history', onHistory);
-          this.socket.emit('get-messages', { code, before, limit: PAGE_LIMIT });
-        });
-        if (page.length === 0) break;
-        try { await this._decryptMessages(page, code); } catch {}
-        _scanMsgsForAttachments(page);
-        if (page.length < PAGE_LIMIT) break;
-        // Messages arrive in DESC order; last item is the oldest — use it as cursor.
-        before = page[page.length - 1].id;
-      }
-    } catch { /* best-effort — server still cleans up plaintext messages */ }
+    const attachments = await this._collectDmAttachments(code);
     this.socket.emit('delete-dm', { code, attachments });
   });
 
@@ -945,6 +904,10 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
   const muteBtn = menu.querySelector('[data-action="dm-mute"]');
   if (muteBtn) muteBtn.textContent = muted.includes(code) ? `🔕 ${t('channels.unmute_dm')}` : `🔔 ${t('channels.mute_dm')}`;
 
+  const isGroup = !!this.channels.find(c => c.code === code)?.is_group;
+  menu.querySelectorAll('[data-action="dm-group-add"], [data-action="dm-group-leave"]').forEach(b => { b.style.display = isGroup ? '' : 'none'; });
+  const delBtn = menu.querySelector('[data-action="dm-delete"]');
+  if (delBtn) delBtn.style.display = isGroup ? 'none' : '';
   // Show/hide "Mark as Read" based on unread count
   const markReadBtn = menu.querySelector('[data-action="dm-mark-read"]');
   if (markReadBtn) markReadBtn.style.display = (this.unreadCounts[code] > 0) ? '' : 'none';
@@ -1682,7 +1645,7 @@ _renderDmOrganizeList() {
   const allTags = [...new Set(displayList.map(c => assignments[c.code]).filter(Boolean))].sort();
   const hasTags = allTags.length > 0;
 
-  const getDmName = (ch) => ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
+  const getDmName = (ch) => ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
 
   const sortGroup = (arr, mode) => {
     if (mode === 'alpha') {
@@ -2380,7 +2343,7 @@ _renderChannels() {
     const dmSortMode = localStorage.getItem('haven_dm_sort_mode') || 'manual';
     const dmOrder = JSON.parse(localStorage.getItem('haven_dm_order') || '[]');
 
-    const getDmName = (ch) => ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
+    const getDmName = (ch) => ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
 
     // Sort DMs by saved order first, then append any new ones
     let sortedDms = [];
@@ -2410,7 +2373,7 @@ _renderChannels() {
       el.dataset.code = ch.code;
       const dmName = getDmName(ch);
       el.innerHTML = `
-        <span class="channel-hash">@</span>
+        <span class="channel-hash">${ch.is_group ? '👥' : '@'}</span>
         <span class="channel-name">${this._escapeHtml(dmName)}</span>
       `;
       const count = (ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0);
@@ -3485,7 +3448,7 @@ _openQuickSwitcher() {
 
   const allChannels = (this.channels || []).map(ch => ({
     code: ch.code,
-    name: ch.is_dm && ch.dm_target
+    name: ch.is_dm && ch.is_group ? `👥 ${this._groupName(ch)}` : ch.is_dm && ch.dm_target
       ? `@ ${this._getNickname(ch.dm_target.id, ch.dm_target.username)}`
       : `# ${ch.name}`,
     isDm: ch.is_dm,

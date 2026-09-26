@@ -560,9 +560,15 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  socket.on('store-signing-backup', (data) => {
+    const backup = typeof data?.backup === 'string' ? data.backup : '';
+    if (!backup || backup.length > 4096) return socket.emit('error-msg', 'Invalid signing key backup');
+    db.prepare('UPDATE users SET signing_backup = ? WHERE id = ?').run(backup, socket.user.id);
+    socket.emit('signing-backup-stored');
+  });
   socket.on('get-encrypted-key', () => {
     try {
-      const row = db.prepare('SELECT encrypted_private_key, e2e_key_salt, public_key FROM users WHERE id = ?')
+      const row = db.prepare('SELECT encrypted_private_key, e2e_key_salt, public_key, signing_key, signing_backup FROM users WHERE id = ?')
         .get(socket.user.id);
       const hasBackup = !!(row && row.encrypted_private_key && row.e2e_key_salt);
       // Forward just the pub-key JWK (x,y) so clients can detect
@@ -580,6 +586,8 @@ module.exports = function register(socket, ctx) {
         salt: row?.e2e_key_salt || null,
         hasPublicKey: !!(row && row.public_key),
         publicKey,
+        signingKey: row && row.signing_key ? JSON.parse(row.signing_key) : null,
+        signingBackup: row?.signing_backup || null,
         state: hasBackup ? 'present' : 'empty'
       });
     } catch (err) {

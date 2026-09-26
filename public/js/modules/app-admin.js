@@ -3468,14 +3468,14 @@ _uploadGeneralFile(file, targetCode) {
  * upload it as it is. (#5310, #5308)
  */
 async _maybeUploadEncryptedDmFile(file, code, ch) {
-  if (!ch || !ch.is_dm || !ch.dm_target) return false;
+  if (!ch || !ch.is_dm || !(ch.dm_target || ch.is_group)) return false;
   const gate = await this._dmSendGate(code);
   if (!gate) return true;
   const partner = gate.partner;
   if (!partner) return false;
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const encrypted = await this.e2e.encryptBytes(arrayBuffer, partner.userId, partner.publicKeyJwk);
+    const encrypted = await this._e2eEncryptBytes(partner, arrayBuffer);
     const blob = new Blob([encrypted], { type: 'application/octet-stream' });
     const formData = new FormData();
     formData.append('scope', 'dm');
@@ -3496,7 +3496,7 @@ async _maybeUploadEncryptedDmFile(file, code, ch) {
     const marker = isImage
       ? `e2e-img:${file.type || 'image/png'}:${data.url}`
       : `e2e-file:${meta}`;
-    const encryptedText = await this.e2e.encrypt(marker, partner.userId, partner.publicKeyJwk);
+    const encryptedText = await this._e2eEncryptText(partner, marker);
     this.socket.emit('send-message', {
       code,
       content: encryptedText,

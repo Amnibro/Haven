@@ -14,7 +14,9 @@
  */
 const { isInt } = require('./helpers');
 
+const { clearChannelRuntimeState } = require('../channelRotation');
 module.exports = function register(socket, ctx) {
+  ctx.leaveGroupDm = (code, userId, attachments) => { const ch = groupOf(code); if (ch && isMember(ch.id, userId)) { leaveGroup(ch, userId, attachments); return true; } return false; };
   const { io, db, generateUniqueSharedCode } = ctx;
 
   const memberIds = (channelId) =>
@@ -127,7 +129,7 @@ module.exports = function register(socket, ctx) {
 
     const existing = findExistingGroup(ids);
     if (existing) {
-      const payload = groupPayload(existing);
+      const payload = { ...groupPayload(existing), existing: true };
       if (isMember(existing.id, socket.user.id)) {
         socket.join(`channel:${existing.code}`);
         socket.emit('group-dm-opened', payload);
@@ -144,7 +146,7 @@ module.exports = function register(socket, ctx) {
     try {
       const tx = db.transaction(() => {
         code = generateUniqueSharedCode ? generateUniqueSharedCode() : require('crypto').randomBytes(4).toString('hex');
-        const res = db.prepare('INSERT INTO channels (name, code, created_by, is_dm, key_epoch) VALUES (?, ?, ?, 1, 0)')
+        const res = db.prepare('INSERT INTO channels (name, code, created_by, is_dm, is_group, key_epoch) VALUES (?, ?, ?, 1, 1, 0)')
           .run(name, code, socket.user.id);
         db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(res.lastInsertRowid, socket.user.id);
         const insInvite = db.prepare('INSERT INTO dm_group_invites (channel_id, user_id, invited_by) VALUES (?, ?, ?)');
@@ -204,6 +206,70 @@ module.exports = function register(socket, ctx) {
     socket.emit('group-dm-declined', { code: ch.code });
   });
 
+  const groupOf = (code) => {
+    const ch = typeof code === 'string' ? groupChannel(code.trim()) : null;
+    if (!ch) return null;
+    const row = db.prepare('SELECT is_group, name FROM channels WHERE id = ?').get(ch.id);
+    return row && row.is_group ? { ...ch, name: row.name } : null;
+  };
+  const socketsOf = (ids) => [...io.of('/').sockets.values()].filter((s) => s.user && ids.includes(s.user.id));
+  socket.on('get-group-invites', () => {
+    const rows = db.prepare(`SELECT c.id, c.code, c.name, i.invited_by, COALESCE(u.display_name, u.username) AS inviter FROM dm_group_invites i JOIN channels c ON c.id = i.channel_id LEFT JOIN users u ON u.id = i.invited_by WHERE i.user_id = ? AND c.is_group = 1`).all(socket.user.id);
+    socket.emit('group-dm-invites', { invites: rows.map((r) => ({ ...groupPayload(r), invitedBy: { id: r.invited_by, username: r.inviter } })) });
+  });
+  socket.on('get-group-roster', (data) => {
+    const ch = groupOf(data && data.code);
+    if (!ch || !isMember(ch.id, socket.user.id)) return;
+    const keysOf = (ids) => {
+      if (!ids.length) return [];
+      const ph = ids.map(() => '?').join(',');
+      return db.prepare(`SELECT id, COALESCE(display_name, username) AS username, public_key, signing_key FROM users WHERE id IN (${ph})`).all(...ids)
+        .map((u) => ({ id: u.id, username: u.username, publicKey: u.public_key ? JSON.parse(u.public_key) : null, signingKey: u.signing_key ? JSON.parse(u.signing_key) : null }));
+    };
+    socket.emit('group-roster', { code: ch.code, name: ch.name, epoch: ch.key_epoch, members: keysOf(memberIds(ch.id)), pending: keysOf(pendingInvitees(ch.id)) });
+  });
+  socket.on('invite-group-dm', (data) => {
+    const ch = groupOf(data && data.code);
+    if (!ch || !isMember(ch.id, socket.user.id)) return socket.emit('error-msg', 'Group not found');
+    const current = rosterIds(ch.id);
+    const ids = [...new Set((Array.isArray(data.userIds) ? data.userIds : []).filter(isInt))].filter((id) => !current.includes(id));
+    if (!ids.length) return;
+    if (current.length + ids.length > 50) return socket.emit('error-msg', 'Group DMs are limited to 50 people');
+    const ph = ids.map(() => '?').join(',');
+    const users = db.prepare(`SELECT u.id, u.public_key, u.signing_key, u.is_guest, COALESCE(u.display_name, u.username) AS username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE u.id IN (${ph}) AND b.id IS NULL`).all(...ids);
+    if (users.length !== ids.length) return socket.emit('error-msg', 'One or more users were not found');
+    const unusable = users.filter((u) => u.is_guest || !u.public_key || !u.signing_key);
+    if (unusable.length) return socket.emit('error-msg', `Cannot add ${unusable.map((u) => u.username).join(', ')} to an encrypted group — no encryption key published yet`);
+    const ins = db.prepare('INSERT OR IGNORE INTO dm_group_invites (channel_id, user_id, invited_by) VALUES (?, ?, ?)');
+    db.transaction(() => { for (const id of ids) ins.run(ch.id, id, socket.user.id); })();
+    const payload = groupPayload(ch);
+    for (const s of socketsOf(ids)) s.emit('group-dm-invite', { ...payload, invitedBy: { id: socket.user.id, username: socket.user.displayName || socket.user.username } });
+    io.to(`channel:${ch.code}`).emit('group-dm-updated', payload);
+  });
+  function leaveGroup(ch, userId, attachments) {
+    const authors = db.prepare('SELECT DISTINCT user_id FROM messages WHERE channel_id = ? AND user_id IS NOT NULL').all(ch.id).map((r) => r.user_id);
+    db.transaction(() => {
+      db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(ch.id, userId);
+      db.prepare('DELETE FROM dm_group_invites WHERE channel_id = ? AND user_id = ?').run(ch.id, userId);
+      db.prepare('DELETE FROM dm_group_rewrap_requests WHERE channel_id = ? AND requester_id = ?').run(ch.id, userId);
+    })();
+    for (const s of socketsOf([userId])) { s.leave(`channel:${ch.code}`); s.emit('channel-deleted', { code: ch.code }); s.emit('group-dm-left', { code: ch.code }); }
+    const left = memberIds(ch.id);
+    if (!left.length) {
+      for (const t of ['dm_group_keys', 'dm_group_invites', 'dm_group_rewrap_requests']) db.prepare(`DELETE FROM ${t} WHERE channel_id = ?`).run(ch.id);
+      ctx.purgeDmChannel(ch, attachments, [...authors, userId]);
+      clearChannelRuntimeState(ctx.state, ch.code);
+    } else {
+      const user = db.prepare('SELECT COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(userId);
+      io.to(`channel:${ch.code}`).emit('group-dm-member-left', { code: ch.code, user: { id: userId, username: user && user.username }, members: groupPayload(ch).members });
+    }
+    if (ctx.broadcastChannelLists) ctx.broadcastChannelLists();
+  }
+  socket.on('leave-group-dm', (data) => {
+    const ch = groupOf(data && data.code);
+    if (!ch || !isMember(ch.id, socket.user.id)) return;
+    leaveGroup(ch, socket.user.id, data.attachments);
+  });
   /* ── Epoch publication ──────────────────────────── */
 
   socket.on('publish-group-epoch', (data) => {
@@ -270,7 +336,9 @@ module.exports = function register(socket, ctx) {
       WHERE channel_id = ? AND recipient_id = ? AND epoch > ?
       ORDER BY epoch ASC
     `).all(ch.id, socket.user.id, sinceEpoch);
-    socket.emit('group-keys', { code: ch.code, currentEpoch: ch.key_epoch, keys: rows });
+    const covered = db.prepare('SELECT recipient_id FROM dm_group_keys WHERE channel_id = ? AND epoch = ? ORDER BY recipient_id').all(ch.id, ch.key_epoch).map((r) => r.recipient_id);
+    const needsRotation = ch.key_epoch === 0 || !sameIds(covered, memberIds(ch.id));
+    socket.emit('group-keys', { code: ch.code, currentEpoch: ch.key_epoch, keys: rows, needsRotation });
   });
 
   /**

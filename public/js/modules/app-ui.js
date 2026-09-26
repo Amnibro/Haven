@@ -7866,7 +7866,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
   // Detect E2E DM — encrypt file bytes before uploading
   // A DM picture that can't be encrypted goes up only if the sender agrees.
   const ch = this.channels.find(c => c.code === targetChannel);
-  const isDm = ch && ch.is_dm && ch.dm_target;
+  const isDm = ch && ch.is_dm && (ch.dm_target || ch.is_group);
   const gate = isDm ? await this._dmSendGate(targetChannel) : { partner: null };
   if (!gate) { this._uploadsCancelled = true; return; }
   const partner = gate.partner;
@@ -7875,7 +7875,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
     // E2E path: encrypt file → upload as opaque blob → send encrypted text marker
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const encrypted = await this.e2e.encryptBytes(arrayBuffer, partner.userId, partner.publicKeyJwk);
+      const encrypted = await this._e2eEncryptBytes(partner, arrayBuffer);
       const blob = new Blob([encrypted], { type: 'application/octet-stream' });
       const formData = new FormData();
       formData.append('scope', 'dm');
@@ -7883,7 +7883,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
       const data = await this._uploadWithProgress('/api/upload-file', formData);
       const mime = file.type || 'image/png';
       const marker = `${spoiler ? 'spoiler-img:' : ''}e2e-img:${mime}:${data.url}`;
-      const encryptedText = await this.e2e.encrypt(marker, partner.userId, partner.publicKeyJwk);
+      const encryptedText = await this._e2eEncryptText(partner, marker);
       this.socket.emit('send-message', {
         code: targetChannel,
         content: encryptedText,

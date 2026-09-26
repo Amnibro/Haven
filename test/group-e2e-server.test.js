@@ -225,5 +225,108 @@ test('group DM rules', async (t) => {
     assert.strictEqual((await forBob).event, null, 'bob was not');
   });
 
+  await t.test('the roster lists members with both keys and the current epoch', async () => {
+    const r = next(B, ['group-roster', 'error-msg']);
+    B.emit('get-group-roster', { code });
+    const { event, data } = await r;
+    assert.strictEqual(event, 'group-roster');
+    assert.strictEqual(data.epoch, 1);
+    assert.deepStrictEqual(data.members.map((m) => m.id).sort(), [alice, bob, carol].map((u) => u.user.id).sort());
+    assert.ok(data.members.every((m) => m.publicKey && m.signingKey));
+    assert.deepStrictEqual(data.pending, []);
+    const k = next(B, ['group-keys']);
+    B.emit('get-group-keys', { code, sinceEpoch: 0 });
+    assert.strictEqual((await k).data.needsRotation, false);
+  });
+  await t.test('a group refuses plaintext and pairwise envelopes', async () => {
+    for (const content of ['hello in the clear', JSON.stringify({ v: 1, iv: 'AAAAAAAAAAAAAAAA', ct: 'x' })]) {
+      const r = next(A, ['error-msg'], 1500);
+      const leak = next(B, ['new-message'], 1500);
+      A.emit('send-message', { code, content });
+      assert.match(String((await r).data), /end-to-end encrypted/);
+      assert.strictEqual((await leak).event, null, 'nothing reached the other members');
+    }
+  });
+  await t.test('a signed group envelope is delivered', async () => {
+    const env = JSON.stringify({ v: 3, e: 1, prev: null, iv: 'AAAAAAAAAAAAAAAA', ct: 'Y2lwaGVy', sig: 'c2ln' });
+    const got = next(C, ['new-message']);
+    A.emit('send-message', { code, content: env });
+    const { data } = await got;
+    assert.strictEqual(data?.message?.content, env);
+    const bad = next(A, ['error-msg'], 1500);
+    A.emit('edit-message', { messageId: data.message.id, content: 'edited in the clear', channelCode: code });
+    assert.match(String((await bad).data), /end-to-end encrypted/);
+  });
+  await t.test('only members can invite, and invitees see it on reconnect', async () => {
+    const denied = next(D, ['error-msg']);
+    D.emit('invite-group-dm', { code, userIds: [dave.user.id] });
+    assert.strictEqual((await denied).event, 'error-msg');
+    const invite = next(D, ['group-dm-invite']);
+    const updated = next(B, ['group-dm-updated']);
+    A.emit('invite-group-dm', { code, userIds: [dave.user.id] });
+    assert.strictEqual((await invite).data.code, code);
+    assert.strictEqual((await updated).event, 'group-dm-updated');
+    const list = next(D, ['group-dm-invites']);
+    D.emit('get-group-invites');
+    assert.deepStrictEqual((await list).data.invites.map((i) => i.code), [code]);
+    const roster = next(A, ['group-roster']);
+    A.emit('get-group-roster', { code });
+    assert.deepStrictEqual((await roster).data.pending.map((m) => m.id), [dave.user.id]);
+  });
+  await t.test('a new member flags the group for rotation', async () => {
+    const opened = next(D, ['group-dm-opened', 'error-msg']);
+    D.emit('accept-group-dm', { code });
+    assert.strictEqual((await opened).event, 'group-dm-opened');
+    const k = next(A, ['group-keys']);
+    A.emit('get-group-keys', { code, sinceEpoch: 0 });
+    assert.strictEqual((await k).data.needsRotation, true);
+  });
+  await t.test('leaving removes access and tells the rest', async () => {
+    const left = next(C, ['group-dm-left']);
+    const gone = next(C, ['channel-deleted']);
+    const told = next(A, ['group-dm-member-left']);
+    C.emit('leave-group-dm', { code });
+    assert.strictEqual((await left).data.code, code);
+    assert.strictEqual((await gone).data.code, code);
+    assert.strictEqual((await told).data.code, code);
+    const r = next(C, ['group-roster', 'group-keys', 'error-msg']);
+    C.emit('get-group-keys', { code, sinceEpoch: 0 });
+    assert.strictEqual((await r).event, 'error-msg');
+  });
+  await t.test('deleting a group from the DM list leaves it instead of deleting it for everyone', async () => {
+    const left = next(D, ['group-dm-left']);
+    D.emit('delete-dm', { code });
+    assert.strictEqual((await left).data.code, code);
+    const r = next(A, ['group-roster']);
+    A.emit('get-group-roster', { code });
+    assert.deepStrictEqual((await r).data.members.map((m) => m.id).sort(), [alice, bob].map((u) => u.user.id).sort());
+  });
+  await t.test('the last member out deletes the group', async () => {
+    B.emit('leave-group-dm', { code });
+    await wait(300);
+    const gone = next(A, ['channel-deleted']);
+    A.emit('leave-group-dm', { code, attachments: [] });
+    assert.strictEqual((await gone).data.code, code);
+    const Database = require('better-sqlite3');
+    const db = new Database(path.join(DATA, 'haven.db'), { readonly: true });
+    const id = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const left = ['messages', 'channel_members', 'dm_group_keys', 'dm_group_invites'].map((tb) => db.prepare(`SELECT COUNT(*) AS n FROM ${tb} m WHERE m.channel_id IN (SELECT id FROM channels WHERE code = ?)`).get(code).n);
+    db.close();
+    assert.strictEqual(id, undefined);
+    assert.deepStrictEqual(left, [0, 0, 0, 0]);
+  });
+  await t.test('the signing key backup round-trips and is size-capped', async () => {
+    const stored = next(B, ['signing-backup-stored', 'error-msg']);
+    B.emit('store-signing-backup', { backup: 'opaque-backup' });
+    assert.strictEqual((await stored).event, 'signing-backup-stored');
+    const got = next(B, ['encrypted-key-result']);
+    B.emit('get-encrypted-key');
+    const { data } = await got;
+    assert.strictEqual(data.signingBackup, 'opaque-backup');
+    assert.ok(data.signingKey);
+    const big = next(B, ['signing-backup-stored', 'error-msg']);
+    B.emit('store-signing-backup', { backup: 'x'.repeat(5000) });
+    assert.strictEqual((await big).event, 'error-msg');
+  });
   [A, B, C, D].forEach((s) => s.close());
 });
