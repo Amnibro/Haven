@@ -17,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Import a Discord server's history with your Ferry bot: Settings, Import Discord History, Connect to Discord, "Use my Ferry bot". Nothing to paste, and it's within Discord's rules. Channels the bot can't see are skipped and named, and a bot missing Discord's Message Content setting gets told how to turn it on. The guide walks through it step by step.
 
 ### Changed
+- Big servers hold up far better. Measured with a new load tester (`node scripts/loadtest.js --users 1000`), which runs a throwaway server with fake people and reports how it copes:
+  - Member lists now send only what changed ("Bob came online") instead of the whole list to everyone, and changes in a channel are gathered up and sent together. With 200 people, everyone arriving went from 700 MB of traffic to 10 MB, and 20 status changes from 195 MB to 1 MB. Older apps still get whole lists.
+  - Refreshing everyone's channel list (when a channel is added, renamed or moved) no longer freezes the server: with 2500 people and 31 channels, the worst pause went from 6.8 seconds to 0.04.
+  - Push notifications go out through a queue. With 3000 members away and a busy chat, the server used to fall half a minute behind and deliver nothing; now it keeps up and every away member is notified within about a second.
 - Signing in to the Discord import with your personal Discord login is now tucked away under "not recommended", behind a warning (it goes against Discord's rules, and a leaked token is a stolen account) and a box you tick to say you understand. The guide no longer describes it.
 
 ## [4.14.0] - 2026-09-26
