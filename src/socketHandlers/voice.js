@@ -737,6 +737,10 @@ module.exports = function register(socket, ctx) {
     if (!streamViewers.has(key)) streamViewers.set(key, new Set());
     streamViewers.get(key).add(socket.user.id);
     broadcastStreamInfo(data.code);
+    // Relayed call: the screen's video starts flowing to this viewer now.
+    if (state.voiceRelay?.currentKind(data.code) === 'relay') {
+      state.voiceRelay.setWatching(data.code, `u${socket.user.id}`, data.sharerId, true).catch(() => {});
+    }
   });
 
   socket.on('stream-unwatch', (data) => {
@@ -749,6 +753,10 @@ module.exports = function register(socket, ctx) {
       if (viewers.size === 0) streamViewers.delete(`${data.code}:${data.sharerId}`);
     }
     broadcastStreamInfo(data.code);
+    // Relayed call: stop sending the screen's video to someone not looking.
+    if (state.voiceRelay?.currentKind(data.code) === 'relay') {
+      state.voiceRelay.setWatching(data.code, `u${socket.user.id}`, data.sharerId, false).catch(() => {});
+    }
   });
 
   // ── Voice state ─────────────────────────────────────────

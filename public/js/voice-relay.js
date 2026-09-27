@@ -144,8 +144,13 @@
       await Promise.all(producers.map(p => this._consume(p).catch(err => console.warn('[Relay] Could not receive a track:', err.message))));
     }
 
-    /** Sends a track into the call as `source` (mic, screen, screen-audio, webcam). */
-    async publish(source, track, { maxBitrate } = {}) {
+    /**
+     * Sends a track into the call as `source` (mic, screen, screen-audio,
+     * webcam). With `simulcast`, a video goes up at full quality and at half
+     * size, and the relay gives each viewer the one their connection can
+     * take, so one viewer on a weak link does not hold the others back.
+     */
+    async publish(source, track, { maxBitrate, simulcast = false } = {}) {
       if (!track) return null;
       const existing = this.producers.get(source);
       if (existing && !existing.closed) {
@@ -153,7 +158,16 @@
         return existing;
       }
       const opts = { track, appData: { source }, stopTracks: false };
-      if (maxBitrate) opts.encodings = [{ maxBitrate }];
+      if (simulcast && track.kind === 'video') {
+        const top = maxBitrate || 2500000;
+        opts.encodings = [
+          { scaleResolutionDownBy: 2, maxBitrate: Math.max(300000, Math.round(top / 4)) },
+          { scaleResolutionDownBy: 1, maxBitrate: top },
+        ];
+        opts.codecOptions = { videoGoogleStartBitrate: 1000 };
+      } else if (maxBitrate) {
+        opts.encodings = [{ maxBitrate }];
+      }
       if (source === 'mic') opts.codecOptions = { opusStereo: false, opusDtx: true, opusFec: true };
       const producer = await this.sendTransport.produce(opts);
       this.producers.set(source, producer);

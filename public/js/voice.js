@@ -2687,7 +2687,7 @@ class VoiceManager {
       if (this._relay) {
         const v = this.screenStream.getVideoTracks()[0];
         const a = this.screenStream.getAudioTracks()[0];
-        if (v) await this._relay.publish('screen', v, { maxBitrate }).catch(e => console.warn('[Relay] Screen not sent:', e.message));
+        if (v) await this._relay.publish('screen', v, { maxBitrate, simulcast: true }).catch(e => console.warn('[Relay] Screen not sent:', e.message));
         if (a) await this._relay.publish('screen-audio', a).catch(e => console.warn('[Relay] Screen audio not sent:', e.message));
       }
 
@@ -3746,7 +3746,7 @@ class VoiceManager {
       const maxBitrate = this._screenBitrates?.[res] || this._screenBitrates?.[0];
       const v = this.screenStream.getVideoTracks()[0];
       const a = this.screenStream.getAudioTracks()[0];
-      if (v) await relay.publish('screen', v, { maxBitrate }).catch(err => console.warn('[Relay] Screen not sent:', err.message));
+      if (v) await relay.publish('screen', v, { maxBitrate, simulcast: true }).catch(err => console.warn('[Relay] Screen not sent:', err.message));
       if (a) await relay.publish('screen-audio', a).catch(err => console.warn('[Relay] Screen audio not sent:', err.message));
     }
     const cam = this.isWebcamActive && this.webcamStream?.getVideoTracks()[0];

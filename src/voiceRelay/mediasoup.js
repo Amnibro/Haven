@@ -182,7 +182,10 @@ class MediasoupRelay {
   async join(code, peerId, userId) {
     const room = await this._room(code);
     if (room.peers.has(peerId)) this.leave(code, peerId);
-    const peer = { userId, transports: new Map(), producers: new Map(), consumers: new Map() };
+    // `watching`: sharers whose screen this person has open. Screen video is
+    // only sent while it is, which is what keeps big screen shares affordable:
+    // the server's upload goes to the people looking, not to the whole call.
+    const peer = { userId, transports: new Map(), producers: new Map(), consumers: new Map(), watching: new Set() };
     room.peers.set(peerId, peer);
     const make = async (direction) => {
       const t = await room.router.createWebRtcTransport({
@@ -258,21 +261,40 @@ class MediasoupRelay {
     if (!room.router.canConsume({ producerId, rtpCapabilities })) return null;
     const t = [...peer.transports.values()].find(x => x.appData.direction === 'recv');
     if (!t) throw new Error('No receiving connection');
-    const consumer = await t.consume({ producerId, rtpCapabilities, paused: true });
+    const owner = [...room.peers.values()].find(p => p.producers.has(producerId));
+    const source = owner?.producers.get(producerId)?.appData.source ?? null;
+    const consumer = await t.consume({
+      producerId, rtpCapabilities, paused: true,
+      appData: { source, sharerId: owner?.userId ?? null },
+    });
     peer.consumers.set(consumer.id, consumer);
     consumer.on('producerclose', () => peer.consumers.delete(consumer.id));
     consumer.on('transportclose', () => peer.consumers.delete(consumer.id));
-    const owner = [...room.peers.values()].find(p => p.producers.has(producerId));
     return {
       id: consumer.id, producerId, kind: consumer.kind, rtpParameters: consumer.rtpParameters,
-      userId: owner?.userId ?? null, source: owner?.producers.get(producerId)?.appData.source ?? null,
+      userId: owner?.userId ?? null, source,
     };
   }
 
+  /** Unpauses a received track once the browser is ready for it. */
   async resumeConsumer(code, peerId, consumerId) {
     const { peer } = this._peer(code, peerId);
     const c = peer.consumers.get(consumerId);
-    if (c) await c.resume();
+    if (!c) return;
+    // Screen video waits until its tile is open (setWatching).
+    if (c.appData.source === 'screen' && !peer.watching.has(c.appData.sharerId)) return;
+    await c.resume();
+  }
+
+  /** The person opened (or closed) a sharer's screen: start or stop its video. */
+  async setWatching(code, peerId, sharerId, watching) {
+    const peer = this.rooms.get(code)?.peers.get(peerId);
+    if (!peer) return;
+    if (watching) peer.watching.add(sharerId); else peer.watching.delete(sharerId);
+    for (const c of peer.consumers.values()) {
+      if (c.appData.source !== 'screen' || c.appData.sharerId !== sharerId || c.closed) continue;
+      if (watching) await c.resume(); else await c.pause();
+    }
   }
 
   /** Leaves a call. Returns the ids of the tracks that stopped. */
