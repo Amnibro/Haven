@@ -590,8 +590,8 @@ _handleWebcamStream(userId, stream) {
 
       const lbl = document.createElement('div');
       lbl.className = 'webcam-tile-label';
-      const peer = this.voice.peers.get(userId);
-      const who = (userId === null || userId === this.user.id) ? t('voice_runtime.you') : (peer ? peer.username : t('voice.someone'));
+      const name = this.voice.peerName(userId);
+      const who = (userId === null || userId === this.user.id) ? t('voice_runtime.you') : (name || t('voice.someone'));
       lbl.textContent = who;
       tile.appendChild(lbl);
 
@@ -882,8 +882,8 @@ _popOutWebcamOverlay(tile, userId) {
   if (!video || !video.srcObject) return;
 
   const stream = video.srcObject;
-  const peer = this.voice.peers.get(userId);
-  const who = userId === null || userId === this.user.id ? t('voice_runtime.you') : (peer ? peer.username : t('voice_runtime.camera'));
+  const name = this.voice.peerName(userId);
+  const who = userId === null || userId === this.user.id ? t('voice_runtime.you') : (name || t('voice_runtime.camera'));
 
   const pipId = `webcam-pip-${userId || 'self'}`;
   if (document.getElementById(pipId)) return;
@@ -977,8 +977,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
     const accepted = !!(this._acceptedStreams && this._acceptedStreams.has(userId));
     const autoAccept = force || accepted || localStorage.getItem('haven_auto_accept_streams') !== 'false';
     if (!autoAccept && userId !== null && userId !== this.user.id) {
-      const peer = this.voice.peers.get(userId);
-      const who = peer ? peer.username : t('voice.someone');
+      const who = this.voice.peerName(userId) || t('voice.someone');
       // Keep the offered stream so the live badge can open it after the
       // prompt has gone (#5636).
       if (!this._pendingStreamOffers) this._pendingStreamOffers = new Map();
@@ -1007,8 +1006,8 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
 
       const lbl = document.createElement('div');
       lbl.className = 'screen-share-tile-label';
-      const peer = this.voice.peers.get(userId);
-      const who = userId === null || userId === this.user.id ? t('voice_runtime.you') : (peer ? peer.username : t('voice.someone'));
+      const name = this.voice.peerName(userId);
+      const who = userId === null || userId === this.user.id ? t('voice_runtime.you') : (name || t('voice.someone'));
       lbl.textContent = who;
       tile.appendChild(lbl);
 
@@ -2019,8 +2018,8 @@ _popOutStreamWindow(tile, userId) {
   if (!video || !video.srcObject) return;
 
   const stream = video.srcObject;
-  const peer = this.voice.peers.get(userId);
-  const who = userId === null || userId === this.user.id ? t('voice_runtime.you') : (peer ? peer.username : t('voice_runtime.stream'));
+  const name = this.voice.peerName(userId);
+  const who = userId === null || userId === this.user.id ? t('voice_runtime.you') : (name || t('voice_runtime.stream'));
 
   // Create floating in-page overlay (like music PiP) instead of window.open
   const pipId = `stream-pip-${userId || 'self'}`;
@@ -2079,8 +2078,8 @@ _popOutStreamWindow(tile, userId) {
     tile.classList.remove('stream-popped-out');
     this._updateStreamContainerCollapse();
     // Also hide the stream tile — user wants to close the stream, not just pop back in
-    const peer = this.voice.peers.get(userId);
-    const who2 = userId === null || userId === this.user.id ? t('voice_runtime.you') : (peer ? peer.username : t('voice_runtime.stream'));
+    const name2 = this.voice.peerName(userId);
+    const who2 = userId === null || userId === this.user.id ? t('voice_runtime.you') : (name2 || t('voice_runtime.stream'));
     this._hideStreamTile(tile, userId, who2, true);
   };
 

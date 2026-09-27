@@ -45,6 +45,8 @@ const ferry = require('../ferry');
 const registerChannels   = require('./channels');
 const registerMessages   = require('./messages');
 const registerVoice      = require('./voice');
+const registerVoiceRelay = require('./voiceRelay');
+const { createVoiceRelay } = require('../voiceRelay');
 const registerMusic      = require('./music');
 const registerUsers      = require('./users');
 const registerModeration = require('./moderation');
@@ -168,6 +170,20 @@ function setupSocketHandlers(io, db, opts = {}) {
     slowModeTracker, pendingTempDelete, pendingVoiceLeave,
     botAudioManager
   };
+
+  // ── Voice relay (Large Server Setup) ─────────────────────
+  // Off unless the admin turns it on. When its worker process goes away, the
+  // people in each relayed call are told to reconnect their media.
+  state.voiceRelay = createVoiceRelay({
+    getSetting: (key) => {
+      try { return db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key)?.value ?? null; }
+      catch { return null; }
+    },
+    onRoomLost: (code) => io.to(`voice:${code}`).emit('relay:lost', { channelCode: code }),
+    onRelayEnded: (code) => io.to(`voice:${code}`).emit('relay:ended', { channelCode: code }),
+  });
+  state.voiceRelay.boot().catch(err => console.error('Voice relay did not start:', err.message));
+
   const dmCalls = createDmCalls({ io, db, voiceUsers, sendPushNotifications });
 
   // ── Rich presence ───────────────────────────────────────
@@ -1170,6 +1186,13 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     if (socket.user.isBot) botAudioManager?.stopWebhook(socket.user.webhookId);
     voiceRoom.delete(socket.user.id);
+    // A relayed call: stop what this person was sending through the relay.
+    if (state.voiceRelay.currentKind(code) === 'relay') {
+      for (const producerId of state.voiceRelay.leave(code, `u${socket.user.id}`)) {
+        io.to(`voice:${code}`).emit('relay:producer-closed', { channelCode: code, producerId, userId: socket.user.id });
+      }
+    }
+    if (voiceRoom.size === 0) state.voiceRelay.callEnded(code);
     clearNativeScreenOfferWindows(nativeScreenOfferWindows, code, socket.user.id);
     socket.leave(`voice:${code}`);
 
@@ -2203,6 +2226,9 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     const FLOOD_EXEMPT = new Set([
       'voice-offer', 'voice-answer', 'voice-ice-candidate',
+      // A relayed call's setup: a burst of these when joining a big call,
+      // each checked against the caller being in that call.
+      ...registerVoiceRelay.RELAY_EVENTS,
       'voice-speaking', 'webcam-started', 'webcam-stopped',
       'stream-viewer-joined', 'stream-viewer-left',
       'visibility-change'
@@ -2540,6 +2566,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerChannels(socket, ctx);
     registerMessages(socket, ctx);
     registerVoice(socket, ctx);
+    registerVoiceRelay(socket, ctx);
     registerMusic(socket, ctx);
     registerUsers(socket, ctx);
     registerModeration(socket, ctx);

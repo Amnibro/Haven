@@ -55,6 +55,8 @@ module.exports = function register(socket, ctx) {
     'turn_password', 'turnstile_secret_key',
     // A channel code, and usually a private staff channel's.
     'automod_log_channel',
+    // Voice relay setup: only the admin screen needs these.
+    'voice_relay_mode', 'voice_relay_port', 'voice_relay_workers', 'voice_relay_address',
   ]);
   const emitSettingChanged = (key, value) => {
     if (NEVER_SENT_SETTINGS.has(key)) return;
@@ -167,6 +169,8 @@ module.exports = function register(socket, ctx) {
       'automod_ban_ip', 'automod_log_channel', 'automod_words',
       'role_gate_notice', // TEMPORARY (#5649): one-time admin notice, remove after the 4.8.x cycle
       'voice_force_relay',
+      // Large Server Setup: the voice relay (src/voiceRelay)
+      'voice_relay_mode', 'voice_relay_port', 'voice_relay_workers', 'voice_relay_address',
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
       'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
       'unicode_emoji_auto_update' // monthly refresh of the built-in emoji set from unicode.org, opt-in
@@ -228,6 +232,22 @@ module.exports = function register(socket, ctx) {
     // Relay-only voice hard-requires TURN. Enabling it without a TURN server
     // configured would leave every client unable to connect at all, so refuse
     // and say why rather than silently breaking voice for the whole server.
+    // The relay opens network ports on the host, so it is the admin's alone.
+    if (key.startsWith('voice_relay_') && !socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can change the voice relay.');
+    if (key === 'voice_relay_mode' && !state.voiceRelay?.MODES.includes(value)) return;
+    if (key === 'voice_relay_port') {
+      const n = parseInt(value, 10);
+      if (String(n) !== value || n < 1024 || n > 65535 - 8) return socket.emit('error-msg', 'The relay port must be a number from 1024 to 65527.');
+    }
+    if (key === 'voice_relay_workers') {
+      const n = parseInt(value, 10);
+      if (String(n) !== value || n < 1 || n > 8) return;
+    }
+    // An IP address or a host name, or empty to work it out automatically.
+    if (key === 'voice_relay_address' && value && !/^[A-Za-z0-9.:-]{1,253}$/.test(value)) {
+      return socket.emit('error-msg', 'Enter an IP address or a host name for the relay, or leave it empty.');
+    }
+
     if (key === 'voice_force_relay') {
       if (!['true', 'false'].includes(value)) return;
       if (value === 'true') {
@@ -503,6 +523,14 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'referrer_policy') onReferrerPolicyChange(value);
 
+    // Relay settings take effect straight away: start, stop or restart it.
+    // Calls already running keep going until they empty (see voiceRelay).
+    if (key.startsWith('voice_relay_') && state.voiceRelay) {
+      state.voiceRelay.apply()
+        .then(status => io.to('admins').emit('voice-relay-status', status))
+        .catch(err => console.error('Voice relay restart failed:', err.message));
+    }
+
     // Keep the in-memory FCM toggle in sync so the message hot path never reads
     // the database. isFcmEnabled() consults this on the next push. (FCM Privacy)
     if (key === 'fcm_enabled') require('../fcm').setFcmAdminEnabled(value !== 'false');
@@ -513,6 +541,67 @@ module.exports = function register(socket, ctx) {
     if (key === 'unicode_emoji_auto_update') {
       const emoji = require('../emoji');
       emoji.ensureEmojiData(emoji.autoUpdateEnabled(value)).catch(() => {});
+    }
+  });
+
+  // ── Voice relay status (Large Server Setup) ─────────────
+  socket.on('voice-relay-status', () => {
+    if (!socket.user.isAdmin) return;
+    if (state.voiceRelay) socket.emit('voice-relay-status', state.voiceRelay.status());
+  });
+
+  // All relay settings in one save, applied with a single restart.
+  socket.on('voice-relay-save', (data, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!socket.user.isAdmin) return reply({ error: 'Only the server admin can change the voice relay.' });
+    const relay = state.voiceRelay;
+    if (!relay || !data || typeof data !== 'object') return reply({ error: 'Bad request' });
+    const mode = String(data.mode || '');
+    const port = String(data.port ?? '').trim();
+    const workers = String(data.workers ?? '').trim();
+    const address = String(data.address ?? '').trim();
+    if (!relay.MODES.includes(mode)) return reply({ error: 'Pick how voice should connect.' });
+    const portN = parseInt(port, 10);
+    if (String(portN) !== port || portN < 1024 || portN > 65535 - relay.MAX_WORKERS) {
+      return reply({ error: 'The relay port must be a number from 1024 to 65527.' });
+    }
+    const workersN = parseInt(workers, 10);
+    if (String(workersN) !== workers || workersN < 1 || workersN > relay.MAX_WORKERS) {
+      return reply({ error: `CPU cores must be from 1 to ${relay.MAX_WORKERS}.` });
+    }
+    if (address && !/^[A-Za-z0-9.:-]{1,253}$/.test(address)) {
+      return reply({ error: 'Enter an IP address or a host name for the relay, or leave it empty.' });
+    }
+    if (mode === 'builtin' && !relay.available()) {
+      return reply({ error: 'The built-in relay is not installed on this server. See the note under Voice relay.' });
+    }
+    const values = { voice_relay_mode: mode, voice_relay_port: String(portN), voice_relay_workers: String(workersN), voice_relay_address: address };
+    try {
+      const put = db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)');
+      db.transaction(() => { for (const [k, v] of Object.entries(values)) put.run(k, v); })();
+    } catch (err) {
+      console.error('Failed to save voice relay settings:', err.message);
+      return reply({ error: 'Could not save the relay settings.' });
+    }
+    for (const [k, v] of Object.entries(values)) emitSettingChanged(k, v);
+    if (typeof logAudit === 'function') {
+      logAudit({ actor: socket.user, action: 'server_setting_update', target_type: 'setting', target_name: 'voice_relay',
+        details: { mode, port: portN, workers: workersN, address: address ? '(set)' : '(auto)' } });
+    }
+    relay.apply()
+      .then(status => { io.to('admins').emit('voice-relay-status', status); reply({ ok: true, status }); })
+      .catch(err => reply({ error: err.message }));
+  });
+
+  // What this server's public address looks like from outside, to prefill
+  // the relay address.
+  socket.on('voice-relay-detect-address', async (_data, ack) => {
+    if (!socket.user.isAdmin || typeof ack !== 'function') return;
+    try {
+      const { detectPublicIp } = require('../voiceRelay/publicIp');
+      ack({ address: await detectPublicIp() });
+    } catch {
+      ack({ address: null });
     }
   });
 

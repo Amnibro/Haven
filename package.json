@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "haven",
   "version": "4.14.0",
   "description": "Haven - self-hosted private chat for your server, your rules",
@@ -38,7 +38,12 @@
     "axios": ">=1.8.2"
   },
   "devDependencies": {
+    "esbuild": "^0.28.2",
     "innosetup-compiler": "^6.3.1",
+    "mediasoup-client": "^3.24.1",
     "socket.io-client": "^4.8.1"
+  },
+  "optionalDependencies": {
+    "mediasoup": "^3.27.1"
   }
 }

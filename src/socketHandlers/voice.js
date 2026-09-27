@@ -30,6 +30,14 @@ module.exports = function register(socket, ctx) {
           nativeScreenOfferWindows, streamViewers, pendingTempDelete,
           pendingVoiceLeave } = state;
 
+  // Direct (peer to peer) or through the voice relay. Settled by whoever
+  // starts the call and kept until it empties (see src/voiceRelay).
+  function callKind(code, occupied = true) {
+    const relay = state.voiceRelay;
+    if (!relay) return 'direct';
+    return (occupied && relay.currentKind(code)) || relay.kindFor(code, occupied);
+  }
+
   function activeScreenPayload(code) {
     const room = voiceUsers.get(code);
     const sessions = activeScreenSessions?.get(code);
@@ -86,6 +94,9 @@ module.exports = function register(socket, ctx) {
     isListening: !!user.isListening,
     nativeScreenVersion: user.nativeScreenVersion || 0,
     nativeScreenCodecs: user.nativeScreenCodecs || [],
+    // Can use the voice relay. Anyone who cannot (an older app, a bot) is
+    // still reached directly, even inside a relayed call.
+    relayCapable: !!user.relayCapable,
   });
 
   function notifyNativeSharersOfIncompatiblePeer(code, peer) {
@@ -199,6 +210,7 @@ module.exports = function register(socket, ctx) {
     const nativeClient = readNativeScreenClient(data);
     socket.nativeScreenVersion = nativeClient.version;
     socket.nativeScreenCodecs = nativeClient.codecs;
+    socket.relayCapable = data.relay === 1;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
@@ -313,6 +325,7 @@ module.exports = function register(socket, ctx) {
       isDeafened: false,
       nativeScreenVersion: socket.nativeScreenVersion,
       nativeScreenCodecs: socket.nativeScreenCodecs,
+      relayCapable: !!socket.relayCapable,
     });
     notifyNativeSharersOfIncompatiblePeer(code, voiceUsers.get(code).get(socket.user.id));
 
@@ -321,7 +334,8 @@ module.exports = function register(socket, ctx) {
     socket.emit('voice-existing-users', {
       channelCode: code,
       users: existingUsers.map(serializeVoicePeer),
-      voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
+      voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+      transport: callKind(code, existingUsers.some(u => !u.isBot)),
     });
 
     existingUsers.forEach(u => {
@@ -835,6 +849,7 @@ module.exports = function register(socket, ctx) {
               isDeafened: false,
               nativeScreenVersion: socket.nativeScreenVersion || 0,
               nativeScreenCodecs: socket.nativeScreenCodecs || [],
+              relayCapable: !!socket.relayCapable,
             });
             notifyNativeSharersOfIncompatiblePeer(code, voiceUsers.get(code).get(socket.user.id));
             voiceLastActivity.set(socket.user.id, Date.now());
@@ -847,6 +862,7 @@ module.exports = function register(socket, ctx) {
               channelCode: code,
               users: existingUsers.map(serializeVoicePeer),
               voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+              transport: callKind(code),
               rejoin: true,
             });
             // Notify existing peers that we're (back) in the room so
@@ -940,6 +956,7 @@ module.exports = function register(socket, ctx) {
     const nativeClient = readNativeScreenClient(data);
     socket.nativeScreenVersion = nativeClient.version;
     socket.nativeScreenCodecs = nativeClient.codecs;
+    socket.relayCapable = data.relay === 1;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) {
       console.warn(`[VoiceDiag] voice-rejoin REJECTED — invalid code "${code}"`);
@@ -1014,6 +1031,7 @@ module.exports = function register(socket, ctx) {
           channelCode: code,
           users: existingUsers.map(serializeVoicePeer),
           voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+          transport: callKind(code),
           // Hint to the client: skip building new RTCPeerConnections —
           // existing ones from before the blip are still live.
           skipRenegotiate: true,
@@ -1055,6 +1073,7 @@ module.exports = function register(socket, ctx) {
         channelCode: code,
         users: existingUsers.map(serializeVoicePeer),
         voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+        transport: callKind(code),
         skipRenegotiate: true,
         rejoin: true
       });
@@ -1121,6 +1140,7 @@ module.exports = function register(socket, ctx) {
       isDeafened: preservedDeafen,
       nativeScreenVersion: socket.nativeScreenVersion,
       nativeScreenCodecs: socket.nativeScreenCodecs,
+      relayCapable: !!socket.relayCapable,
     });
     notifyNativeSharersOfIncompatiblePeer(code, voiceUsers.get(code).get(socket.user.id));
 
@@ -1134,6 +1154,7 @@ module.exports = function register(socket, ctx) {
       channelCode: code,
       users: existingUsers.map(serializeVoicePeer),
       voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+      transport: callKind(code),
       rejoin: true
     });
 
