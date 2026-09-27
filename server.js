@@ -4956,20 +4956,49 @@ app.post('/api/import/discord/upload', uploadLimiter, uploadDiskGuard, (req, res
 // ── Discord Direct Connect — pull messages straight from Discord's API ──
 const DISCORD_API = 'https://discord.com/api/v10';
 
-async function discordApiFetch(endpoint, userToken, retries = 2) {
+async function discordApiFetch(endpoint, auth, retries = 2) {
   const resp = await fetch(`${DISCORD_API}${endpoint}`, {
-    headers: { Authorization: userToken }
+    headers: auth.headers,
+    signal: AbortSignal.timeout(30000)
   });
-  if (resp.status === 401) throw new Error('Invalid or expired Discord token');
-  if (resp.status === 403) throw new Error('Access denied — check token permissions');
+  if (resp.status === 401) {
+    throw new Error(auth.ferry
+      ? "Discord rejected the Ferry bot's token. Set Ferry up again in Settings, then try again."
+      : 'Invalid or expired Discord token');
+  }
+  if (resp.status === 403) {
+    const err = new Error(auth.ferry
+      ? "The Ferry bot isn't allowed to read that on Discord."
+      : 'Access denied. Check the token can see this.');
+    err.status = 403;
+    throw err;
+  }
   if (resp.status === 429 && retries > 0) {
     const wait = parseFloat(resp.headers.get('retry-after') || '3');
     await new Promise(r => setTimeout(r, wait * 1000));
-    return discordApiFetch(endpoint, userToken, retries - 1);
+    return discordApiFetch(endpoint, auth, retries - 1);
   }
   if (!resp.ok) throw new Error(`Discord API error ${resp.status}`);
   return resp.json();
 }
+
+// Who the import reads Discord as. The Ferry bot is the normal way: its token
+// stays on the server and the client only sends useFerry. A personal login
+// token is the fallback the client keeps behind a warning, since Discord's
+// rules don't allow apps to drive a personal account.
+function resolveImportAuth(body) {
+  if (body?.useFerry) {
+    const headers = require('./src/ferry').importHeaders();
+    if (!headers) return { error: 'Ferry is not set up yet. Set it up in Settings, then try again.' };
+    return { ferry: true, headers };
+  }
+  const discordToken = body?.discordToken;
+  if (!discordToken || typeof discordToken !== 'string') return { error: 'Discord token required' };
+  return { ferry: false, headers: { Authorization: discordToken } };
+}
+
+// Discord ids are numbers; anything else never reaches a Discord URL.
+const DISCORD_ID = /^\d{5,25}$/;
 
 // Step A: validate token → list servers
 app.post('/api/import/discord/connect', express.json(), async (req, res) => {
@@ -4977,15 +5006,17 @@ app.post('/api/import/discord/connect', express.json(), async (req, res) => {
   const user = token ? verifyToken(token) : null;
   if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
-  const { discordToken } = req.body;
-  if (!discordToken || typeof discordToken !== 'string') {
-    return res.status(400).json({ error: 'Discord token required' });
-  }
+  const auth = resolveImportAuth(req.body);
+  if (auth.error) return res.status(400).json({ error: auth.error });
 
   try {
-    const me = await discordApiFetch('/users/@me', discordToken);
-    const guilds = await discordApiFetch('/users/@me/guilds?limit=200', discordToken);
+    const me = await discordApiFetch('/users/@me', auth);
+    const guilds = await discordApiFetch('/users/@me/guilds?limit=200', auth);
+    if (auth.ferry && !guilds.length) {
+      return res.status(400).json({ error: "The Ferry bot isn't in any Discord server yet. Add it to yours with the invite link in Settings, Ferry, then try again." });
+    }
     res.json({
+      ferry: auth.ferry,
       user: { username: me.global_name || me.username },
       guilds: guilds.map(g => ({ id: g.id, name: g.name, icon: g.icon }))
     });
@@ -5000,11 +5031,13 @@ app.post('/api/import/discord/guild-channels', express.json(), async (req, res) 
   const user = token ? verifyToken(token) : null;
   if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
-  const { discordToken, guildId } = req.body;
-  if (!discordToken || !guildId) return res.status(400).json({ error: 'Missing params' });
+  const auth = resolveImportAuth(req.body);
+  if (auth.error) return res.status(400).json({ error: auth.error });
+  const { guildId } = req.body;
+  if (typeof guildId !== 'string' || !DISCORD_ID.test(guildId)) return res.status(400).json({ error: 'Missing params' });
 
   try {
-    const allChannels = await discordApiFetch(`/guilds/${guildId}/channels`, discordToken);
+    const allChannels = await discordApiFetch(`/guilds/${guildId}/channels`, auth);
 
     // Build category map
     const categories = {};
@@ -5030,14 +5063,14 @@ app.post('/api/import/discord/guild-channels', express.json(), async (req, res) 
 
     // Active threads
     try {
-      const active = await discordApiFetch(`/guilds/${guildId}/threads/active`, discordToken);
+      const active = await discordApiFetch(`/guilds/${guildId}/threads/active`, auth);
       if (active.threads) threads.push(...active.threads);
     } catch {}
 
     // Archived threads per text/forum/announcement channel (up to 100 per channel)
     for (const ch of channelsList) {
       try {
-        const archived = await discordApiFetch(`/channels/${ch.id}/threads/archived/public?limit=100`, discordToken);
+        const archived = await discordApiFetch(`/channels/${ch.id}/threads/archived/public?limit=100`, auth);
         if (archived.threads) threads.push(...archived.threads);
       } catch {}
       await new Promise(r => setTimeout(r, 200));
@@ -5086,8 +5119,10 @@ app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
   const user = token ? verifyToken(token) : null;
   if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
-  const { discordToken, guildName, channels: selected } = req.body;
-  if (!discordToken || !Array.isArray(selected) || !selected.length) {
+  const auth = resolveImportAuth(req.body);
+  if (auth.error) return res.status(400).json({ error: auth.error });
+  const { guildName, channels: selected } = req.body;
+  if (!Array.isArray(selected) || !selected.length || !selected.every(ch => typeof ch?.id === 'string' && DISCORD_ID.test(ch.id))) {
     return res.status(400).json({ error: 'Missing params' });
   }
 
@@ -5097,56 +5132,72 @@ app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
       serverName: guildName || 'Discord Import',
       channels: []
     };
+    // Channels the reader can't open (a bot only sees what its roles allow)
+    // are skipped and named, instead of failing the whole import.
+    const skipped = [];
+    // A bot without the Message Content intent gets every message with an
+    // empty body, which would import as nothing at all.
+    let peopleMessages = 0, emptyPeopleMessages = 0;
 
     for (const ch of selected) {
       const messages = [];
       let before = null, batch;
 
-      do {
-        let ep = `/channels/${ch.id}/messages?limit=100`;
-        if (before) ep += `&before=${before}`;
-        batch = await discordApiFetch(ep, discordToken);
+      try {
+        do {
+          let ep = `/channels/${ch.id}/messages?limit=100`;
+          if (before) ep += `&before=${before}`;
+          batch = await discordApiFetch(ep, auth);
 
-        for (const msg of batch) {
-          if (msg.type !== 0 && msg.type !== 19) continue; // Default + Reply only
-          let content = msg.content || '';
-          if (Array.isArray(msg.attachments)) {
-            for (const a of msg.attachments) {
-              content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
+          for (const msg of batch) {
+            if (msg.type !== 0 && msg.type !== 19) continue; // Default + Reply only
+            if (!msg.author?.bot) {
+              peopleMessages++;
+              if (!msg.content && !msg.attachments?.length && !msg.embeds?.length) emptyPeopleMessages++;
             }
-          }
-          if (Array.isArray(msg.embeds)) {
-            for (const e of msg.embeds) {
-              if (e.title) content += `\n🔗 **${e.title}**`;
-              if (e.description) content += `\n${e.description}`;
-              if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
+            let content = msg.content || '';
+            if (Array.isArray(msg.attachments)) {
+              for (const a of msg.attachments) {
+                content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
+              }
             }
+            if (Array.isArray(msg.embeds)) {
+              for (const e of msg.embeds) {
+                if (e.title) content += `\n🔗 **${e.title}**`;
+                if (e.description) content += `\n${e.description}`;
+                if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
+              }
+            }
+            content = content.trim();
+            if (!content) continue;
+
+            messages.push({
+              discordId: msg.id,
+              author: msg.author?.global_name || msg.author?.username || 'Unknown',
+              authorId: msg.author?.id || null,
+              authorAvatar: msg.author?.avatar
+                ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png?size=64`
+                : null,
+              isBot: msg.author?.bot || false,
+              content,
+              timestamp: msg.timestamp,
+              isPinned: msg.pinned || false,
+              reactions: (msg.reactions || []).map(r => ({
+                emoji: r.emoji?.name || '❓',
+                count: r.count || 1
+              })),
+              replyTo: msg.message_reference?.message_id || null
+            });
           }
-          content = content.trim();
-          if (!content) continue;
 
-          messages.push({
-            discordId: msg.id,
-            author: msg.author?.global_name || msg.author?.username || 'Unknown',
-            authorId: msg.author?.id || null,
-            authorAvatar: msg.author?.avatar
-              ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png?size=64`
-              : null,
-            isBot: msg.author?.bot || false,
-            content,
-            timestamp: msg.timestamp,
-            isPinned: msg.pinned || false,
-            reactions: (msg.reactions || []).map(r => ({
-              emoji: r.emoji?.name || '❓',
-              count: r.count || 1
-            })),
-            replyTo: msg.message_reference?.message_id || null
-          });
-        }
-
-        if (batch.length > 0) before = batch[batch.length - 1].id;
-        await new Promise(r => setTimeout(r, 300)); // respect rate limits
-      } while (batch.length === 100);
+          if (batch.length > 0) before = batch[batch.length - 1].id;
+          await new Promise(r => setTimeout(r, 300)); // respect rate limits
+        } while (batch.length === 100);
+      } catch (err) {
+        if (err.status !== 403) throw err;
+        skipped.push(ch.name || ch.id);
+        continue;
+      }
 
       result.channels.push({
         discordId: ch.id,
@@ -5158,12 +5209,22 @@ app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
       });
     }
 
+    if (auth.ferry && peopleMessages >= 5 && emptyPeopleMessages === peopleMessages) {
+      return res.status(400).json({ error: "Discord sent the messages without their text. On the Ferry bot's Bot page in the Discord Developer Portal, turn on Message Content Intent, then try again." });
+    }
+    if (!result.channels.length) {
+      return res.status(400).json({ error: auth.ferry
+        ? "The Ferry bot can't read any of those channels. On Discord, give it a role that can see them, then try again."
+        : "Couldn't read any of those channels." });
+    }
+
     const importId = crypto.randomBytes(16).toString('hex');
     const tempPath = path.join(os.tmpdir(), `haven-import-${importId}.json`);
     fs.writeFileSync(tempPath, JSON.stringify(result));
 
     res.json({
       importId,
+      skipped,
       format: result.format,
       serverName: result.serverName,
       channels: result.channels.map(c => ({

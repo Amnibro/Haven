@@ -13,8 +13,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Added
+- Import a Discord server's history with your Ferry bot: Settings, Import Discord History, Connect to Discord, "Use my Ferry bot". Nothing to paste, and it's within Discord's rules. Channels the bot can't see are skipped and named, and a bot missing Discord's Message Content setting gets told how to turn it on. The guide walks through it step by step.
+
 ### Changed
-- The Discord import's "Connect to Discord" tab, which signs in with your personal Discord login, now opens with a warning (it goes against Discord's rules, and a leaked token is a stolen account) and stays locked until you tick that you understand. The guide now only covers exporting with a bot or with Discord's own data download.
+- Signing in to the Discord import with your personal Discord login is now tucked away under "not recommended", behind a warning (it goes against Discord's rules, and a leaked token is a stolen account) and a box you tick to say you understand. The guide no longer describes it.
 
 ## [4.14.0] - 2026-09-26
 

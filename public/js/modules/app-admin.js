@@ -3687,6 +3687,12 @@ _setupDiscordImport() {
     if (gated) gated.style.display = 'none';
     const tokenField = document.getElementById('import-discord-token');
     if (tokenField) tokenField.value = '';
+    const personal = document.querySelector('.import-personal-login');
+    if (personal) personal.open = false;
+    this._importAuth = null;
+    this._renderImportFerry();
+    // Fresh Ferry state, so the Connect tab knows whether the bot is set up.
+    this.socket?.emit('ferry:get-config');
     const cStatus = document.getElementById('import-connect-status');
     if (cStatus) { cStatus.style.display = 'none'; cStatus.textContent = ''; }
     const fStatus = document.getElementById('import-fetch-status');
@@ -3803,14 +3809,12 @@ _setupDiscordImport() {
     if (!e.target.checked) document.getElementById('import-discord-token').value = '';
   });
 
-  connectBtn?.addEventListener('click', async () => {
-    if (!document.getElementById('import-token-risk-ack')?.checked) return;
-    const tokenInput = document.getElementById('import-discord-token');
-    const discordToken = tokenInput?.value?.trim();
-    if (!discordToken) { this._showToast(t('settings.admin.import_paste_token'), 'error'); return; }
-
-    connectBtn.disabled = true;
-    connectBtn.textContent = '⏳';
+  // auth is { useFerry: true } (the Ferry bot, whose token stays on the
+  // server) or { discordToken } (the personal login behind the warning).
+  // Every later step sends the same auth.
+  const connectWith = async (auth, btn, btnLabel) => {
+    btn.disabled = true;
+    btn.textContent = '⏳';
     connectStatus.style.display = '';
     connectStatus.textContent = t('settings.admin.import_connecting');
     connectStatus.style.color = '';
@@ -3819,10 +3823,12 @@ _setupDiscordImport() {
       const res = await fetch('/api/import/discord/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.token },
-        body: JSON.stringify({ discordToken })
+        body: JSON.stringify(auth)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t('settings.admin.import_connection_failed'));
+      this._importAuth = auth;
+      connectStatus.style.display = 'none';
 
       // Show server list
       document.getElementById('import-connect-step-token').style.display = 'none';
@@ -3849,9 +3855,27 @@ _setupDiscordImport() {
       connectStatus.textContent = '❌ ' + err.message;
       connectStatus.style.color = '#ed4245';
     } finally {
-      connectBtn.disabled = false;
-      connectBtn.textContent = t('settings.admin.import_connect_btn');
+      btn.disabled = false;
+      btn.textContent = btnLabel;
     }
+  };
+
+  const ferryConnectBtn = document.getElementById('import-ferry-connect-btn');
+  ferryConnectBtn?.addEventListener('click', () => {
+    connectWith({ useFerry: true }, ferryConnectBtn, t('modals.discord_import.ferry_btn'));
+  });
+
+  document.getElementById('import-open-ferry')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    modal.style.display = 'none';
+    this._openFerryModal();
+  });
+
+  connectBtn?.addEventListener('click', () => {
+    if (!document.getElementById('import-token-risk-ack')?.checked) return;
+    const discordToken = document.getElementById('import-discord-token')?.value?.trim();
+    if (!discordToken) { this._showToast(t('settings.admin.import_paste_token'), 'error'); return; }
+    connectWith({ discordToken }, connectBtn, t('settings.admin.import_connect_btn'));
   });
 
   // Disconnect
@@ -3860,6 +3884,7 @@ _setupDiscordImport() {
     document.getElementById('import-connect-step-servers').style.display = 'none';
     document.getElementById('import-connect-step-token').style.display = '';
     document.getElementById('import-discord-token').value = '';
+    this._importAuth = null;
   });
 
   // Back to servers from channels
@@ -4000,6 +4025,18 @@ async _importUploadFile(file) {
 
 // ── Discord Direct Connect helpers ────────────────────
 
+/** The Ferry option on the Connect tab: the button, or how to set Ferry up. */
+_renderImportFerry() {
+  const btn = document.getElementById('import-ferry-connect-btn');
+  const missing = document.getElementById('import-ferry-missing');
+  if (!btn || !missing) return;
+  // Until the state arrives, offer the button; the server says if Ferry is missing.
+  const state = this._ferryConfig?.state;
+  const noBot = !!state && !state.hasToken;
+  btn.style.display = noBot ? 'none' : '';
+  missing.style.display = noBot ? '' : 'none';
+},
+
 async _importPickGuild(guild) {
   const serversStep = document.getElementById('import-connect-step-servers');
   const channelsStep = document.getElementById('import-connect-step-channels');
@@ -4013,11 +4050,10 @@ async _importPickGuild(guild) {
   fetchStatus.style.color = '';
 
   try {
-    const discordToken = document.getElementById('import-discord-token')?.value?.trim();
     const res = await fetch('/api/import/discord/guild-channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.token },
-      body: JSON.stringify({ discordToken, guildId: guild.id })
+      body: JSON.stringify({ ...this._importAuth, guildId: guild.id })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || t('settings.admin.import_load_channels_failed'));
@@ -4147,18 +4183,20 @@ async _importConnectFetch() {
   fetchStatus.style.color = '';
 
   try {
-    const discordToken = document.getElementById('import-discord-token')?.value?.trim();
     const res = await fetch('/api/import/discord/fetch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.token },
       body: JSON.stringify({
-        discordToken,
+        ...this._importAuth,
         guildName: this._connectGuild?.name || 'Discord Import',
         channels: selected
       })
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || t('settings.admin.import_fetch_failed'));
+    if (result.skipped?.length) {
+      this._showToast(t('modals.discord_import.skipped_channels', { names: result.skipped.join(', ') }), 'error');
+    }
 
     // Transition to the standard preview step (reuses existing execute flow)
     this._importSetState(result.importId, result);

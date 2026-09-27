@@ -3333,13 +3333,21 @@
         <div id="import-tab-connect" style="display:none">
           <div id="import-connect-step-token">
             <p class="settings-hint" style="margin-bottom:8px" data-i18n="modals.discord_import.connect_hint">
-              Pull a server's history straight from Discord by signing in with your own Discord account.
+              Pull a Discord server's history straight into Haven.
             </p>
+            <div class="import-ferry-box">
+              <strong data-i18n="modals.discord_import.ferry_title">🛶 Use your Ferry bot (recommended)</strong>
+              <p data-i18n="modals.discord_import.ferry_desc">Your Ferry bot reads the history for you. Nothing to paste, and it's within Discord's rules. It can import every channel it can see on Discord.</p>
+              <button class="btn-sm btn-accent" id="import-ferry-connect-btn" data-i18n="modals.discord_import.ferry_btn">Use my Ferry bot</button>
+              <p class="muted-text" id="import-ferry-missing" style="display:none"><span data-i18n="modals.discord_import.ferry_missing">Ferry isn't set up on this server yet. It takes about two minutes, and you only do it once.</span> <a href="#" id="import-open-ferry" data-i18n="modals.discord_import.ferry_setup_link">Set up Ferry</a></p>
+            </div>
+            <details class="import-personal-login">
+              <summary data-i18n="modals.discord_import.personal_summary">Or use your personal Discord login (not recommended)</summary>
             <div class="import-token-risk">
               <strong data-i18n="modals.discord_import.risk_title">⚠️ Read this first</strong>
               <p data-i18n="modals.discord_import.risk_rules">This uses your personal Discord login token. Discord's rules don't allow apps to use a personal account this way, so Discord could lock or ban the account you use.</p>
               <p data-i18n="modals.discord_import.risk_takeover">Anyone who gets your token can take over your Discord account. Only paste it into a Haven server you run yourself, and never because someone asked you to.</p>
-              <p data-i18n="modals.discord_import.risk_safer">The Upload File tab is the safer way to bring your history over.</p>
+              <p data-i18n="modals.discord_import.risk_safer">Your Ferry bot, above, does the same import within Discord's rules.</p>
               <label class="import-token-risk-ack">
                 <input type="checkbox" id="import-token-risk-ack">
                 <span data-i18n="modals.discord_import.risk_ack">I understand the risks, and this is my own Haven server</span>
@@ -3369,6 +3377,7 @@
               <button class="btn-sm btn-accent" id="import-connect-btn" data-i18n="modals.discord_import.connect_btn">Connect</button>
             </div>
             </div>
+            </details>
             <p class="muted-text" id="import-connect-status" style="margin-top:6px;display:none"></p>
           </div>
 

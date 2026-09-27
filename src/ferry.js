@@ -1471,6 +1471,17 @@ async function verifyToken(token) {
   return { id: user.id, username: user.username, avatar: discordAvatarUrl(user) };
 }
 
+/**
+ * Headers for reading Discord as the Ferry bot, for the Discord import. The
+ * token never leaves the server: the import routes call Discord with these
+ * and the client only says "use Ferry". Null when Ferry has no token.
+ */
+function importHeaders() {
+  const { token } = getConfig();
+  if (!token) return null;
+  return { 'Authorization': `Bot ${token}`, 'User-Agent': USER_AGENT };
+}
+
 /** The invite link an admin needs, with exactly the permissions Ferry uses. */
 function inviteUrl(applicationId) {
   // 536870912 Manage Webhooks + 2048 Send Messages + 1024 View Channel
@@ -1494,6 +1505,7 @@ module.exports = {
   reconnectFerry,
   stopFerry: stop,
   getFerryState,
+  importHeaders,
   getDirectory,
   searchMembers,
   sendToDiscord,

@@ -194,31 +194,39 @@ Any channel can be switched between private and public later from **Channel Func
 
 ## 📥 Importing from Discord
 
-Haven can import a Discord server's message history from an export file.
+Haven can copy a Discord server's message history into Haven channels. The easiest way uses your Ferry bot: nothing to download, nothing to paste.
 
-### Method 1: DiscordChatExporter with a bot (whole server, everyone's messages)
+### Method 1: Your Ferry bot (recommended)
 
-1. In the [Discord Developer Portal](https://discord.com/developers/applications), create an application, open its **Bot** page, turn on **Message Content Intent**, and copy the bot token. If you already set up Ferry (see below), you can use the same bot.
-2. Invite the bot to your Discord server with the **View Channels** and **Read Message History** permissions.
-3. In [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter), paste the bot token and export the channels you want in **JSON** format.
+1. Set up Ferry if you haven't yet. The [Ferry section](#-ferry-discord-bridge) walks you through it and takes about two minutes. For importing you only need its first two parts: create the bot, then connect it to Haven and add it to your Discord server. You don't have to turn Ferry on or pair any channels.
+2. In Haven, open **Settings** (⚙️ in the sidebar) → **Import Discord History**, then click the **🔗 Connect to Discord** tab
+3. Click **Use my Ferry bot**
+4. Pick your Discord server, then tick the channels and threads you want
+5. Click **Fetch Messages** and wait while Haven copies them. A big server can take a few minutes
+6. In the preview, rename channels if you want, then click **Import Selected**
 
-### Method 2: Discord's own data package (your messages only)
+The bot can only import channels it can see on Discord. If a channel is private there, give the bot's role access to it first. Otherwise Haven skips that channel and tells you which ones it skipped.
 
-In Discord, go to **User Settings → Data & Privacy → Request all of my Data**. Discord emails you a ZIP when it's ready.
+**What gets imported:** messages, replies, embeds, reactions, pins, links to attachments, and the original Discord names and avatars.
 
-### Uploading the file
+**Channel types supported:** text, announcement, forum, media, plus active and archived public threads.
 
-1. Open **Settings** (⚙️ in the sidebar) → **Import Discord History**
-2. On the **📁 Upload File** tab, drag/drop or browse for the `.json` or `.zip` file
-3. In the preview, rename channels if you want, then click **Import**
+### Method 2: Upload an export file
 
-**What gets imported:** messages, replies, reactions, pins, links to attachments, and the original Discord names and avatars. Each exported channel or thread becomes a Haven channel.
+If you'd rather not set up a bot, Discord can give you a download of your own messages (only yours, not everyone's):
+
+1. In Discord, go to **User Settings → Data & Privacy → Request all of my Data**. Discord emails you a ZIP when it's ready, which can take a few days
+2. In Haven, open **Settings** → **Import Discord History**. The **📁 Upload File** tab is already open
+3. Drop the ZIP in, or click **browse** to find it
+4. In the preview, rename channels if you want, then click **Import Selected**
+
+Export files from DiscordChatExporter (JSON) work here too.
 
 ### Important Notes
 
 - Imported messages appear as the original Discord usernames, but they're all stored under the admin account. They're clearly marked as imported from Discord.
 - The import is **history only**: Discord roles, permissions, bots, and webhooks are not imported.
-- To keep chatting with people who stay on Discord, use Ferry (below) to bridge channels between the two.
+- To keep chatting with people who stay on Discord, use [Ferry](#-ferry-discord-bridge) to bridge channels between the two.
 
 ---
 
@@ -1064,6 +1072,8 @@ Click the **🔐** button in the DM header to view your **safety number** — a 
 
 Ferry relays messages between your Haven channels and Discord channels. Haven users
 appear on Discord under their own names, and Discord messages show up in Haven.
+
+The same bot can also copy your Discord server's history into Haven: see [Importing from Discord](#-importing-from-discord).
 
 **Every Haven server needs its own Discord bot.** Haven cannot ship a shared one:
 Discord caps unverified applications at 100 servers and verification requires a company

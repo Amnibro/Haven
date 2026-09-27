@@ -18668,6 +18668,24 @@ ul.chat-list { list-style-type: disc; }
   color: var(--text-primary);
   font-family: monospace;
 }
+.import-ferry-box {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--accent-color, #5865f2);
+  border-radius: 0.375rem;
+  background: var(--bg-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.import-ferry-box p { margin: 0.375rem 0 0.625rem; }
+.import-ferry-box #import-ferry-missing { margin: 0.625rem 0 0; }
+.import-personal-login { margin-top: 0.75rem; font-size: 0.75rem; }
+.import-personal-login > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+}
+.import-personal-login > summary:hover { color: var(--text-primary); }
 .import-token-risk {
   margin: 0.5rem 0;
   padding: 0.625rem 0.75rem;

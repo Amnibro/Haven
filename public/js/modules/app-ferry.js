@@ -91,6 +91,7 @@ export default {
       this._ferryConfig = payload;
       this._renderFerryModal();
       this._renderFerrySummary();
+      this._renderImportFerry?.();
     });
 
     this.socket.on('ferry:token-ok', (data) => {
