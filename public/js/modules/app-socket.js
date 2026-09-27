@@ -1386,7 +1386,36 @@ _setupSocketListeners() {
     }
   });
 
+  // Member entries arrive without the fields that hold their usual value;
+  // put them back so everything reading a member sees the full shape.
+  const fillMember = (u) => ({
+    highScore: 0, statusText: '', avatar: null, avatarShape: 'circle', border: null,
+    borderTransform: null, animateProfile: 'trigger', isGuest: false, role: null, activity: null,
+    ...u,
+  });
+
+  // Only the members that changed, merged into the list kept for that
+  // channel. The server sends the whole list first, so a channel with no
+  // list here yet is skipped until it does.
+  this.socket.on('online-users-delta', (data) => {
+    const list = this._onlineByChannel?.get(data?.channelCode);
+    if (!list) return;
+    const upsert = Array.isArray(data.upsert) ? data.upsert.map(fillMember) : [];
+    const drop = new Set([...(Array.isArray(data.remove) ? data.remove : []), ...upsert.map(u => u.id)]);
+    const users = list.filter(u => !drop.has(u.id)).concat(upsert);
+    users.sort((a, b) => {
+      if (a.online !== b.online) return a.online ? -1 : 1;
+      return (a.username || '').toLowerCase().localeCompare((b.username || '').toLowerCase());
+    });
+    applyOnlineUsers({ channelCode: data.channelCode, users, visibilityMode: data.visibilityMode });
+  });
+
   this.socket.on('online-users', (data) => {
+    if (data?.slim && Array.isArray(data.users)) data = { ...data, users: data.users.map(fillMember) };
+    applyOnlineUsers(data);
+  });
+
+  const applyOnlineUsers = (data) => {
     // Every list is kept by channel (the socket sits in every room it
     // belongs to), so a DM PiP can read its own partner's presence instead
     // of the list for whatever channel is on screen (#5574).
@@ -1407,7 +1436,7 @@ _setupSocketListeners() {
         this._renderOnlineOverlay();
       }
     }
-  });
+  };
 
   this.socket.on('voice-users-update', (data) => {
     // Right-side VOICE panel shows who's in voice for the channel you are

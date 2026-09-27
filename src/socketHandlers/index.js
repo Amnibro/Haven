@@ -832,9 +832,69 @@ function setupSocketHandlers(io, db, opts = {}) {
     } catch { /* presence is best-effort */ }
   }
 
-  function emitOnlineUsers(code) {
-    const room = channelUsers.get(code);
+  // ── emitOnlineUsers ─────────────────────────────────────
+  // Rebuilding a channel's whole member list and sending all of it to
+  // everyone in the channel on every change grew with the cube of the
+  // channel: 200 people arriving meant 700 MB of lists. Now a change only
+  // marks the channel, the list is rebuilt at most once per short window
+  // (longer for bigger rooms), and a client that asked for deltas gets just
+  // the members that changed. It gets the whole list the first time it sees
+  // a channel and again whenever it enters one. A client that did not ask
+  // (an older app) still gets the whole list, once per window.
+  const memberListTimers = new Map();   // code -> pending flush
+  const memberListLast = new Map();     // code -> what was last sent
 
+  // Fields a member entry leaves out when they hold their usual value, for
+  // clients that asked for deltas (they fill them back in on arrival). Most
+  // members have no avatar, border or activity, so this cuts each entry to
+  // about a third.
+  const MEMBER_DEFAULTS = {
+    highScore: 0, statusText: '', avatar: null, avatarShape: 'circle', border: null,
+    borderTransform: null, animateProfile: 'trigger', isGuest: false, role: null, activity: null,
+  };
+  function slimMember(u) {
+    const out = {};
+    for (const k in u) {
+      const d = MEMBER_DEFAULTS[k];
+      if (k in MEMBER_DEFAULTS && (u[k] === d || (d === null && u[k] == null))) continue;
+      out[k] = u[k];
+    }
+    return out;
+  }
+
+  function byPresence(a, b) {
+    if (a.online !== b.online) return a.online ? -1 : 1;
+    return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
+  }
+
+  function emitOnlineUsers(code) {
+    if (!code || memberListTimers.has(code)) return;
+    const room = io.of('/').adapter.rooms.get(`channel:${code}`);
+    const delay = Math.min(1000, 50 + (room ? room.size : 0) * 2);
+    memberListTimers.set(code, setTimeout(() => {
+      memberListTimers.delete(code);
+      try { flushOnlineUsers(code); } catch (err) { console.error('Member list update failed:', err); }
+    }, delay));
+  }
+
+  // The next update sends this socket the whole list for the channel.
+  function resetPresenceSync(socket, code) {
+    socket.presenceSynced?.delete(code);
+  }
+  // Deltas only make sense while the socket stays in the room: once it
+  // leaves (or joins afresh) it has missed changes, so it starts over with
+  // the whole list. Hooked on the adapter so every join and leave counts.
+  for (const evt of ['join-room', 'leave-room']) {
+    io.of('/').adapter.on(evt, (room, id) => {
+      if (typeof room !== 'string' || !room.startsWith('channel:')) return;
+      const s = io.of('/').sockets.get(id);
+      if (s) resetPresenceSync(s, room.slice(8));
+    });
+  }
+
+  // One channel's member list as its members see it, before the invisible
+  // rule is applied per viewer. Roles are worked out once per user per build.
+  function buildOnlineUsers(code) {
     const visibility = db.prepare("SELECT value FROM server_settings WHERE key = 'member_visibility'").get();
     const mode = visibility ? visibility.value : 'online';
 
@@ -858,6 +918,11 @@ function setupSocketHandlers(io, db, opts = {}) {
     } catch { /* columns may not exist yet */ }
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const roles = new Map();
+    const roleOf = (id) => {
+      if (!roles.has(id)) roles.set(id, getUserHighestRole(id, channel ? channel.id : null));
+      return roles.get(id);
+    };
     const memberIds = new Set();
     if (channel) {
       const rows = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id);
@@ -892,7 +957,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         borderTransform: statusMap[m.id]?.borderTransform || null,
         animateProfile: statusMap[m.id]?.animateProfile || 'trigger',
         isGuest: statusMap[m.id]?.isGuest || false,
-        role: getUserHighestRole(m.id, channel ? channel.id : null),
+        role: roleOf(m.id),
         // null unless the user opted in; getPublicActivity applies their
         // privacy prefs, so nothing filtered here can leak downstream.
         activity: globalOnlineIds.has(m.id) ? activity.getPublicActivity(m.id) : null
@@ -912,7 +977,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             borderTransform: statusMap[s.user.id]?.borderTransform || s.user.borderTransform || null,
             animateProfile: statusMap[s.user.id]?.animateProfile || s.user.animate_profile || 'trigger',
             isGuest: statusMap[s.user.id]?.isGuest || !!s.user.isGuest,
-            role: getUserHighestRole(s.user.id, channel ? channel.id : null),
+            role: roleOf(s.user.id),
             activity: activity.getPublicActivity(s.user.id)
           });
         }
@@ -920,32 +985,87 @@ function setupSocketHandlers(io, db, opts = {}) {
       users = Array.from(onlineMap.values());
     }
 
-    users.sort((a, b) => {
-      if (a.online !== b.online) return a.online ? -1 : 1;
-      return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
-    });
+    users.sort(byPresence);
 
-    const hasInvisible = users.some(u => u.status === 'invisible');
+    return { users, mode };
+  }
 
-    if (!hasInvisible) {
-      io.to(`channel:${code}`).emit('online-users', { channelCode: code, users, visibilityMode: mode });
-    } else {
-      for (const [, s] of io.of('/').sockets) {
-        if (!s.user || !s.rooms || !s.rooms.has(`channel:${code}`)) continue;
-        const viewerId = s.user.id;
-        const customUsers = users.map(u => {
-          if (u.status === 'invisible' && u.id !== viewerId) {
-            if (mode === 'online') return null;
-            return { ...u, online: false, status: 'offline' };
-          }
-          return u;
-        }).filter(Boolean);
-        customUsers.sort((a, b) => {
-          if (a.online !== b.online) return a.online ? -1 : 1;
-          return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
-        });
-        s.emit('online-users', { channelCode: code, users: customUsers, visibilityMode: mode });
+  function flushOnlineUsers(code) {
+    const room = io.of('/').adapter.rooms.get(`channel:${code}`);
+    if (!room || !room.size) { memberListLast.delete(code); return; }
+    const { users, mode } = buildOnlineUsers(code);
+
+    // Everyone else sees an invisible member as offline, or not at all when
+    // the list shows online members only. The member themselves sees the
+    // real entry, so `own` keeps it.
+    const pub = [];
+    const pubJson = new Map();
+    const own = new Map();
+    const byId = new Map();
+    for (const u of users) {
+      byId.set(u.id, u);
+      if (u.status === 'invisible') {
+        own.set(u.id, JSON.stringify(u));
+        if (mode === 'online') continue;
+        const shown = { ...u, online: false, status: 'offline' };
+        pub.push(shown);
+        pubJson.set(u.id, JSON.stringify(shown));
+      } else {
+        pub.push(u);
+        pubJson.set(u.id, JSON.stringify(u));
       }
+    }
+    pub.sort(byPresence);
+    const pubById = new Map(pub.map(u => [u.id, u]));
+    const slimmed = new Map();
+    const slim = (u) => {
+      if (!slimmed.has(u)) slimmed.set(u, slimMember(u));
+      return slimmed.get(u);
+    };
+
+    const prev = memberListLast.get(code);
+    const fresh = !prev || prev.mode !== mode;
+    const changed = [];
+    const removed = [];
+    if (!fresh) {
+      for (const [id, json] of pubJson) if (prev.pubJson.get(id) !== json) changed.push(id);
+      for (const id of prev.pubJson.keys()) if (!pubJson.has(id)) removed.push(id);
+    }
+    memberListLast.set(code, { mode, pubJson, own });
+
+    for (const sid of room) {
+      const s = io.of('/').sockets.get(sid);
+      if (!s || !s.user) continue;
+      const viewer = s.user.id;
+      const selfHidden = own.has(viewer);
+
+      if (!s.presenceDeltas || fresh || !s.presenceSynced?.has(code)) {
+        const list = selfHidden
+          ? pub.filter(u => u.id !== viewer).concat(byId.get(viewer)).sort(byPresence)
+          : pub;
+        if (s.presenceDeltas) {
+          s.emit('online-users', { channelCode: code, users: list.map(slim), visibilityMode: mode, slim: 1 });
+          (s.presenceSynced || (s.presenceSynced = new Set())).add(code);
+        } else {
+          s.emit('online-users', { channelCode: code, users: list, visibilityMode: mode });
+        }
+        continue;
+      }
+
+      let upsert = changed;
+      let remove = removed;
+      let extra = null;
+      if (selfHidden) {
+        // Keep the viewer's own real entry, and send it when it changed.
+        upsert = changed.filter(id => id !== viewer);
+        remove = removed.filter(id => id !== viewer);
+        const seen = prev.own.get(viewer) ?? prev.pubJson.get(viewer);
+        if (own.get(viewer) !== seen) extra = byId.get(viewer);
+      }
+      if (!upsert.length && !remove.length && !extra) continue;
+      const entries = upsert.map(id => pubById.get(id));
+      if (extra) entries.push(extra);
+      s.emit('online-users-delta', { channelCode: code, visibilityMode: mode, upsert: entries.map(slim), remove });
     }
   }
 
@@ -1684,6 +1804,8 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     const token = socket.handshake.auth?.token;
     if (!token || typeof token !== 'string') return next(new Error('Authentication required'));
+    // This client merges member-list deltas (online-users-delta).
+    socket.presenceDeltas = socket.handshake.auth?.presenceDeltas === 1;
 
     const user = verifyToken(token);
     if (!user) return next(new Error('Invalid token'));
@@ -2266,7 +2388,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
       parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships,
       // Broadcast helpers
-      broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence,
+      broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence, resetPresenceSync,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks

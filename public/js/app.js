@@ -4,7 +4,7 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.13.1';
+import SocketMethods   from './modules/app-socket.js?v=4.14.2';
 import UIBindMethods   from './modules/app-ui.js?v=4.12.1';
 import MediaMethods    from './modules/app-media.js?v=4.13.1';
 import ContextMethods  from './modules/app-context.js?v=4.13.1';
@@ -289,7 +289,9 @@ class HavenApp {
     // exists, below, since it travels over the authenticated connection.
 
     this.socket = io({
-      auth: { token: this.token },
+      // presenceDeltas: this client merges member-list changes
+      // (online-users-delta) instead of needing every list in full.
+      auth: { token: this.token, presenceDeltas: 1 },
       reconnectionDelay: 1500,
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.4,

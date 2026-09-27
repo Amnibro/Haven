@@ -37,7 +37,7 @@ const { clearChannelRuntimeState } = require('../channelRotation');
 module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
-    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence,
+    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence, resetPresenceSync,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
     applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
     rotateChannelCode, rotatePrivateCodesAfterRemoval, botAudioManager
@@ -675,6 +675,9 @@ module.exports = function register(socket, ctx) {
 
     socket.currentChannel = code;
     socket.join(`channel:${code}`);
+    // Opening a channel shows its member list from the next update, so that
+    // update has to be the whole list for this socket.
+    resetPresenceSync(socket, code);
 
     if (!channelUsers.has(code)) channelUsers.set(code, new Map());
     channelUsers.get(code).set(socket.user.id, {
