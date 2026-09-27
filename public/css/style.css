@@ -18690,7 +18690,9 @@ ul.chat-list { list-style-type: disc; }
 .large-server-status { margin: 4px 0 8px; font-size: 0.78rem; color: var(--text-muted); }
 .large-server-status.is-running { color: var(--success, #3ba55d); }
 .large-server-status.is-error { color: var(--danger, #ed4245); }
-.large-server-unavailable { margin: 8px 0 0; font-size: 0.75rem; color: var(--danger, #ed4245); }
+.large-server-install { margin-top: 4px; }
+#voice-relay-install-log { font-size: 0.72rem; overflow-wrap: anywhere; }
+#voice-relay-install-log.is-error { color: var(--danger, #ed4245); }
 .large-server-checklist { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .large-server-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .large-server-item > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

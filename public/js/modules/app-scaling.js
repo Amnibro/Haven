@@ -37,6 +37,11 @@ _setupLargeServerSection() {
   });
 
   document.getElementById('voice-relay-save')?.addEventListener('click', () => this._saveVoiceRelay());
+  document.getElementById('voice-relay-install-btn')?.addEventListener('click', () => this._installVoiceRelay());
+  this.socket.on('voice-relay-install-progress', ({ line } = {}) => {
+    const log = document.getElementById('voice-relay-install-log');
+    if (log && line) { log.textContent = line; log.classList.remove('is-error'); }
+  });
 
   section.querySelectorAll('[data-large-server-open]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -46,7 +51,8 @@ _setupLargeServerSection() {
 
   this.socket.on('voice-relay-status', (status) => {
     this._voiceRelayStatus = status;
-    this._renderVoiceRelayStatus();
+    this._updateLargeServerVisibility();
+    this._updateRelayPortHint();
   });
 },
 
@@ -70,8 +76,14 @@ _renderLargeServerSection() {
 
 _updateLargeServerVisibility() {
   const mode = document.querySelector('input[name="voice-relay-mode"]:checked')?.value || 'off';
+  // Not installed yet: the install step comes before the settings.
+  const installed = this._voiceRelayStatus ? this._voiceRelayStatus.available !== false : true;
   const options = document.getElementById('voice-relay-builtin-options');
-  if (options) options.style.display = mode === 'builtin' ? '' : 'none';
+  if (options) options.style.display = mode === 'builtin' && installed ? '' : 'none';
+  const install = document.getElementById('voice-relay-install');
+  if (install) install.style.display = mode === 'builtin' && !installed ? '' : 'none';
+  const saveRow = document.getElementById('voice-relay-save')?.parentElement;
+  if (saveRow) saveRow.style.display = mode === 'builtin' && !installed ? 'none' : '';
   this._updateRelayPortHint();
   this._renderVoiceRelayStatus();
 },
@@ -85,15 +97,17 @@ _updateRelayPortHint() {
   if (!hint) return;
   const port = parseInt(document.getElementById('voice-relay-port')?.value, 10) || 40000;
   const workers = parseInt(document.getElementById('voice-relay-workers')?.value, 10) || 1;
-  hint.textContent = t('settings.admin.large_server.port_hint', { ports: this._relayPorts(port, workers) });
+  const ports = this._relayPorts(port, workers);
+  hint.textContent = t('settings.admin.large_server.port_hint', { ports })
+    + (this._voiceRelayStatus?.docker ? ' ' + t('settings.admin.large_server.docker_hint', { ports }) : '');
 },
 
 _renderVoiceRelayStatus() {
   const el = document.getElementById('voice-relay-status');
-  const missing = document.getElementById('voice-relay-unavailable');
   const st = this._voiceRelayStatus;
   const chosen = document.querySelector('input[name="voice-relay-mode"]:checked')?.value || 'off';
-  if (missing) missing.style.display = st && !st.available && chosen === 'builtin' ? '' : 'none';
+  const installBtn = document.getElementById('voice-relay-install-btn');
+  if (installBtn && !this._voiceRelayInstalling) installBtn.disabled = !!st?.installing;
   if (!el) return;
   el.className = 'large-server-status';
   if (!st) { el.textContent = ''; return; }
@@ -117,6 +131,26 @@ _renderVoiceRelayStatus() {
   } else {
     el.textContent = '';
   }
+},
+
+_installVoiceRelay() {
+  const btn = document.getElementById('voice-relay-install-btn');
+  const log = document.getElementById('voice-relay-install-log');
+  this._voiceRelayInstalling = true;
+  if (btn) btn.disabled = true;
+  if (log) { log.textContent = t('settings.admin.large_server.installing'); log.classList.remove('is-error'); }
+  this.socket.emit('voice-relay-install', null, (res) => {
+    this._voiceRelayInstalling = false;
+    if (btn) btn.disabled = false;
+    if (res?.ok) {
+      if (log) log.textContent = '';
+      this._showToast(t('settings.admin.large_server.installed'), 'success');
+      this.socket.emit('voice-relay-status');
+    } else if (log) {
+      log.textContent = t('settings.admin.large_server.install_failed', { error: res?.error || '?' });
+      log.classList.add('is-error');
+    }
+  });
 },
 
 _saveVoiceRelay() {

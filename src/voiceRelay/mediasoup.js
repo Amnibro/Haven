@@ -12,21 +12,16 @@
  * networks that block UDP), so the admin opens `port` up to
  * `port + workers - 1` and nothing else. Calls are spread across workers.
  *
- * mediasoup is an optional dependency: if it did not install (no ready-made
- * build for this system and no compiler), the relay reports itself as
- * unavailable and calls keep working peer to peer.
+ * mediasoup is installed on demand from Large Server Setup (see ./addon.js).
+ * Until it is, the relay reports itself as not installed and calls keep
+ * working peer to peer.
  */
 
 const os = require('os');
 const { detectPublicIp } = require('./publicIp');
+const { loadMediasoup } = require('./addon');
 
-let mediasoup = null;
-let loadError = null;
-try {
-  mediasoup = require('mediasoup');
-} catch (err) {
-  loadError = err;
-}
+const NOT_INSTALLED = 'The relay is not installed yet. Install it from Large Server Setup.';
 
 const MEDIA_CODECS = [
   { kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
@@ -66,13 +61,12 @@ class MediasoupRelay {
     this._starting = null;
   }
 
-  static available() { return !!mediasoup; }
-  static loadError() { return loadError ? loadError.message : null; }
+  static available() { return !!loadMediasoup(); }
 
   status() {
     return {
-      state: mediasoup ? this.state : 'unavailable',
-      error: mediasoup ? this.error : `The relay is not installed on this server (${loadError?.message || 'mediasoup missing'}).`,
+      state: loadMediasoup() ? this.state : 'unavailable',
+      error: loadMediasoup() ? this.error : NOT_INSTALLED,
       address: this.address,
       ports: this.workers.map(w => w.port),
       calls: this.rooms.size,
@@ -82,7 +76,7 @@ class MediasoupRelay {
 
   /** Starts the workers. Safe to call again while starting or running. */
   start() {
-    if (!mediasoup) { this.state = 'unavailable'; return Promise.resolve(false); }
+    if (!loadMediasoup()) { this.state = 'unavailable'; this.error = NOT_INSTALLED; return Promise.resolve(false); }
     if (this.state === 'running') return Promise.resolve(true);
     if (this._starting) return this._starting;
     this._starting = this._start().finally(() => { this._starting = null; });
@@ -102,7 +96,7 @@ class MediasoupRelay {
       const listenIp = lan || '0.0.0.0';
 
       for (let i = 0; i < workers; i++) {
-        const worker = await mediasoup.createWorker({ logLevel: 'warn' });
+        const worker = await loadMediasoup().createWorker({ logLevel: 'warn' });
         const slot = { worker, webRtcServer: null, port: port + i, rooms: new Set() };
         worker.on('died', (err) => this._workerDied(slot, err));
         const info = (protocol) => ({

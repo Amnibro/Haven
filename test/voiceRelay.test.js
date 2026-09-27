@@ -8,9 +8,11 @@
  * the call use it, screen tracks need a screen share, and turning the relay
  * off moves the call to direct connections.
  *
- * Needs mediasoup (optional dependency) and mediasoup-client (dev dependency);
- * skipped when either is missing.
+ * Needs mediasoup-client (a dev dependency) and mediasoup, which servers
+ * install on demand from Large Server Setup rather than with Haven. Skipped
+ * without it; to run it:
  *
+ *   npm install --no-save mediasoup@3.27.1
  *   node --test test/voiceRelay.test.js
  */
 const test = require('node:test');

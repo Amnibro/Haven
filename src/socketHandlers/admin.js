@@ -573,7 +573,7 @@ module.exports = function register(socket, ctx) {
       return reply({ error: 'Enter an IP address or a host name for the relay, or leave it empty.' });
     }
     if (mode === 'builtin' && !relay.available()) {
-      return reply({ error: 'The built-in relay is not installed on this server. See the note under Voice relay.' });
+      return reply({ error: 'Install the relay first, with the button under Voice relay.' });
     }
     const values = { voice_relay_mode: mode, voice_relay_port: String(portN), voice_relay_workers: String(workersN), voice_relay_address: address };
     try {
@@ -591,6 +591,24 @@ module.exports = function register(socket, ctx) {
     relay.apply()
       .then(status => { io.to('admins').emit('voice-relay-status', status); reply({ ok: true, status }); })
       .catch(err => reply({ error: err.message }));
+  });
+
+  // Installs the relay's media engine into the data folder, reporting
+  // progress to the admins as it goes.
+  socket.on('voice-relay-install', async (_data, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!socket.user.isAdmin) return reply({ error: 'Only the server admin can install the voice relay.' });
+    if (!state.voiceRelay) return reply({ error: 'Voice relay unavailable' });
+    io.to('admins').emit('voice-relay-status', state.voiceRelay.status());
+    const result = await state.voiceRelay.install((line) => io.to('admins').emit('voice-relay-install-progress', { line }));
+    if (result.ok) console.log('🔊 Voice relay installed');
+    else console.error('Voice relay install failed:', result.error);
+    if (typeof logAudit === 'function') {
+      logAudit({ actor: socket.user, action: 'voice_relay_install', target_type: 'setting', target_name: 'voice_relay',
+        details: { ok: !!result.ok, error: result.error || null } });
+    }
+    io.to('admins').emit('voice-relay-status', state.voiceRelay.status());
+    reply(result);
   });
 
   // What this server's public address looks like from outside, to prefill

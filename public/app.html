@@ -2648,7 +2648,13 @@
               </label>
               <small class="settings-hint" data-i18n="settings.admin.large_server.workers_hint">One core carries many calls. Add more when calls get very large or numerous; each extra core uses the next port up.</small>
             </div>
-            <p class="large-server-unavailable" id="voice-relay-unavailable" style="display:none" data-i18n="settings.admin.large_server.unavailable">The built-in relay is not installed on this server. It installs with Haven on Windows, Linux (including Raspberry Pi) and Apple Silicon Macs. Run Haven's update again, and if it still says this, the server log shows why.</p>
+            <div class="large-server-install" id="voice-relay-install" style="display:none">
+              <small class="settings-hint" data-i18n="settings.admin.large_server.install_hint">The relay is not installed on this server yet. Installing it downloads about 10 MB, once; Haven updates keep it. It works on Windows, Linux (including Raspberry Pi and Docker) and Apple Silicon Macs.</small>
+              <div style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                <button type="button" class="btn-sm btn-accent" id="voice-relay-install-btn" data-i18n="settings.admin.large_server.install_btn">Install the relay</button>
+                <small class="muted-text" id="voice-relay-install-log"></small>
+              </div>
+            </div>
 
             <div style="margin-top:10px; display:flex; align-items:center; gap:8px">
               <button type="button" class="btn-sm btn-accent" id="voice-relay-save" data-i18n="settings.admin.large_server.save">Save relay settings</button>

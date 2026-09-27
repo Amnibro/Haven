@@ -15,7 +15,9 @@
  * tells the people in each one to connect to each other directly.
  */
 
+const fs = require('fs');
 const { MediasoupRelay } = require('./mediasoup');
+const addon = require('./addon');
 
 const MODES = ['off', 'builtin'];
 const DEFAULT_PORT = 40000;
@@ -51,8 +53,16 @@ function createVoiceRelay({ getSetting, onRoomLost, onRelayEnded = () => {} }) {
     available: () => MediasoupRelay.available(),
 
     status() {
-      return { mode: mode(), available: MediasoupRelay.available(), ...builtin.status() };
+      return {
+        mode: mode(), available: MediasoupRelay.available(), installing: addon.isInstalling(),
+        // In Docker the port also has to be mapped in docker-compose.yml.
+        docker: fs.existsSync('/.dockerenv'),
+        ...builtin.status(),
+      };
     },
+
+    /** Installs the media engine (Large Server Setup). */
+    install: (onLine) => addon.install(onLine),
 
     /** Called when the admin saves relay settings: start, stop or restart. */
     apply() {
