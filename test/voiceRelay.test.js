@@ -155,9 +155,27 @@ test('a call goes through the voice relay once the admin turns it on', { skip: !
   assert.strictEqual(consumer.kind, 'audio');
   assert.ok((await ask(B, 'relay:resume', { code, consumerId: got.consumer.id })).ok, 'resumed');
 
-  // A screen track needs a screen share first.
+  // Asking for the same track again gets the same consumer, not another copy.
+  const twice = await ask(B, 'relay:consume', { code, producerId: producer.id, rtpCapabilities: bSession.device.rtpCapabilities });
+  assert.strictEqual(twice.consumer?.id, got.consumer.id, 'one consumer per track');
+
+  // A screen track needs a screen share first, and each source carries its own kind.
   const screen = await ask(A, 'relay:produce', { code, transportId: aSession.send.id, kind: 'video', rtpParameters: {}, source: 'screen' });
   assert.match(screen.error || '', /screen share/i);
+  const wrongKind = await ask(A, 'relay:produce', { code, transportId: aSession.send.id, kind: 'video', rtpParameters: {}, source: 'screen-audio' });
+  assert.match(wrongKind.error || '', /Bad request/, 'screen audio must be audio');
+
+  // Kicked from voice: their tracks stop for everyone and the relay drops them.
+  const bobTrack = await bSession.send.produce({ track: new FakeMediaStreamTrack({ kind: 'audio' }), appData: { source: 'mic' } });
+  const bobClosed = next(A, 'relay:producer-closed', (d) => d.producerId === bobTrack.id);
+  A.emit('voice-kick', { code, userId: bob.user.id });
+  assert.ok(await bobClosed, 'a kicked person stops being heard');
+  const afterKick = await ask(B, 'relay:producers', { code });
+  assert.ok(afterKick.error, 'and can no longer use the relay');
+  const bBack = next(B, 'voice-existing-users', (d) => d.channelCode === code);
+  B.emit('voice-join', { code, relay: 1 });
+  assert.ok(await bBack, 'rejoined after the kick');
+  await relaySession(B, code);
 
   // Leaving stops the admin's tracks for everyone else.
   const closed = next(B, 'relay:producer-closed', (d) => d.producerId === producer.id);

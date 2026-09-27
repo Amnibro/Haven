@@ -2368,7 +2368,7 @@
         "docker_hint": "This server runs in Docker, so also map port {{ports}} for UDP and TCP in docker-compose.yml: the lines are there, commented out.",
         "address": "Public address",
         "address_placeholder": "Found automatically",
-        "address_hint": "Where people connect to reach the relay: this server's public IP address or domain name. Leave it empty and Haven works it out when the relay starts.",
+        "address_hint": "Where people connect to reach the relay: this server's public IP address or domain name. Leave it empty and Haven works it out when the relay starts. Everyone in a relayed call can see this address (and, so people on your own network connect directly, the server's local address), as with any voice server; a server hidden behind a proxy is not hidden from them.",
         "detect": "Detect",
         "detecting": "Detecting...",
         "detect_failed": "Could not detect it. Enter it by hand.",

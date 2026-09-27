@@ -112,6 +112,8 @@ function createVoiceRelay({ getSetting, onRoomLost, onRelayEnded = () => {} }) {
     consume: (...a) => builtin.consume(...a),
     resumeConsumer: (...a) => builtin.resumeConsumer(...a),
     setWatching: (...a) => builtin.setWatching(...a),
+    closeSources: (...a) => builtin.closeSources(...a),
+    sessions: () => builtin.sessions(),
     leave: (...a) => builtin.leave(...a),
     inCall: (...a) => builtin.inCall(...a),
   };

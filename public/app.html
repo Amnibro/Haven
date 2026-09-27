@@ -2638,7 +2638,7 @@
                 <input type="text" id="voice-relay-address" class="settings-text-input" data-i18n-placeholder="settings.admin.large_server.address_placeholder" placeholder="Found automatically" style="flex:1">
                 <button type="button" class="btn-sm" id="voice-relay-detect" data-i18n="settings.admin.large_server.detect">Detect</button>
               </label>
-              <small class="settings-hint" data-i18n="settings.admin.large_server.address_hint">Where people connect to reach the relay: this server's public IP address or domain name. Leave it empty and Haven works it out when the relay starts.</small>
+              <small class="settings-hint" data-i18n="settings.admin.large_server.address_hint">Where people connect to reach the relay: this server's public IP address or domain name. Leave it empty and Haven works it out when the relay starts. Everyone in a relayed call can see this address (and, so people on your own network connect directly, the server's local address), as with any voice server; a server hidden behind a proxy is not hidden from them.</small>
               <label class="select-row" style="margin-top:8px">
                 <span data-i18n="settings.admin.large_server.workers">CPU cores</span>
                 <select id="voice-relay-workers">

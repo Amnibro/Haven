@@ -520,6 +520,8 @@ module.exports = function register(socket, ctx) {
 
     if (target.isBot) botAudioManager?.stopWebhook(-Number(data.userId));
     voiceRoom.delete(data.userId);
+    // In a relayed call, stop sending the call to them right now.
+    ctx.dropRelayUser?.(data.code, data.userId);
     const targetSocket = io.sockets.sockets.get(target.socketId);
     if (targetSocket) {
       targetSocket.leave(`voice:${data.code}`);
@@ -649,6 +651,7 @@ module.exports = function register(socket, ctx) {
     if (currentSession.transport === 'browser' && data.sessionId != null) return acknowledge(false);
 
     clearScreenState(data.code, socket.user.id);
+    ctx.closeRelaySources?.(data.code, socket.user.id, ['screen', 'screen-audio']);
 
     for (const [uid, user] of voiceRoom) {
       if (uid !== socket.user.id) {
@@ -715,6 +718,7 @@ module.exports = function register(socket, ctx) {
       camUsersSet.delete(socket.user.id);
       if (camUsersSet.size === 0) activeWebcamUsers.delete(data.code);
     }
+    ctx.closeRelaySources?.(data.code, socket.user.id, ['webcam']);
 
     for (const [uid, user] of voiceRoom) {
       if (uid !== socket.user.id) {

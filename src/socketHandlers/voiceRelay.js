@@ -20,6 +20,11 @@
  */
 
 const SOURCES = new Set(['mic', 'screen', 'screen-audio', 'webcam']);
+// What each source must carry.
+const SOURCE_KIND = { mic: 'audio', 'screen-audio': 'audio', screen: 'video', webcam: 'video' };
+// Joining a big call is a burst of these (two per track in the call), so the
+// limit is generous; it only stops a client hammering the relay.
+const RATE = { max: 800, windowMs: 10000 };
 const ID = /^[A-Za-z0-9-]{1,64}$/;
 
 module.exports = function registerVoiceRelay(socket, ctx) {
@@ -36,10 +41,19 @@ module.exports = function registerVoiceRelay(socket, ctx) {
     return !!entry && entry.socketId === socket.id && voiceRelay.currentKind(code) === 'relay';
   }
 
+  let windowStart = 0;
+  let used = 0;
+  const overLimit = () => {
+    const now = Date.now();
+    if (now - windowStart > RATE.windowMs) { windowStart = now; used = 0; }
+    return ++used > RATE.max;
+  };
+
   // Every handler answers through the ack: { ok: true, ... } or { error }.
   function handle(event, fn) {
     socket.on(event, async (data, ack) => {
       const reply = typeof ack === 'function' ? ack : () => {};
+      if (overLimit()) return reply({ error: 'Slow down' });
       try {
         if (!data || typeof data !== 'object' || !inRelayedCall(data.code)) {
           return reply({ error: 'Not in a relayed call' });
@@ -69,7 +83,7 @@ module.exports = function registerVoiceRelay(socket, ctx) {
   });
 
   handle('relay:produce', async ({ code, transportId, kind, rtpParameters, source }) => {
-    if (!ID.test(String(transportId)) || !SOURCES.has(source) || (kind !== 'audio' && kind !== 'video')) throw new Error('Bad request');
+    if (!ID.test(String(transportId)) || !SOURCES.has(source) || SOURCE_KIND[source] !== kind) throw new Error('Bad request');
     if (!rtpParameters || typeof rtpParameters !== 'object') throw new Error('Bad request');
     // Screen and webcam go through the same announcements as a direct call,
     // which is where streams_enabled and the rest are checked.
@@ -79,7 +93,6 @@ module.exports = function registerVoiceRelay(socket, ctx) {
     if (source === 'webcam' && !activeWebcamUsers.get(code)?.has(socket.user.id)) {
       throw new Error('Start the camera first');
     }
-    if (source === 'mic' && kind !== 'audio') throw new Error('Bad request');
     const producerId = await voiceRelay.produce(code, peerId(), transportId, kind, rtpParameters, source);
     socket.to(`voice:${code}`).emit('relay:new-producer', {
       channelCode: code, producerId, userId: socket.user.id, source, kind,

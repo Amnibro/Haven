@@ -184,6 +184,34 @@ function setupSocketHandlers(io, db, opts = {}) {
   });
   state.voiceRelay.boot().catch(err => console.error('Voice relay did not start:', err.message));
 
+  // Ends a person's relay session in a call: their tracks stop for everyone
+  // and nothing more is sent to them. Every way out of a call comes here.
+  function dropRelayUser(code, userId) {
+    const relay = state.voiceRelay;
+    if (relay.currentKind(code) === 'relay') {
+      for (const producerId of relay.leave(code, `u${userId}`)) {
+        io.to(`voice:${code}`).emit('relay:producer-closed', { channelCode: code, producerId, userId });
+      }
+    }
+    if (!voiceUsers.get(code)?.size) relay.callEnded(code);
+  }
+  // Stops the given tracks of a person (a screen share or camera they ended).
+  function closeRelaySources(code, userId, sources) {
+    const relay = state.voiceRelay;
+    if (relay.currentKind(code) !== 'relay') return;
+    for (const producerId of relay.closeSources(code, `u${userId}`, sources)) {
+      io.to(`voice:${code}`).emit('relay:producer-closed', { channelCode: code, producerId, userId });
+    }
+  }
+  // Safety net: a relay session whose person is no longer in that call (kicked,
+  // dropped as stale, removed by any path that did not come through here)
+  // is closed within seconds, so it cannot go on receiving the call.
+  setInterval(() => {
+    for (const { code, userId } of state.voiceRelay.sessions()) {
+      if (!voiceUsers.get(code)?.has(userId)) dropRelayUser(code, userId);
+    }
+  }, 5000).unref?.();
+
   const dmCalls = createDmCalls({ io, db, voiceUsers, sendPushNotifications });
 
   // ── Rich presence ───────────────────────────────────────
@@ -1186,13 +1214,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     if (socket.user.isBot) botAudioManager?.stopWebhook(socket.user.webhookId);
     voiceRoom.delete(socket.user.id);
-    // A relayed call: stop what this person was sending through the relay.
-    if (state.voiceRelay.currentKind(code) === 'relay') {
-      for (const producerId of state.voiceRelay.leave(code, `u${socket.user.id}`)) {
-        io.to(`voice:${code}`).emit('relay:producer-closed', { channelCode: code, producerId, userId: socket.user.id });
-      }
-    }
-    if (voiceRoom.size === 0) state.voiceRelay.callEnded(code);
+    dropRelayUser(code, socket.user.id);
     clearNativeScreenOfferWindows(nativeScreenOfferWindows, code, socket.user.id);
     socket.leave(`voice:${code}`);
 
@@ -2522,6 +2544,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships,
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence, resetPresenceSync,
+      dropRelayUser, closeRelaySources,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks
