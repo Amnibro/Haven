@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Changed
+- The Discord import's "Connect to Discord" tab, which signs in with your personal Discord login, now opens with a warning (it goes against Discord's rules, and a leaked token is a stolen account) and stays locked until you tick that you understand. The guide now only covers exporting with a bot or with Discord's own data download.
+
 ## [4.14.0] - 2026-09-26
 
 Calls in DMs now ring: starting voice in a DM or group DM rings the others,
