@@ -5137,7 +5137,7 @@ app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
             timestamp: msg.timestamp,
             isPinned: msg.pinned || false,
             reactions: (msg.reactions || []).map(r => ({
-              emoji: r.emoji?.name || 'â“',
+              emoji: r.emoji?.name || '❓',
               count: r.count || 1
             })),
             replyTo: msg.message_reference?.message_id || null
