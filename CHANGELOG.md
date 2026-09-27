@@ -14,6 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- Large Server Setup, a new page in admin settings for servers meant to grow big. Its centrepiece is the voice relay: switched on, each person in a call sends their voice and video once, to the server, which passes it on, so calls are no longer limited by everyone's upload (direct calls start struggling past about ten people). It runs inside Haven, needs one port opened, and finds the server's public address by itself. Microphone, camera and screen share all go through it; bots and apps that don't support it yet still connect directly in the same call, and calls recover on their own after a server restart. Off by default. The page also points to the other settings a big server should look at. A LiveKit option for people who run their own LiveKit server is planned.
 - Import a Discord server's history with your Ferry bot: Settings, Import Discord History, Connect to Discord, "Use my Ferry bot". Nothing to paste, and it's within Discord's rules. Channels the bot can't see are skipped and named, and a bot missing Discord's Message Content setting gets told how to turn it on. The guide walks through it step by step.
 
 ### Changed
