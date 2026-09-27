@@ -1368,10 +1368,23 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // Encrypted DM files (#5699): the server cannot read an encrypted message
+    // to find the file it points at, so the sender names it. Only files this
+    // sender uploaded count, so nobody can get someone else's file removed.
+    let e2eFiles = null;
+    if (channel.is_dm && data.encrypted === true && Array.isArray(data.files)) {
+      const owns = db.prepare('SELECT 1 FROM upload_ownership WHERE rel_path = ? AND user_id = ?');
+      e2eFiles = data.files.slice(0, 10)
+        .map(f => (typeof f === 'string' ? UPLOAD_PATH_EXACT_RE.exec(f) : null))
+        .map(m => (m ? m[1] : null))
+        .filter(rel => rel && isSafeUploadRelPath(rel) && owns.get(rel, socket.user.id));
+      e2eFiles = e2eFiles.length ? JSON.stringify([...new Set(e2eFiles)]) : null;
+    }
+
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw);
+        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw, e2e_files) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw, e2eFiles);
 
       // Attachment tags (#tagging): the composer sends `attachmentTags` alongside
       // an upload's URL. Global vocabulary, applied to the file this message

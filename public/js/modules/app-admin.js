@@ -3503,6 +3503,9 @@ async _maybeUploadEncryptedDmFile(file, code, ch) {
       code,
       content: encryptedText,
       encrypted: true,
+      // The server cannot see this inside the encrypted text; naming it lets
+      // deleting the message remove the file too (#5699).
+      files: [data.url],
       replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null
     });
     this.notifications.play('sent');

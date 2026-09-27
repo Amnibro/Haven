@@ -34,6 +34,10 @@ function initDatabase() {
   db.pragma('cache_size = -8000');          // 8 MB page cache (was 64 MB — overkill for a chat app)
   db.pragma('busy_timeout = 5000');         // wait up to 5 s on lock contention
   db.pragma('temp_store = MEMORY');         // keep temp tables in RAM
+  // Deleted rows are overwritten with zeros instead of lingering in the file
+  // until the space is reused, so deleted messages cannot be read back out of
+  // haven.db with a text editor (#5699).
+  db.pragma('secure_delete = ON');
   db.pragma('mmap_size = 33554432');        // 32 MB memory-mapped I/O (was 256 MB)
 
   // Hard-cap SQLite's own heap usage so it can never run away
@@ -1712,10 +1716,31 @@ function initDatabase() {
     // NSFW topics blur their picture and preview until clicked, and stay out
     // of the list for anyone who hides NSFW channels (#5633).
     { name: 'nsfw', sql: "ALTER TABLE messages ADD COLUMN nsfw INTEGER DEFAULT 0" },
+    // Encrypted DM files (#5699): the server cannot read an E2E message to find
+    // the file it points at, so the sender lists it here (JSON array of paths).
+    { name: 'e2e_files', sql: "ALTER TABLE messages ADD COLUMN e2e_files TEXT DEFAULT NULL" },
   ]) {
     try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to) WHERE reply_to IS NOT NULL");
+
+  // Encrypted DM files (#5699). Deleting a message by any route (one message,
+  // a whole DM or channel, auto-cleanup, a purge) notes its files here, and a
+  // sweep in server.js moves them out with the other deleted attachments. A
+  // trigger catches every route without each of them having to know.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS released_uploads (
+      rel_path    TEXT PRIMARY KEY,
+      released_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TRIGGER IF NOT EXISTS messages_release_e2e_files
+    AFTER DELETE ON messages
+    WHEN OLD.e2e_files IS NOT NULL AND json_valid(OLD.e2e_files)
+    BEGIN
+      INSERT OR IGNORE INTO released_uploads (rel_path)
+        SELECT value FROM json_each(OLD.e2e_files) WHERE type = 'text';
+    END;
+  `);
 
   // ── Audit log ───────────────────────────────────────────
   // Tracks admin/moderator actions: channel CRUD, role changes,

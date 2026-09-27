@@ -7776,6 +7776,8 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
         code: targetChannel,
         content: encryptedText,
         encrypted: true,
+        // So deleting the message removes the file too (#5699).
+        files: [data.url],
         ...(bundled && { bundled: true })
       });
       this.notifications.play('sent');

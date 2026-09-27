@@ -5814,6 +5814,37 @@ function runAutoCleanup() {
 
 // Run cleanup every 15 minutes
 setInterval(runAutoCleanup, 15 * 60 * 1000);
+
+// Encrypted DM files whose message was deleted (#5699; the trigger that notes
+// them is in src/database.js). Each goes to deleted-attachments like any other
+// deleted file, unless a message still points at it.
+function releaseDeletedE2eFiles() {
+  try {
+    const { getDb } = require('./src/database');
+    const db = getDb();
+    const rows = db.prepare('SELECT rel_path FROM released_uploads LIMIT 500').all();
+    if (!rows.length) return;
+    const inEncrypted = db.prepare(`
+      SELECT 1 FROM messages m, json_each(m.e2e_files) j
+      WHERE m.e2e_files IS NOT NULL AND json_valid(m.e2e_files) AND j.value = ? LIMIT 1`);
+    const inContent = db.prepare("SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1");
+    const done = db.prepare('DELETE FROM released_uploads WHERE rel_path = ?');
+    let moved = 0;
+    for (const { rel_path: rel } of rows) {
+      const like = '%/uploads/' + rel.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
+      if (isSafeUploadRelPath(rel) && !inEncrypted.get(rel) && !inContent.get(like)) {
+        moveUploadToDeleted(rel);
+        moved++;
+      }
+      done.run(rel);
+    }
+    if (moved) console.log(`🗑️  Moved ${moved} file(s) from deleted encrypted messages to deleted-attachments`);
+  } catch (err) {
+    console.error('Releasing deleted encrypted files failed:', err.message);
+  }
+}
+releaseDeletedE2eFiles();
+setInterval(releaseDeletedE2eFiles, 5 * 60 * 1000);
 // Also run once at startup (delayed 30s to let DB settle)
 setTimeout(runAutoCleanup, 30000);
 // Expose globally so socketHandlers can trigger it
