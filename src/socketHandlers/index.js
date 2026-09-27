@@ -1252,6 +1252,64 @@ function setupSocketHandlers(io, db, opts = {}) {
   }, 2000);
   botVoiceReconciliationTimer.unref?.();
 
+  // ── Push delivery queue ─────────────────────────────────
+  // One message in a big channel calls for a notification to every member
+  // who is away. They all used to be sent on the spot, each encrypted right
+  // there, so with 3000 away members and a lively chat the server fell half
+  // a minute behind and delivered nothing. Now they wait in a queue and go
+  // out a few at a time, with the server free to do other work in between.
+  // A member still waiting for a notification from a channel gets the newer
+  // message in its place: notifications carry a per-channel tag, so the
+  // phone would have replaced it anyway.
+  // Real push services take 50 to 200 ms to answer, so enough are kept in
+  // flight to get through a big channel's worth in seconds.
+  const PUSH_IN_FLIGHT = 32;
+  const pushQueue = [];
+  const pushWaiting = new Map();   // endpoint + channel -> queued job
+  let pushActive = 0;
+  let pushPumping = false;
+
+  function queuePush(sub, channelCode, payload) {
+    const key = sub.endpoint + '\n' + channelCode;
+    const waiting = pushWaiting.get(key);
+    if (waiting) { waiting.payload = payload; return; }
+    const job = { key, sub, payload };
+    pushWaiting.set(key, job);
+    pushQueue.push(job);
+    pumpPushQueue();
+  }
+
+  function pumpPushQueue() {
+    if (pushPumping) return;
+    pushPumping = true;
+    setImmediate(() => {
+      pushPumping = false;
+      const sliceStart = Date.now();
+      while (pushActive < PUSH_IN_FLIGHT && pushQueue.length) {
+        const job = pushQueue.shift();
+        pushWaiting.delete(job.key);
+        pushActive++;
+        let sending;
+        try {
+          sending = webpush.sendNotification({ endpoint: job.sub.endpoint, keys: { p256dh: job.sub.p256dh, auth: job.sub.auth } }, job.payload);
+        } catch (err) {
+          sending = Promise.reject(err);
+        }
+        sending.catch((err) => {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(job.sub.endpoint); } catch { /* non-critical */ }
+          }
+        }).finally(() => {
+          pushActive--;
+          pumpPushQueue();
+        });
+        // Encrypting is synchronous; hand the thread back now and then.
+        if (Date.now() - sliceStart > 8) break;
+      }
+      if (pushQueue.length && pushActive < PUSH_IN_FLIGHT) pumpPushQueue();
+    });
+  }
+
   // ── Push notification helper ────────────────────────────
   function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent) {
     try {
@@ -1296,12 +1354,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       for (const sub of subs) {
         if (activeUserIds.has(sub.user_id)) continue;
         if (mutedUserIds.has(sub.user_id)) continue;
-        const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
-        webpush.sendNotification(pushSub, payload).catch((err) => {
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint); } catch { /* non-critical */ }
-          }
-        });
+        queuePush(sub, channelCode, payload);
       }
 
       // isFcmEnabled() also reflects the admin's FCM Privacy toggle, kept in
