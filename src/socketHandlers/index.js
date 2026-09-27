@@ -956,7 +956,16 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     const statusMap = {};
     try {
-      const statusRows = db.prepare('SELECT id, status, status_text, avatar, avatar_shape, border, border_transform, animate_profile, is_guest FROM users').all();
+      // Only this channel's members: the list never shows anyone else, and
+      // reading every account on the server for each update (a two-person DM
+      // included) was the cost that grew with the size of the server.
+      const statusRows = db.prepare(`
+        SELECT u.id, u.status, u.status_text, u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.is_guest
+        FROM users u
+        JOIN channel_members cm ON cm.user_id = u.id
+        JOIN channels c ON c.id = cm.channel_id
+        WHERE c.code = ?
+      `).all(code);
       statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle', border: r.border || null, borderTransform: parseBorderTransform(r.border_transform), animateProfile: r.animate_profile || 'trigger', isGuest: !!r.is_guest }; });
     } catch { /* columns may not exist yet */ }
 
