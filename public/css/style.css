@@ -18668,6 +18668,35 @@ ul.chat-list { list-style-type: disc; }
   color: var(--text-primary);
   font-family: monospace;
 }
+/* ── Large Server Setup ── */
+.large-server-card {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+}
+.large-server-card-title { font-weight: 600; margin-bottom: 4px; }
+.large-server-choices { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.large-server-choice {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 0.375rem; cursor: pointer;
+}
+.large-server-choice input { margin-top: 3px; flex-shrink: 0; }
+.large-server-choice > span { display: flex; flex-direction: column; gap: 2px; }
+.large-server-choice small { color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
+.large-server-choice:has(input:checked) { border-color: var(--accent-color, #5865f2); }
+.large-server-choice-disabled { opacity: 0.55; cursor: default; }
+.large-server-status { margin: 4px 0 8px; font-size: 0.78rem; color: var(--text-muted); }
+.large-server-status.is-running { color: var(--success, #3ba55d); }
+.large-server-status.is-error { color: var(--danger, #ed4245); }
+.large-server-unavailable { margin: 8px 0 0; font-size: 0.75rem; color: var(--danger, #ed4245); }
+.large-server-checklist { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.large-server-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.large-server-item > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.large-server-item small { color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
+.large-server-item .btn-sm { flex-shrink: 0; }
+
 .import-ferry-box {
   margin: 0.5rem 0;
   padding: 0.75rem;

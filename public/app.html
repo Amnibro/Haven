@@ -1454,6 +1454,7 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-custom-tos" style="display:none">⚖️ <span data-i18n="settings.nav.tos">Terms of Service</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-connectivity" style="display:none">📡 <span data-i18n="settings.nav.connectivity">Voice &amp; Connectivity</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-large-server" style="display:none">🏟️ <span data-i18n="settings.nav.large_server">Large Server Setup</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-tunnel" style="display:none">🧭 <span data-i18n="settings.nav.tunnel">Tunnel</span></div>
 
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_people">People &amp; Access</div>
@@ -2595,6 +2596,105 @@
             <button class="btn-sm btn-accent" id="test-connectivity-btn">🩺 <span data-i18n="settings.admin.test_connectivity_btn">Test voice connectivity</span></button>
             <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.test_connectivity_hint">Checks the servers above the same way a call does, and says in plain English what works and what doesn't. Save your changes first.</small>
             <div id="connectivity-test-result" style="display:none;margin-top:10px"></div>
+          </div>
+        </div>
+
+        <!-- Large Server Setup (Admin only) -->
+        <div class="admin-settings" id="section-large-server" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🏟️ <span data-i18n="settings.admin.large_server.title">Large Server Setup</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.large_server.hint">What a big community needs, in one place. A server for friends and family can skip this page.</small>
+
+          <div class="large-server-card">
+            <div class="large-server-card-title">🔊 <span data-i18n="settings.admin.large_server.relay_title">Voice relay</span></div>
+            <small class="settings-hint" data-i18n="settings.admin.large_server.relay_hint">Normally everyone in a call sends their voice and video straight to everyone else. That works for a handful of people, but past about ten each person's upload runs out. With a relay, each person sends once, to this server, and the server passes it on, so calls can hold many more people. It uses this server's internet connection instead of theirs.</small>
+
+            <div class="large-server-choices" role="radiogroup">
+              <label class="large-server-choice">
+                <input type="radio" name="voice-relay-mode" value="off">
+                <span><strong data-i18n="settings.admin.large_server.mode_off">Off</strong>
+                <small data-i18n="settings.admin.large_server.mode_off_hint">Direct connections, as always. Best for small groups.</small></span>
+              </label>
+              <label class="large-server-choice">
+                <input type="radio" name="voice-relay-mode" value="builtin">
+                <span><strong data-i18n="settings.admin.large_server.mode_builtin">Built-in relay</strong>
+                <small data-i18n="settings.admin.large_server.mode_builtin_hint">Runs inside Haven. Nothing else to install: open one port and switch it on. Recommended.</small></span>
+              </label>
+              <label class="large-server-choice large-server-choice-disabled">
+                <input type="radio" name="voice-relay-mode" value="livekit" disabled>
+                <span><strong data-i18n="settings.admin.large_server.mode_livekit">LiveKit</strong>
+                <small data-i18n="settings.admin.large_server.mode_livekit_hint">Use a LiveKit server you run yourself, for more control. Coming in a later update.</small></span>
+              </label>
+            </div>
+
+            <div id="voice-relay-builtin-options" style="display:none">
+              <p class="large-server-status" id="voice-relay-status"></p>
+              <label class="select-row">
+                <span data-i18n="settings.admin.large_server.port">Port</span>
+                <input type="number" id="voice-relay-port" class="settings-text-input" min="1024" max="65527" placeholder="40000" style="width:110px">
+              </label>
+              <small class="settings-hint" id="voice-relay-port-hint"></small>
+              <label class="select-row" style="margin-top:8px">
+                <span data-i18n="settings.admin.large_server.address">Public address</span>
+                <input type="text" id="voice-relay-address" class="settings-text-input" data-i18n-placeholder="settings.admin.large_server.address_placeholder" placeholder="Found automatically" style="flex:1">
+                <button type="button" class="btn-sm" id="voice-relay-detect" data-i18n="settings.admin.large_server.detect">Detect</button>
+              </label>
+              <small class="settings-hint" data-i18n="settings.admin.large_server.address_hint">Where people connect to reach the relay: this server's public IP address or domain name. Leave it empty and Haven works it out when the relay starts.</small>
+              <label class="select-row" style="margin-top:8px">
+                <span data-i18n="settings.admin.large_server.workers">CPU cores</span>
+                <select id="voice-relay-workers">
+                  <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                  <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
+                </select>
+              </label>
+              <small class="settings-hint" data-i18n="settings.admin.large_server.workers_hint">One core carries many calls. Add more when calls get very large or numerous; each extra core uses the next port up.</small>
+            </div>
+            <p class="large-server-unavailable" id="voice-relay-unavailable" style="display:none" data-i18n="settings.admin.large_server.unavailable">The built-in relay is not installed on this server. It installs with Haven on Windows, Linux (including Raspberry Pi) and Apple Silicon Macs. Run Haven's update again, and if it still says this, the server log shows why.</p>
+
+            <div style="margin-top:10px; display:flex; align-items:center; gap:8px">
+              <button type="button" class="btn-sm btn-accent" id="voice-relay-save" data-i18n="settings.admin.large_server.save">Save relay settings</button>
+              <small class="muted-text" id="voice-relay-save-note" data-i18n="settings.admin.large_server.save_note">Takes effect straight away. Calls in progress reconnect by themselves.</small>
+            </div>
+          </div>
+
+          <div class="large-server-card">
+            <div class="large-server-card-title">✅ <span data-i18n="settings.admin.large_server.more_title">Also worth setting for a big server</span></div>
+            <div class="large-server-checklist">
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_members">Member list</strong>
+                <small data-i18n="settings.admin.large_server.item_members_hint">Show online members only, so a server with thousands of accounts does not list every one of them.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-members" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_signups">Sign-ups</strong>
+                <small data-i18n="settings.admin.large_server.item_signups_hint">A captcha and a limit on new accounts per hour stop floods of spam accounts.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-whitelist" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_automod">Auto-moderation</strong>
+                <small data-i18n="settings.admin.large_server.item_automod_hint">Block links from brand-new accounts and step up to bans automatically when moderators cannot watch every channel.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-automod" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_guests">Guest access</strong>
+                <small data-i18n="settings.admin.large_server.item_guests_hint">Decide whether people can drop in without an account, and whether guests may use voice.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-guests" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_limits">Limits</strong>
+                <small data-i18n="settings.admin.large_server.item_limits_hint">Message length, upload size and attachments per message keep storage and bandwidth in check.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-uploads" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_backup">Backups and cleanup</strong>
+                <small data-i18n="settings.admin.large_server.item_backup_hint">Automatic backups, and clearing out old files so the disk does not fill up.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-backup" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_turn">TURN server</strong>
+                <small data-i18n="settings.admin.large_server.item_turn_hint">Lets people on very strict networks (some offices, schools, mobile carriers) connect to voice at all.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-connectivity" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+            </div>
           </div>
         </div>
 

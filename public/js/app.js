@@ -21,6 +21,7 @@ import ForumMethods    from './modules/app-forum.js?v=4.11.1';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.10.0';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.10.0';
 import CallMethods from './modules/app-calls.js?v=4.12.1';
+import ScalingMethods from './modules/app-scaling.js?v=4.14.2';
 
 class HavenApp {
   constructor() {
@@ -467,6 +468,7 @@ Object.assign(HavenApp.prototype,
   RoleToolMethods,
   PermMatrixMethods,
   CallMethods,
+  ScalingMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

@@ -793,6 +793,7 @@ _syncSettingsNav() {
     'section-uploads':      ['manage_server'],
     'section-tags-admin':   ['manage_tags'],
     'section-connectivity': [],
+    'section-large-server': [],   // admin only: the relay opens ports on the host
     'section-tunnel':       ['manage_server'],
     'section-bots':         ['manage_server', 'manage_webhooks'],
     'section-ferry':        [],
@@ -989,6 +990,7 @@ _snapshotAdminSettings() {
     ferrySection.style.display = this.user?.isAdmin ? '' : 'none';
     if (this.user?.isAdmin) this.socket.emit('ferry:get-config');
   }
+  this._renderLargeServerSection?.();
 },
 
 _saveAdminSettings() {
