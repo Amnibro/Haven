@@ -3681,6 +3681,12 @@ _setupDiscordImport() {
     if (cs1) cs1.style.display = '';
     if (cs2) cs2.style.display = 'none';
     if (cs3) cs3.style.display = 'none';
+    const riskAck = document.getElementById('import-token-risk-ack');
+    if (riskAck) riskAck.checked = false;
+    const gated = document.getElementById('import-connect-gated');
+    if (gated) gated.style.display = 'none';
+    const tokenField = document.getElementById('import-discord-token');
+    if (tokenField) tokenField.value = '';
     const cStatus = document.getElementById('import-connect-status');
     if (cStatus) { cStatus.style.display = 'none'; cStatus.textContent = ''; }
     const fStatus = document.getElementById('import-fetch-status');
@@ -3790,7 +3796,15 @@ _setupDiscordImport() {
   const connectBtn = document.getElementById('import-connect-btn');
   const connectStatus = document.getElementById('import-connect-status');
 
+  // The personal-token path stays hidden until the admin ticks the box under
+  // the warning: it breaks Discord's rules and a leaked token is a stolen account.
+  document.getElementById('import-token-risk-ack')?.addEventListener('change', (e) => {
+    document.getElementById('import-connect-gated').style.display = e.target.checked ? '' : 'none';
+    if (!e.target.checked) document.getElementById('import-discord-token').value = '';
+  });
+
   connectBtn?.addEventListener('click', async () => {
+    if (!document.getElementById('import-token-risk-ack')?.checked) return;
     const tokenInput = document.getElementById('import-discord-token');
     const discordToken = tokenInput?.value?.trim();
     if (!discordToken) { this._showToast(t('settings.admin.import_paste_token'), 'error'); return; }

@@ -3333,8 +3333,19 @@
         <div id="import-tab-connect" style="display:none">
           <div id="import-connect-step-token">
             <p class="settings-hint" style="margin-bottom:8px" data-i18n="modals.discord_import.connect_hint">
-              Connect directly to Discord and pull your messages — no external tools needed.
+              Pull a server's history straight from Discord by signing in with your own Discord account.
             </p>
+            <div class="import-token-risk">
+              <strong data-i18n="modals.discord_import.risk_title">⚠️ Read this first</strong>
+              <p data-i18n="modals.discord_import.risk_rules">This uses your personal Discord login token. Discord's rules don't allow apps to use a personal account this way, so Discord could lock or ban the account you use.</p>
+              <p data-i18n="modals.discord_import.risk_takeover">Anyone who gets your token can take over your Discord account. Only paste it into a Haven server you run yourself, and never because someone asked you to.</p>
+              <p data-i18n="modals.discord_import.risk_safer">The Upload File tab is the safer way to bring your history over.</p>
+              <label class="import-token-risk-ack">
+                <input type="checkbox" id="import-token-risk-ack">
+                <span data-i18n="modals.discord_import.risk_ack">I understand the risks, and this is my own Haven server</span>
+              </label>
+            </div>
+            <div id="import-connect-gated" style="display:none">
             <details class="import-token-help">
               <summary data-i18n="modals.discord_import.token_help_summary">How do I get my Discord token?</summary>
               <div class="import-token-steps">
@@ -3356,6 +3367,7 @@
             <div style="display:flex;gap:8px;margin-top:10px">
               <input type="password" id="import-discord-token" class="import-token-input" data-i18n-placeholder="modals.discord_import.token_placeholder" placeholder="Paste your Discord token here">
               <button class="btn-sm btn-accent" id="import-connect-btn" data-i18n="modals.discord_import.connect_btn">Connect</button>
+            </div>
             </div>
             <p class="muted-text" id="import-connect-status" style="margin-top:6px;display:none"></p>
           </div>
