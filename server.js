@@ -846,14 +846,25 @@ app.get('/api/push/vapid-key', (req, res) => {
 });
 
 // ── Push notification subscription endpoints ─────────────
-app.post('/api/push/subscribe', express.json(), (req, res) => {
+app.post('/api/push/subscribe', express.json(), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { endpoint, keys } = req.body;
-  if (!endpoint || !keys?.p256dh || !keys?.auth)
+  const { endpoint, keys } = req.body || {};
+  if (typeof endpoint !== 'string' || !endpoint || endpoint.length > 2048 ||
+      typeof keys?.p256dh !== 'string' || !keys.p256dh || keys.p256dh.length > 512 ||
+      typeof keys?.auth !== 'string' || !keys.auth || keys.auth.length > 512)
     return res.status(400).json({ error: 'Invalid subscription object' });
+  // Same rule as the socket path: the server posts to this address for every
+  // notification, so it must be a public HTTPS push service, never an address
+  // on the server's own network.
+  try {
+    if (new URL(endpoint).protocol !== 'https:') throw new Error('not https');
+    await require('./src/webhookCallback').resolveCallbackDestination(endpoint);
+  } catch {
+    return res.status(400).json({ error: 'Invalid subscription object' });
+  }
 
   try {
     const { getDb } = require('./src/database');
@@ -872,6 +883,12 @@ app.post('/api/push/subscribe', express.json(), (req, res) => {
         VALUES (?, ?, ?, ?)
         ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth
       `).run(user.id, endpoint, keys.p256dh, keys.auth);
+        // Ten devices per person is plenty; the oldest go first. Without a cap
+        // one account could register endless endpoints for the push queue.
+        db.prepare(`
+          DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
+            SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 10)
+        `).run(user.id, user.id);
     })();
     res.json({ ok: true });
   } catch (err) {

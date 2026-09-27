@@ -1323,7 +1323,9 @@ function setupSocketHandlers(io, db, opts = {}) {
         pushActive++;
         let sending;
         try {
-          sending = webpush.sendNotification({ endpoint: job.sub.endpoint, keys: { p256dh: job.sub.p256dh, auth: job.sub.auth } }, job.payload);
+          // A push service that never answers must not hold a queue slot
+          // forever, or a handful of them would stop every notification.
+          sending = webpush.sendNotification({ endpoint: job.sub.endpoint, keys: { p256dh: job.sub.p256dh, auth: job.sub.auth } }, job.payload, { timeout: 10000 });
         } catch (err) {
           sending = Promise.reject(err);
         }

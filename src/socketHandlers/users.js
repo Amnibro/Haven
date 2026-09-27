@@ -389,6 +389,12 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?, ?, ?)
           ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth
         `).run(socket.user.id, endpoint, keys.p256dh, keys.auth);
+        // Ten devices per person is plenty; the oldest go first. Without a cap
+        // one account could register endless endpoints for the push queue.
+        db.prepare(`
+          DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
+            SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 10)
+        `).run(socket.user.id, socket.user.id);
       })();
       socket.emit('push-subscribed');
     } catch (err) {
