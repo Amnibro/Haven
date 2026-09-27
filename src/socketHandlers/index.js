@@ -398,7 +398,9 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // ── getEnrichedChannels ─────────────────────────────────
-  function getEnrichedChannels(userId, isAdmin, joinRooms) {
+  // `shared` (optional) carries per-channel answers that are the same for
+  // every viewer, so a broadcast to thousands of people works them out once.
+  function getEnrichedChannels(userId, isAdmin, joinRooms, shared = null) {
     // Holders of 'view_all_channels' (e.g. a server-wide Mod role) get the
     // same visibility treatment as the admin: every non-DM channel, with
     // membership filled in on the fly — so channels created after the role
@@ -512,11 +514,16 @@ function setupSocketHandlers(io, db, opts = {}) {
       const readMap = {};
       readRows.forEach(r => { readMap[r.channel_id] = r.last_read_message_id; });
 
-      const latestRows = db.prepare(
-        `SELECT channel_id, MAX(id) as latest_id FROM messages WHERE channel_id IN (${placeholders}) AND thread_id IS NULL GROUP BY channel_id`
-      ).all(...channelIds);
       const latestMap = {};
-      latestRows.forEach(r => { latestMap[r.channel_id] = r.latest_id; });
+      const unknown = shared ? channelIds.filter(id => !shared.latest.has(id)) : channelIds;
+      if (unknown.length) {
+        const latestRows = db.prepare(
+          `SELECT channel_id, MAX(id) as latest_id FROM messages WHERE channel_id IN (${unknown.map(() => '?').join(',')}) AND thread_id IS NULL GROUP BY channel_id`
+        ).all(...unknown);
+        if (shared) unknown.forEach(id => shared.latest.set(id, 0));
+        latestRows.forEach(r => { latestMap[r.channel_id] = r.latest_id; if (shared) shared.latest.set(r.channel_id, r.latest_id); });
+      }
+      if (shared) channelIds.forEach(id => { latestMap[id] = shared.latest.get(id) || 0; });
 
       channels.forEach(ch => {
         const lastRead = readMap[ch.id] || 0;
@@ -528,7 +535,10 @@ function setupSocketHandlers(io, db, opts = {}) {
             // own thread panel, never appear in the channel scroll, and so can
             // never be marked-read by scrolling — counting them here pins a
             // phantom unread on the channel forever.
-            'SELECT COUNT(*) as cnt FROM messages WHERE channel_id = ? AND id > ? AND user_id != ? AND thread_id IS NULL'
+            // Counting stops at 1000: badges show 99+ past 99 anyway, and an
+            // uncapped count walked every unread message of a long-idle member
+            // on every channel-list refresh.
+            'SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND user_id != ? AND thread_id IS NULL LIMIT 1000)'
           ).get(ch.id, lastRead, userId);
           ch.unreadCount = countRow ? countRow.cnt : 0;
         } else {
@@ -635,17 +645,50 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // ── broadcastChannelLists (debounced, shared timer) ─────
+  // Every connected person gets their own channel list rebuilt. That used to
+  // happen in one go, so on a big server one new channel froze everything
+  // for seconds (2500 people, 31 channels: 6.8 s). Now each person's list is
+  // built once however many devices they have open, answers shared by
+  // everyone are worked out once per pass, and the pass steps aside every
+  // few milliseconds so messages keep flowing. A change during a pass
+  // queues one more pass.
   let _broadcastPending = null;
+  let _broadcastRunning = false;
+  let _broadcastAgain = false;
   function broadcastChannelLists() {
+    if (_broadcastRunning) { _broadcastAgain = true; return; }
     if (_broadcastPending) return;
-    _broadcastPending = setTimeout(() => {
-      _broadcastPending = null;
+    _broadcastPending = setTimeout(runChannelListBroadcast, 150);
+  }
+  async function runChannelListBroadcast() {
+    _broadcastPending = null;
+    _broadcastRunning = true;
+    try {
+      const byUser = new Map();
       for (const [, s] of io.sockets.sockets) {
-        if (s.user && !s.user.isBot) {
-          s.emit('channels-list', getEnrichedChannels(s.user.id, s.user.isAdmin, null));
+        if (!s.user || s.user.isBot) continue;
+        if (!byUser.has(s.user.id)) byUser.set(s.user.id, []);
+        byUser.get(s.user.id).push(s);
+      }
+      const shared = { latest: new Map() };
+      let sliceStart = Date.now();
+      for (const [userId, sockets] of byUser) {
+        const live = sockets.filter(s => s.connected);
+        if (live.length) {
+          const list = getEnrichedChannels(userId, live[0].user.isAdmin, null, shared);
+          for (const s of live) s.emit('channels-list', list);
+        }
+        if (Date.now() - sliceStart > 12) {
+          await new Promise(r => setImmediate(r));
+          sliceStart = Date.now();
         }
       }
-    }, 150);
+    } catch (err) {
+      console.error('Channel list refresh failed:', err);
+    } finally {
+      _broadcastRunning = false;
+      if (_broadcastAgain) { _broadcastAgain = false; broadcastChannelLists(); }
+    }
   }
 
   // ── logAudit — record an admin/moderator action ─────────
