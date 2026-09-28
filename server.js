@@ -1125,14 +1125,11 @@ app.post('/api/upload-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
       const hdr = Buffer.alloc(12);
       fs.readSync(fd, hdr, 0, 12, 0);
       fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
+      const realType = sniffImageType(hdr);
+      if (realType) req.file.mimetype = realType;
+      if (!realType) {
         fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
+        return res.status(400).json({ error: 'That file is not a supported image (JPEG, PNG, GIF or WebP)' });
       }
     } catch {
       try { fs.unlinkSync(req.file.path); } catch {}
@@ -1222,14 +1219,11 @@ app.post('/api/upload-border', uploadLimiter, uploadDiskGuard, (req, res) => {
       const hdr = Buffer.alloc(12);
       fs.readSync(fd, hdr, 0, 12, 0);
       fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
+      const realType = sniffImageType(hdr);
+      if (realType) req.file.mimetype = realType;
+      if (!realType) {
         fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
+        return res.status(400).json({ error: 'That file is not a supported image (JPEG, PNG, GIF or WebP)' });
       }
     } catch {
       try { fs.unlinkSync(req.file.path); } catch {}
@@ -1360,14 +1354,11 @@ app.post('/api/upload-webhook-avatar', uploadLimiter, uploadDiskGuard, (req, res
       const hdr = Buffer.alloc(12);
       fs.readSync(fd, hdr, 0, 12, 0);
       fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
+      const realType = sniffImageType(hdr);
+      if (realType) req.file.mimetype = realType;
+      if (!realType) {
         fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
+        return res.status(400).json({ error: 'That file is not a supported image (JPEG, PNG, GIF or WebP)' });
       }
     } catch {
       try { fs.unlinkSync(req.file.path); } catch {}
@@ -1553,14 +1544,11 @@ app.post('/api/upload-persona-avatar', uploadLimiter, uploadDiskGuard, (req, res
       const hdr = Buffer.alloc(12);
       fs.readSync(fd, hdr, 0, 12, 0);
       fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
+      const realType = sniffImageType(hdr);
+      if (realType) req.file.mimetype = realType;
+      if (!realType) {
         fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
+        return res.status(400).json({ error: 'That file is not a supported image (JPEG, PNG, GIF or WebP)' });
       }
     } catch {
       try { fs.unlinkSync(req.file.path); } catch {}
@@ -1931,14 +1919,11 @@ app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
       const hdr = Buffer.alloc(12);
       fs.readSync(fd, hdr, 0, 12, 0);
       fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
+      const realType = sniffImageType(hdr);
+      if (realType) req.file.mimetype = realType;
+      if (!realType) {
         fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
+        return res.status(400).json({ error: 'That file is not a supported image (JPEG, PNG, GIF or WebP)' });
       }
     } catch {
       try { fs.unlinkSync(req.file.path); } catch {}
@@ -2635,12 +2620,9 @@ app.post('/api/upload-server-icon', uploadLimiter, uploadDiskGuard, (req, res) =
       const hdr = Buffer.alloc(12);
       fs.readSync(fd, hdr, 0, 12, 0);
       fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
+      const realType = sniffImageType(hdr);
+      if (realType) req.file.mimetype = realType;
+      if (!realType) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
 
     const iconUrl = `/uploads/${req.file.filename}`;
@@ -2671,12 +2653,9 @@ app.post('/api/upload-role-icon', uploadLimiter, uploadDiskGuard, (req, res) => 
       const hdr = Buffer.alloc(12);
       fs.readSync(fd, hdr, 0, 12, 0);
       fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
+      const realType = sniffImageType(hdr);
+      if (realType) req.file.mimetype = realType;
+      if (!realType) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
 
     const iconUrl = `/uploads/${req.file.filename}`;
