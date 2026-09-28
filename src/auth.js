@@ -1760,6 +1760,8 @@ router.get('/SSO', (req, res) => {
 
   const safeAuthCode = authCode.replace(/[^a-fA-F0-9]/g, '');
   const safeOrigin = origin.replace(/[<>"'&]/g, '');
+  const ret = typeof req.query.return === 'string' ? req.query.return.trim() : '';
+  const safeBack = /^https?:\/\/[\w.\-:\[\]]{1,100}$/.test(safeOrigin) && /^\/(?!\/)[\w\-\/]{0,100}$/.test(ret) ? safeOrigin + ret : '';
 
   const nonce = crypto.randomBytes(16).toString('base64');
   res.set('Content-Security-Policy',
@@ -1821,10 +1823,15 @@ router.get('/SSO', (req, res) => {
     </div>
   </div>
   <script nonce="${nonce}">
-    document.getElementById('login-btn').addEventListener('click', () => { window.location.href = '/'; });
+    let staleToken = false;
+    document.getElementById('login-btn').addEventListener('click', () => {
+      if (staleToken) { try { localStorage.removeItem('haven_token'); } catch {} }
+      window.location.href = '/?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+    });
     document.getElementById('cancel-btn').addEventListener('click', () => window.close());
     const authCode = '${safeAuthCode}';
     const origin = '${safeOrigin}';
+    const back = '${safeBack}';
     let approvedProfile = null;
 
     (async function() {
@@ -1903,6 +1910,7 @@ router.get('/SSO', (req, res) => {
         });
         clearTimeout(timer);
         if (!verifyRes.ok) {
+          staleToken = verifyRes.status === 401 || verifyRes.status === 403;
           showNotLoggedIn('Token validation failed (' + verifyRes.status + '). Please log in again.');
           clearTimeout(bootTimeout);
           return;
@@ -1959,6 +1967,7 @@ router.get('/SSO', (req, res) => {
           });
           if (res.ok) {
             setDebug('Approval stored on home server. Returning profile to requesting server...', 'ok');
+            let told = false;
             if (origin && window.opener && approvedProfile) {
               try {
                 window.opener.postMessage({
@@ -1967,10 +1976,17 @@ router.get('/SSO', (req, res) => {
                   profile: approvedProfile,
                   serverOrigin: window.location.origin
                 }, origin);
+                told = true;
               } catch {}
             }
             document.getElementById('buttons').style.display = 'none';
-            document.getElementById('success-msg').style.display = 'block';
+            const done = document.getElementById('success-msg');
+            done.style.display = 'block';
+            // Send the user back instead of stranding them on "close this tab":
+            // a popup closes itself once its opener has the approval, and a
+            // same-tab sign-in returns to the page the requester asked for.
+            if (told) { setTimeout(() => window.close(), 700); }
+            else if (back) { done.textContent = '✓ Approved! Taking you back…'; setTimeout(() => window.location.replace(back), 400); }
           } else {
             const data = await res.json().catch(() => ({}));
             setDebug(data.error || 'Approval failed on home server.', 'error');

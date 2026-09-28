@@ -11,7 +11,14 @@
   if (_pendingChannel) sessionStorage.setItem('haven_pending_channel', _pendingChannel);
   if (_pendingMessage) sessionStorage.setItem('haven_pending_message', _pendingMessage);
 
+  // A sign-in that started on the SSO consent page returns there afterwards,
+  // so approving another site doesn't need a second trip through its button.
+  const _ssoNext = (() => {
+    const n = _urlParams.get('next') || '';
+    return /^\/api\/auth\/SSO\?[\w%=&.\-~]{1,600}$/.test(n) ? n : '';
+  })();
   function _buildAppUrl() {
+    if (_ssoNext) return _ssoNext;
     const _appQuery = (() => {
       const parts = [];
       if (_pendingInvite) parts.push('invite=' + encodeURIComponent(_pendingInvite));
