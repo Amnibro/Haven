@@ -675,11 +675,14 @@ _setCfnBadge(fn, isOn, text) {
   if (!row) return;
   let badge = row.querySelector('.cfn-badge');
   if (!badge) {
-    // Badge was replaced by an input — restore it
-    const input = row.querySelector('.cfn-input');
+    // The badge was swapped for an editor: put it back, the whole editor.
+    // Self Destruct's is an hours box and a mode drop-down in a wrapper, and
+    // replacing only the box left the drop-down behind in this shared panel,
+    // where every other channel then showed it too (#5702).
+    const editor = row.querySelector('.cfn-input-wrap') || row.querySelector('.cfn-input');
     badge = document.createElement('span');
     badge.className = 'cfn-badge';
-    if (input) input.replaceWith(badge);
+    if (editor) editor.replaceWith(badge);
     else return;
   }
   badge.textContent = text;

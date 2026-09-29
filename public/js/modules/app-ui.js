@@ -741,10 +741,17 @@ _setupUI() {
       badge.replaceWith(wrap);
       input.focus(); input.select();
       let committed = false;
+      // Leaving it empty (a misclick) or pressing Escape puts the setting back
+      // as it was instead of leaving the editor open (#5702).
+      const cancel = () => {
+        if (committed) return;
+        committed = true;
+        this._updateChannelFunctionsPanel(ch);
+      };
       const commitExpiry = () => {
         if (committed) return;
         const hours = parseInt(input.value);
-        if (isNaN(hours) || hours < 0) return;
+        if (isNaN(hours) || hours < 0) return cancel();
         committed = true;
         const mode = modeSelect.value === 'clear' ? 'clear' : 'delete';
         if (hours === 0) {
@@ -764,7 +771,11 @@ _setupUI() {
           if (!wrap.contains(document.activeElement)) commitExpiry();
         }, 50);
       };
-      input.addEventListener('keydown', e2 => { if (e2.key === 'Enter') { commitExpiry(); input.blur(); } });
+      input.addEventListener('keydown', e2 => {
+        if (e2.key === 'Enter') { commitExpiry(); input.blur(); }
+        else if (e2.key === 'Escape') { e2.preventDefault(); cancel(); }
+      });
+      modeSelect.addEventListener('keydown', e2 => { if (e2.key === 'Escape') { e2.preventDefault(); cancel(); } });
       input.addEventListener('blur', onBlur);
       modeSelect.addEventListener('blur', onBlur);
     } else if (fn === 'afk-sub') {
