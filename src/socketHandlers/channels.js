@@ -1371,6 +1371,8 @@ module.exports = function register(socket, ctx) {
       else if (stored && !ctx.roleGateAllows(s.user.id, fresh)) s.leave(`channel:${channel.code}`);
     }
     broadcastChannelLists();
+    // The member list follows the requirement too (#5703).
+    emitOnlineUsers(channel.code);
     io.to(`channel:${code}`).emit('channel-role-gate-updated', { code, roleGate: stored ? JSON.parse(stored) : null });
     cb({ success: true, roleGate: stored ? JSON.parse(stored) : null });
     _audit({ actor: socket.user, action: 'channel_role_gate',

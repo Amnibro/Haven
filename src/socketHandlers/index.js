@@ -1013,16 +1013,22 @@ function setupSocketHandlers(io, db, opts = {}) {
       statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle', border: r.border || null, borderTransform: parseBorderTransform(r.border_transform), animateProfile: r.animate_profile || 'trigger', isGuest: !!r.is_guest }; });
     } catch { /* columns may not exist yet */ }
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, role_gate, is_dm FROM channels WHERE code = ?').get(code);
     const roles = new Map();
     const roleOf = (id) => {
       if (!roles.has(id)) roles.set(id, getUserHighestRole(id, channel ? channel.id : null));
       return roles.get(id);
     };
+    // A channel's required roles (#5703): someone added by hand keeps their
+    // membership when they lack the roles, but the channel is hidden from
+    // them, so they are not listed in it either. Admins always pass.
+    const gated = !!(channel && !channel.is_dm && parseRoleGate(channel.role_gate));
+    const adminIds = gated ? new Set(db.prepare('SELECT id FROM users WHERE is_admin = 1').all().map(r => r.id)) : null;
+    const passesGate = (id) => !gated || adminIds.has(id) || roleGateAllows(id, channel);
     const memberIds = new Set();
     if (channel) {
       const rows = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id);
-      rows.forEach(r => memberIds.add(r.user_id));
+      rows.forEach(r => { if (passesGate(r.user_id)) memberIds.add(r.user_id); });
     }
 
     let users;
@@ -1037,7 +1043,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         LEFT JOIN bans b ON u.id = b.user_id
         WHERE c.code = ? AND b.id IS NULL
         ORDER BY COALESCE(u.display_name, u.username)
-      `).all(code);
+      `).all(code).filter(m => memberIds.has(m.id));
       const globalOnlineIds = new Set();
       for (const [, s] of io.of('/').sockets) {
         if (s.user) globalOnlineIds.add(s.user.id);
