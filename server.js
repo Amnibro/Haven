@@ -3837,6 +3837,24 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     }
   }
 
+  // Optional thread_id: post as a reply inside a thread (#5706). The parent
+  // has to be a top-level message in this bot's channel, and a reply_to
+  // only stands if it points into that same thread.
+  let threadId = null;
+  if (req.body.thread_id !== undefined && req.body.thread_id !== null) {
+    const tid = parseInt(req.body.thread_id, 10);
+    const parent = Number.isInteger(tid) && tid > 0
+      ? db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ? AND thread_id IS NULL').get(tid, webhook.channel_id)
+      : null;
+    if (!parent) return res.status(400).json({ error: 'thread_id must be a top-level message in this bot\'s channel' });
+    if (req.body.ephemeral === true) return res.status(400).json({ error: 'thread_id cannot be combined with ephemeral' });
+    threadId = tid;
+    if (replyTo) {
+      const r = db.prepare('SELECT thread_id FROM messages WHERE id = ?').get(replyTo);
+      if (!r || r.thread_id !== threadId) replyTo = null;
+    }
+  }
+
   // Optional ephemeral delivery to a single recipient in this channel.
   // Ephemeral webhook messages are not persisted to chat history.
   const ephemeral = req.body.ephemeral === true;
@@ -3886,7 +3904,8 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     is_webhook: true,
     webhook_name: username,
     ephemeral,
-    recipient_id: recipientId
+    recipient_id: recipientId,
+    thread_id: threadId,
   };
 
   if (ephemeral) {
@@ -3908,19 +3927,41 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
 
   // Insert non-ephemeral messages into the DB/history.
   const result = db.prepare(
-    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to) VALUES (?, ?, ?, 1, ?, ?, ?)'
-  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo);
+    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?)'
+  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId);
   message.id = result.lastInsertRowid;
 
   // Broadcast to all clients in this channel
-  if (io) {
+  if (io && threadId) {
+    // A thread reply: the same two events a person's thread reply sends.
+    const code = webhook.channel_code;
+    io.to(`channel:${code}`).emit('new-thread-message', { channelCode: code, parentId: threadId, message });
+    const count = db.prepare('SELECT COUNT(*) AS count FROM messages WHERE thread_id = ?').get(threadId).count;
+    const last = db.prepare('SELECT id, created_at FROM messages WHERE thread_id = ? ORDER BY created_at DESC, id DESC LIMIT 1').get(threadId);
+    const participants = db.prepare(`
+      SELECT DISTINCT COALESCE(m.webhook_username, u.display_name, u.username) AS username, COALESCE(m.webhook_avatar, u.avatar) AS avatar
+      FROM messages m LEFT JOIN users u ON m.user_id = u.id
+      WHERE m.thread_id = ? ORDER BY m.created_at DESC LIMIT 5
+    `).all(threadId);
+    io.to(`channel:${code}`).emit('thread-updated', {
+      channelCode: code,
+      parentId: threadId,
+      thread: {
+        count,
+        lastReplyAt: last ? last.created_at : null,
+        lastReplyId: last ? last.id : null,
+        senderId: null,
+        participants: participants.map(p => ({ username: p.username, avatar: p.avatar })),
+      },
+    });
+  } else if (io) {
     io.to(`channel:${webhook.channel_code}`).emit('new-message', {
       channelCode: webhook.channel_code,
       message
     });
   }
 
-  res.status(200).json({ success: true, message_id: result.lastInsertRowid });
+  res.status(200).json({ success: true, message_id: result.lastInsertRowid, ...(threadId ? { thread_id: threadId } : {}) });
 });
 
 // ── Listening presence webhook (any music player) ──

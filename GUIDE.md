@@ -1393,6 +1393,8 @@ Content-Type: application/json
 - `avatar_url` (optional) — override the bot's avatar for this message
 - `ephemeral` (optional) — when `true`, deliver only to `recipient_id` and do not store in history
 - `recipient_id` (required when `ephemeral` is `true`) — user id that should receive the private bot message
+- `reply_to` (optional): id of a message in the same channel to reply to
+- `thread_id` (optional): id of a top-level message in the bot's channel; the message is posted as a reply inside that thread (not combinable with `ephemeral`)
 
 Ephemeral example:
 
@@ -1407,7 +1409,19 @@ Content-Type: application/json
 }
 ```
 
-Response (regular): `{ "success": true, "message_id": 123 }`
+Thread example:
+
+```
+POST https://your-server.com/api/webhooks/<token>
+Content-Type: application/json
+
+{
+  "content": "Build finished",
+  "thread_id": 123
+}
+```
+
+Response (regular): `{ "success": true, "message_id": 124 }` (plus `"thread_id": 123` for a thread reply)
 
 Response (ephemeral): `{ "success": true, "ephemeral": true, "recipient_id": 42, "delivered": true }`
 
