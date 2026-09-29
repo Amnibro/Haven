@@ -2212,6 +2212,9 @@ function setupSocketHandlers(io, db, opts = {}) {
     const FLOOD_LIMITS = {
       message: { max: 10, windowMs: 10000 },
       event:   { max: 60, windowMs: 10000 },
+      // Opening a channel sends about seven cheap reads at once, so clicking
+      // quickly through a server ran out of the general allowance (#5701).
+      browse:  { max: 400, windowMs: 10000 },
       nativeSignal: { max: 120, windowMs: 10000 },
       nativeSignalGlobal: { max: 12000, windowMs: 10000 },
       screenLifecycle: { max: 12, windowMs: 10000 },
@@ -2264,6 +2267,13 @@ function setupSocketHandlers(io, db, opts = {}) {
       'visibility-change'
     ]);
 
+    // What opening a channel sends: reads that cost the server little, limited
+    // by the 'browse' bucket instead of the general one (#5701).
+    const BROWSE_EVENTS = new Set([
+      'enter-channel', 'get-messages', 'mark-read', 'get-channel-members',
+      'request-voice-users', 'get-voice-counts', 'get-channels',
+    ]);
+
     // Events that mark a real, engaged human for the idle-online flag. Kept
     // deliberately narrow: passive traffic (typing, visibility, presence
     // pings) and the client's automatic away transition are NOT here, because
@@ -2303,8 +2313,14 @@ function setupSocketHandlers(io, db, opts = {}) {
         return next();
       }
       if (FLOOD_EXEMPT.has(eventName)) return next();
-      if (floodCheck('event')) {
-        socket.emit('error-msg', 'Slow down — too many requests');
+      const bucket = BROWSE_EVENTS.has(eventName) ? 'browse' : 'event';
+      if (floodCheck(bucket)) {
+        // One warning every few seconds, not one per blocked request (#5701).
+        const now = Date.now();
+        if (now - (socket._lastSlowDown || 0) > 3000) {
+          socket._lastSlowDown = now;
+          socket.emit('error-msg', 'Slow down — too many requests');
+        }
         return;
       }
       next();
