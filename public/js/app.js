@@ -63,6 +63,7 @@ import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.17.23';
 import CallMethods from './modules/app-calls.js?v=4.17.1';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
+import TemplateMethods from './modules/app-templates.js?v=4.14.0';
 
 class HavenApp {
   constructor() {
@@ -374,6 +375,7 @@ class HavenApp {
     this._setupWebhookManagement();
     this._setupExtensionUpdates();
     this._setupDiscordImport();
+    this._setupServerTemplates();
     this._setupAuditLog();
     this._initRoleManagement();
     this._initPermMatrix();
@@ -553,6 +555,7 @@ Object.assign(HavenApp.prototype,
   PermMatrixMethods,
   CallMethods,
   ScalingMethods,
+  TemplateMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

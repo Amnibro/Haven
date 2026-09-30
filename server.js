@@ -1,4 +1,4 @@
-﻿// ── Resolve data directory BEFORE loading .env ────────────
+// ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('./src/paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
 const { trimUploadsToLimit } = require('./src/uploadsTrim');
@@ -89,6 +89,7 @@ const { Server } = require('socket.io');
 const crypto = require('crypto');
 const helmet = require('helmet');
 const multer = require('multer');
+const { stripImageMetadata, sniffImageType } = require('./src/imageMetadata');
 const diskGuard = require('./src/diskGuard');
 
 // (#5505) Refuse uploads that would eat into the reserved disk headroom, so a
@@ -1984,18 +1985,6 @@ const listeningUpload = multer({
   limits: { fileSize: 512 * 1024, files: 1, fields: 8, fieldSize: 4096 },
 }).single('cover');
 
-// sniffImageType returns the MIME type from a buffer's magic bytes, or null for
-// anything that isn't one of the accepted image formats.
-function sniffImageType(buf) {
-  if (!buf || buf.length < 12) return null;
-  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
-  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
-  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
-  return null;
-}
-
 app.post('/api/webhooks/listening/:token', listeningLimiter, (req, res) => {
   // Resolve the token before touching the body, so a post to an unknown or
   // malformed token is refused without buffering up to 512KB of upload first.
@@ -3126,6 +3115,90 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
     console.error('Import execute error:', err);
     res.status(500).json({ error: 'Import failed: ' + err.message });
   }
+});
+
+const serverTemplate = require('./src/serverTemplate');
+const pendingTemplates = new Map();
+const templateAdmin = (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  return user && verifyAdminFromDb(user) ? user : (res.status(403).json({ error: 'Admin only' }), null);
+};
+const templateOptions = (body) => ({ mode: body.mode === 'replace' ? 'replace' : 'merge', posts: body.posts !== false, webhooks: body.webhooks !== false, joinMembers: body.joinMembers !== false });
+const templateUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: serverTemplate.LIMITS.bytes, files: 1, fields: 4 } }).single('template');
+app.get('/api/admin/template/export', (req, res) => {
+  const user = templateAdmin(req, res);
+  if (!user) return;
+  try {
+    const db = require('./src/database').getDb();
+    const { template, warnings } = serverTemplate.exportTemplate(db, {
+      uploadsDir: UPLOADS_DIR, themesDir: THEMES_DIR, posts: req.query.posts === 'none' ? 'none' : 'pinned', assets: req.query.assets !== '0', havenVersion: require('./package.json').version,
+      meta: { name: typeof req.query.name === 'string' ? req.query.name.slice(0, 60) : '', description: typeof req.query.description === 'string' ? req.query.description.slice(0, 500) : '' },
+    });
+    const slug = (template.meta.name || 'haven').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'haven';
+    res.setHeader('Content-Disposition', `attachment; filename="${slug}.haven-template.json"`);
+    res.setHeader('X-Template-Warnings', String(warnings.length));
+    res.type('application/json').send(JSON.stringify(template, null, 2));
+  } catch (err) {
+    console.error('Template export failed:', err.message);
+    res.status(500).json({ error: 'Template export failed' });
+  }
+});
+app.post('/api/admin/template/upload', uploadLimiter, (req, res) => {
+  const user = templateAdmin(req, res);
+  if (!user) return;
+  templateUpload(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Templates can be at most 12 MB' : 'Upload failed' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    let json;
+    try { json = JSON.parse(req.file.buffer.toString('utf8')); } catch { return res.status(400).json({ error: 'That file is not valid JSON' }); }
+    const result = serverTemplate.validateTemplate(json);
+    if (result.errors) return res.status(400).json({ error: 'That template is not valid', details: result.errors });
+    for (const [key, entry] of pendingTemplates) if (Date.now() - entry.at > 30 * 60 * 1000 || entry.userId === user.id) pendingTemplates.delete(key);
+    if (pendingTemplates.size >= 10) pendingTemplates.delete(pendingTemplates.keys().next().value);
+    const id = crypto.randomBytes(16).toString('hex');
+    pendingTemplates.set(id, { template: result.template, userId: user.id, at: Date.now() });
+    res.json({ id, summary: serverTemplate.summarizeTemplate(result.template), warnings: result.warnings });
+  });
+});
+const pendingTemplate = (req, res, user) => {
+  const entry = typeof req.body?.id === 'string' && pendingTemplates.get(req.body.id);
+  return entry && entry.userId === user.id ? entry : (res.status(404).json({ error: 'That upload has expired. Choose the file again.' }), null);
+};
+const runTemplate = (entry, user, body, dryRun) => serverTemplate.applyTemplate(require('./src/database').getDb(), entry.template, {
+  ...templateOptions(body), actorId: user.id, uploadsDir: UPLOADS_DIR, themesDir: THEMES_DIR, dryRun,
+});
+app.post('/api/admin/template/plan', express.json({ limit: '4kb' }), (req, res) => {
+  const user = templateAdmin(req, res);
+  const entry = user && pendingTemplate(req, res, user);
+  if (!entry) return;
+  try { res.json(runTemplate(entry, user, req.body, true)); } catch (err) {
+    console.error('Template plan failed:', err.message);
+    res.status(500).json({ error: 'Could not work out what the template would change' });
+  }
+});
+app.post('/api/admin/template/apply', express.json({ limit: '4kb' }), (req, res) => {
+  const user = templateAdmin(req, res);
+  const entry = user && pendingTemplate(req, res, user);
+  if (!entry) return;
+  let report;
+  try { report = runTemplate(entry, user, req.body, false); } catch (err) {
+    console.error('Template apply failed:', err.message);
+    return res.status(500).json({ error: 'Applying the template failed; nothing was changed' });
+  }
+  pendingTemplates.delete(req.body.id);
+  try {
+    require('./src/automod').invalidate();
+    socketRuntime?.syncRoleGateMemberships?.();
+    socketRuntime?.broadcastChannelLists?.();
+    io.except('bot-sockets').emit('roles-updated');
+    if (Object.keys(report.changedSettings).length) io.except('bot-sockets').emit('server-settings-stale');
+    if (report.created.emojis.length) io.emit('library-updated', { kind: 'emojis' });
+    if (report.created.stickers.length) io.emit('library-updated', { kind: 'stickers' });
+    require('./src/database').getDb().prepare('INSERT INTO audit_log (actor_id, actor_username, action, target_type, target_name, details) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(user.id, user.username, 'server_template_apply', 'server', entry.template.meta.name || '', JSON.stringify({ mode: report.mode, created: { roles: report.created.roles.length, channels: report.created.channels.length }, updated: { roles: report.updated.roles.length, channels: report.updated.channels.length, settings: report.updated.settings } }));
+  } catch (err) { console.error('Template follow-up failed:', err.message); }
+  res.json(report);
 });
 
 // Create HTTP or HTTPS server

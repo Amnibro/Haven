@@ -2,8 +2,9 @@
 
 const crypto = require('crypto');
 const path = require('node:path');
-const { utcStamp, isInt, isValidUploadPath, VALID_ROLE_PERMS } = require('./helpers');
+const { utcStamp, isInt, isValidUploadPath, VALID_ROLE_PERMS, normalizeWordGroups, validEscalation } = require('./helpers');
 const {
+  BUILTIN_THEMES,
   compatibleThemeFiles,
   isThemeFilename,
   readThemeMetadataFile,
@@ -205,34 +206,13 @@ module.exports = function register(socket, ctx) {
     // Word groups (#5614): stored normalised, so a hand-edited or oversized
     // payload never reaches the matcher.
     if (key === 'automod_words') {
-      let groups;
-      try { groups = JSON.parse(value); } catch { return; }
-      if (!Array.isArray(groups) || groups.length > 50) return;
-      const clean = [];
-      for (const g of groups) {
-        if (!g || typeof g !== 'object') return;
-        const name = String(g.name || '').trim().slice(0, 40);
-        const strikes = Math.min(100, Math.max(1, parseInt(g.strikes, 10) || 1));
-        const words = [...new Set((Array.isArray(g.words) ? g.words : [])
-          .map(w => String(w || '').trim().replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean))].slice(0, 300);
-        if (words.length) clean.push({ name: name || `group ${clean.length + 1}`, strikes, words });
-      }
-      value = JSON.stringify(clean);
+      value = normalizeWordGroups(value);
+      if (value === null) return;
     }
-    if (key === 'automod_escalation') {
-      // Thresholds must be coherent or the escalation ladder misbehaves in
-      // ways that are very hard to debug from the outside: a ban threshold
-      // below the mute threshold would ban before it ever mutes.
-      try {
-        const c = JSON.parse(value);
-        const num = (v, lo, hi) => Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi;
-        if (!num(c.windowHours, 1, 8760)) return;
-        if (!num(c.muteMinutes, 1, 43200)) return;
-        for (const k of ['warnAt', 'muteAt', 'banAt']) { if (!num(c[k], 0, 1000)) return; }
-        if (c.muteAt && c.warnAt && Number(c.muteAt) < Number(c.warnAt)) return;
-        if (c.banAt && c.muteAt && Number(c.banAt) < Number(c.muteAt)) return;
-      } catch { return; }
-    }
+    // Thresholds must be coherent or the escalation ladder misbehaves in
+    // ways that are very hard to debug from the outside: a ban threshold
+    // below the mute threshold would ban before it ever mutes.
+    if (key === 'automod_escalation' && !validEscalation(value)) return;
 
     // Relay-only voice hard-requires TURN. Enabling it without a TURN server
     // configured would leave every client unable to connect at all, so refuse
@@ -352,8 +332,7 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'default_theme') {
       // Allow built-in names OR "file:name.theme.css" for published custom themes
-      const validBuiltin = ['', 'haven', 'discord', 'matrix', 'tron', 'halo', 'lotr', 'cyberpunk', 'nord', 'dracula', 'bloodborne', 'darksouls', 'eldenring', 'ice', 'abyss', 'minecraft', 'ffx', 'zelda', 'fallout', 'scripture', 'chapel', 'gospel', 'midnightpurple', 'crt', 'win95', 'rgb', 'daylight', 'cloudy'];
-      if (!validBuiltin.includes(value)) {
+      if (!BUILTIN_THEMES.includes(value)) {
         if (!value.startsWith('file:')) return;
         const file = value.slice(5);
         const metadata = readThemeMetadataFile(THEMES_DIR, file);
