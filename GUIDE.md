@@ -1274,8 +1274,10 @@ be handed to others through the role system, one permission at a time.
 - **Uploads & limits**: max upload size (25 MB by default, raise it as far as your
   disk allows), attachments per message (10 by default), max message length,
   per-member storage usage
-- **Auto-cleanup**: automatic deletion of messages past a chosen age, and how
-  long the files left behind by deleted messages and channels are kept before
+- **Auto-cleanup**: automatic deletion of messages past a chosen age, or of the
+  oldest messages once the database or the uploads folder passes a size you
+  set (for uploads, only messages with files go, and pinned and archived ones
+  stay), and how long the files left behind by deleted messages and channels are kept before
   they are removed for good (a week by default)
 - **Server updates**: check for a new Haven release and apply it in place. Haven
   takes a pre-update backup and restarts itself

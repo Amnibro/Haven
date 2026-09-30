@@ -134,7 +134,7 @@ module.exports = function register(socket, ctx) {
     let clearDefaultTheme = false;
 
     const allowedKeys = [
-      'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
+      'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'cleanup_max_uploads_mb',
       'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
       'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
@@ -287,6 +287,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'cleanup_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'cleanup_max_age_days') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 3650) return; }
     if (key === 'cleanup_max_size_mb') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100000) return; }
+    if (key === 'cleanup_max_uploads_mb') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 10000000) return; value = String(n); }
     if (key === 'max_upload_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 102400) return; }
     if (key === 'max_attachments') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 50) return; } // (#5561)
     if (key === 'max_tags_per_attachment') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 10) return; } // (#tagging phase 4)

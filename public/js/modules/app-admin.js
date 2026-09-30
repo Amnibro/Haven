@@ -474,6 +474,8 @@ _applyServerSettings() {
     if (cleanupSize && this.serverSettings.cleanup_max_size_mb) {
       cleanupSize.value = this.serverSettings.cleanup_max_size_mb;
     }
+    const cleanupUploads = document.getElementById('cleanup-max-uploads');
+    if (cleanupUploads) cleanupUploads.value = this.serverSettings.cleanup_max_uploads_mb || '0';
     const deletedRet = document.getElementById('deleted-retention-days');
     if (deletedRet) deletedRet.value = this.serverSettings.deleted_retention_days || '7';
     const maxUpload = document.getElementById('max-upload-mb');
@@ -946,6 +948,7 @@ _snapshotAdminSettings() {
     cleanup_enabled: this.serverSettings.cleanup_enabled || 'false',
     cleanup_max_age_days: this.serverSettings.cleanup_max_age_days || '0',
     cleanup_max_size_mb: this.serverSettings.cleanup_max_size_mb || '0',
+    cleanup_max_uploads_mb: this.serverSettings.cleanup_max_uploads_mb || '0',
     deleted_retention_days: this.serverSettings.deleted_retention_days || '7',
     whitelist_enabled: this.serverSettings.whitelist_enabled || 'false',
     max_upload_mb: this.serverSettings.max_upload_mb || '25',
@@ -1079,6 +1082,10 @@ _saveAdminSettings() {
   }
 
   const cleanSize = String(Math.max(0, Math.min(100000, parseInt(document.getElementById('cleanup-max-size')?.value) || 0)));
+  const cleanUploads = String(Math.max(0, Math.min(10000000, parseInt(document.getElementById('cleanup-max-uploads')?.value) || 0)));
+  if (cleanUploads !== (snap.cleanup_max_uploads_mb || '0')) {
+    this.socket.emit('update-server-setting', { key: 'cleanup_max_uploads_mb', value: cleanUploads });
+  }
   if (cleanSize !== (snap.cleanup_max_size_mb || '0')) {
     this.socket.emit('update-server-setting', { key: 'cleanup_max_size_mb', value: cleanSize });
     changed = true;
@@ -1345,6 +1352,8 @@ _cancelAdminSettings() {
     if (ca) ca.value = snap.cleanup_max_age_days;
     const cs = document.getElementById('cleanup-max-size');
     if (cs) cs.value = snap.cleanup_max_size_mb;
+    const cu = document.getElementById('cleanup-max-uploads');
+    if (cu) cu.value = snap.cleanup_max_uploads_mb;
     const dr = document.getElementById('deleted-retention-days');
     if (dr) dr.value = snap.deleted_retention_days;
     const wl = document.getElementById('whitelist-enabled');

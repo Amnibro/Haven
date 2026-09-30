@@ -439,6 +439,7 @@ function initDatabase() {
   insertSetting.run('cleanup_enabled', 'false');       // auto-cleanup toggle
   insertSetting.run('cleanup_max_age_days', '0');      // delete messages older than N days (0 = disabled)
   insertSetting.run('cleanup_max_size_mb', '0');       // delete oldest messages when DB exceeds N MB (0 = disabled)
+  insertSetting.run('cleanup_max_uploads_mb', '0');    // delete oldest messages with files when uploads/ exceeds N MB (0 = disabled)
   insertSetting.run('whitelist_enabled', 'false');     // whitelist toggle
   // Empty on purpose. A stored value always beats SERVER_NAME, so seeding the
   // literal 'HAVEN' here meant a server started with SERVER_NAME=Foo in its

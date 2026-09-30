@@ -1,6 +1,7 @@
 ﻿// ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('./src/paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
+const { trimUploadsToLimit } = require('./src/uploadsTrim');
 
 // ── Node.js version guard ─────────────────────────────────
 const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
@@ -5805,6 +5806,19 @@ function runAutoCleanup() {
           relocateOrphanAttachments(trimmedAttachments);
         }
       }
+    }
+
+    // Uploads limit: once the uploads folder passes N MB, the oldest messages
+    // with files go until it is back under. It runs in the background because
+    // it has to add up the folder; see src/uploadsTrim.js.
+    const maxUploadsMb = parseInt(getSetting('cleanup_max_uploads_mb') || '0');
+    if (maxUploadsMb > 0) {
+      trimUploadsToLimit({
+        db, uploadsDir: UPLOADS_DIR, maxBytes: maxUploadsMb * 1024 * 1024,
+        extractPaths: extractUploadRelPaths, move: (rel) => moveUploadToDeleted(rel, UPLOADS_DIR),
+      }).then((r) => {
+        if (r.deleted > 0) console.log(`Auto-cleanup: uploads were over ${maxUploadsMb} MB, removed ${r.deleted} old message(s) with files`);
+      }).catch((e) => console.error('Uploads limit error:', e.message));
     }
 
     // Files in deleted-attachments are purged on their own clock at the top

@@ -4335,6 +4335,12 @@ _setupUI() {
       cleanupSize.value = val;
     });
   }
+  const cleanupUploads = document.getElementById('cleanup-max-uploads');
+  if (cleanupUploads) {
+    cleanupUploads.addEventListener('change', () => {
+      cleanupUploads.value = Math.max(0, Math.min(10000000, parseInt(cleanupUploads.value) || 0));
+    });
+  }
 
   const runCleanupBtn = document.getElementById('run-cleanup-now-btn');
   if (runCleanupBtn) {
