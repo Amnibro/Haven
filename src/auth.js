@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { getDb } = require('./database');
+const { grantAdminRole } = require('./roleDefaults');
 const OTPAuth = require('otpauth');
 const QRCode = require('qrcode');
 const https = require('https');
@@ -593,6 +594,7 @@ router.post('/register', authLimiter, async (req, res) => {
     const result = db.prepare(
       'INSERT INTO users (username, password_hash, is_admin, avatar) VALUES (?, ?, ?, ?)'
     ).run(username, hash, isAdmin, avatarPath);
+    if (isAdmin) grantAdminRole(db, result.lastInsertRowid);
     _regTimestamps.push(Date.now()); // feed the opt-in global registration rate limit
 
     // Consume the invite if it was used for registration.
@@ -702,6 +704,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
     if (!anyAdmin && user.username.toLowerCase() === ADMIN_USERNAME && !user.is_admin) {
       db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
+      grantAdminRole(db, user.id);
       user.is_admin = 1;
     }
 
@@ -1601,6 +1604,7 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
 
     // Restore admin status
     db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
+    grantAdminRole(db, user.id);
 
     // Remove any active ban on the admin
     db.prepare('DELETE FROM bans WHERE user_id = ?').run(user.id);

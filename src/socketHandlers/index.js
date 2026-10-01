@@ -16,6 +16,7 @@ const automod = require('../automod');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
 const { diskStatus } = require('../diskGuard');
+const { grantAdminRole } = require('../roleDefaults');
 const {
   UnsafeCallbackError,
   postWebhookCallback,
@@ -2001,6 +2002,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
       if (!anyAdmin && uRow.username.toLowerCase() === ADMIN_USERNAME && !uRow.is_admin) {
         db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
+        grantAdminRole(db, user.id);
         uRow.is_admin = 1;
       }
       socket.user.isAdmin = !!uRow.is_admin;

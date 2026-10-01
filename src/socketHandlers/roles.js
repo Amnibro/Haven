@@ -3,7 +3,7 @@
 const bcrypt = require('bcryptjs');
 const OTPAuth = require('otpauth');
 const { isString, isInt, VALID_ROLE_PERMS } = require('./helpers');
-const { seedDefaultRoles } = require('../roleDefaults');
+const { seedDefaultRoles, grantAdminRole } = require('../roleDefaults');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -1582,6 +1582,7 @@ module.exports = function register(socket, ctx) {
           db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, ?)').run(
             socket.user.id, formerAdminRole.id, socket.user.id
           );
+          grantAdminRole(db, userId);
         });
         transferTxn();
 

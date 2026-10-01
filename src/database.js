@@ -2,7 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const { DB_PATH } = require('./paths');
 const { ensureSearchIndex } = require('./searchIndex');
-const { seedDefaultRoles } = require('./roleDefaults');
+const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('./roleDefaults');
 
 let db;
 
@@ -1612,29 +1612,37 @@ function initDatabase() {
 
   // One-time: the made-up Admin role, which only lived in the
   // 'admin_role_display' setting, becomes a real role at the top with every
-  // permission a role can hold, given to the admin so they look the same.
+  // permission a role can hold, worn by the admin so they look the same.
   // Their powers still come from is_admin; the role adds nothing to them.
-  // A server that had it hidden gets no role.
+  // A new server gets the role too, and whoever becomes admin later is given
+  // it (grantAdminRole). A server that had it hidden gets no role.
   try {
-    const done = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_role_converted'").get();
-    if (!done) {
+    const setting = (key) => db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key);
+    if (!setting('admin_role_id')) {
       db.transaction(() => {
         const admin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
-        const row = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_role_display'").get();
-        let d = {};
-        try { d = row ? JSON.parse(row.value) : {}; } catch { d = {}; }
-        if (admin && d.visible !== false) {
-          const name = (typeof d.name === 'string' && d.name.trim()) ? d.name.trim().slice(0, 30) : 'Admin';
-          const color = (typeof d.color === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(d.color)) ? d.color : '#e74c3c';
-          const icon = (typeof d.icon === 'string' && /^\/uploads\//i.test(d.icon)) ? d.icon : null;
-          const r = db.prepare("INSERT INTO roles (name, level, scope, color, icon) VALUES (?, 99, 'server', ?, ?)")
-            .run(name, color, icon);
-          const { VALID_ROLE_PERMS } = require('./socketHandlers/helpers');
-          const insertPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
-          VALID_ROLE_PERMS.forEach(p => insertPerm.run(r.lastInsertRowid, p));
-          db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, ?)')
-            .run(admin.id, r.lastInsertRowid, admin.id);
+        let roleId = null;
+        if (!setting('admin_role_converted')) {
+          let d = {};
+          try { d = JSON.parse(setting('admin_role_display')?.value || '{}') || {}; } catch { d = {}; }
+          if (d.visible !== false) {
+            roleId = createAdminRole(db, {
+              name: (typeof d.name === 'string' && d.name.trim()) ? d.name.trim().slice(0, 30) : 'Admin',
+              color: (typeof d.color === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(d.color)) ? d.color : '#e74c3c',
+              icon: (typeof d.icon === 'string' && /^\/uploads\//i.test(d.icon)) ? d.icon : null,
+            });
+          }
+        } else {
+          // Converted by the first version of this step, which did not note
+          // the role's id: it is the level 99 role it gave the admin.
+          const held = admin && db.prepare(`
+            SELECT r.id FROM roles r JOIN user_roles ur ON ur.role_id = r.id
+            WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.level = 99 AND r.name != 'Former Admin'
+            ORDER BY r.id LIMIT 1`).get(admin.id);
+          roleId = held ? held.id : createAdminRole(db);
         }
+        db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('admin_role_id', ?)").run(roleId ? String(roleId) : 'none');
+        if (admin) grantAdminRole(db, admin.id);
         db.prepare("DELETE FROM server_settings WHERE key = 'admin_role_display'").run();
         db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('admin_role_converted', '1')").run();
       })();
