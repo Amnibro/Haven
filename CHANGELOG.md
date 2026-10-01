@@ -11,6 +11,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.16.0] - 2026-10-01
+
+Profile pictures can be cropped, the admin's badge is now a real role you can
+edit like any other, and Auto-Cleanup can keep the uploads folder under a size
+you choose. Bots can post into threads, automatic Away can be tuned, and a
+handful of fixes from the issue tracker.
+
+### Added
+- Avatar cropping: an Edit button next to your profile picture opens a crop editor, and picking a new still image opens it straight away. The Edit Profile window is tidied up too. (#5700, thanks Bo0sted)
+- Transparent roles: a role can be set to not color the people who hold it, so their next role down sets their color instead. Handy for letting mods pick their own color through a group role. (#5707, thanks Bo0sted)
+- Auto-Cleanup has a "Max Uploads Size (MB)" setting. Once the uploads folder passes it, the oldest messages with files are removed until it is back under. Pinned and archived messages and cleanup-exempt channels are left alone, and avatars, emoji and stickers count toward the total but are never removed. The files go through deleted-attachments like any other delete. Off by default.
+- Automatic Away can be tuned or switched off in Admin, Presence & Activity, with separate wait times for a visible and a hidden tab. The defaults stay at 5 and 2 minutes. (#5705, thanks michues)
+- An option to turn off STUN and TURN (Admin, Connectivity), for servers used only on one home or office network, where those lookups fail and show misleading connection warnings. (#5704, thanks michues)
+- Bots can post into threads: the webhook API takes a `thread_id` (a top-level message in the bot's channel), and the reply shows in the thread the same way a person's does. The bot guide covers it. (#5706)
+
+### Changed
+- The admin's badge is a real role now. It used to be a made-up label that also hid every other role the admin held. On updating, it becomes a real role at the top with the same name, color and icon, which you can rename, recolor or delete like any other role. The admin's powers don't come from it and don't change. New servers get it too, and it moves to the new admin when admin is transferred. (#5707)
+- Transferring admin: the former admin's server roles are replaced by the Former Admin role, which already holds every role permission. (#5707)
+- The backup screen says plainly what a backup holds: with Messages ticked it carries the whole database, so people keep their accounts and passwords after a restore, and the file holds login details and needs keeping safe.
+- The website moved to haven-app.com, and the app's download links point there.
+
+### Fixed
+- A channel's member list leaves out people its required roles keep out, and updates as soon as the requirement changes. (#5703)
+- Clicking quickly through channels no longer trips the "Slow down" limit, and a limited client gets one warning every few seconds instead of one per request. (#5701)
+- Self Destruct in Channel Functions: clicking away with nothing entered, or pressing Escape, puts it back as it was, and its drop-down no longer lingers in every other channel's panel. (#5702)
+- Channel names in the sidebar get the full width: the options button takes no room until you hover or tab to the channel. (#5709, thanks birdcrazy)
+
+### Security
+- The upload library (multer) is updated to 2.4.0: an upload aborted partway no longer leaves its partial file behind on disk.
+
 ## [4.15.0] - 2026-09-27
 
 Haven gets ready for big communities. A new Large Server Setup page in admin
