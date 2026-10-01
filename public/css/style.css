@@ -4734,10 +4734,15 @@ html.rgb-cycling *::after {
   color: var(--text-secondary);
   font-size: 1rem;
   cursor: pointer;
-  padding: 0.125rem 0.3125rem;
   border-radius: var(--radius-sm);
-  opacity: 1;
-  display: none;
+  /* Hidden until the row is hovered or focused, and it takes no width while
+     hidden so the channel name gets the room (#5709). It stays in the layout
+     rather than display:none so it can still be tabbed to, and so the menu it
+     opens (right-click included) has a place to anchor. */
+  opacity: 0;
+  max-width: 0;
+  padding: 0.125rem 0;
+  overflow: hidden;
   pointer-events: none;
   transition: opacity .15s;
   line-height: 1;
@@ -4745,16 +4750,13 @@ html.rgb-cycling *::after {
   margin-left: auto;
 }
 .channel-item:hover .channel-more-btn,
-.channel-item .channel-more-btn:focus {
+.channel-item:focus-within .channel-more-btn {
   opacity: 1;
-  display: block;
+  max-width: 2em;
+  padding: 0.125rem 0.3125rem;
   pointer-events: auto;
 }
-.channel-more-btn:hover { 
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  display: block; 
-}
+.channel-more-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 .channel-ctx-menu {
   position: fixed;
