@@ -972,7 +972,6 @@ module.exports = function register(socket, ctx) {
 
       const users = [];
       const userChannelMap = {};
-      let overrideReadWarned = false;
       for (const m of allMembers) {
         // The admin is listed so they can manage their own roles; nobody
         // else sees themselves or any admin here.
@@ -1006,19 +1005,12 @@ module.exports = function register(socket, ctx) {
         // Compute effective permissions per (role, channel) so the RAC can
         // re-display the user's actual saved customisations on reopen
         // instead of always falling back to the role's defaults.
-        let userOverrides = [];
-        try {
-          userOverrides = db.prepare(
-            'SELECT role_id, channel_id, permission, allowed FROM user_role_perms WHERE user_id = ?'
-          ).all(m.id);
-        } catch (err) {
-          // The editor then shows role defaults instead of this person's saved
-          // customisations, and saving would overwrite them. Logged once per request.
-          if (!overrideReadWarned) {
-            overrideReadWarned = true;
-            console.warn('role assignment list: override read failed:', err.message);
-          }
-        }
+        // Not caught here: showing role defaults in place of this person's
+        // saved customisations would overwrite them on save, so a failed read
+        // fails the whole request (the catch below logs it and tells the user).
+        const userOverrides = db.prepare(
+          'SELECT role_id, channel_id, permission, allowed FROM user_role_perms WHERE user_id = ?'
+        ).all(m.id);
 
         for (const cr of currentRoles) {
           const basePerms = db.prepare(
