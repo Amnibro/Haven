@@ -407,7 +407,7 @@ _listenSession() {
     }
     // Re-join voice if we were in voice before reconnect
     if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
-      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() });
+      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getRelayClientInfo() });
       if (this.voice.isMuted) this.socket.emit('voice-mute-state', { code: this.voice.currentChannel, muted: true });
       if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: this.voice.currentChannel, deafened: true });
       // (#5427) When the socket flaps (common on the web client behind certain
@@ -575,7 +575,7 @@ _listenSession() {
       // live, so rebind the voice slot here instead. This is a no-op on
       // the server when we're already bound on this socket.
       if (voiceLive && this.voice?.currentChannel && this.socket?.connected) {
-        this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() });
+        this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getRelayClientInfo() });
       }
       // Re-fetch channels in case list changed while backgrounded
       this.socket?.emit('get-channels');
@@ -868,7 +868,7 @@ _forceFullResync(reason) {
         try { this.socket.emit('request-online-users', { code: this.currentChannel }); } catch (err) { console.warn('[Resync] request-online-users failed', err); }
         try { this.socket.emit('request-voice-users', { code: this.currentChannel }); } catch (err) { console.warn('[Resync] request-voice-users failed', err); }
         if (this.voice?.inVoice && this.voice.currentChannel) {
-          try { this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() }); } catch (err) { console.warn('[Resync] voice-rejoin failed', err); }
+          try { this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getRelayClientInfo() }); } catch (err) { console.warn('[Resync] voice-rejoin failed', err); }
         }
       }
     }
@@ -895,7 +895,7 @@ _lightVoiceResync(reason) {
     if (this.voice?.inVoice && this.voice.currentChannel) {
       // voice-rejoin is now a no-op on the server when already bound on this
       // socket (skipRenegotiate). Still safe — used only to refresh roster.
-      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() });
+      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getRelayClientInfo() });
       // UI may have been flipped to "Join Voice" by a partial desync — restore.
       try { this._reconcileVoiceUi?.(); } catch (err) { console.warn('[Resync] _reconcileVoiceUi failed', err); }
       try { this.voice.reassertScreenStreams?.(); } catch (err) { console.warn('[Resync] reassertScreenStreams failed', err); }

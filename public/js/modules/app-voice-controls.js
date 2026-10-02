@@ -314,6 +314,222 @@ _bindVoiceControls() {
       this.voice.setScreenResolution(val);
     });
   }
+  // ── Screen share bitrate stepper (300–10000 Kbps + unlimited) ──
+  // The value is an editable input: type a number and confirm with Enter or
+  // by leaving the field; out-of-range input clamps to the nearest bound.
+  // Holding a step button auto-repeats with acceleration.
+  const bitrateMinus = document.getElementById('screen-bitrate-minus');
+  const bitratePlus = document.getElementById('screen-bitrate-plus');
+  const bitrateValue = document.getElementById('screen-bitrate-value');
+  // Commit guards: declared up here, above commitBitrateInput. ES modules run
+  // in strict mode, so assigning before the `let` executes throws
+  // "bitrateBlurSuppressed is not defined" on every typed commit (#5672).
+  let bitrateEscapePressed = false;
+  let bitrateBlurSuppressed = false;
+  // Unconditional field write. Stepper presses are explicit user intent to
+  // change the value, so they must sync the field even while it is focused:
+  // button pointerdown is preventDefaulted (focus stays in the field) and
+  // renderBitrate skips focused inputs — without this, the field keeps the
+  // stale text and the next blur re-commits it, silently reverting the step
+  // (and re-applying the old cap to a live share).
+  const writeBitrateField = (kbps) => {
+    if (!bitrateValue) return;
+    if ('value' in bitrateValue) {
+      bitrateValue.value = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
+    } else {
+      bitrateValue.textContent = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
+    }
+  };
+  const renderBitrate = (kbps) => {
+    if (!bitrateValue) return;
+    if (document.activeElement === bitrateValue) return; // don't fight typing
+    writeBitrateField(kbps);
+  };
+  const parseBitrateInput = () => {
+    const raw = String(bitrateValue?.value ?? bitrateValue?.textContent ?? '').toLowerCase();
+    // "unlimited"/"ilimitado" (or empty unit text) means uncapped.
+    if (/unlimited|ilimitado|inf/.test(raw)) return 0;
+    const digits = raw.replace(/[^0-9]/g, '');
+    if (!digits) return null;
+    const n = parseInt(digits, 10);
+    if (!Number.isSafeInteger(n)) return null;
+    if (n <= 0) return 0;
+    if (n < 300) return 300;
+    if (n > 10000) return 0; // above the range wraps to unlimited
+    return n;
+  };
+  const commitBitrateInput = () => {
+    const parsed = parseBitrateInput();
+    if (parsed === null) {
+      renderBitrate(this.voice.screenBitrate);
+      return;
+    }
+    this.voice.setScreenBitrate(parsed);
+    // The programmatic blur below re-fires the blur listener: suppress that
+    // second commit (Enter confirmed once already). The flag wraps a
+    // synchronous blur() dispatch.
+    if (bitrateValue && 'value' in bitrateValue) {
+      bitrateBlurSuppressed = true;
+      try { bitrateValue.blur?.(); } finally { bitrateBlurSuppressed = false; }
+    }
+    renderBitrate(this.voice.screenBitrate);
+  };
+  const stepBitrate = (dir) => {
+    const cur = this.voice.screenBitrate || 0;
+    let next;
+    if (dir < 0) {
+      // From unlimited, step down into the top of the range.
+      next = cur === 0 ? 10000 : cur - 100;
+    } else {
+      // Past the top of the range wraps to unlimited.
+      next = cur === 0 ? 300 : cur + 100;
+    }
+    this.voice.setScreenBitrate(next);
+    writeBitrateField(this.voice.screenBitrate);
+  };
+  // Press-and-hold auto-repeat: first repeat after 400 ms, then every 80 ms
+  // with the step doubling every ~10 repeats so long holds move fast.
+  const holdRepeat = (button, dir) => {
+    if (!button) return;
+    let timer = null;
+    let interval = null;
+    let repeats = 0;
+    const stop = () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+      timer = interval = null;
+      repeats = 0;
+    };
+    const tick = () => {
+      repeats++;
+      const magnitude = repeats > 20 ? 400 : repeats > 10 ? 200 : 100;
+      const cur = this.voice.screenBitrate || 0;
+      let next;
+      if (dir < 0) {
+        // From unlimited, step down into the top of the range; from a capped
+        // value, saturate at the 300 floor. A raw `cur - magnitude` can land
+        // exactly on 0 (e.g. 400 − 400), which means unlimited — a hold
+        // sliding down must never jump to uncapped.
+        if (cur === 0) next = 10000;
+        else next = Math.max(300, cur - magnitude);
+      } else {
+        next = cur === 0 ? 300 : cur + magnitude;
+      }
+      this.voice.setScreenBitrate(next);
+      writeBitrateField(this.voice.screenBitrate);
+    };
+    let pressed = false;
+    // Active pointer for the current press: a second finger's pointerdown is
+    // ignored instead of overwriting `timer` and leaking the first press's
+    // timeout (which would arm an interval after both fingers lifted).
+    let activePointerId = null;
+    button.addEventListener('pointerdown', (e) => {
+      if (activePointerId !== null) return; // multitouch: keep the first press
+      e.preventDefault();
+      activePointerId = e.pointerId ?? 'mouse';
+      pressed = true;
+      stepBitrate(dir); // immediate single step on press
+      timer = setTimeout(() => {
+        interval = setInterval(tick, 80);
+      }, 400);
+    });
+    // Keyboard activation (Enter/Space) fires click with detail === 0 and no
+    // pointerdown. Pointer clicks carry detail >= 1. Checking detail (not just
+    // `pressed`) means a stale `pressed` from a drag-off release can never
+    // swallow the next keyboard activation, while a pointer click following
+    // its own pointerdown is still consumed exactly once — including the
+    // touch sequence pointerup → pointerleave → click. A keyboard step never
+    // touches the active pointer's state: its timers and trailing click still
+    // belong to that press, so a second finger stays ignored instead of
+    // overwriting `timer` and leaking an interval.
+    button.addEventListener('click', (e) => {
+      if (e && e.detail === 0) {
+        stepBitrate(dir);
+        return;
+      }
+      if (pressed) { pressed = false; return; }
+      stepBitrate(dir);
+    });
+    const clearPress = (e) => {
+      // Only the press's own pointer may end it; another pointer's leave must
+      // not disarm the active hold.
+      if (e && e.pointerId !== undefined && activePointerId !== null &&
+          e.pointerId !== activePointerId) return;
+      activePointerId = null;
+      stop();
+    };
+    // pointerup is followed by click, which consumes `pressed` above — the
+    // flag itself is left for click, but the timers stop here. pointerleave
+    // must NOT clear `pressed`: on touch the sequence is pointerup →
+    // pointerleave → click, so clearing on leave would double-step.
+    // pointercancel is never followed by click, so it clears both.
+    button.addEventListener('pointerup', clearPress);
+    button.addEventListener('pointerleave', (e) => {
+      // End the hold timers and release the pointer guard so the next press
+      // works even after a drag-off release outside the button (which sends
+      // no pointerup/click here). `pressed` is deliberately kept for the
+      // trailing click: on touch the sequence is pointerup → pointerleave →
+      // click, so clearing it here would double-step. A stale `pressed` with
+      // no click coming is harmless — the next keyboard click (detail === 0)
+      // steps regardless.
+      if (e && e.pointerId !== undefined && activePointerId !== null &&
+          e.pointerId !== activePointerId) return;
+      activePointerId = null;
+      stop();
+    });
+    // pointercancel is never followed by click, so it clears both — but only
+    // when it belongs to the active press. Clearing `pressed` before the
+    // identity check (as a previous version did) let a second, ignored
+    // pointer's cancel disarm the first press, and the trailing click then
+    // double-stepped.
+    button.addEventListener('pointercancel', (e) => {
+      if (e && e.pointerId !== undefined && activePointerId !== null &&
+          e.pointerId !== activePointerId) return;
+      pressed = false;
+      activePointerId = null;
+      stop();
+    });
+  };
+  if (bitrateMinus && bitratePlus && bitrateValue) {
+    renderBitrate(this.voice.screenBitrate);
+    holdRepeat(bitrateMinus, -1);
+    holdRepeat(bitratePlus, +1);
+    // Escape discards the typed text instead of confirming it: without the
+    // flag the blur() below would run commitBitrateInput() and apply the
+    // very value the user was cancelling (renderBitrate skips focused inputs).
+    // (Flags declared above, next to the other bitrate state.)
+    const restoreBitrateDisplay = () => {
+      const kbps = this.voice.screenBitrate;
+      if ('value' in bitrateValue) {
+        bitrateValue.value = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
+      } else {
+        bitrateValue.textContent = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
+      }
+    };
+    bitrateValue.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitBitrateInput();
+      } else if (e.key === 'Escape') {
+        bitrateEscapePressed = true;
+        restoreBitrateDisplay();
+        bitrateValue.blur?.();
+      }
+      e.stopPropagation();
+    });
+    bitrateValue.addEventListener('blur', () => {
+      if (bitrateEscapePressed) {
+        bitrateEscapePressed = false;
+        restoreBitrateDisplay();
+        return;
+      }
+      if (bitrateBlurSuppressed) return; // Enter already committed
+      commitBitrateInput();
+    });
+    bitrateValue.addEventListener('focus', () => {
+      try { bitrateValue.select?.(); } catch {}
+    });
+  }
   if (screenFpsSelect) {
     const savedFps = localStorage.getItem('haven_screen_fps') || '30';
     screenFpsSelect.value = savedFps;
@@ -321,19 +537,6 @@ _bindVoiceControls() {
       this.voice.setScreenFrameRate(parseInt(e.target.value, 10));
     });
   }
-  const nativeScreenRow = document.getElementById('native-screen-share-row');
-  const nativeScreenHint = document.getElementById('native-screen-share-hint');
-  const nativeScreenToggle = document.getElementById('native-screen-share-enabled');
-  if (window.havenDesktop?.nativeScreen && nativeScreenToggle) {
-    nativeScreenRow.hidden = false;
-    nativeScreenHint.hidden = false;
-    nativeScreenToggle.checked = localStorage.getItem('haven_native_screen_share') === '1';
-    nativeScreenToggle.addEventListener('change', () => {
-      if (nativeScreenToggle.checked) localStorage.setItem('haven_native_screen_share', '1');
-      else localStorage.removeItem('haven_native_screen_share');
-    });
-  }
-
   // Wire up the voice manager's video callback
   this.voice.onScreenStream = (userId, stream) => this._handleScreenStream(userId, stream);
   // Wire up webcam video callback
@@ -368,6 +571,7 @@ _bindVoiceControls() {
   // over from a previous stream.
   this.voice.onScreenShareRestart = (userId) => {
     if (this._renegBudget) delete this._renegBudget[userId];
+    this._resetScreenShareUiState(userId);
   };
 
   // Wire up AFK auto-move
@@ -397,15 +601,6 @@ _bindVoiceControls() {
   // staring at "ICE: Connecting..." with no clue why (#5399).
   this.voice.onConnectivityWarning = (msg) => {
     this._showToast(msg, 'error', null, 12000);
-  };
-  this.voice.onScreenShareWarning = () => {
-    const button = document.getElementById('screen-share-btn');
-    if (button) {
-      button.textContent = '🖥️';
-      button.title = t('voice.screen_share');
-      button.classList.remove('sharing');
-    }
-    this._showToast(t('voice.screen_share_cancelled'), 'error', null, 12000);
   };
 
   // Wire up talking indicator

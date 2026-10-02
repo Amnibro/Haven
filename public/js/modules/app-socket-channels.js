@@ -52,7 +52,7 @@ _listenChannelsAndMessages() {
     );
     this.voice?.resolveDeferredChannelGone?.(deferredRotation?.newCode || deferredChannel?.code || null);
     if (voiceRotation && this.voice?.inVoice && this.voice.currentChannel === voiceRotation.newCode) {
-      this.socket.emit('voice-rejoin', { code: voiceRotation.newCode, ...this.voice.getNativeScreenClientInfo() });
+      this.socket.emit('voice-rejoin', { code: voiceRotation.newCode, ...this.voice.getRelayClientInfo() });
       if (this.voice.isMuted) this.socket.emit('voice-mute-state', { code: voiceRotation.newCode, muted: true });
       if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: voiceRotation.newCode, deafened: true });
       this.voice._healPeerConnectionsAfterChannelRotation?.(voiceRotation.oldCode);
@@ -691,7 +691,7 @@ _listenPresenceAndVoice() {
       if ((now - (this._lastVoiceSelfHealAt || 0)) > 3000 && this.socket?.connected) {
         this._lastVoiceSelfHealAt = now;
         console.warn('[Voice] Self missing from roster — emitting voice-rejoin');
-        this.socket.emit('voice-rejoin', { code: data.channelCode, ...this.voice.getNativeScreenClientInfo() });
+        this.socket.emit('voice-rejoin', { code: data.channelCode, ...this.voice.getRelayClientInfo() });
       }
     }
     if (isViewing && localStorage.getItem('haven_hide_voice_panel') !== 'true') {

@@ -58,14 +58,6 @@ class VoiceManager {
     // not the same thing as "the viewer is seeing the stream".
     this._screenDelivered = new Set();
     this.screenGainNodes = new Map(); // userId → GainNode for screen share audio
-    this._nativeScreenPeers = new Map(); // sharerId → { connection, sessionId }
-    this._pendingNativeScreenCandidates = new Map();
-    this._nativeScreenAnnouncements = new Map(); // sharerId → active native sessionId
-    this._nativeScreenPeerCapabilities = new Map(); // peerId → {version, codecs, isBot}
-    this._nativeScreenSenderStates = new Map(); // peer/session → answer + queued ICE state
-    this._nativeScreenSharing = false;
-    this._nativeScreenSessionId = null;
-    this._nativeScreenCodec = null;
     this._screenStartOperation = 0;
     this._screenStartInFlight = false;
     this._pendingScreenStop = null;
@@ -76,7 +68,6 @@ class VoiceManager {
     this.onScreenShareStarted = null; // callback(userId, username) — someone started streaming
     this.onWebcamStatusChange = null; // callback() — webcam started/stopped, re-render user list
     this.onConnectivityWarning = null; // (#5399) callback(message) — fired when no STUN server responds
-    this.onScreenShareWarning = null; // callback() — native transport stopped for compatibility
     this._connectivityWarned = false;  // only warn once per session to avoid toast spam
     this.deafenedUsers = new Set();   // userIds we've muted our audio towards
     this._localTalkInterval = null;
@@ -100,22 +91,41 @@ class VoiceManager {
 
     // Screen share quality settings (populated from localStorage)
     const savedRes = localStorage.getItem('haven_screen_res');
-    this.screenResolution = savedRes !== null ? parseInt(savedRes, 10) : 1080;  // 0 = source
+    this.screenResolution = savedRes !== null ? parseInt(savedRes, 10) : 1080;  // 1080p default
     this.screenFrameRate = parseInt(localStorage.getItem('haven_screen_fps') || '30', 10) || 30;
+    // User bitrate cap in kbps (0 = unlimited). Stepper in Settings moves in
+    // 100 kbps steps between 300 and 10000; anything above wraps to unlimited.
+    // Default 8000 restores the #5379 1080p ceiling for people who never
+    // touched the setting.
+    this.screenBitrate = this._normalizeScreenBitrate(
+      localStorage.getItem('haven_screen_bitrate')
+    );
+    // Relay republish debounce (maintainer review on #5672): direct peers get
+    // setParameters immediately, but the relay producer teardown/re-create is
+    // debounced until 750 ms after the last change, with latest-wins.
+    this._relayBitrateTimer = null;
+    this._relayRepublishInFlight = false;
+    this._pendingRelayRepublish = false;
+    // Share-identity token of the latest deferred republish (see
+    // _scheduleRelayScreenRepublish): revalidated before the re-run so a
+    // request queued under an older generation can never publish under a
+    // newer one.
+    this._pendingRelayToken = null;
+    this._relayBitrateDebounceMs = 750;
+    // Base delay (ms) for the bounded republish retry after a failed relay
+    // publish; multiplied by the attempt number (linear backoff).
+    this._relayPublishRetryBaseMs = 500;
+    // Serializes relay screen-producer mutations (initial publish vs bitrate
+    // re-produce) so two produce() calls can never interleave and hijack each
+    // other's producer entry (#5672 review, round 2). Promise chain tail.
+    this._relayScreenQueue = null;
+    // Set when the initial screen publish failed: the recovery path in
+    // _republishRelayScreenBitrate may then publish even with no key recorded.
+    this._relayScreenNeedsPublish = false;
 
-    // Bitrate map: resolution → bits/sec  (per-resolution caps for screen-share encoding).
-    // 3.18.1 (#5379): bumped 2-3x because the previous values (1.5 / 3 / 5 Mbps) were
-    // well below what modern home internet can comfortably push, and WebRTC was dropping
-    // framerate to fit inside the cap instead of using the headroom users actually have.
-    // Reference points: YouTube live recommends 4.5-9 Mbps for 1080p60; OBS default for
-    // 1080p60 is 8 Mbps. We sit between "good" and "high" so two-person sessions on
-    // typical broadband stop being framerate-starved.
-    this._screenBitrates = {
-      0:    8_000_000,   // 8 Mbps fallback for unconstrained (source)
-      720:  4_000_000,   // 4 Mbps  (was 1.5)
-      1080: 8_000_000,   // 8 Mbps  (was 3)
-      1440: 14_000_000,  // 14 Mbps (was 5)
-    };
+    // The old per-resolution bitrate table was replaced by the user bitrate
+    // setting (screenBitrate, 300–10000 Kbps + unlimited). Relayed peers still
+    // get the gentler fixed profile inside _screenBitrateFor.
 
     // Default STUN pool — non-Google by preference. Each entry is tried
     // simultaneously by the browser during ICE gathering, so listing several
@@ -158,7 +168,6 @@ class VoiceManager {
     this._pendingConfiguredStun = null;
 
     this._setupSocketListeners();
-    this._setupNativeScreenBridge();
   }
 
   // ── Fetch ICE servers from backend (STUN + optional TURN) ──
@@ -527,7 +536,7 @@ class VoiceManager {
     const now = Date.now();
     if (this.socket && this.socket.connected && now - (this._lastReassertAt || 0) > 3000) {
       this._lastReassertAt = now;
-      this.socket.emit('voice-rejoin', { code, ...this.getNativeScreenClientInfo() });
+      this.socket.emit('voice-rejoin', { code, ...this.getRelayClientInfo() });
     }
     return true;
   }
@@ -567,7 +576,11 @@ class VoiceManager {
     for (const sharerId of this.screenSharers) {
       if (sharerId === this.localUserId) continue;
       this._screenDelivered.delete(sharerId);
-      if (this._deliverScreenFromReceivers(sharerId)) restored++;
+      // Exclude the tile's own track so a surviving black tile isn't
+      // "restored" without frames; it falls into renegotiate + watch below.
+      if (this._deliverScreenFromReceivers(sharerId, {
+        skipTrackId: this._screenTileTrackId(sharerId),
+      })) restored++;
       else {
         this.requestScreenStream(sharerId);
         this._watchForScreenStream(sharerId);
@@ -589,24 +602,8 @@ class VoiceManager {
     return Number(mine) < Number(remoteUserId);
   }
 
-  _nativeScreenCodecs() {
-    const codecs = new Set();
-    try {
-      const capabilities = globalThis.RTCRtpReceiver?.getCapabilities?.('video')?.codecs || [];
-      for (const codec of capabilities) {
-        const name = String(codec?.mimeType || '').replace(/^video\//i, '').toUpperCase();
-        if (name === 'H264' || name === 'AV1' || name === 'H265') codecs.add(name);
-      }
-    } catch { /* no codec list in this runtime: the H.264 baseline below still applies */ }
-    // H.264 is the protocol baseline and is available in supported Chromium builds.
-    if (codecs.size === 0) codecs.add('H264');
-    return ['H264', 'AV1', 'H265'].filter(codec => codecs.has(codec));
-  }
-
-  getNativeScreenClientInfo() {
+  getRelayClientInfo() {
     return {
-      nativeScreenVersion: 2,
-      nativeScreenCodecs: this._nativeScreenCodecs(),
       // Sent with every join and rejoin: this client can use the voice relay.
       relay: typeof window !== 'undefined' && typeof window.HavenRelaySession === 'function' ? 1 : 0,
     };
@@ -632,40 +629,6 @@ class VoiceManager {
     if (this._callTransport !== 'relay') return false;
     const info = this._voiceUserInfo?.get(userId);
     return !!info && info.relayCapable && !info.isBot;
-  }
-
-  _nativeScreenEnabled() {
-    try { return localStorage.getItem('haven_native_screen_share') === '1'; }
-    catch { return false; }
-  }
-
-  _rememberNativeScreenPeer(user) {
-    if (!user || user.id == null) return;
-    const codecs = Array.isArray(user.nativeScreenCodecs)
-      ? user.nativeScreenCodecs.filter(codec =>
-          codec === 'H264' || codec === 'AV1' || codec === 'H265'
-        )
-      : [];
-    this._nativeScreenPeerCapabilities.set(user.id, {
-      version: user.nativeScreenVersion === 2 ? 2 : 0,
-      codecs,
-      isBot: user.isBot === true,
-    });
-  }
-
-  _nativeScreenCodecIntersection() {
-    let codecs = this._nativeScreenCodecs();
-    const peerCapabilities = this._nativeScreenPeerCapabilities;
-    for (const peerId of this.peers.keys()) {
-      // Prototype-only unit harnesses predate the capability map. Real instances
-      // always initialize it in the constructor.
-      if (!peerCapabilities) continue;
-      const peer = peerCapabilities.get(peerId);
-      if (peer?.isBot) continue;
-      if (peer?.version !== 2) return [];
-      codecs = codecs.filter(codec => peer.codecs.includes(codec));
-    }
-    return codecs;
   }
 
   // True when an incoming offer arrives while we have an offer of our own in
@@ -718,7 +681,6 @@ class VoiceManager {
         (this._voiceSessionGeneration || 0) === voiceGeneration;
       if (!channelCode || !stillCurrent()) return;
       this._flushPendingScreenStop(channelCode);
-      for (const user of data.users || []) this._rememberNativeScreenPeer(user);
       for (const user of data.users || []) this._rememberVoiceUser(user);
       // A relayed call: our tracks go through the relay, and only people who
       // cannot use it get a direct connection. (Large Server Setup)
@@ -736,7 +698,7 @@ class VoiceManager {
       this.audioBitrate = data.voiceBitrate || 0;
       if (data.rejoin && !data.skipRenegotiate) {
         this._reannounceScreenShare(data.users || [], { channelCode, voiceGeneration }).catch(err => {
-          console.warn('[NativeScreen] Failed to restore screen share after voice rejoin:', err);
+          console.warn('[Voice] Failed to restore screen share after voice rejoin:', err);
         });
       }
       // Fast-path: server told us this is a transient rejoin and our
@@ -799,7 +761,6 @@ class VoiceManager {
       // The new user handles creating offers to existing users,
       // so we just wait for their offer via 'voice-offer'.
       if (data?.user) {
-        this._rememberNativeScreenPeer(data.user);
         this._rememberVoiceUser(data.user);
         if (this.onVoiceJoin) this.onVoiceJoin(data.user.id, data.user.username);
       }
@@ -1059,18 +1020,6 @@ class VoiceManager {
       this._stopAnalyser(data.user.id);
       this._removePeer(data.user.id);
       this._voiceUserInfo?.delete(data.user.id);
-      this._closeNativeScreenPeer(data.user.id);
-      this._nativeScreenAnnouncements.delete(data.user.id);
-      this._nativeScreenPeerCapabilities.delete(data.user.id);
-      if (this._nativeScreenSharing) {
-        for (const key of this._nativeScreenSenderStates.keys()) {
-          if (key.startsWith(`${data.user.id}:`)) this._nativeScreenSenderStates.delete(key);
-        }
-        window.havenDesktop?.nativeScreen?.removePeer?.({
-          peerId: data.user.id,
-          sessionId: this._nativeScreenSessionId,
-        }).catch((err) => { console.warn('[Screen] native removePeer failed', err); });
-      }
       // If they were screen sharing, clean up
       this._screenDelivered.delete(data.user.id);
       if (this.screenSharers.has(data.user.id)) {
@@ -1118,12 +1067,6 @@ class VoiceManager {
       if (!data || data.channelCode !== this.currentChannel) return;
       this.screenSharers.add(data.userId);
       this._cancelScreenWatchdog(data.userId);
-      this._closeNativeScreenPeer(data.userId);
-      if (data.transport === 'native' && data.sessionId) {
-        this._nativeScreenAnnouncements.set(data.userId, data.sessionId);
-      } else {
-        this._nativeScreenAnnouncements.delete(data.userId);
-      }
       // New share — the previous one's delivery says nothing about this one.
       this._screenDelivered.delete(data.userId);
       // A deliberate new share deserves a clean renegotiation budget; the
@@ -1158,38 +1101,9 @@ class VoiceManager {
       this.screenSharers.delete(data.userId);
       this._cancelScreenWatchdog(data.userId);
       this._screenDelivered.delete(data.userId);
-      this._closeNativeScreenPeer(data.userId);
-      this._nativeScreenAnnouncements.delete(data.userId);
+      this._cleanupScreenPlayback(data.userId);
       if (this.onScreenStream) this.onScreenStream(data.userId, null);
       if (this.onWebcamStatusChange) this.onWebcamStatusChange();
-    });
-
-    this.socket.on('native-screen-incompatible-peer', data => {
-      if (!this._nativeScreenSharing || data?.channelCode !== this.currentChannel ||
-          data.sessionId !== this._nativeScreenSessionId) return;
-      console.warn('[NativeScreen] Stopping because a viewer does not support native screen transport');
-      if (this.onScreenShareWarning) this.onScreenShareWarning();
-      this.stopScreenShare().catch(err => {
-        console.warn('[NativeScreen] Failed to stop incompatible native share:', err);
-      });
-    });
-
-    this.socket.on('native-screen-offer', data => {
-      this._handleNativeScreenOffer(data).catch(err => {
-        console.error('[NativeScreen] Failed to accept offer:', err);
-      });
-    });
-
-    this.socket.on('native-screen-answer', data => {
-      this._handleNativeScreenAnswer(data).catch(err => {
-        console.warn('[NativeScreen] Failed to apply answer:', err);
-      });
-    });
-
-    this.socket.on('native-screen-ice-candidate', data => {
-      this._handleNativeScreenIceCandidate(data).catch(err => {
-        console.warn('[NativeScreen] Failed to apply ICE candidate:', err);
-      });
     });
 
     // Someone started their webcam
@@ -1215,8 +1129,7 @@ class VoiceManager {
           this.screenSharers.delete(sharerId);
           this._cancelScreenWatchdog(sharerId);
           this._screenDelivered.delete(sharerId);
-          this._closeNativeScreenPeer(sharerId);
-          this._nativeScreenAnnouncements.delete(sharerId);
+          this._cleanupScreenPlayback(sharerId);
           if (this.onScreenStream) this.onScreenStream(sharerId, null);
         }
         data.sharers.forEach(s => {
@@ -1224,22 +1137,6 @@ class VoiceManager {
           this.screenSharers.add(s.id);
           if (s.hasAudio === false && this.onScreenNoAudio) {
             this.onScreenNoAudio(s.id);
-          }
-          if (s.transport === 'native' && s.sessionId) {
-            const previousSession = this._nativeScreenAnnouncements.get(s.id);
-            if (previousSession && previousSession !== s.sessionId) {
-              this._closeNativeScreenPeer(s.id);
-              this._screenDelivered.delete(s.id);
-              if (this.onScreenStream) this.onScreenStream(s.id, null);
-            }
-            this._nativeScreenAnnouncements.set(s.id, s.sessionId);
-          } else {
-            if (this._nativeScreenAnnouncements.has(s.id)) {
-              this._closeNativeScreenPeer(s.id);
-              this._screenDelivered.delete(s.id);
-              if (this.onScreenStream) this.onScreenStream(s.id, null);
-            }
-            this._nativeScreenAnnouncements.delete(s.id);
           }
           // Late joiners never receive 'screen-share-started', so they never
           // armed the silent-failure recovery watchdog. Arm it here so a
@@ -1267,14 +1164,8 @@ class VoiceManager {
       if (!this.isScreenSharing || data?.channelCode !== this.currentChannel) return;
       const targetUserId = data && data.targetUserId;
       if (targetUserId == null) return;
-      if (!this._nativeScreenSharing && this._isRelayedPeer(targetUserId)) return;
+      if (this._isRelayedPeer(targetUserId)) return;
 
-      if (this._nativeScreenSharing) {
-        this._replaceNativeScreenPeer(targetUserId).catch(err => {
-          console.warn('[NativeScreen] Failed to renegotiate native peer:', err);
-        });
-        return;
-      }
       if (!this.screenStream) return;
 
       // Peer may not exist yet (joiner's offer still in flight). Retry a
@@ -1310,14 +1201,16 @@ class VoiceManager {
         const missing = screenTracks.filter(track => !senders.some(s => s.track === track));
         if (missing.length) {
           missing.forEach(track => conn.addTrack(track, this.screenStream));
-          const res = this.screenResolution;
-          const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
+          const maxBitrate = this._screenBitrateFor(this.screenResolution);
           this._applyScreenBitrate(conn, maxBitrate, targetUserId);
         }
 
         // Renegotiate to include the video tracks (or refresh an existing
-        // screen-share m-section that the receiver lost frames on)
+        // screen-share m-section that the receiver lost frames on), then nudge
+        // the encoder for a fresh keyframe — same black-tile-on-GPU rationale
+        // as the initial share path below.
         await this._renegotiate(targetUserId, conn);
+        this._requestScreenKeyframe(targetUserId);
       };
       tryRenegotiate(6);
     });
@@ -1341,335 +1234,26 @@ class VoiceManager {
     });
   }
 
-  _setupNativeScreenBridge() {
-    const api = window.havenDesktop?.nativeScreen;
-    if (!api?.onSignal) return;
-    api.onSignal(signal => {
-      if (!this._nativeScreenSharing || !signal || signal.sessionId !== this._nativeScreenSessionId) return;
-      if (signal.type === 'error') {
-        console.error('[NativeScreen]', signal.message || 'Native media process failed');
-        if (signal.fatal) this._handleNativeScreenFailure(signal.message);
-        return;
-      }
-      const common = {
-        code: this.currentChannel,
-        targetUserId: signal.peerId,
-        sessionId: signal.sessionId,
-        negotiationId: signal.negotiationId,
-      };
-      if (!common.code || common.targetUserId == null || !common.negotiationId) return;
-      if (signal.type === 'offer' && signal.description) {
-        for (const key of this._nativeScreenSenderStates.keys()) {
-          if (key.startsWith(`${signal.peerId}:`)) this._nativeScreenSenderStates.delete(key);
-        }
-        this._nativeScreenSenderStates.set(
-          `${signal.peerId}:${signal.sessionId}:${signal.negotiationId}`,
-          {
-          ready: false,
-          applying: null,
-          candidates: [],
-          }
-        );
-        this.socket.emit('native-screen-offer', { ...common, offer: signal.description });
-      } else if (signal.type === 'ice-candidate') {
-        this.socket.emit('native-screen-ice-candidate', {
-          ...common,
-          candidate: signal.candidate || null,
-        });
-      }
-    });
-  }
-
-  async _handleNativeScreenOffer(data) {
-    const sharerId = data?.from?.id;
-    if (sharerId == null || data.channelCode !== this.currentChannel) return;
-    if (!this.screenSharers.has(sharerId) || !data.offer || !data.sessionId || !data.negotiationId) return;
-    if (this._nativeScreenAnnouncements.get(sharerId) !== data.sessionId) return;
-
-    const pendingKey = `${sharerId}:${data.sessionId}:${data.negotiationId}`;
-    this._closeNativeScreenPeer(sharerId, data.sessionId, data.negotiationId);
-    const connection = new RTCPeerConnection(this.rtcConfig);
-    const entry = {
-      connection,
-      stream: new MediaStream(),
-      sessionId: data.sessionId,
-      negotiationId: data.negotiationId,
-      disconnectTimer: null,
-    };
-    this._nativeScreenPeers.set(sharerId, entry);
-
-    connection.onicecandidate = event => {
-      if (this._nativeScreenPeers.get(sharerId) !== entry) return;
-      this.socket.emit('native-screen-ice-candidate', {
-        code: this.currentChannel,
-        targetUserId: sharerId,
-        sessionId: entry.sessionId,
-        negotiationId: entry.negotiationId,
-        candidate: event.candidate?.toJSON?.() || event.candidate || null,
-      });
-    };
-    connection.ontrack = event => {
-      if (this._nativeScreenPeers.get(sharerId) !== entry) return;
-      const alreadyAdded = entry.stream.getTracks?.().some(track => track === event.track);
-      if (!alreadyAdded && typeof entry.stream.addTrack === 'function') {
-        entry.stream.addTrack(event.track);
-      } else if (!alreadyAdded && event.streams?.[0]) {
-        entry.stream = event.streams[0];
-      }
-      if (event.track.kind === 'audio') {
-        this._playScreenAudio(sharerId, entry.stream);
-        return;
-      }
-      if (event.track.kind !== 'video') return;
-      this._screenDelivered.add(sharerId);
-      if (this.onScreenStream) this.onScreenStream(sharerId, entry.stream);
-      event.track.onended = () => {
-        if (this._nativeScreenPeers.get(sharerId) !== entry) return;
-        this._recoverNativeScreenPeer(sharerId);
-      };
-    };
-    connection.onconnectionstatechange = () => {
-      if (this._nativeScreenPeers.get(sharerId) !== entry) return;
-      if (connection.connectionState === 'connected' && entry.disconnectTimer) {
-        clearTimeout(entry.disconnectTimer);
-        entry.disconnectTimer = null;
-      }
-      if (connection.connectionState === 'failed') {
-        this._recoverNativeScreenPeer(sharerId);
-      } else if (connection.connectionState === 'disconnected' && !entry.disconnectTimer) {
-        entry.disconnectTimer = setTimeout(() => {
-          if (this._nativeScreenPeers.get(sharerId) !== entry ||
-              connection.connectionState !== 'disconnected') return;
-          this._recoverNativeScreenPeer(sharerId);
-        }, 5000);
-      }
-    };
-
-    await connection.setRemoteDescription(data.offer);
-    if (this._nativeScreenPeers.get(sharerId) !== entry) return;
-    const pending = this._pendingNativeScreenCandidates.get(pendingKey) || [];
-    this._pendingNativeScreenCandidates.delete(pendingKey);
-    const answer = await connection.createAnswer();
-    await connection.setLocalDescription(answer);
-    if (this._nativeScreenPeers.get(sharerId) !== entry) return;
-    this.socket.emit('native-screen-answer', {
-      code: this.currentChannel,
-      targetUserId: sharerId,
-      sessionId: entry.sessionId,
-      negotiationId: entry.negotiationId,
-      answer: { type: answer.type, sdp: answer.sdp },
-    });
-
-    for (const candidate of pending) {
-      if (candidate) await connection.addIceCandidate(candidate).catch(() => { /* stale candidate from an earlier negotiation; the others still connect */ });
-    }
-  }
-
-  async _handleNativeScreenIceCandidate(data) {
-    const remoteId = data?.from?.id;
-    if (remoteId == null || data.channelCode !== this.currentChannel ||
-        !data.sessionId || !data.negotiationId) return;
-
-    if (this._nativeScreenSharing && data.sessionId === this._nativeScreenSessionId) {
-      const key = `${remoteId}:${data.sessionId}:${data.negotiationId}`;
-      const state = this._nativeScreenSenderStates.get(key);
-      if (!state) return;
-      if (!state.ready) {
-        state.candidates.push(data.candidate || null);
-        state.candidates = state.candidates.slice(-64);
-        return;
-      }
-      const pending = window.havenDesktop?.nativeScreen?.addIceCandidate?.({
-        peerId: remoteId,
-        sessionId: data.sessionId,
-        negotiationId: data.negotiationId,
-        candidate: data.candidate || null,
-      });
-      await this._withNativeScreenTimeout(pending, 'add ICE candidate');
-      return;
-    }
-
-    if (this._nativeScreenAnnouncements.get(remoteId) !== data.sessionId) return;
-
-    const entry = this._nativeScreenPeers.get(remoteId);
-    if (!entry || entry.sessionId !== data.sessionId ||
-        entry.negotiationId !== data.negotiationId || !entry.connection.remoteDescription) {
-      const key = `${remoteId}:${data.sessionId}:${data.negotiationId}`;
-      const pending = this._pendingNativeScreenCandidates.get(key) || [];
-      if (!this._pendingNativeScreenCandidates.has(key)) {
-        const prefix = `${remoteId}:${data.sessionId}:`;
-        const matching = Array.from(this._pendingNativeScreenCandidates.keys())
-          .filter(candidateKey => candidateKey.startsWith(prefix));
-        while (matching.length >= 4) {
-          this._pendingNativeScreenCandidates.delete(matching.shift());
-        }
-      }
-      pending.push(data.candidate || null);
-      this._pendingNativeScreenCandidates.set(key, pending.slice(-64));
-      return;
-    }
-    if (data.candidate) await entry.connection.addIceCandidate(data.candidate);
-  }
-
-  async _handleNativeScreenAnswer(data) {
-    const peerId = data?.from?.id;
-    if (!this._nativeScreenSharing || peerId == null ||
-        data?.channelCode !== this.currentChannel ||
-        data.sessionId !== this._nativeScreenSessionId || !data.negotiationId) return;
-    const api = window.havenDesktop?.nativeScreen;
-    if (!api?.setRemoteDescription) return;
-    const key = `${peerId}:${data.sessionId}:${data.negotiationId}`;
-    const state = this._nativeScreenSenderStates.get(key);
-    if (!state) return;
-    if (state.ready) return;
-    if (state.applying) return state.applying;
-
-    state.applying = (async () => {
-      try {
-        await this._withNativeScreenTimeout(api.setRemoteDescription({
-          peerId,
-          sessionId: data.sessionId,
-          negotiationId: data.negotiationId,
-          description: data.answer,
-        }), 'set remote description');
-        while (state.candidates.length) {
-          const candidates = state.candidates.splice(0);
-          for (const candidate of candidates) {
-            await this._withNativeScreenTimeout(api.addIceCandidate({
-              peerId,
-              sessionId: data.sessionId,
-              negotiationId: data.negotiationId,
-              candidate,
-            }), 'add ICE candidate');
-          }
-        }
-        state.ready = true;
-      } catch (err) {
-        if (this._nativeScreenSenderStates.get(key) === state) {
-          this._nativeScreenSenderStates.delete(key);
-          await this._withNativeScreenTimeout(
-            api.removePeer?.({ peerId, sessionId: data.sessionId }),
-            'remove peer'
-          ).catch((err) => { console.warn('[Screen] native removePeer failed', err); });
-        }
-        throw err;
-      } finally {
-        if (this._nativeScreenSenderStates.get(key) === state) state.applying = null;
-      }
-    })();
-    return state.applying;
-  }
-
-  async _replaceNativeScreenPeer(peerId, expectedSessionId = this._nativeScreenSessionId) {
-    if (!this._nativeScreenSharing || peerId == null ||
-        this._nativeScreenSessionId !== expectedSessionId) return;
-    const api = window.havenDesktop?.nativeScreen;
-    const sessionId = expectedSessionId;
-    for (const key of this._nativeScreenSenderStates.keys()) {
-      if (key.startsWith(`${peerId}:`)) this._nativeScreenSenderStates.delete(key);
-    }
-    await this._withNativeScreenTimeout(
-      api?.removePeer?.({ peerId, sessionId }),
-      'remove peer'
-    ).catch((err) => { console.warn('[Screen] native removePeer failed', err); });
-    if (!this._nativeScreenSharing || this._nativeScreenSessionId !== sessionId) return;
-    await this._withNativeScreenTimeout(api?.addPeer?.({ peerId, sessionId }), 'add peer');
-  }
-
   async _reannounceScreenShare(users, context = {}) {
     const channelCode = context.channelCode || this.currentChannel;
     const voiceGeneration = context.voiceGeneration ?? (this._voiceSessionGeneration || 0);
-    const nativeSessionId = this._nativeScreenSessionId;
     const screenStream = this.screenStream;
     const isCurrent = () => this.isScreenSharing && this.currentChannel === channelCode &&
-      (this._voiceSessionGeneration || 0) === voiceGeneration;
+      (this._voiceSessionGeneration || 0) === voiceGeneration &&
+      this.screenStream === screenStream;
     if (!channelCode || !isCurrent()) return;
-    if (this._nativeScreenSharing && nativeSessionId) {
-      const response = await this._emitScreenStart({
-        code: channelCode,
-        hasAudio: !!this.screenHasAudio,
-        transport: 'native',
-        sessionId: nativeSessionId,
-        codec: this._nativeScreenCodec || 'H264',
-      });
-      if (!response.ok || !isCurrent()) {
-        await this.stopScreenShare();
-        return false;
-      }
-      const peerIds = Array.isArray(response.viewerIds) ? response.viewerIds : [];
-      await Promise.allSettled(peerIds.map(peerId =>
-        this._replaceNativeScreenPeer(peerId, nativeSessionId)
-      ));
-      return true;
-    }
-    if (!screenStream || this._nativeScreenSharing) return;
+    if (!screenStream) return;
     const response = await this._emitScreenStart({
       code: channelCode,
       hasAudio: screenStream.getAudioTracks().length > 0,
       transport: 'browser',
     });
-    if (!response.ok || !isCurrent()) {
+    if (!isCurrent()) return false;
+    if (!response.ok) {
       await this.stopScreenShare();
       return false;
     }
     return true;
-  }
-
-  _closeNativeScreenPeer(userId, preserveSessionId = null, preserveNegotiationId = null) {
-    const entry = this._nativeScreenPeers.get(userId);
-    if (entry) {
-      this._nativeScreenPeers.delete(userId);
-      if (entry.disconnectTimer) clearTimeout(entry.disconnectTimer);
-      try { entry.connection.close(); } catch { /* already closed */ }
-    }
-    for (const key of this._pendingNativeScreenCandidates.keys()) {
-      if (key.startsWith(`${userId}:`) &&
-          key !== `${userId}:${preserveSessionId}:${preserveNegotiationId}`) {
-        this._pendingNativeScreenCandidates.delete(key);
-      }
-    }
-  }
-
-  _recoverNativeScreenPeer(userId) {
-    this._screenDelivered.delete(userId);
-    if (this.onScreenStream) this.onScreenStream(userId, null);
-    this._closeNativeScreenPeer(userId);
-    if (!this.screenSharers.has(userId)) return;
-    this.requestScreenStream(userId);
-    this._cancelScreenWatchdog(userId);
-    this._watchForScreenStream(userId);
-  }
-
-  _closeAllNativeScreenPeers() {
-    for (const userId of Array.from(this._nativeScreenPeers.keys())) {
-      this._closeNativeScreenPeer(userId);
-    }
-    this._pendingNativeScreenCandidates.clear();
-    this._nativeScreenAnnouncements.clear();
-    for (const sharerId of this._screenWatchdogTimers.keys()) {
-      this._cancelScreenWatchdog(sharerId);
-    }
-  }
-
-  _handleNativeScreenFailure(message) {
-    if (!this._nativeScreenSharing) return;
-    console.error('[NativeScreen] Stopping failed native share:', message || 'unknown error');
-    this.stopScreenShare().catch(err => {
-      console.warn('[NativeScreen] Failed to clean up native share:', err);
-    });
-  }
-
-  _withNativeScreenTimeout(promise, operation) {
-    const timeoutMs = this._nativeScreenOperationTimeoutMs || 10000;
-    let timer = null;
-    return Promise.race([
-      Promise.resolve(promise),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Native screen ${operation} timed out`)), timeoutMs);
-      }),
-    ]).finally(() => {
-      if (timer) clearTimeout(timer);
-    });
   }
 
   _screenSignalCode(originalCode, voiceGeneration) {
@@ -1731,143 +1315,31 @@ class VoiceManager {
       (this._voiceSessionGeneration || 0) === voiceGeneration;
   }
 
-  async _tryStartNativeScreenShare(
-    operation = this._screenStartOperation,
-    channelCode = this.currentChannel,
-    voiceGeneration = this._voiceSessionGeneration || 0
-  ) {
-    const api = window.havenDesktop?.nativeScreen;
-    const requiredMethods = [
-      'getCapabilities', 'start', 'stop', 'addPeer', 'removePeer',
-      'setRemoteDescription', 'addIceCandidate', 'onSignal',
-    ];
-    if (!api || requiredMethods.some(method => typeof api[method] !== 'function')) return null;
-    const compatibleCodecs = this._nativeScreenCodecIntersection();
-    if (!compatibleCodecs.includes('H264')) return null;
-
-    const capabilities = await this._withNativeScreenTimeout(
-      api.getCapabilities(),
-      'capability check'
-    ).catch(() => null);
-    if (!this._isScreenStartValid(operation, channelCode, voiceGeneration)) return false;
-    if (!capabilities?.supported) return null;
-
-    const res = this.screenResolution;
-    let announced = false;
-    let startedSessionId = null;
-    try {
-      const result = await api.start({
-        resolution: res,
-        frameRate: this.screenFrameRate,
-        bitrate: this._screenBitrateFor(res),
-        codecs: compatibleCodecs,
-        iceServers: this.rtcConfig.iceServers || [],
-        iceTransportPolicy: this.rtcConfig.iceTransportPolicy || 'all',
-      });
-      if (!this._isScreenStartValid(operation, channelCode, voiceGeneration)) {
-        if (result?.started) {
-          await this._withNativeScreenTimeout(
-            api.stop({ sessionId: result.sessionId }),
-            'stop'
-          ).catch((err) => { console.warn('[Screen] native stop failed', err); });
+  // Ask the video sender(s) carrying our screen share for an immediate
+  // keyframe. Hardware encoders can otherwise sit on deltas for seconds after
+  // a (re)negotiation, leaving viewers with a black tile even though the
+  // track is live and unmuted — the exact "black until rejoin" shape, since a
+  // rejoin forces a fresh negotiation that eventually carries an IDR.
+  // generateKeyFrame exists on Chromium video senders; elsewhere it is a
+  // guarded no-op.
+  _requestScreenKeyframe(targetUserId = null) {
+    if (!this.isScreenSharing || !this.screenStream) return;
+    const videoTracks = new Set(this.screenStream.getVideoTracks());
+    if (!videoTracks.size) return;
+    const peers = targetUserId != null
+      ? [[targetUserId, this.peers.get(targetUserId)]]
+      : Array.from(this.peers);
+    for (const [, peer] of peers) {
+      const conn = peer?.connection;
+      if (!conn || typeof conn.getSenders !== 'function') continue;
+      try {
+        for (const sender of conn.getSenders()) {
+          if (sender?.track && videoTracks.has(sender.track) &&
+              typeof sender.generateKeyFrame === 'function') {
+            sender.generateKeyFrame().catch(() => {});
+          }
         }
-        return false;
-      }
-      if (!result?.started || !/^[A-Za-z0-9_-]{8,64}$/.test(String(result.sessionId || '')) ||
-          !compatibleCodecs.includes(result.codec)) {
-        await this._withNativeScreenTimeout(api.stop(), 'stop').catch((err) => { console.warn('[Screen] native stop failed', err); });
-        return result?.cancelled ? false : null;
-      }
-
-      startedSessionId = result.sessionId;
-      const startResponse = await this._emitScreenStart({
-        code: channelCode,
-        hasAudio: result.hasAudio === true,
-        transport: 'native',
-        sessionId: result.sessionId,
-        codec: compatibleCodecs.includes(result.codec) ? result.codec : 'H264',
-      });
-      const startStillValid = this._isScreenStartValid(operation, channelCode, voiceGeneration);
-      if (!startResponse.ok || !startStillValid) {
-        if (startResponse.ok || startResponse.error === 'timeout') {
-          this._emitOrQueueScreenStop(
-            this._screenSignalCode(channelCode, voiceGeneration),
-            result.sessionId
-          );
-        }
-        await this._withNativeScreenTimeout(
-          api.stop({ sessionId: result.sessionId }),
-          'stop'
-        ).catch((err) => { console.warn('[Screen] native stop failed', err); });
-        return startResponse.error === 'incompatible_viewer' ? null : false;
-      }
-
-      this._nativeScreenSharing = true;
-      this._nativeScreenSessionId = result.sessionId;
-      this._nativeScreenCodec = compatibleCodecs.includes(result.codec) ? result.codec : 'H264';
-      this.isScreenSharing = true;
-      this.screenStream = null;
-      this.screenHasAudio = result.hasAudio === true;
-      announced = true;
-
-      const viewerIds = new Set(Array.isArray(startResponse.viewerIds) ? startResponse.viewerIds : []);
-      const peerResults = await Promise.allSettled(Array.from(this.peers.keys())
-        .filter(peerId => viewerIds.has(peerId))
-        .map(peerId =>
-        this._withNativeScreenTimeout(api.addPeer({
-          peerId,
-          sessionId: result.sessionId,
-        }), 'add peer')
-      ));
-      if (peerResults.some(result => result.status === 'rejected')) {
-        console.warn('[NativeScreen] One or more initial viewers could not be attached');
-      }
-      if (!this._isScreenStartValid(operation, channelCode, voiceGeneration)) {
-        const signalCode = this._screenSignalCode(channelCode, voiceGeneration);
-        this._emitOrQueueScreenStop(signalCode, result.sessionId);
-        await this._withNativeScreenTimeout(
-          api.stop({ sessionId: result.sessionId }),
-          'stop'
-        ).catch((err) => { console.warn('[Screen] native stop failed', err); });
-        if (this._nativeScreenSessionId === result.sessionId) {
-          this._nativeScreenSharing = false;
-          this._nativeScreenSessionId = null;
-          this._nativeScreenCodec = null;
-          this._nativeScreenSenderStates.clear();
-          this.isScreenSharing = false;
-          this.screenHasAudio = false;
-        }
-        return false;
-      }
-      return true;
-    } catch (err) {
-      const operationIsCurrent = this._screenStartOperation === operation;
-      const ownsCurrentSession = !!startedSessionId &&
-        this._nativeScreenSessionId === startedSessionId;
-      if (startedSessionId) {
-        await this._withNativeScreenTimeout(
-          api.stop({ sessionId: startedSessionId }),
-          'stop'
-        ).catch((err) => { console.warn('[Screen] native stop failed', err); });
-      } else if (operationIsCurrent && !this._nativeScreenSessionId) {
-        await this._withNativeScreenTimeout(api.stop(), 'stop').catch((err) => { console.warn('[Screen] native stop failed', err); });
-      }
-      if (announced) {
-        const signalCode = this._screenSignalCode(channelCode, voiceGeneration);
-        this._emitOrQueueScreenStop(signalCode, startedSessionId);
-      }
-      if (operationIsCurrent || ownsCurrentSession) {
-        if (!startedSessionId || this._nativeScreenSessionId === startedSessionId) {
-          this._nativeScreenSharing = false;
-          this._nativeScreenSessionId = null;
-          this._nativeScreenCodec = null;
-          this.isScreenSharing = false;
-          this.screenStream = null;
-          this.screenHasAudio = false;
-        }
-      }
-      console.error('[NativeScreen] Native share initialization failed:', err);
-      return announced ? false : null;
+      } catch { /* sender gone mid-iteration — ignore */ }
     }
   }
 
@@ -1897,20 +1369,33 @@ class VoiceManager {
   // changed, so no track event fires. Video packets arrive and decode into a
   // receiver nobody is rendering: the sharer shows LIVE, the viewer gets
   // nothing, and there is no error anywhere to notice.
-  _deliverScreenFromReceivers(sharerId) {
-    // Native screen media has its own peer connection. A video receiver on
-    // the voice connection is a webcam or a stale browser-share transceiver.
-    if (this._nativeScreenAnnouncements.has(sharerId)) return false;
+  // Track id currently rendered in the UI tile, if any. Lets recovery tell
+  // "same black receiver" (needs renegotiation + keyframe) apart from "a new
+  // track arrived without ontrack" (needs adoption).
+  _screenTileTrackId(sharerId) {
+    try {
+      const tile = document.getElementById(`screen-tile-${sharerId}`);
+      const vid = tile && tile.querySelector('video');
+      const track = vid && vid.srcObject && vid.srcObject.getVideoTracks?.()[0];
+      return track ? track.id : null;
+    } catch { return null; }
+  }
+
+  _deliverScreenFromReceivers(sharerId, { skipTrackId = null } = {}) {
+    // A video receiver on the voice connection is a webcam or a stale
+    // browser-share transceiver.
     const peer = this.peers.get(sharerId);
     if (!peer || !this.screenSharers.has(sharerId)) return false;
     // A peer can be sending webcam and screen at once. We can't tell the two
     // apart from the receiver alone, so exclude whichever track ontrack
-    // previously classified as their webcam.
+    // previously classified as their webcam — and, when given, the track the
+    // UI tile is already rendering, so recovery doesn't "adopt" the same
+    // black receiver and stall.
     const camTrackId = peer._webcamTrackId || null;
     const candidates = peer.connection.getReceivers()
       .map(r => r.track)
       .filter(t => t && t.kind === 'video' && t.readyState === 'live' &&
-                   !t.muted && t.id !== camTrackId);
+                   !t.muted && t.id !== camTrackId && t.id !== skipTrackId);
     if (!candidates.length) return false;
     // Prefer the track we already believe is their screen; otherwise the most
     // recently negotiated one.
@@ -1953,8 +1438,14 @@ class VoiceManager {
         this._screenDelivered.delete(sharerId);
       }
       // Media may already be flowing into an unrendered receiver — adopt it
-      // rather than paying for a round of signalling we don't need.
-      if (this._deliverScreenFromReceivers(sharerId)) {
+      // rather than paying for a round of signalling we don't need. The
+      // tile's own track is excluded: re-adopting the same receiver the tile
+      // already renders changes nothing and would mark it delivered, stalling
+      // recovery on the GPU black-tile shape (live receiver, zero decoded
+      // frames — needs renegotiation + keyframe, not a re-adopt). A genuinely
+      // new track (reshare without ontrack) is still adopted.
+      const tileTrackId = this._screenTileTrackId(sharerId);
+      if (this._deliverScreenFromReceivers(sharerId, { skipTrackId: tileTrackId })) {
         console.warn('[Voice] Adopted screen stream from existing receiver for', sharerId,
           '— no track event fired for this share');
         return;
@@ -1973,17 +1464,20 @@ class VoiceManager {
     this._screenWatchdogTimers.delete(sharerId);
   }
 
-  // True when we both marked the share delivered AND still have a live
-  // non-muted video receiver for it (or a live <video> tile).
+  // True when the viewer is actually seeing frames. A tile whose video element
+  // never decoded a frame (videoWidth === 0) is the GPU-encoder black-tile
+  // shape: the receiver reports live+unmuted because delta packets flow, but
+  // no IDR ever arrived to decode. That must NOT count as live, or the
+  // watchdog stops while the tile stays black until a rejoin.
   _screenStillLive(sharerId) {
     try {
-      const nativePeer = this._nativeScreenPeers.get(sharerId);
-      if (nativePeer?.connection?.getReceivers().some(receiver => {
-        const track = receiver.track;
-        return track?.kind === 'video' && track.readyState === 'live' && !track.muted;
-      })) return true;
+      const tile = document.getElementById(`screen-tile-${sharerId}`);
+      const vid = tile && tile.querySelector('video');
+      if (vid) {
+        const track = vid.srcObject && vid.srcObject.getVideoTracks?.()[0];
+        return !!track && track.readyState === 'live' && vid.videoWidth > 0;
+      }
     } catch { /* peer closed mid-check: try the next source */ }
-    if (this._nativeScreenAnnouncements.has(sharerId)) return false;
     try {
       const peer = this.peers.get(sharerId);
       if (peer && peer.connection) {
@@ -1996,12 +1490,6 @@ class VoiceManager {
         if (live) return true;
       }
     } catch { /* peer closed mid-check: try the next source */ }
-    try {
-      const tile = document.getElementById(`screen-tile-${sharerId}`);
-      const vid = tile && tile.querySelector('video');
-      const track = vid && vid.srcObject && vid.srcObject.getVideoTracks?.()[0];
-      if (track && track.readyState === 'live' && vid.videoWidth > 0) return true;
-    } catch { /* tile removed mid-check: treat as not live */ }
     return false;
   }
 
@@ -2013,7 +1501,12 @@ class VoiceManager {
       if (sharerId === this.localUserId) continue;
       if (this._screenDelivered.has(sharerId) && this._screenStillLive(sharerId)) continue;
       this._screenDelivered.delete(sharerId);
-      if (this._deliverScreenFromReceivers(sharerId)) continue;
+      // Same rule as the watchdog: only a track the tile isn't already
+      // rendering counts as a recovery adoption, otherwise arm the timer so
+      // a black tile gets its renegotiation + keyframe.
+      if (this._deliverScreenFromReceivers(sharerId, {
+        skipTrackId: this._screenTileTrackId(sharerId),
+      })) continue;
       this._watchForScreenStream(sharerId);
     }
   }
@@ -2186,7 +1679,7 @@ class VoiceManager {
       // Persist voice channel for auto-rejoin after page refresh or server restart
       try { localStorage.setItem('haven_voice_channel', channelCode); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
 
-      this.socket.emit('voice-join', { code: channelCode, ...this.getNativeScreenClientInfo() });
+      this.socket.emit('voice-join', { code: channelCode, ...this.getRelayClientInfo() });
       // Inform peers / UI about our mute state so they show the muted icon
       // immediately instead of waiting for someone to query.
       if (this.isMuted) {
@@ -2216,12 +1709,8 @@ class VoiceManager {
       peers: this.peers.size,
       stack: new Error().stack
     });
-    const pendingScreenStart = this._screenStartInFlight;
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
     this._screenStartInFlight = false;
-    if (pendingScreenStart && !this.isScreenSharing) {
-      window.havenDesktop?.nativeScreen?.stop?.().catch((err) => { console.warn('[Screen] native stop failed', err); });
-    }
     // Stop screen share and webcam first if active, in teardown mode: the
     // peers are closed a few lines down, so there is nobody to renegotiate
     // with. The normal path fired renegotiations at connections about to be
@@ -2293,7 +1782,6 @@ class VoiceManager {
     this.audioBitrate = 0;
     this.screenSharers.clear();
     this._screenDelivered.clear();
-    this._closeAllNativeScreenPeers();
     this.screenGainNodes.clear();
     this.webcamUsers.clear();
     this._vcDest = null;
@@ -2328,28 +1816,14 @@ class VoiceManager {
     if (!this.inVoice) return;
     this.stopBotAudio();
 
-    const pendingScreenStart = this._screenStartInFlight;
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
     this._screenStartInFlight = false;
-    if (pendingScreenStart && !this.isScreenSharing) {
-      window.havenDesktop?.nativeScreen?.stop?.().catch((err) => { console.warn('[Screen] native stop failed', err); });
-    }
 
     // Stop screen share / webcam (local cleanup only)
     if (this.isScreenSharing && this.screenStream) {
       this._pendingScreenStop = { sessionId: null };
       this.screenStream.getTracks().forEach(t => t.stop());
       this.screenStream = null;
-      this.isScreenSharing = false;
-    }
-    if (this._nativeScreenSharing) {
-      this._pendingScreenStop = { sessionId: this._nativeScreenSessionId };
-      window.havenDesktop?.nativeScreen?.stop?.({
-        sessionId: this._nativeScreenSessionId,
-      }).catch((err) => { console.warn('[Screen] native stop failed', err); });
-      this._nativeScreenSharing = false;
-      this._nativeScreenSessionId = null;
-      this._nativeScreenSenderStates.clear();
       this.isScreenSharing = false;
     }
     if (this.isWebcamActive && this.webcamStream) {
@@ -2394,7 +1868,6 @@ class VoiceManager {
     this.isDeafened = false;
     this.screenSharers.clear();
     this._screenDelivered.clear();
-    this._closeAllNativeScreenPeers();
     this.screenGainNodes.clear();
     this.webcamUsers.clear();
     this._vcDest = null;
@@ -2550,6 +2023,101 @@ class VoiceManager {
 
   // ── Screen Sharing ──────────────────────────────────────
 
+  // Serial executor for relay screen-producer mutations. The initial publish
+  // and bitrate re-produces must never run concurrently: with two produce()
+  // calls in flight the late one overwrites the early one's map entry (or
+  // replaceTracks onto its producer), and the stale side's cleanup then kills
+  // the new share's producer (#5672 review, round 2). Every operation still
+  // re-reads the latest cap/track when it runs, so serialization alone
+  // converges on the newest state. The stored tail never rejects, so one
+  // failure cannot stall later operations.
+  _relayScreenEnqueue(fn) {
+    const prev = this._relayScreenQueue || Promise.resolve();
+    const next = prev.catch(() => {}).then(fn);
+    this._relayScreenQueue = next.catch(() => {});
+    return next;
+  }
+
+  // Initial relay publish for a new share. Reads the bitrate cap fresh instead
+  // of reusing the value captured before renegotiations: the user may have
+  // moved the stepper while they were in flight, and the debounced update
+  // scheduled by that change returns early (no producer yet), so publishing
+  // with the stale value would stick until the next change (#5672 review).
+  // Any timer armed mid-startup is dropped — this publish already carries the
+  // latest cap, so a re-produce would be pure churn; later changes re-arm it.
+  // The key is recorded only after a successful publish so a failed start
+  // leaves truthful state for the recovery path in _republishRelayScreenBitrate.
+  // A failed start also schedules that recovery (same debounced republish a
+  // bitrate change would arm) so the share self-heals instead of waiting for
+  // the next user change (#5672 review).
+  // A stop (or new share) mid-publish is detected via the operation guard and
+  // cleans up exactly the producer created here, never the new share's.
+  // The share identity token is bound by the caller BEFORE the enqueue (same
+  // pattern as the republish path): this publish may wait behind a slow
+  // producer, and a stop landing in that wait must invalidate it. Binding at
+  // execution time would adopt the teardown's generation (isScreenSharing and
+  // screenStream are still present while stop awaits its unpublish) and leave
+  // a late producer live, so the next share hits replaceTrack instead of
+  // produce. Callers without a token (tests, legacy) fall back to current.
+  async _publishInitialRelayScreen(boundToken) {
+    const entry = boundToken || this._relayScreenToken();
+    if (this._screenStartOperation !== entry.op || this._relay !== entry.relay) return;
+    const relay = entry.relay;
+    if (!relay || !this.isScreenSharing || !this.screenStream) return;
+    const op = entry.op;
+    if (this.screenStream?.getVideoTracks?.()[0] !== entry.track) return;
+    this._cancelRelayScreenRepublish?.();
+    const v = this.screenStream.getVideoTracks()[0];
+    const a = this.screenStream.getAudioTracks()[0];
+    const stale = () => relay !== this._relay || op !== this._screenStartOperation ||
+      !this.isScreenSharing || this.screenStream?.getVideoTracks()[0] !== v;
+    const dropIfStale = async (producer, source) => {
+      if (!stale()) return false;
+      try {
+        if (producer && relay.producers?.get?.(source) === producer &&
+            typeof relay.unpublishIf === 'function') {
+          await relay.unpublishIf(source, producer).catch(() => {});
+        } else if (producer && !relay.producers && typeof relay.unpublish === 'function') {
+          await relay.unpublish(source).catch(() => {});
+        }
+      } catch {}
+      return true;
+    };
+    const { opts: screenOpts, key: relayKey } = this._relayScreenOpts();
+    if (v) {
+      let producer = null;
+      try {
+        producer = await relay.publish('screen', v, screenOpts);
+      } catch (e) {
+        console.warn('[Relay] Screen not sent:', e?.message || e);
+        if (!stale()) {
+          this._relayScreenNeedsPublish = true;
+          try { this._scheduleRelayScreenRepublish?.(); } catch {}
+        }
+      }
+      if (producer) {
+        if (await dropIfStale(producer, 'screen')) return;
+        this._lastRelayScreenBitrateKey = relayKey;
+        this._relayScreenNeedsPublish = false;
+      } else if (!stale() && v.readyState === 'live' &&
+          this._lastRelayScreenBitrateKey == null && !this._relayScreenNeedsPublish) {
+        // publish() resolved falsy without throwing (no live producer): flag
+        // the same recovery instead of stranding the share unpublished.
+        this._relayScreenNeedsPublish = true;
+        try { this._scheduleRelayScreenRepublish?.(); } catch {}
+      }
+    }
+    if (a && !stale()) {
+      let audioProducer = null;
+      try {
+        audioProducer = await relay.publish('screen-audio', a);
+      } catch (err) { console.warn('[Relay] Screen audio not sent:', err.message); }
+      // Same orphan race as the video above: a stop resolving while produce()
+      // was pending must not leave a late audio producer live.
+      await dropIfStale(audioProducer, 'screen-audio');
+    }
+  }
+
   async shareScreen() {
     if (!this.inVoice || this.socket?.connected === false || this.isScreenSharing ||
         this._screenStartInFlight || this._pendingScreenStop) return false;
@@ -2560,12 +2128,6 @@ class VoiceManager {
     this._screenStartInFlight = true;
     let capturedStream = null;
     try {
-      if (this._nativeScreenEnabled()) {
-        const nativeResult = await this._tryStartNativeScreenShare(
-          operation, channelCode, voiceGeneration
-        );
-        if (nativeResult !== null) return nativeResult;
-      }
       if (!this._isScreenStartValid(operation, channelCode, voiceGeneration)) return false;
 
       // Build video constraints from quality settings
@@ -2668,7 +2230,7 @@ class VoiceManager {
       }
 
       // Add screen tracks to all existing peer connections and cap bitrate
-      const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
+      const maxBitrate = this._screenBitrateFor(this.screenResolution);
       // Renegotiate with every peer at once. Each peer is its own
       // RTCPeerConnection, so there is nothing to serialise, and awaiting
       // them one at a time meant the last viewer in a bigger call waited for
@@ -2683,12 +2245,20 @@ class VoiceManager {
         renegotiations.push(this._renegotiate(userId, peer.connection));
       }
       await Promise.all(renegotiations);
-      if (this._relay) {
-        const v = this.screenStream.getVideoTracks()[0];
-        const a = this.screenStream.getAudioTracks()[0];
-        if (v) await this._relay.publish('screen', v, { maxBitrate, simulcast: true }).catch(e => console.warn('[Relay] Screen not sent:', e.message));
-        if (a) await this._relay.publish('screen-audio', a).catch(e => console.warn('[Relay] Screen audio not sent:', e.message));
-      }
+      // Publish the screen to the relay with a freshly-read cap (see
+      // _publishInitialRelayScreen for why the pre-renegotiation value is
+      // not reused here). Enqueued so it can never interleave with a
+      // concurrent bitrate re-produce and hijack its producer entry; the
+      // token is bound before the enqueue so a stop waiting in line
+      // invalidates it instead of being adopted at execution time.
+      const initialToken = this._relayScreenToken();
+      await this._relayScreenEnqueue(() => this._publishInitialRelayScreen(initialToken));
+      // Hardware encoders (notably H.264 on GPU) can take a long time to emit
+      // the first keyframe, and the setParameters call above can restart the
+      // encoder mid-negotiation. Viewers whose decoder never got an IDR show a
+      // black tile until a rejoin forces a fresh negotiation — request one
+      // explicitly now that every peer has settled.
+      this._requestScreenKeyframe();
 
       if (!this._isScreenStartValid(operation, channelCode, voiceGeneration)) {
         await this.stopScreenShare();
@@ -2715,38 +2285,21 @@ class VoiceManager {
   async stopScreenShare({ teardown = false } = {}) {
     if (!this.isScreenSharing) return;
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
+    this._cancelRelayScreenRepublish?.();
     if (this._relay) {
       await this._relay.unpublish('screen').catch(() => { /* unpublish logs its own failures */ });
       await this._relay.unpublish('screen-audio').catch(() => { /* unpublish logs its own failures */ });
     }
+    this._lastRelayScreenBitrateKey = undefined;
+    this._relayScreenNeedsPublish = false;
+    // NOTE: _relayRepublishInFlight is deliberately left alone here. An
+    // in-flight republish finishes under its own guards (operation check +
+    // producer-identity cleanup) instead of being unblocked into a concurrent
+    // publish; _pendingRelayRepublish is dropped because it belonged to the
+    // dying share.
+    this._pendingRelayRepublish = false;
     this._screenStartInFlight = false;
 
-    if (this._nativeScreenSharing) {
-      const channelCode = this.currentChannel;
-      const voiceGeneration = this._voiceSessionGeneration || 0;
-      const sessionId = this._nativeScreenSessionId;
-      this._nativeScreenSharing = false;
-      this._nativeScreenSessionId = null;
-      this._nativeScreenCodec = null;
-      this._nativeScreenSenderStates.clear();
-      this.isScreenSharing = false;
-      this.screenStream = null;
-      this.screenHasAudio = false;
-      this.screenSharers.delete(this.localUserId);
-      this._nativeScreenAnnouncements.delete(this.localUserId);
-      this._emitOrQueueScreenStop(
-        this._screenSignalCode(channelCode, voiceGeneration),
-        sessionId
-      );
-      if (this.onScreenStream) this.onScreenStream(this.localUserId, null);
-      await this._withNativeScreenTimeout(
-        window.havenDesktop?.nativeScreen?.stop?.({ sessionId }),
-        'stop'
-      ).catch(err => {
-        console.warn('[NativeScreen] Failed to stop native pipeline:', err);
-      });
-      return;
-    }
     if (!this.screenStream) return;
 
     const tracks = this.screenStream.getTracks();
@@ -2762,7 +2315,6 @@ class VoiceManager {
       this.screenHasAudio = false;
       this._captureController = null;
       this.screenSharers.delete(this.localUserId);
-      this._nativeScreenAnnouncements.delete(this.localUserId);
       this._emitOrQueueScreenStop(this.currentChannel);
       if (this.onScreenStream) this.onScreenStream(this.localUserId, null);
       return;
@@ -2806,7 +2358,6 @@ class VoiceManager {
     this.isScreenSharing = false;
     this._captureController = null;
     this.screenSharers.delete(this.localUserId);
-    this._nativeScreenAnnouncements.delete(this.localUserId);
 
     this._emitOrQueueScreenStop(this.currentChannel);
     // Notify local UI — pass localUserId so tile is found by its real ID
@@ -2964,6 +2515,25 @@ class VoiceManager {
     if (this.isScreenSharing) this._applyLiveQualityChange();
   }
 
+  // Bitrate cap in kbps (0 = unlimited). Anything outside 300–10000 wraps:
+  // below clamps to 300, above wraps to unlimited (the + stepper's top stop).
+  // Default 8000 keeps the #5379 1080p ceiling for fresh profiles.
+  _normalizeScreenBitrate(value) {
+    if (value === null || value === undefined || value === '') return 8000;
+    const n = parseInt(value, 10);
+    if (!Number.isSafeInteger(n)) return 8000;
+    if (n === 0) return 0;
+    if (n < 300) return 300;
+    if (n > 10000) return 0;
+    return n;
+  }
+
+  setScreenBitrate(kbps) {
+    this.screenBitrate = this._normalizeScreenBitrate(kbps);
+    try { localStorage.setItem('haven_screen_bitrate', String(this.screenBitrate)); } catch {}
+    if (this.isScreenSharing) this.reapplyScreenBitrate();
+  }
+
   /**
    * Apply resolution / framerate / bitrate changes to an active screen share
    * without stopping and restarting the stream.
@@ -2992,7 +2562,7 @@ class VoiceManager {
     }
 
     // Update bitrate cap on all peer senders
-    const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
+    const maxBitrate = this._screenBitrateFor(this.screenResolution);
     for (const [userId, peer] of this.peers) {
       this._applyScreenBitrate(peer.connection, maxBitrate, userId);
     }
@@ -3077,25 +2647,227 @@ class VoiceManager {
     if (was === relayed) return;
     if (relayed) console.log('[Voice] Peer', userId, 'is reached through a relay; the gentler screen share profile applies to that viewer');
     if (this.isScreenSharing) {
-      this._applyScreenBitrate(connection, this._screenBitrates[this.screenResolution] || this._screenBitrates[0], userId);
+      this._applyScreenBitrate(connection, this._screenBitrateFor(this.screenResolution), userId);
     }
   }
 
   _screenBitrateFor(res, relayProfile = this._screenRelayProfileEnabled()) {
-    const table = relayProfile
-      ? { 0: 3_000_000, 720: 1_500_000, 1080: 3_000_000, 1440: 5_000_000 }
-      : this._screenBitrates;
-    return table[res] || table[0];
+    if (relayProfile) {
+      return { 0: 3_000_000, 720: 1_500_000, 1080: 3_000_000, 1440: 5_000_000 }[res]
+        || 3_000_000;
+    }
+    // The user cap is the only ceiling on direct paths. 0 = unlimited →
+    // null, meaning "leave the sender uncapped".
+    const user = Number.isSafeInteger(this.screenBitrate) ? this.screenBitrate : 8000;
+    return user > 0 ? user * 1000 : null;
   }
 
   // Re-apply the current cap to every peer, for when the toggle changes while
-  // a share is already running.
+  // a share is already running. Direct peers get setParameters immediately
+  // (cheap); the relay producer re-create is debounced (see below).
   reapplyScreenBitrate() {
     if (!this.isScreenSharing) return;
     const maxBitrate = this._screenBitrateFor(this.screenResolution);
     for (const [userId, peer] of this.peers) {
       this._applyScreenBitrate(peer.connection, maxBitrate, userId);
     }
+    this._scheduleRelayScreenRepublish();
+  }
+
+  // Debounced relay republish (#5672 review): holding the stepper fires
+  // setScreenBitrate every 80 ms, and each relay re-produce tears the
+  // producer down. Wait until 750 ms after the last change so a hold turns
+  // into a single re-produce with the final value. The share identity token
+  // is bound HERE, at schedule time: the republish may wait in the debounce
+  // timer and then in _relayScreenEnqueue behind a slow initial publish, and
+  // a stop landing in either wait must invalidate it. Binding at execution
+  // time would adopt the teardown's generation (isScreenSharing is still
+  // true while stop awaits its unpublish) and publish into the teardown.
+  _relayScreenToken() {
+    return {
+      op: this._screenStartOperation,
+      relay: this._relay,
+      track: this.screenStream?.getVideoTracks?.()[0],
+    };
+  }
+
+  _scheduleRelayScreenRepublish() {
+    if (!this.isScreenSharing || !this._relay) return;
+    try { clearTimeout(this._relayBitrateTimer); } catch {}
+    this._relayBitrateTimer = null;
+    const token = this._relayScreenToken();
+    const delay = Number.isSafeInteger(this._relayBitrateDebounceMs)
+      ? this._relayBitrateDebounceMs
+      : 750;
+    if (delay <= 0) {
+      this._republishRelayScreenBitrate(token).catch(() => {});
+      return;
+    }
+    this._relayBitrateTimer = setTimeout(() => {
+      this._relayBitrateTimer = null;
+      this._republishRelayScreenBitrate(token).catch(() => {});
+    }, delay);
+  }
+
+  _cancelRelayScreenRepublish() {
+    try { clearTimeout(this._relayBitrateTimer); } catch {}
+    this._relayBitrateTimer = null;
+    this._pendingRelayRepublish = false;
+    this._pendingRelayToken = null;
+  }
+
+  // Options for the relayed screen producer, shared by the initial publish
+  // and live bitrate updates so both agree on what "current" means. The key
+  // lets updates skip a disruptive re-produce when nothing changed.
+  //
+  // "Unlimited" (null/0) gets an explicit high cap instead of omitting
+  // maxBitrate: voice-relay.js falls back to `maxBitrate || 2500000`, so an
+  // omitted cap would pin an unlimited share to 2.5 Mbps — below the default.
+  // 14 Mbps matches the old #5379 1440p ceiling (the highest pre-stepper cap)
+  // and sits above the stepper's 10 Mbps top stop.
+  _relayScreenOpts(maxBitrate = this._screenBitrateFor(this.screenResolution)) {
+    const UNLIMITED_RELAY_CAP = 14_000_000;
+    const effective = maxBitrate || UNLIMITED_RELAY_CAP;
+    return { opts: { simulcast: true, maxBitrate: effective }, key: effective };
+  }
+
+  // Latest-wins republish (#5672 review): the pre-debounce version did
+  // `await unpublish()` with hasPublished checked only before it, so a
+  // bitrate change landing mid-republish hit the hasPublished early-return
+  // and was dropped, leaving the relay on the in-between value. Now an
+  // overlapping request only sets _pendingRelayRepublish and the loop
+  // re-reads the current settings after each await, so the final publish
+  // always carries the newest cap.
+  //
+  // Recovery: if a previous publish failed after the unpublish (producer
+  // missing but a key recorded), this publishes instead of returning early —
+  // otherwise one transient failure strands the share unpublished until the
+  // next user change. Publish failures retry bounded (3x, linear backoff)
+  // while the same share is live. The key is committed only after a
+  // successful publish so a failed attempt retries instead of looking done.
+  //
+  // Stale successes (stop, relay restart, or a new share mid-publish) remove
+  // exactly the producer created here (identity check via unpublishIf) so no
+  // orphan stays live and a new share's producer is never touched. The whole
+  // body runs inside _relayScreenEnqueue so it can never interleave with the
+  // initial publish and hijack its producer entry.
+  async _republishRelayScreenBitrate(boundToken) {
+    // The token carries the scheduling share's identity (see
+    // _scheduleRelayScreenRepublish): an overlapping request only records
+    // the latest token, and the re-run below revalidates it instead of
+    // adopting whatever generation happens to be live by then.
+    const token = boundToken || this._relayScreenToken();
+    if (this._relayRepublishInFlight) {
+      this._pendingRelayRepublish = true;
+      this._pendingRelayToken = token;
+      return;
+    }
+    this._relayRepublishInFlight = true;
+    try {
+      await this._relayScreenEnqueue(() => this._republishRelayScreenInner(token));
+    } finally {
+      this._relayRepublishInFlight = false;
+      // A change that landed while the last attempt was finishing (e.g. a new
+      // share whose update found us in-flight) must not be lost with no timer
+      // left to fire: run once more while the share is live. The stashed
+      // token is revalidated inside, so a stale request aborts instead of
+      // publishing under a newer generation.
+      const pendingToken = this._pendingRelayToken;
+      this._pendingRelayToken = null;
+      if (this._pendingRelayRepublish && this.isScreenSharing && this._relay) {
+        this._pendingRelayRepublish = false;
+        this._republishRelayScreenBitrate(pendingToken).catch(() => {});
+      }
+    }
+  }
+
+  async _republishRelayScreenInner(boundToken) {
+    // Generation bound at schedule/enqueue time (see above): a stop/new-share
+    // /relay-restart landing in the debounce wait, in the serialization queue,
+    // or during the backoff await aborts instead of being adopted. Re-reading
+    // _screenStartOperation here at execution time let a retry wake up under
+    // the teardown generation while stop was still awaiting its unpublish
+    // (isScreenSharing still true) and publish into the teardown, poisoning
+    // the next share's producer entry (replaceTrack instead of produce).
+    const entry = boundToken || this._relayScreenToken();
+    if (this._screenStartOperation !== entry.op || this._relay !== entry.relay) return;
+    const entryOp = entry.op;
+    const entryRelay = entry.relay;
+    const entryTrack = entry.track;
+    let failures = 0;
+    for (;;) {
+        this._pendingRelayRepublish = false;
+        // Stop, new share, or relay restart since entry: never publish stale.
+        if (this._screenStartOperation !== entryOp || this._relay !== entryRelay) return;
+        const op = entryOp;
+        const relay = this._relay;
+        if (!relay || !this.isScreenSharing || !this.screenStream) return;
+        const v = this.screenStream.getVideoTracks()[0];
+        if (!v || v.readyState !== 'live') return;
+        // Same share AND same generation as entry (track swap = new capture).
+        if (v !== entryTrack) return;
+        // Freshness of this attempt: same relay session, same share, same track.
+        const alive = () => relay === this._relay && op === this._screenStartOperation &&
+          this.isScreenSharing && this.screenStream?.getVideoTracks()[0] === v;
+        const published = !!relay.hasPublished?.('screen');
+        const { opts, key } = this._relayScreenOpts(this._screenBitrateFor(this.screenResolution));
+        // No await has run since _pendingRelayRepublish was cleared, so it is
+        // still false here: an unchanged cap simply has nothing to do.
+        if (published && key === this._lastRelayScreenBitrateKey) return;
+        if (published) {
+          // Conditional teardown: never remove a producer we did not intend
+          // to replace (e.g. a new share published concurrently).
+          const prev = relay.producers?.get?.('screen');
+          if (prev && typeof relay.unpublishIf === 'function') {
+            const removed = await relay.unpublishIf('screen', prev).catch(() => false);
+            if (!removed) return;
+          } else {
+            await relay.unpublish('screen');
+          }
+          // Stop, relay restart, or a new share started mid-flight: don't
+          // re-publish stale state.
+          if (!alive()) return;
+        } else if (this._lastRelayScreenBitrateKey == null && !this._relayScreenNeedsPublish) {
+          return; // never published: the initial-publish path owns it
+        }
+        // Re-read before publishing: a change that arrived during the
+        // unpublish await wins over the value captured above. A share that
+        // ended mid-flight must not re-publish (alive covers stop/new share).
+        if (!alive()) return;
+        const fresh = this._relayScreenOpts(this._screenBitrateFor(this.screenResolution));
+        let producer = null;
+        try {
+          producer = await relay.publish('screen', v, fresh.opts);
+        } catch (err) {
+          try { console.warn('[Relay] Screen bitrate update failed:', err?.message || err); } catch {}
+          failures += 1;
+          if (failures > 3) return;
+          if (!alive()) return;
+          const base = this._relayPublishRetryBaseMs ?? 500;
+          await new Promise(r => setTimeout(r, base * failures));
+          continue;
+        }
+        // NOTE: a falsy resolve is treated as success (key commit) — the real
+        // adapter only returns null when track is null, which callers exclude
+        // (v is checked live above); produce failures throw and retry above.
+        failures = 0;
+        if (!alive()) {
+          try {
+            if (producer && relay.producers?.get?.('screen') === producer &&
+                typeof relay.unpublishIf === 'function') {
+              await relay.unpublishIf('screen', producer).catch(() => {});
+            } else if (producer && !relay.producers && typeof relay.unpublish === 'function') {
+              // Sessions without a visible producer map (test mocks): fall
+              // back to a plain unpublish. Real sessions expose producers.
+              await relay.unpublish('screen').catch(() => {});
+            }
+          } catch {}
+          return;
+        }
+        this._lastRelayScreenBitrateKey = fresh.key;
+        this._relayScreenNeedsPublish = false;
+        if (!this._pendingRelayRepublish) return;
+      }
   }
 
   _applyScreenBitrate(connection, maxBitrate, userId = this._peerIdForConnection(connection)) {
@@ -3109,17 +2881,21 @@ class VoiceManager {
           if (!params.encodings || params.encodings.length === 0) {
             params.encodings = [{}];
           }
-          params.encodings[0].maxBitrate = relayProfile
-            ? this._screenBitrateFor(this.screenResolution, true)
-            : maxBitrate;
           // Per-encoding cap is the primary control; framerate hint also helps
           // browsers that respect it (Chromium-based ones do). Under the relay
           // profile the framerate stays unpinned on purpose, so the encoder can
-          // shed frames instead of filling a queue it cannot drain.
+          // shed frames instead of filling a queue it cannot drain. A null cap
+          // is the "unlimited" setting — remove any previous limit instead of
+          // writing zero, which some browsers read as "send nothing".
           if (relayProfile) {
+            params.encodings[0].maxBitrate = this._screenBitrateFor(this.screenResolution, true);
             delete params.encodings[0].maxFramerate;
-          } else if (this.screenFrameRate) {
-            params.encodings[0].maxFramerate = this.screenFrameRate;
+          } else {
+            if (maxBitrate) params.encodings[0].maxBitrate = maxBitrate;
+            else delete params.encodings[0].maxBitrate;
+            if (this.screenFrameRate) {
+              params.encodings[0].maxFramerate = this.screenFrameRate;
+            }
           }
           params.degradationPreference = relayProfile ? 'balanced' : 'maintain-framerate';
           sender.setParameters(params).catch(() => { /* browser rejected the hint: the encoder keeps its defaults */ });
@@ -3373,7 +3149,7 @@ class VoiceManager {
       });
       // Cap bitrate for this new peer
       const res = this.screenResolution;
-      const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
+      const maxBitrate = this._screenBitrateFor(this.screenResolution);
       this._applyScreenBitrate(connection, maxBitrate, userId);
     }
 
@@ -3399,11 +3175,10 @@ class VoiceManager {
         // - displaySurface is only set on getDisplayMedia tracks
         // - also check our signaling state (webcamUsers vs screenSharers)
         const settings = track.getSettings ? track.getSettings() : {};
-        const hasNativeScreen = this._nativeScreenAnnouncements.has(userId);
-        const isScreenTrack = !hasNativeScreen &&
+        const isScreenTrack =
           (!!settings.displaySurface || this.screenSharers.has(userId));
         const isWebcamTrack = !settings.displaySurface &&
-          (hasNativeScreen || this.webcamUsers.has(userId));
+          this.webcamUsers.has(userId);
 
         if (isWebcamTrack && !isScreenTrack) {
           // Route to webcam callback. Remember the track id so
@@ -3432,7 +3207,6 @@ class VoiceManager {
           if (this.onScreenStream) this.onScreenStream(userId, videoStream);
           track.onunmute = () => {
             setTimeout(() => {
-              if (this._nativeScreenAnnouncements.has(userId)) return;
               const freshStream = new MediaStream([track]);
               this._screenDelivered.add(userId);
               if (this.onScreenStream) this.onScreenStream(userId, freshStream);
@@ -3440,7 +3214,6 @@ class VoiceManager {
           };
           track.onmute = () => {};
           track.onended = () => {
-            if (this._nativeScreenAnnouncements.has(userId)) return;
             // Don't tear down the tile if the sharer is in the middle of a
             // stop+restart cycle. Their old track ends naturally as part of
             // stopScreenShare, but the screenSharers set (driven by the
@@ -3484,11 +3257,10 @@ class VoiceManager {
         // peer is actively sharing are treated as screen audio; all other
         // audio is voice (and updates voiceStreamId so subsequent renegs
         // don't get re-misclassified either).
-        const peerHasNativeScreen = this._nativeScreenAnnouncements.has(userId);
-        const peerIsSharing = this.screenSharers.has(userId) && !peerHasNativeScreen;
+        const peerIsSharing = this.screenSharers.has(userId);
         const streamHasVideo = sourceStream && sourceStream.getVideoTracks().length > 0;
         const knownAsScreen = sourceStream && knownScreenStreamIds.has(sourceStream.id);
-        const isScreenAudio = !peerHasNativeScreen &&
+        const isScreenAudio =
           (knownAsScreen || (peerIsSharing && streamHasVideo));
 
         // Track order across an m-section is not guaranteed: the audio of a
@@ -3584,9 +3356,13 @@ class VoiceManager {
         // the video m-line may need a fresh delivery into the UI — ontrack
         // does not always re-fire after an ICE restart, so the tile that
         // was live before the blip can stay black/missing until we adopt
-        // the receiver track ourselves.
+        // the receiver track ourselves. Same tile-track exclusion as the
+        // watchdog: only a track the tile isn't already on counts, or a
+        // black tile would be marked delivered with no recovery armed.
         if (this.screenSharers.has(userId)) {
-          if (!this._deliverScreenFromReceivers(userId)) {
+          if (!this._deliverScreenFromReceivers(userId, {
+            skipTrackId: this._screenTileTrackId(userId),
+          })) {
             this._screenDelivered.delete(userId);
             this._watchForScreenStream(userId);
           }
@@ -3634,11 +3410,12 @@ class VoiceManager {
       const audioEl = document.getElementById(`voice-audio-${userId}`);
       if (audioEl) audioEl.remove();
       const screenAudioEl = document.getElementById(`voice-audio-screen-${userId}`);
-      if (screenAudioEl) screenAudioEl.remove();
-      this.screenGainNodes.delete(userId);
+      if (screenAudioEl || this.screenGainNodes.has(userId)) {
+        this._cleanupScreenPlayback(userId);
+      }
       this._pendingScreenAudio?.delete(userId);
-      this.gainNodes.delete(userId);
       this._screenDelivered.delete(userId);
+      this.gainNodes.delete(userId);
       this._relayPeers?.delete(userId);
       this.peers.delete(userId);
       // Always stop the analyser here too, not just in voice-user-left.
@@ -3726,6 +3503,7 @@ class VoiceManager {
 
   _closeRelay() {
     clearTimeout(this._relayRetryTimer);
+    this._cancelRelayScreenRepublish?.();
     const session = this._relay;
     this._relay = null;
     if (session) session.close();
@@ -3737,13 +3515,13 @@ class VoiceManager {
     if (!relay) return;
     const mic = this.localStream?.getAudioTracks()[0];
     if (mic && !this.isListenerOnly) await relay.publish('mic', mic).catch(err => console.warn('[Relay] Mic not sent:', err.message));
-    if (this.isScreenSharing && this.screenStream && !this._nativeScreenSharing) {
-      const res = this.screenResolution;
-      const maxBitrate = this._screenBitrates?.[res] || this._screenBitrates?.[0];
-      const v = this.screenStream.getVideoTracks()[0];
-      const a = this.screenStream.getAudioTracks()[0];
-      if (v) await relay.publish('screen', v, { maxBitrate, simulcast: true }).catch(err => console.warn('[Relay] Screen not sent:', err.message));
-      if (a) await relay.publish('screen-audio', a).catch(err => console.warn('[Relay] Screen audio not sent:', err.message));
+    if (this.isScreenSharing && this.screenStream) {
+      // Same guarded, serialized, fresh-cap publish as a new share: a relay
+      // (re)start can race a stop or a bitrate change exactly like shareScreen
+      // can, so it must not publish inline (#5672 review, round 3). Token
+      // bound before the enqueue for the same reason.
+      const restartToken = this._relayScreenToken();
+      await this._relayScreenEnqueue(() => this._publishInitialRelayScreen(restartToken));
     }
     const cam = this.isWebcamActive && this.webcamStream?.getVideoTracks()[0];
     if (cam) await relay.publish('webcam', cam).catch(err => console.warn('[Relay] Camera not sent:', err.message));
@@ -4233,6 +4011,23 @@ class VoiceManager {
       }
     }
     if (this.onScreenAudio) this.onScreenAudio(userId);
+  }
+
+  _cleanupScreenPlayback(userId) {
+    const audioEl = typeof document !== 'undefined' &&
+      typeof document.getElementById === 'function'
+      ? document.getElementById(`voice-audio-screen-${userId}`)
+      : null;
+    if (audioEl) {
+      try { audioEl.pause(); } catch {}
+      audioEl.srcObject = null;
+      audioEl.remove();
+    }
+    const gainNode = this.screenGainNodes?.get(userId);
+    if (gainNode) {
+      try { gainNode.disconnect(); } catch {}
+      this.screenGainNodes?.delete(userId);
+    }
   }
 
   // Re-route every screen-share audio stream that's currently playing to match

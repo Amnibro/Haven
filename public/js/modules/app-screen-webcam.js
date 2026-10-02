@@ -771,6 +771,8 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
     this._pendingStreamOffers?.delete(userId);
     this._acceptedStreams?.delete(userId);
     const tileId = `screen-tile-${userId || 'self'}`;
+    this._cancelScreenNoAudioTimer(userId);
+    this._removeScreenSharePiP(userId);
     this._stopStreamStallWatchdog(tileId);
     const tile = document.getElementById(tileId);
     if (tile) {
