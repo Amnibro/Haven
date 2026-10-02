@@ -82,7 +82,7 @@ module.exports = function register(socket, ctx) {
     try {
       fs.mkdirSync(path.dirname(dst), { recursive: true });
       fs.renameSync(src, dst);
-    } catch { /* file locked or already moved */ }
+    } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
   }
 
   // Reply banners must match message rendering: bots live in webhook_* with
@@ -416,7 +416,7 @@ module.exports = function register(socket, ctx) {
             obj.poll.votes[v.option_index].push({ user_id: v.user_id, username: v.username });
           });
           obj.poll.totalVotes = votes.length;
-        } catch (e) { /* invalid poll_data */ }
+        } catch (e) { /* invalid poll_data: send the message without its poll rather than drop it */ }
       }
       if (m.is_webhook) {
         obj.is_webhook = true;
@@ -736,7 +736,7 @@ module.exports = function register(socket, ctx) {
         const full = path.join(UPLOADS_DIR, name);
         const st = fs.statSync(full);
         if (st && st.isFile()) s = st.size;
-      } catch { /* missing or permission denied */ }
+      } catch { /* missing or permission denied: counts as 0 bytes */ }
       sizeCache.set(url, s);
       return s;
     };
@@ -1289,7 +1289,7 @@ module.exports = function register(socket, ctx) {
             VALUES (?, ?, ?)
             ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
           `).run(socket.user.id, channel.id, result.lastInsertRowid);
-        } catch (e) { /* non-critical */ }
+        } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
         return;
       }
     }
@@ -1409,7 +1409,11 @@ module.exports = function register(socket, ctx) {
             maxTags,
             maxLen,
           }) || [];
-        } catch (e) { /* tags are best-effort */ }
+        } catch (e) {
+          // Tags are best-effort and never sink the message, but the tags the
+          // uploader picked were dropped.
+          console.warn('send-message attachment tagging failed:', e.message);
+        }
       }
 
       const message = {
@@ -1479,7 +1483,7 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?, ?)
           ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
         `).run(socket.user.id, channel.id, result.lastInsertRowid);
-      } catch (e) { /* non-critical */ }
+      } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
     } catch (err) {
       console.error('send-message error:', err.message);
       socket.emit('error-msg', 'Failed to send message — please try again');
@@ -2334,7 +2338,7 @@ module.exports = function register(socket, ctx) {
           emoji: data.emoji,
           author: { id: socket.user.id, username: socket.user.displayName }
         });
-      } catch { /* best-effort */ }
+      } catch { /* fireWebhookEvent catches and logs its own errors; this only guards the call */ }
     } catch (err) {
       console.error('add-reaction error:', err.message);
     }
@@ -2470,7 +2474,7 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?, ?)
           ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
         `).run(socket.user.id, channel.id, result.lastInsertRowid);
-      } catch (e) { /* non-critical */ }
+      } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
     } catch (err) {
       console.error('create-poll error:', err.message);
       socket.emit('error-msg', 'Failed to create poll');

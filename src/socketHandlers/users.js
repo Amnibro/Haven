@@ -553,7 +553,7 @@ module.exports = function register(socket, ctx) {
         try {
           const parsed = typeof row.public_key === 'string' ? JSON.parse(row.public_key) : row.public_key;
           if (parsed && parsed.x && parsed.y) publicKey = { kty: parsed.kty, crv: parsed.crv, x: parsed.x, y: parsed.y };
-        } catch { /* stored pub key not JSON — skip */ }
+        } catch { /* stored pub key not JSON: send none, the client copes with that */ }
       }
       socket.emit('encrypted-key-result', {
         encryptedKey: row?.encrypted_private_key || null,
@@ -769,7 +769,7 @@ module.exports = function register(socket, ctx) {
     // it now rather than waiting up to STEAM_POLL_MS for the next tick to pick
     // up the rotated key. Non-fatal: a failure here just means the old cadence.
     if (key === 'STEAM_API_KEY') {
-      try { activity.pollSteam().catch(() => {}); } catch { /* ignore */ }
+      try { activity.pollSteam().catch(() => {}); } catch { /* the regular poll picks up the new key anyway */ }
     }
 
     _audit({

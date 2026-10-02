@@ -74,7 +74,7 @@ module.exports = function register(socket, ctx) {
     });
 
     let storedPublishedThemes = [];
-    try { storedPublishedThemes = JSON.parse(settings.published_themes || '[]'); } catch {}
+    try { storedPublishedThemes = JSON.parse(settings.published_themes || '[]'); } catch { /* malformed stored list: treat as none published */ }
     const publishedThemes = compatibleThemeFiles(THEMES_DIR, storedPublishedThemes);
     settings.published_themes = JSON.stringify(publishedThemes);
     settings.default_theme = validatedThemeDefault(
@@ -509,7 +509,8 @@ module.exports = function register(socket, ctx) {
     // Automod caches its settings for 15s on the hot path; drop the cache so
     // an admin toggle takes effect on the very next message. (v3.42.0)
     if (key.startsWith('automod_')) {
-      try { automod.invalidate(); _broadcastLinkPolicy(); } catch { /* module optional */ }
+      automod.invalidate();
+      _broadcastLinkPolicy();
     }
 
     // Audit: log the setting change. Skip per-user UI prefs that the
@@ -774,7 +775,7 @@ module.exports = function register(socket, ctx) {
       r.enabled = !!r.enabled;
       r.is_expired = !!r.is_expired;
       let ch = [];
-      try { const p = JSON.parse(r.channels || '[]'); if (Array.isArray(p)) ch = p; } catch { /* keep [] */ }
+      try { const p = JSON.parse(r.channels || '[]'); if (Array.isArray(p)) ch = p; } catch { /* malformed stored list: show the link with no channels */ }
       r.channels = ch;
     });
     target.emit('invite-codes-list', rows);
@@ -1541,7 +1542,10 @@ module.exports = function register(socket, ctx) {
         ? Object.assign(automod.policy(), { enabled: true, scanDms: s.automod_scan_dms === 'true' })
         : { enabled: false, mode: 'off', allow: [], deny: [], scanDms: false };
       io.except('bot-sockets').emit('link-policy', payload);
-    } catch { /* non-critical */ }
+    } catch (err) {
+      // Clients would keep enforcing the old link policy until they reconnect.
+      console.error('link policy broadcast failed:', err.message);
+    }
   }
 
   function _emitDomains() {

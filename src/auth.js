@@ -361,7 +361,10 @@ router.post('/guest-login', authLimiter, async (req, res) => {
         db.prepare(
           'INSERT OR IGNORE INTO eula_acceptances (user_id, version, ip_address, age_verified) VALUES (?, ?, ?, ?)'
         ).run(userId, eulaVersion, req.ip || req.socket.remoteAddress || '', ageVerified ? 1 : 0);
-      } catch { /* non-critical */ }
+      } catch (err) {
+        // Not worth failing the login over, but the acceptance record is gone.
+        console.warn('[guest-login] Failed to record EULA acceptance:', err.message);
+      }
     }
 
     const token = jwt.sign(
@@ -406,9 +409,14 @@ function provisionNewUser(db, userId, username, io) {
           const ins = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
           for (const ch of grantChannels) ins.run(ch.channel_id, userId);
         }
-      } catch { /* non-critical */ }
+      } catch (err) {
+        console.warn(`[provision] Failed to grant linked channels for role ${role.id}:`, err.message);
+      }
     }
-  } catch { /* non-critical */ }
+  } catch (err) {
+    // Without these roles a new member may not see any channel.
+    console.warn('[provision] Failed to assign auto roles:', err.message);
+  }
 
   // ── Persistent welcome message ─────────────────────────
   // Post a saved welcome message to every channel flagged show_welcome, so a
@@ -624,7 +632,9 @@ router.post('/register', authLimiter, async (req, res) => {
         db.prepare(
           'INSERT OR IGNORE INTO eula_acceptances (user_id, version, ip_address, age_verified) VALUES (?, ?, ?, ?)'
         ).run(result.lastInsertRowid, eulaVersion, req.ip || req.socket.remoteAddress || '', ageVerified ? 1 : 0);
-      } catch { /* non-critical */ }
+      } catch (err) {
+        console.warn('[register] Failed to record EULA acceptance:', err.message);
+      }
     }
 
     res.json({
@@ -745,7 +755,9 @@ router.post('/login', authLimiter, async (req, res) => {
         db.prepare(
           'INSERT OR IGNORE INTO eula_acceptances (user_id, version, ip_address, age_verified) VALUES (?, ?, ?, ?)'
         ).run(user.id, eulaVersion, req.ip || req.socket.remoteAddress || '', ageVerified ? 1 : 0);
-      } catch { /* non-critical */ }
+      } catch (err) {
+        console.warn('[login] Failed to record EULA acceptance:', err.message);
+      }
     }
 
     res.json({
@@ -816,7 +828,7 @@ router.post('/ban-appeal', authLimiter, async (req, res) => {
           }
         }
       }
-    } catch { /* non-critical */ }
+    } catch { /* the appeal is already saved; admins still see it in the Banned Users list */ }
 
     return res.json({ success: true });
   } catch (err) {
@@ -858,7 +870,7 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
     let preserved = false;
     if (oldPassword) {
       let matchesOriginal = false;
-      try { matchesOriginal = await bcrypt.compare(oldPassword, user.password_hash); } catch { /* fall through */ }
+      try { matchesOriginal = await bcrypt.compare(oldPassword, user.password_hash); } catch { /* unusable stored hash counts as no match, so this fails closed */ }
       if (matchesOriginal) {
         preserved = true;
       } else {
@@ -1860,7 +1872,7 @@ router.get('/SSO', (req, res) => {
               setDebug('Using cached profile (validate endpoint did not respond in time).', 'ok');
               return;
             }
-          } catch {}
+          } catch { /* storage blocked or cached profile unreadable: show the timeout message below */ }
           showNotLoggedIn('SSO check timed out. Try refreshing this page or logging in again.');
         }
       }, 5000);
@@ -1957,7 +1969,7 @@ router.get('/SSO', (req, res) => {
                   profile: approvedProfile,
                   serverOrigin: window.location.origin
                 }, origin);
-              } catch {}
+              } catch { /* opener closed or navigated away; approval is already stored on the server */ }
             }
             document.getElementById('buttons').style.display = 'none';
             document.getElementById('success-msg').style.display = 'block';
@@ -2202,7 +2214,10 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
           db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(dn.value, user.id);
           user.display_name = dn.value;
         }
-      } catch { /* non-critical */ }
+      } catch (err) {
+        // Sign-in still goes ahead; the username stands in for the name.
+        console.warn('[OIDC] Failed to set display name:', err.message);
+      }
     }
 
     const displayName = user.display_name || user.username;
@@ -2238,7 +2253,7 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
 <script>
   try {
     sessionStorage.setItem('haven_oidc_handoff', ${JSON.stringify(handoff).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')});
-  } catch (e) {}
+  } catch (e) { /* storage blocked in this browser: the login page just shows the sign-in form again */ }
   location.replace('/?oidc=1');
 </script>
 </body></html>`);

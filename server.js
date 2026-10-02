@@ -32,7 +32,7 @@ const path = require('path');
 {
   const srcDir = path.join(__dirname, 'src');
   let entries = [];
-  try { entries = fs.readdirSync(srcDir, { withFileTypes: true }); } catch { /* no src = other problems */ }
+  try { entries = fs.readdirSync(srcDir, { withFileTypes: true }); } catch { /* no src folder: the require() calls below fail loudly on their own */ }
   const dirNames = new Set(entries.filter(e => e.isDirectory()).map(e => e.name));
   const stale = entries.filter(e =>
     e.isFile() && e.name.endsWith('.js') && dirNames.has(e.name.slice(0, -3)) &&
@@ -167,7 +167,11 @@ function moveUploadToDeleted(relPath, srcRoot = UPLOADS_DIR) {
     // A rename keeps the upload's own timestamp. The retention window counts
     // from the deletion, so stamp the file now.
     try { const now = new Date(); fs.utimesSync(dst, now, now); } catch { /* purge falls back to the upload time */ }
-  } catch { /* file locked or already moved */ }
+  } catch (err) {
+    // Already moved by another path is fine; anything else leaves the file
+    // live in uploads/ after its message was deleted, so say so.
+    if (err.code !== 'ENOENT') console.warn(`[uploads] Could not move ${relPath} to deleted-attachments:`, err.message);
+  }
 }
 
 function collectUploadRelPaths(contents) {
@@ -338,7 +342,10 @@ function getUploadUsage() {
       entry.files++;
       attributedBytes += bytes;
     }
-  } catch { /* table missing on a database that has not migrated yet */ }
+  } catch (err) {
+    // Every file then shows as unattributed, so the report is wrong; say why.
+    console.warn('[uploads] Could not read upload ownership for the usage report:', err.message);
+  }
 
   let liveBytes = 0;
   for (const bytes of sizes.values()) liveBytes += bytes;
@@ -1053,7 +1060,10 @@ app.get('/api/ice-servers', (req, res) => {
       "SELECT key, value FROM server_settings WHERE key IN ('stun_urls','turn_url','turn_username','turn_password','voice_force_relay','voice_ice_disabled')"
     ).all();
     rows.forEach(r => { dbSettings[r.key] = r.value; });
-  } catch { /* DB not ready — fall back to env/defaults below */ }
+  } catch (err) {
+    // Falls back to env/defaults, which ignores the admin's voice settings.
+    console.warn('[ice-servers] Could not read voice settings, using env/defaults:', err.message);
+  }
 
   // An explicit admin disable takes precedence over env and built-in servers.
   // Empty iceServers tells WebRTC to use direct host candidates only.
@@ -1184,7 +1194,7 @@ app.post('/api/upload-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
         return res.status(400).json({ error: 'File content does not match image type' });
       }
     } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
+      try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
       return res.status(400).json({ error: 'Failed to validate file' });
     }
 
@@ -1275,7 +1285,7 @@ app.post('/api/upload-border', uploadLimiter, uploadDiskGuard, (req, res) => {
         return res.status(400).json({ error: 'File content does not match image type' });
       }
     } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
+      try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
       return res.status(400).json({ error: 'Failed to validate file' });
     }
 
@@ -1412,7 +1422,7 @@ app.post('/api/upload-webhook-avatar', uploadLimiter, uploadDiskGuard, (req, res
         return res.status(400).json({ error: 'File content does not match image type' });
       }
     } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
+      try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
       return res.status(400).json({ error: 'Failed to validate file' });
     }
 
@@ -1586,7 +1596,7 @@ app.post('/api/upload-persona-avatar', uploadLimiter, uploadDiskGuard, (req, res
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (req.file.size > 2 * 1024 * 1024) {
-      try { fs.unlinkSync(req.file.path); } catch {}
+      try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
       return res.status(400).json({ error: 'Avatar must be under 2 MB' });
     }
     try {
@@ -1604,13 +1614,13 @@ app.post('/api/upload-persona-avatar', uploadLimiter, uploadDiskGuard, (req, res
         return res.status(400).json({ error: 'File content does not match image type' });
       }
     } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
+      try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
       return res.status(400).json({ error: 'Failed to validate file' });
     }
     const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
     const safeExt = mimeToExt[req.file.mimetype];
     if (!safeExt) {
-      try { fs.unlinkSync(req.file.path); } catch {}
+      try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
       return res.status(400).json({ error: 'Invalid file type' });
     }
     const currentExt = path.extname(req.file.filename).toLowerCase();
@@ -1750,7 +1760,7 @@ app.get('/api/donors', (req, res) => {
         const ordered = JSON.parse(fs.readFileSync(orderPath, 'utf-8'));
         data.featuredSponsors = ordered.sponsors || [];
         data.featuredDonors = ordered.donors || [];
-      } catch {}
+      } catch { /* optional ordering file; the plain donors list still shows */ }
     }
     res.json(data);
   } catch {
@@ -1775,7 +1785,7 @@ app.get('/api/health', (req, res) => {
     if (iconRow && iconRow.value) icon = iconRow.value;
     const fpRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_fingerprint'").get();
     if (fpRow && fpRow.value) fingerprint = fpRow.value;
-  } catch {}
+  } catch { /* frequent unauthenticated ping: answer with the env defaults rather than fail or log */ }
   res.json({
     status: 'online',
     name,
@@ -1808,7 +1818,7 @@ app.get('/api/public-config', (req, res) => {
     const adminPwResetRow = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
     const oidcConfig = require('./src/oidc').getOidcConfig();
     let storedPublishedThemes = [];
-    try { storedPublishedThemes = JSON.parse(publishedThemesRow?.value || '[]'); } catch {}
+    try { storedPublishedThemes = JSON.parse(publishedThemesRow?.value || '[]'); } catch { /* malformed setting: treat as no published themes */ }
     const publishedThemes = compatibleThemeFiles(THEMES_DIR, storedPublishedThemes);
     res.json({
       default_theme: validatedThemeDefault(THEMES_DIR, themeRow?.value || '', publishedThemes),
@@ -1980,7 +1990,7 @@ app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
         return res.status(400).json({ error: 'File content does not match image type' });
       }
     } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
+      try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
       return res.status(400).json({ error: 'Failed to validate file' });
     }
 
@@ -2116,7 +2126,7 @@ const BUILTIN_SOUNDS = [
 // re-fetches the relevant library live. `io` is created later in the file, so
 // resolve it at request time via app.set('io', io).
 function broadcastLibraryUpdate(req, kind) {
-  try { req.app.get('io')?.emit('library-updated', { kind }); } catch {}
+  try { req.app.get('io')?.emit('library-updated', { kind }); } catch { /* live refresh hint only; clients still see the change on next load */ }
 }
 
 // ── Sound upload (admin only, wav/mp3/ogg, configurable max size) ────
@@ -2188,7 +2198,9 @@ app.delete('/api/sounds/:name', (req, res) => {
     }
     const row = getDb().prepare('SELECT filename FROM custom_sounds WHERE name = ?').get(name);
     if (row) {
-      try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
+      try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch (err) {
+        if (err.code !== 'ENOENT') console.warn(`[sounds] Could not delete file for sound "${name}":`, err.message);
+      }
       getDb().prepare('DELETE FROM custom_sounds WHERE name = ?').run(name);
     }
     broadcastLibraryUpdate(req, 'sounds');
@@ -2400,7 +2412,9 @@ app.delete('/api/emojis/:name', (req, res) => {
   try {
     const row = getDb().prepare('SELECT filename FROM custom_emojis WHERE name = ?').get(name);
     if (row) {
-      try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
+      try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch (err) {
+        if (err.code !== 'ENOENT') console.warn(`[emojis] Could not delete file for emoji "${name}":`, err.message);
+      }
       getDb().prepare('DELETE FROM custom_emojis WHERE name = ?').run(name);
     }
     broadcastLibraryUpdate(req, 'emojis');
@@ -2415,7 +2429,9 @@ app.delete('/api/emojis/:name', (req, res) => {
 // Stored under uploads/stickers/<file> so message rendering can detect
 // them by URL prefix and render at sticker dimensions.
 const STICKERS_DIR = path.join(uploadDir, 'stickers');
-try { fs.mkdirSync(STICKERS_DIR, { recursive: true }); } catch {}
+try { fs.mkdirSync(STICKERS_DIR, { recursive: true }); } catch (err) {
+  console.error('[stickers] Could not create the stickers folder; sticker uploads will fail:', err.message);
+}
 
 // (#5335) Seed a small starter pack on first run so the picker isn't empty
 // out of the box. Files in public/starter-stickers/ are copied into
@@ -2446,7 +2462,9 @@ function seedStarterStickers() {
         if (!fs.existsSync(destPath)) fs.copyFileSync(path.join(seedDir, file), destPath);
         insert.run(baseName, 'Starter', destName);
         seeded++;
-      } catch {}
+      } catch (err) {
+        console.warn(`[stickers] Could not seed starter sticker ${file}:`, err.message);
+      }
     }
     if (seeded > 0) console.log(`[stickers] Seeded ${seeded} starter sticker(s) into the "Starter" pack.`);
   } catch (err) {
@@ -2561,7 +2579,9 @@ app.delete('/api/stickers/:name', (req, res) => {
   try {
     const row = getDb().prepare('SELECT filename FROM stickers WHERE name = ?').get(name);
     if (row) {
-      try { fs.unlinkSync(path.join(STICKERS_DIR, row.filename)); } catch {}
+      try { fs.unlinkSync(path.join(STICKERS_DIR, row.filename)); } catch (err) {
+        if (err.code !== 'ENOENT') console.warn(`[stickers] Could not delete file for sticker "${name}":`, err.message);
+      }
       getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
     }
     broadcastLibraryUpdate(req, 'stickers');
@@ -2670,7 +2690,7 @@ app.post('/api/upload-server-icon', uploadLimiter, uploadDiskGuard, (req, res) =
       else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
       else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
       if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
-    } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
+    } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
     const iconUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
@@ -2706,7 +2726,7 @@ app.post('/api/upload-role-icon', uploadLimiter, uploadDiskGuard, (req, res) => 
       else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
       else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
       if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
-    } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
+    } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
     const iconUrl = `/uploads/${req.file.filename}`;
     res.json({ path: iconUrl });
@@ -2750,7 +2770,14 @@ function pipeBackupArchive(plan, destStream) {
   return new Promise((resolve, reject) => {
     let tmpDb = null;
     let settled = false;
-    const cleanup = () => { if (tmpDb) { try { fs.unlinkSync(tmpDb); } catch {} } };
+    const cleanup = () => {
+      if (!tmpDb) return;
+      try { fs.unlinkSync(tmpDb); } catch (err) {
+        // Missing just means VACUUM INTO never wrote it. Anything else leaves a
+        // full copy of the database lying in the data folder.
+        if (err.code !== 'ENOENT') console.warn('[Backup] Could not remove temporary database copy:', err.message);
+      }
+    };
     // Resolve/reject exactly once, always after the temp DB clone is removed.
     const finish = (err) => {
       if (settled) return;
@@ -2829,7 +2856,7 @@ function pipeBackupArchive(plan, destStream) {
 
       if (has('messages')) {
         tmpDb = path.join(DATA_DIR, `.backup-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
-        try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch {}
+        try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch { /* optional tidy-up; VACUUM INTO reads a consistent snapshot either way */ }
         const safePath = tmpDb.replace(/'/g, "''");
         db.prepare(`VACUUM INTO '${safePath}'`).run();
         // If DMs are NOT included, scrub them from the cloned DB so the backup
@@ -2860,7 +2887,10 @@ function pipeBackupArchive(plan, destStream) {
             try {
               if (entry.isFile()) archive.file(full, { name: `uploads/${sub}` });
               else if (entry.isDirectory()) walk(full, sub);
-            } catch {}
+            } catch (err) {
+              // Keep going, but the backup is missing these files, so say so.
+              console.warn(`[Backup] Skipped uploads/${sub}:`, err.message);
+            }
           }
         };
         walk(UPLOADS_DIR, '');
@@ -2880,7 +2910,7 @@ function buildBackupFile(includeRaw, outPath) {
   const output = fs.createWriteStream(outPath);
   return pipeBackupArchive(plan, output)
     .then(() => ({ filePath: outPath, filename: plan.filename, mode: plan.mode, include: plan.include }))
-    .catch((err) => { try { fs.unlinkSync(outPath); } catch {} throw err; });
+    .catch((err) => { try { fs.unlinkSync(outPath); } catch { /* partial zip may not exist; the real error is rethrown */ } throw err; });
 }
 
 app.get('/api/admin/backup', async (req, res) => {
@@ -2914,7 +2944,7 @@ app.get('/api/admin/backup', async (req, res) => {
   } catch (err) {
     console.error('[Backup] Failed:', err);
     if (!res.headersSent) res.status(500).json({ error: 'Backup failed: ' + err.message });
-    else { try { res.destroy(); } catch {} }
+    else { try { res.destroy(); } catch { /* response may already be closed; failure was logged above */ } }
   }
 });
 
@@ -2999,7 +3029,7 @@ function extractFullBackup(zipPath, stagedDb, stagedUploads, onProgress) {
             const now = Date.now();
             if (!force && now - lastEmit < 400) return;
             lastEmit = now;
-            try { onProgress({ phase: 'extract', bytesDone, bytesTotal }); } catch {}
+            try { onProgress({ phase: 'extract', bytesDone, bytesTotal }); } catch { /* progress bar only; never fail the restore over it */ }
           };
           emitProgress(true);
 
@@ -3029,7 +3059,7 @@ function extractFullBackup(zipPath, stagedDb, stagedUploads, onProgress) {
           zipfile.close();
           resolve(manifest);
         } catch (e) {
-          try { zipfile.close(); } catch {}
+          try { zipfile.close(); } catch { /* may already be closed; the original error is rejected below */ }
           reject(e);
         }
       });
@@ -3057,7 +3087,12 @@ app.post('/api/admin/restore', (req, res) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No backup file uploaded' });
 
-    const cleanupTmp = () => { try { fs.unlinkSync(req.file.path); } catch {} };
+    const cleanupTmp = () => {
+      try { fs.unlinkSync(req.file.path); } catch (err) {
+        // The upload can be many GB, so a leftover copy is worth knowing about.
+        if (err.code !== 'ENOENT') console.warn('[Restore] Could not remove uploaded backup temp file:', err.message);
+      }
+    };
     const stagedDb = DB_PATH + '.restore';
     const stagedUploads = UPLOADS_DIR + '.restore';
 
@@ -3066,7 +3101,7 @@ app.post('/api/admin/restore', (req, res) => {
     const sendRestoreProgress = (p) => {
       if (!io) return;
       for (const [, s] of io.sockets.sockets) {
-        if (s.user && s.user.id === user.id) { try { s.emit('restore-progress', p); } catch {} }
+        if (s.user && s.user.id === user.id) { try { s.emit('restore-progress', p); } catch { /* socket may have disconnected */ } }
       }
     };
 
@@ -3075,8 +3110,12 @@ app.post('/api/admin/restore', (req, res) => {
       manifest = await extractFullBackup(req.file.path, stagedDb, stagedUploads, sendRestoreProgress);
     } catch (e) {
       cleanupTmp();
-      try { fs.unlinkSync(stagedDb); } catch {}
-      try { fs.rmSync(stagedUploads, { recursive: true, force: true }); } catch {}
+      try { fs.unlinkSync(stagedDb); } catch (err2) {
+        if (err2.code !== 'ENOENT') console.warn('[Restore] Could not remove staged database:', err2.message);
+      }
+      try { fs.rmSync(stagedUploads, { recursive: true, force: true }); } catch (err2) {
+        console.warn('[Restore] Could not remove staged uploads:', err2.message);
+      }
       const status = e && e.status ? e.status : 500;
       if (status === 500) console.error('[Restore] Failed:', e);
       if (!res.headersSent) res.status(status).json({ error: status === 500 ? ('Restore failed: ' + e.message) : e.message });
@@ -3153,7 +3192,7 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
       const isGif  = hdr.slice(0, 6).toString().startsWith('GIF8');
       const isWebp = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
       if (!isJpeg && !isPng && !isGif && !isWebp) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image — only JPG, PNG, GIF, or WebP' }); }
-    } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
+    } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
     const bannerUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
@@ -3934,7 +3973,7 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
           content: (r.content || '').slice(0, 200),
         });
       }
-    } catch { /* best-effort */ }
+    } catch { /* the inline reply preview is cosmetic; the message still posts without it */ }
   }
 
   const message = {
@@ -5035,7 +5074,7 @@ app.post('/api/import/discord/upload', uploadLimiter, uploadDiskGuard, (req, res
       fs.writeFileSync(tempPath, JSON.stringify(result));
 
       // Clean up the uploaded raw file
-      try { fs.unlinkSync(req.file.path); } catch {}
+      try { fs.unlinkSync(req.file.path); } catch { /* cleanupTempImports() sweeps any haven-import leftover */ }
 
       // Return preview (channel list + counts — NOT the full messages)
       res.json({
@@ -5052,7 +5091,7 @@ app.post('/api/import/discord/upload', uploadLimiter, uploadDiskGuard, (req, res
         totalMessages: result.channels.reduce((sum, c) => sum + c.messageCount, 0)
       });
     } catch (parseErr) {
-      try { fs.unlinkSync(req.file.path); } catch {}
+      try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
       res.status(400).json({ error: parseErr.message });
     }
   });
@@ -5170,14 +5209,14 @@ app.post('/api/import/discord/guild-channels', express.json(), async (req, res) 
     try {
       const active = await discordApiFetch(`/guilds/${guildId}/threads/active`, auth);
       if (active.threads) threads.push(...active.threads);
-    } catch {}
+    } catch { /* bot may lack access to active threads; list the channels without them */ }
 
     // Archived threads per text/forum/announcement channel (up to 100 per channel)
     for (const ch of channelsList) {
       try {
         const archived = await discordApiFetch(`/channels/${ch.id}/threads/archived/public?limit=100`, auth);
         if (archived.threads) threads.push(...archived.threads);
-      } catch {}
+      } catch { /* channels the bot cannot read have no archived threads to list */ }
       await new Promise(r => setTimeout(r, 200));
     }
 
@@ -5357,9 +5396,9 @@ function cleanupTempImports() {
       try {
         const stat = fs.statSync(fp);
         if (stat.mtimeMs < cutoff) fs.unlinkSync(fp);
-      } catch {}
+      } catch { /* file in use or already removed; the next sweep retries */ }
     }
-  } catch {}
+  } catch { /* temp dir unreadable; orphaned import files are only disk clutter */ }
 }
 // Run once at startup to clean up any stale files from previous crashes
 cleanupTempImports();
@@ -5488,7 +5527,10 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
             try {
               db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)')
                 .run(result.lastInsertRowid, channelId, user.id);
-            } catch {}
+            } catch (err) {
+              // Do not abort the import over one pin, but do not lose it silently either.
+              console.warn('[import] Could not pin an imported message:', err.message);
+            }
           }
 
           // Import reactions
@@ -5498,7 +5540,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
               try {
                 db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)')
                   .run(result.lastInsertRowid, user.id, r.emoji);
-              } catch {}
+              } catch { /* a reaction is cosmetic and can number in the thousands; never abort the import over one */ }
             }
           }
         }
@@ -5508,7 +5550,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
     txn();
 
     // Clean up temp file
-    try { fs.unlinkSync(tempPath); } catch {}
+    try { fs.unlinkSync(tempPath); } catch { /* cleanupTempImports() sweeps any haven-import leftover */ }
 
     res.json({ success: true, ...stats });
   } catch (err) {
@@ -5597,7 +5639,7 @@ const io = new Server(server, {
 const db = initDatabase();
 
 // (#5335) Seed starter stickers now that the DB is ready.
-try { seedStarterStickers(); } catch {}
+seedStarterStickers();   // catches and logs its own errors
 
 // Download / refresh the Unicode emoji list (non-blocking, best-effort).
 // Opt-in: off unless the admin enables it or UNICODE_EMOJI_AUTO_UPDATE forces it.
@@ -5611,7 +5653,9 @@ try { seedStarterStickers(); } catch {}
 try {
   const rp = db.prepare("SELECT value FROM server_settings WHERE key = 'referrer_policy'").get()?.value;
   if (rp && VALID_REFERRER_POLICIES.includes(rp)) currentReferrerPolicy = rp;
-} catch {}
+} catch (err) {
+  console.warn(`[security] Could not load the saved Referrer-Policy, using ${DEFAULT_REFERRER_POLICY}:`, err.message);
+}
 
 // ── Admin password reset (one-time, from .env) ───────────
 // Set ADMIN_RESET_PASSWORD in .env, restart, and it resets the admin's password.
@@ -5633,7 +5677,10 @@ if (process.env.ADMIN_RESET_PASSWORD) {
       envContent = envContent.replace(/^ADMIN_RESET_PASSWORD=.*$/m, '').replace(/\n{3,}/g, '\n\n');
       fs.writeFileSync(ENV_PATH, envContent);
       console.log('   Removed ADMIN_RESET_PASSWORD from .env (one-time use)');
-    } catch {}
+    } catch (err) {
+      // Left in place it would reset the admin password again on every restart.
+      console.error(`   Could not remove ADMIN_RESET_PASSWORD from ${ENV_PATH}; delete that line by hand:`, err.message);
+    }
   } else {
     console.warn(`âš ï¸  ADMIN_RESET_PASSWORD set but no user "${adminName}" found — skipping`);
   }
@@ -5824,7 +5871,7 @@ registerProcessCleanup();
 // Close the Discord socket deliberately on shutdown. Without this a container
 // restart leaves Discord holding a session it will keep feeding for a minute.
 for (const sig of ['SIGINT', 'SIGTERM']) {
-  process.on(sig, () => { try { stopFerry(); } catch { /* exit cleanup */ } });
+  process.on(sig, () => { try { stopFerry(); } catch { /* shutting down anyway; Discord drops the session on its own */ } });
 }
 
 // ── Auto-cleanup interval (runs every 15 minutes) ───────
@@ -5879,7 +5926,9 @@ function runAutoCleanup() {
             "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
           ).get(like);
           if (!still) moveUploadToDeleted(rel, UPLOADS_DIR);
-        } catch { /* best-effort */ }
+        } catch (err) {
+          console.warn(`[cleanup] Could not check whether ${rel} is still referenced:`, err.message);
+        }
       }
     };
 
@@ -6012,7 +6061,9 @@ function runAutoCleanup() {
       if (orphansDeleted > 0) {
         console.log(`ðŸ—‘ï¸  Auto-cleanup: removed ${orphansDeleted} orphan DM channel(s)`);
       }
-    } catch (e) { /* sweep is best-effort */ }
+    } catch (e) {
+      console.warn('[orphan-DM] Sweep failed:', e.message);
+    }
 
     if (totalDeleted > 0) {
       console.log(`ðŸ—‘ï¸  Auto-cleanup: deleted ${totalDeleted} old messages`);
@@ -6071,7 +6122,9 @@ function pruneAutoBackups(retain) {
       .map(f => ({ name: f, full: path.join(AUTO_BACKUP_DIR, f), mtime: fs.statSync(path.join(AUTO_BACKUP_DIR, f)).mtimeMs }))
       .sort((a, b) => b.mtime - a.mtime);
     for (const f of files.slice(retain)) {
-      try { fs.unlinkSync(f.full); } catch {}
+      try { fs.unlinkSync(f.full); } catch (err) {
+        if (err.code !== 'ENOENT') console.warn(`[AutoBackup] Could not prune ${f.name}:`, err.message);
+      }
     }
   } catch (err) {
     console.error('[AutoBackup] Prune failed:', err);
@@ -6171,7 +6224,9 @@ app.post('/api/admin/auto-backups/run-now', (req, res) => {
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
   // Reset last-run so runAutoBackup definitely fires.
-  try { db.prepare("DELETE FROM server_settings WHERE key = 'auto_backup_last_run'").run(); } catch {}
+  try { db.prepare("DELETE FROM server_settings WHERE key = 'auto_backup_last_run'").run(); } catch (err) {
+    console.warn('[AutoBackup] Could not reset last-run time, so this run may be skipped:', err.message);
+  }
   setImmediate(runAutoBackup);
   res.json({ ok: true });
 });
@@ -6295,7 +6350,9 @@ app.post('/api/admin/update/run', (req, res) => {
     return res.status(400).json({ error: instructions.message, method });
   }
   // Trigger an auto-backup first so we have a rollback point.
-  try { db.prepare("DELETE FROM server_settings WHERE key = 'auto_backup_last_run'").run(); } catch {}
+  try { db.prepare("DELETE FROM server_settings WHERE key = 'auto_backup_last_run'").run(); } catch (err) {
+    console.error('[Update] Could not reset auto-backup last-run time, so the pre-update backup may be skipped:', err.message);
+  }
   try { runAutoBackup(); } catch (err) { console.error('[Update] Pre-update backup failed:', err); }
 
   res.json({ ok: true, method, message: instructions.message });
@@ -6367,7 +6424,7 @@ function rotateCrashLogIfNeeded() {
     const stat = fs.statSync(CRASH_LOG);
     if (stat.size < MAX_CRASH_LOG_BYTES) return;
     const rotated = `${CRASH_LOG}.1`;
-    try { fs.unlinkSync(rotated); } catch {}
+    try { fs.unlinkSync(rotated); } catch { /* no older rotated log yet */ }
     try {
       fs.renameSync(CRASH_LOG, rotated);
     } catch {
@@ -6435,7 +6492,7 @@ process.on('exit', (code) => {
   if (code !== 0) {
     const ts = new Date().toISOString();
     const line = `[${ts}] Process exited with code ${code}\n`;
-    try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch {}
+    try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch { /* process is exiting; nowhere left to report a log write failure */ }
   }
 });
 
@@ -6555,7 +6612,7 @@ server.listen(PORT, HOST, () => {
 function gracefulShutdown(signal) {
   const ts = new Date().toISOString();
   const line = `[${ts}] Graceful shutdown: ${signal}\n`;
-  try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch {}
+  try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch { /* crash log is a diagnostic extra; shutdown continues */ }
   console.log(`\n${signal} received — shutting down`);
   botAudioManager?.shutdown();
   io.close();

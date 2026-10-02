@@ -946,7 +946,7 @@ module.exports = function register(socket, ctx) {
           }
         }
         socket.emit('status-updated', { status: 'online', statusText: socket.user.statusText || '' });
-      } catch { /* ignore */ }
+      } catch { /* runs on every voice-activity ping; the user stays "away" and the next ping retries */ }
     }
   });
 

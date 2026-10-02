@@ -84,14 +84,19 @@ function settings() {
       "SELECT key, value FROM server_settings WHERE key LIKE 'automod_%'"
     ).all();
     for (const r of rows) s[r.key] = r.value;
-  } catch { /* pre-migration DB: fall back to defaults (all off) */ }
+  } catch (err) {
+    // Falls back to defaults (all off). Cached, so this logs at most every CACHE_MS.
+    console.warn('automod: could not read settings, filtering is off:', err.message);
+  }
 
   let allow = new Map(), deny = new Map();
   try {
     for (const r of getDb().prepare('SELECT domain, mode, include_subdomains FROM automod_domains').all()) {
       (r.mode === 'deny' ? deny : allow).set(r.domain, r.include_subdomains !== 0);
     }
-  } catch { /* table not created yet */ }
+  } catch (err) {
+    console.warn('automod: could not read domain lists:', err.message);
+  }
 
   _cache = { settings: s, allow, deny, words: compileWordGroups(s.automod_words), expires: now + CACHE_MS };
   return s;

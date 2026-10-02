@@ -137,7 +137,7 @@ function finish(res, status, provider) {
 <script>
   // Only works when this page was opened via window.open (the normal path).
   // A tab the user landed in some other way just shows the message.
-  setTimeout(function(){ try { window.close(); } catch (e) {} }, ${ok ? 1200 : 4000});
+  setTimeout(function(){ try { window.close(); } catch (e) { /* browser refused; the message stays up */ } }, ${ok ? 1200 : 4000});
 </script></body></html>`);
 }
 
@@ -243,7 +243,7 @@ function createConnectRoutes(getActivity) {
           const data = await sumResp.json();
           personaName = data?.response?.players?.[0]?.personaname || '';
         }
-      } catch { /* name is cosmetic */ }
+      } catch { /* name is cosmetic; the link is already verified and is saved without it */ }
 
       req.activity.saveConnection(userId, 'steam', {
         externalId: steamId,
@@ -318,7 +318,7 @@ function createConnectRoutes(getActivity) {
           displayName = me.display_name || me.id || '';
           externalId = me.id || '';
         }
-      } catch { /* cosmetic */ }
+      } catch { /* profile name is cosmetic; the tokens above are what the link needs */ }
 
       req.activity.saveConnection(userId, 'spotify', {
         externalId,

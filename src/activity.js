@@ -318,7 +318,9 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
     let rows = [];
     try {
       rows = db.prepare('SELECT provider, display_name, created_at FROM user_connections WHERE user_id = ?').all(userId);
-    } catch { /* table missing */ }
+    } catch (err) {
+      console.warn('[Haven activity] Could not list connections:', err.message);
+    }
     return rows.map(r => ({
       provider: r.provider,
       displayName: r.display_name || '',
@@ -351,7 +353,11 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
   function removeConnection(userId, provider) {
     try {
       db.prepare('DELETE FROM user_connections WHERE user_id = ? AND provider = ?').run(userId, provider);
-    } catch { /* nothing to remove */ }
+    } catch (err) {
+      // A DELETE that matches nothing does not throw, so this is a real failure:
+      // the stored tokens for this link are still there.
+      console.error(`[Haven activity] Failed to remove ${provider} connection:`, err.message);
+    }
     notifyConnections(userId);
     // Drop whatever that provider was reporting so the activity doesn't linger
     // until the next poll tick that will no longer happen.
@@ -387,7 +393,11 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
   function disableListening(userId) {
     try {
       db.prepare('DELETE FROM listening_tokens WHERE user_id = ?').run(userId);
-    } catch { /* nothing to remove */ }
+    } catch (err) {
+      // A DELETE that matches nothing does not throw, so the old webhook token
+      // is still valid here.
+      console.error('[Haven activity] Failed to revoke listening token:', err.message);
+    }
     clearListeningPresence(userId);
   }
 

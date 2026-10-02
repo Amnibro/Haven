@@ -883,7 +883,10 @@ module.exports = function register(socket, ctx) {
         _audit({ actor: socket.user, action: 'user_perms_update',
           target_type: 'user', target_id: userId, target_name: tgt ? tgt.u : null,
           details: { roleId: role.id, roleName: role.name, granted, denied } });
-      } catch {}
+      } catch (err) {
+        // The change is saved and answered; only its audit entry is missing.
+        console.warn('[audit] user_perms_update entry failed:', err.message);
+      }
     } catch (err) {
       console.error('set-user-server-perms error:', err);
       cb({ error: 'Failed to update permissions' });
@@ -969,6 +972,7 @@ module.exports = function register(socket, ctx) {
 
       const users = [];
       const userChannelMap = {};
+      let overrideReadWarned = false;
       for (const m of allMembers) {
         // The admin is listed so they can manage their own roles; nobody
         // else sees themselves or any admin here.
@@ -1007,7 +1011,14 @@ module.exports = function register(socket, ctx) {
           userOverrides = db.prepare(
             'SELECT role_id, channel_id, permission, allowed FROM user_role_perms WHERE user_id = ?'
           ).all(m.id);
-        } catch { /* table may not exist yet */ }
+        } catch (err) {
+          // The editor then shows role defaults instead of this person's saved
+          // customisations, and saving would overwrite them. Logged once per request.
+          if (!overrideReadWarned) {
+            overrideReadWarned = true;
+            console.warn('role assignment list: override read failed:', err.message);
+          }
+        }
 
         for (const cr of currentRoles) {
           const basePerms = db.prepare(
@@ -1167,7 +1178,10 @@ module.exports = function register(socket, ctx) {
         _audit({ actor: socket.user, action: 'role_assign',
           target_type: 'user', target_id: userId, target_name: tgt ? tgt.u : null,
           details: { roleId, roleName: role.name, channelId, customLevel: assignLevel !== role.level ? assignLevel : null } });
-      } catch {}
+      } catch (err) {
+        // The role is assigned and answered; only its audit entry is missing.
+        console.warn('[audit] role_assign entry failed:', err.message);
+      }
     } catch (err) {
       console.error('Assign role error:', err);
       cb({ error: 'Failed to assign role' });
@@ -1227,7 +1241,10 @@ module.exports = function register(socket, ctx) {
       _audit({ actor: socket.user, action: 'role_revoke',
         target_type: 'user', target_id: userId, target_name: target ? target.username : null,
         details: { roleId, roleName: r ? r.name : null, channelId } });
-    } catch {}
+    } catch (err) {
+      // The role is revoked; only its audit entry is missing.
+      console.warn('[audit] role_revoke entry failed:', err.message);
+    }
 
     refreshUserRoles(userId);
     syncSeeAllMemberships(userId);

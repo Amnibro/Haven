@@ -64,6 +64,17 @@ const {
 
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
+// Some failures would repeat on every timer tick, connection or message.
+// Report each kind at most once every ten minutes, so a broken table shows up
+// in the log without flooding it.
+const _throttledWarnAt = new Map();
+function throttledWarn(tag, err) {
+  const now = Date.now();
+  if (now - (_throttledWarnAt.get(tag) || 0) < 10 * 60 * 1000) return;
+  _throttledWarnAt.set(tag, now);
+  console.warn(`${tag}:`, err && err.message);
+}
+
 // ══════════════════════════════════════════════════════════════
 // setupSocketHandlers — called once from server.js
 // ══════════════════════════════════════════════════════════════
@@ -236,7 +247,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             break;
           }
         }
-      } catch { /* presence is best-effort */ }
+      } catch { /* presence is best-effort; the next presence update carries the change */ }
     },
     // Linked accounts changed. Push to EVERY socket this user has open, not
     // just the one that started the flow — the OAuth callback frequently
@@ -261,7 +272,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         for (const [, s] of io.of('/').sockets) {
           if (s.user && s.user.id === userId) s.emit('connections', payload);
         }
-      } catch { /* best-effort */ }
+      } catch { /* best-effort push; the link itself is saved and shows on the next load */ }
     },
   });
   activity.start();
@@ -818,7 +829,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (ch && ch.is_temp_voice && !pendingTempDelete.has(code)) {
           createTempChannelDeleteCallback({ db, io, state, channelId: ch.id })();
         }
-      } catch { /* column may not exist yet */ }
+      } catch { /* the 60s empty temp-voice sweep below retries this cleanup */ }
     }
     // Tell any remaining peers (and watchers of the text channel) that the
     // pruned users are gone so they tear down dead RTCPeerConnections and
@@ -921,7 +932,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         WHERE c.is_dm = 1 AND cm.user_id = ?
       `).all(userId);
       for (const r of rows) emitOnlineUsers(r.code);
-    } catch { /* presence is best-effort */ }
+    } catch { /* presence is best-effort; the next presence change refreshes these DMs */ }
   }
 
   // ── emitOnlineUsers ─────────────────────────────────────
@@ -1001,7 +1012,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           )
       `).all('flappy');
       scoreRows.forEach(r => { scores[r.user_id] = r.score; });
-    } catch { /* table may not exist yet */ }
+    } catch { /* score badges are decoration; the list still goes out without them */ }
 
     const statusMap = {};
     try {
@@ -1016,7 +1027,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         WHERE c.code = ?
       `).all(code);
       statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle', border: r.border || null, borderTransform: parseBorderTransform(r.border_transform), animateProfile: r.animate_profile || 'trigger', isGuest: !!r.is_guest }; });
-    } catch { /* columns may not exist yet */ }
+    } catch { /* runs on every presence change; members then show default status and avatar */ }
 
     const channel = db.prepare('SELECT id, role_gate, is_dm FROM channels WHERE code = ?').get(code);
     const roles = new Map();
@@ -1260,7 +1271,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       let tempChannel = null;
       try {
         tempChannel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_temp_voice = 1').get(code);
-      } catch { /* column may not exist yet */ }
+      } catch { /* the 60s empty temp-voice sweep retries this cleanup */ }
       if (tempChannel) {
         const doDeleteTempChannel = createTempChannelDeleteCallback({
           db,
@@ -1364,7 +1375,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         }
         sending.catch((err) => {
           if (err.statusCode === 410 || err.statusCode === 404) {
-            try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(job.sub.endpoint); } catch { /* non-critical */ }
+            try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(job.sub.endpoint); } catch { /* the next push to this dead endpoint tries the cleanup again */ }
           }
         }).finally(() => {
           pushActive--;
@@ -1402,7 +1413,11 @@ function setupSocketHandlers(io, db, opts = {}) {
           'SELECT user_id FROM user_channel_prefs WHERE channel_code = ? AND muted = 1'
         ).all(channelCode);
         mutedUserIds = new Set(mutedRows.map(r => r.user_id));
-      } catch { /* table may not exist on a brand-new fresh schema race; skip */ }
+      } catch (err) {
+        // Runs per message. Pushes still go out, but people who muted this
+        // channel get them too, so say so (throttled).
+        throttledWarn('push mute lookup failed', err);
+      }
 
       // Detect E2E encrypted envelope — don't leak ciphertext in notifications
       let displayContent = messageContent;
@@ -1446,7 +1461,7 @@ function setupSocketHandlers(io, db, opts = {}) {
               .then(res => {
                 if (res.failedTokens && res.failedTokens.length) {
                   const ph = res.failedTokens.map(() => '?').join(',');
-                  try { db.prepare(`DELETE FROM fcm_tokens WHERE token IN (${ph})`).run(...res.failedTokens); } catch {}
+                  try { db.prepare(`DELETE FROM fcm_tokens WHERE token IN (${ph})`).run(...res.failedTokens); } catch { /* the next send to these dead tokens tries the cleanup again */ }
                 }
               })
               .catch(err => console.error('FCM push error:', err.message));
@@ -1500,7 +1515,10 @@ function setupSocketHandlers(io, db, opts = {}) {
              failure_count = CASE WHEN ? THEN 0 ELSE COALESCE(failure_count, 0) + 1 END
          WHERE id = ?`
       ).run(status || 0, isOk ? null : (errorMsg || null), isOk ? 1 : 0, botId);
-    } catch { /* best-effort */ }
+    } catch (err) {
+      // Delivery itself is unaffected, but the admin panel's bot status goes stale.
+      throttledWarn('webhook delivery status update failed', err);
+    }
   }
 
   // POSTs the event to the bot's callback. Single retry after 5s on 5xx /
@@ -1759,7 +1777,10 @@ function setupSocketHandlers(io, db, opts = {}) {
           }
         }
       }
-    } catch { /* columns may not exist yet */ }
+    } catch (err) {
+      // An uncaught throw here would crash the server; the next tick retries.
+      throttledWarn('AFK voice sweep failed', err);
+    }
   }, 30 * 1000);
 
   // Temporary channel cleanup (every 60s)
@@ -1789,7 +1810,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           }
           io.to(`channel:${ch.code}`).emit('channel-messages-cleared', { code: ch.code, reason: 'auto-clear' });
           // Refresh channel lists so the new expires_at propagates to clients.
-          try { broadcastChannelLists(); } catch {}
+          broadcastChannelLists();
           console.log(`[Temporary] Channel "${ch.code}" messages cleared (auto-clear mode)`);
         } else {
           db.transaction(() => {
@@ -1874,7 +1895,10 @@ function setupSocketHandlers(io, db, opts = {}) {
           musicQueues.delete(ch.code);
         }
       }
-    } catch { /* column may not exist yet */ }
+    } catch (err) {
+      // Empty temp voice channels linger until this works again or they expire.
+      throttledWarn('Empty temp voice channel sweep failed', err);
+    }
   }, 60 * 1000);
 
   // Someone removed from a private channel still knows its code, and a code
@@ -1967,7 +1991,12 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (ip && isIpBanned(ip)) {
         return next(new Error('Your IP has been banned from this server'));
       }
-    } catch { /* table may not exist on very old DBs — fail open */ }
+    } catch (err) {
+      // Fails open on purpose, like the HTTP gate: a broken ban list must not
+      // lock every user out. Login still applies, and the log says the gate
+      // is down (throttled, since this runs per connection).
+      throttledWarn('IP ban check failed, connection allowed', err);
+    }
     next();
   });
 
@@ -2056,7 +2085,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           socket.user.statusText = statusRow.status_text || '';
         }
       }
-    } catch { /* columns may not exist on old db */ }
+    } catch { /* status is cosmetic; the user just starts with the default status */ }
 
     try {
       socket.user.roles = getUserRoles(user.id);
@@ -2080,7 +2109,11 @@ function setupSocketHandlers(io, db, opts = {}) {
                       SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 5
                     )`).run(user.id, user.id);
       }
-    } catch { /* table may not exist on very old DBs */ }
+    } catch (err) {
+      // Never block the connection, but "also ban IP" will not know this
+      // address (throttled, since this runs per connection).
+      throttledWarn('user IP record failed', err);
+    }
 
     next();
   });
@@ -2109,7 +2142,11 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (status.low === _diskWasLow) return;
       _diskWasLow = status.low;
       io.to('admins').emit('disk-status', status);
-    } catch { /* never let a health check take the server down */ }
+    } catch (err) {
+      // Never let a health check take the server down, but say admins are
+      // not getting low disk warnings.
+      throttledWarn('disk status check failed', err);
+    }
   }, 60 * 1000);
 
   // ══════════════════════════════════════════════════════════
@@ -2190,7 +2227,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     try {
       const rows = db.prepare('SELECT target_id, nickname FROM user_nicknames WHERE owner_id = ?').all(socket.user.id);
       for (const r of rows) nicknames[r.target_id] = r.nickname;
-    } catch { /* non-critical — table may not exist yet on old installs before migration runs */ }
+    } catch { /* non-critical: nicknames are saved, they just do not sync to this connection */ }
 
     socket.emit('session-info', {
       id: socket.user.id, username: socket.user.username,

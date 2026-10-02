@@ -195,7 +195,7 @@ async function rateLimitWaitMs(res) {
   try {
     const info = await res.clone().json();
     if (Number.isFinite(info?.retry_after)) seconds = info.retry_after;
-  } catch { /* header-only 429 */ }
+  } catch { /* header-only 429: use the Retry-After header below */ }
   if (!seconds) {
     const header = Number(res.headers.get('retry-after'));
     seconds = Number.isFinite(header) && header > 0 ? header : 1;
@@ -246,7 +246,7 @@ async function discordRequest(method, path, body, attempt = 0) {
   if (res.status === 204) return null;
 
   let payload = null;
-  try { payload = await res.json(); } catch { /* empty body */ }
+  try { payload = await res.json(); } catch { /* empty or non-JSON body; errors below fall back to the HTTP status */ }
 
   if (!res.ok) {
     const detail = payload?.message || `HTTP ${res.status}`;
@@ -285,7 +285,7 @@ async function executeWebhook(webhookId, webhookToken, payload, { threadId = nul
   }
 
   let data = null;
-  try { data = await res.json(); } catch { /* 204 */ }
+  try { data = await res.json(); } catch { /* 204 or non-JSON body; errors below fall back to the HTTP status */ }
   if (!res.ok) {
     const err = new Error(data?.message || `HTTP ${res.status}`);
     err.status = res.status;
@@ -442,7 +442,7 @@ function stopHeartbeat() {
 
 function gatewaySend(payload) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  try { ws.send(JSON.stringify(payload)); } catch { /* socket died mid-write */ }
+  try { ws.send(JSON.stringify(payload)); } catch { /* socket died mid-write; its close handler reconnects */ }
 }
 
 function sendHeartbeat() { gatewaySend({ op: 1, d: seq }); }
@@ -904,6 +904,16 @@ function takePendingStarter(threadId) {
   try { relayToHaven(pending.msg); } catch (err) { console.error('Ferry forum relay error:', err.message); }
 }
 
+// An automod fault must never take the bridge down, so the text passes
+// unfiltered; but it means filtering is off for bridged messages, so the
+// admin hears about it once rather than once per message.
+let automodFaultLogged = false;
+function noteAutomodFault(err) {
+  if (automodFaultLogged) return;
+  automodFaultLogged = true;
+  console.warn('[ferry] Automod check failed, bridged text is passing unfiltered:', err && err.message);
+}
+
 /**
  * A forum post's title, cleaned the way Haven cleans a topic title typed in
  * Haven. Empty when there is nothing left or the link policy refuses it.
@@ -915,7 +925,7 @@ function havenTopicTitle(name) {
   if (!title) return '';
   try {
     if (automod.checkText(title, { surface: 'message' }).ok === false) return '';
-  } catch { /* an automod fault must never take the bridge down */ }
+  } catch (err) { noteAutomodFault(err); }
   return title;
 }
 
@@ -1149,7 +1159,7 @@ function buildHavenContent(msg) {
       // announcement down with it.
       try {
         if (link && automod.checkText(link, { surface: 'message' }).ok === false) link = '';
-      } catch { /* an automod fault must never take the bridge down */ }
+      } catch (err) { noteAutomodFault(err); }
     } else if (media.length) {
       // Once the image is coming through, e.url is the link that would be
       // unfurled, so it is dropped and the readable parts are kept for context.
@@ -1179,7 +1189,7 @@ function buildHavenContent(msg) {
   // everybody on the server rather than just to the bridge.
   try {
     if (authoredText && automod.checkText(authoredText, { surface: 'message' }).ok === false) return '';
-  } catch { /* an automod fault must never take the bridge down */ }
+  } catch (err) { noteAutomodFault(err); }
 
   // A picture referenced from both a component and an attachment goes once.
   const uniqueMedia = [...new Set(media.filter(Boolean))];
@@ -1238,7 +1248,7 @@ function neutralizeLiteralPings(text, discordPingedEveryone = false) {
   let out = String(text || '');
   if (!discordPingedEveryone) out = out.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
   if (deps && deps.db) {
-    try { out = stripRoleMentions(out, deps.db.prepare('SELECT name FROM roles').all().map(r => r.name)); } catch { /* roles table optional in tests */ }
+    try { out = stripRoleMentions(out, deps.db.prepare('SELECT name FROM roles').all().map(r => r.name)); } catch { /* roles table optional in tests; always present on a real server */ }
   }
   return out;
 }
@@ -1527,7 +1537,7 @@ async function ensureLinkWebhook(link) {
   try {
     const existing = await discordRequest('GET', `/channels/${link.discord_channel_id}/webhooks`);
     created = (existing || []).find(w => w.token && botUser && w.application_id === botUser.id) || null;
-  } catch { /* fall through to create */ }
+  } catch { /* cannot list webhooks: fall through to create, which reports its own error */ }
 
   if (!created) {
     created = await discordRequest('POST', `/channels/${link.discord_channel_id}/webhooks`, { name: 'Haven Ferry' });
@@ -1797,7 +1807,7 @@ function touchLink(linkId, error) {
     deps.db.prepare(
       'UPDATE ferry_links SET last_activity_at = CURRENT_TIMESTAMP, last_error = ? WHERE id = ?'
     ).run(error || null, linkId);
-  } catch { /* best-effort health tracking */ }
+  } catch { /* best-effort health tracking, runs per relayed message, so not logged */ }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1916,7 +1926,10 @@ function initFerry(dependencies) {
     for (const row of deps.db.prepare('SELECT webhook_id FROM ferry_links WHERE webhook_id IS NOT NULL').all()) {
       ownWebhookIds.add(row.webhook_id);
     }
-  } catch { /* table arrives with the migration */ }
+  } catch (err) {
+    // Without this list, the first messages after a restart can echo back into Haven.
+    console.warn('[ferry] Could not load webhook ids for the loop guard:', err.message);
+  }
 
   if (getConfig().enabled && getConfig().token) {
     connect();
