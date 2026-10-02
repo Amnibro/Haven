@@ -527,7 +527,7 @@ _bindVoiceControls() {
       commitBitrateInput();
     });
     bitrateValue.addEventListener('focus', () => {
-      try { bitrateValue.select?.(); } catch {}
+      bitrateValue.select?.();
     });
   }
   if (screenFpsSelect) {

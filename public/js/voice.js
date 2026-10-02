@@ -1336,7 +1336,7 @@ class VoiceManager {
         for (const sender of conn.getSenders()) {
           if (sender?.track && videoTracks.has(sender.track) &&
               typeof sender.generateKeyFrame === 'function') {
-            sender.generateKeyFrame().catch(() => {});
+            sender.generateKeyFrame().catch(() => { /* the encoder refused; its next regular keyframe still comes */ });
           }
         }
       } catch { /* sender gone mid-iteration — ignore */ }
@@ -2033,8 +2033,8 @@ class VoiceManager {
   // failure cannot stall later operations.
   _relayScreenEnqueue(fn) {
     const prev = this._relayScreenQueue || Promise.resolve();
-    const next = prev.catch(() => {}).then(fn);
-    this._relayScreenQueue = next.catch(() => {});
+    const next = prev.catch(() => { /* the previous operation's caller already got its error */ }).then(fn);
+    this._relayScreenQueue = next.catch(() => { /* callers see this through next; the stored tail must not reject */ });
     return next;
   }
 
@@ -2073,14 +2073,12 @@ class VoiceManager {
       !this.isScreenSharing || this.screenStream?.getVideoTracks()[0] !== v;
     const dropIfStale = async (producer, source) => {
       if (!stale()) return false;
-      try {
-        if (producer && relay.producers?.get?.(source) === producer &&
-            typeof relay.unpublishIf === 'function') {
-          await relay.unpublishIf(source, producer).catch(() => {});
-        } else if (producer && !relay.producers && typeof relay.unpublish === 'function') {
-          await relay.unpublish(source).catch(() => {});
-        }
-      } catch {}
+      if (producer && relay.producers?.get?.(source) === producer &&
+          typeof relay.unpublishIf === 'function') {
+        await relay.unpublishIf(source, producer).catch((err) => console.warn('[Relay] could not drop a stale screen producer:', err?.message || err));
+      } else if (producer && !relay.producers && typeof relay.unpublish === 'function') {
+        await relay.unpublish(source).catch((err) => console.warn('[Relay] could not drop a stale screen producer:', err?.message || err));
+      }
       return true;
     };
     const { opts: screenOpts, key: relayKey } = this._relayScreenOpts();
@@ -2092,7 +2090,7 @@ class VoiceManager {
         console.warn('[Relay] Screen not sent:', e?.message || e);
         if (!stale()) {
           this._relayScreenNeedsPublish = true;
-          try { this._scheduleRelayScreenRepublish?.(); } catch {}
+          this._scheduleRelayScreenRepublish?.();
         }
       }
       if (producer) {
@@ -2104,7 +2102,7 @@ class VoiceManager {
         // publish() resolved falsy without throwing (no live producer): flag
         // the same recovery instead of stranding the share unpublished.
         this._relayScreenNeedsPublish = true;
-        try { this._scheduleRelayScreenRepublish?.(); } catch {}
+        this._scheduleRelayScreenRepublish?.();
       }
     }
     if (a && !stale()) {
@@ -2530,7 +2528,7 @@ class VoiceManager {
 
   setScreenBitrate(kbps) {
     this.screenBitrate = this._normalizeScreenBitrate(kbps);
-    try { localStorage.setItem('haven_screen_bitrate', String(this.screenBitrate)); } catch {}
+    try { localStorage.setItem('haven_screen_bitrate', String(this.screenBitrate)); } catch { /* storage blocked (private mode): the cap holds for this session only */ }
     if (this.isScreenSharing) this.reapplyScreenBitrate();
   }
 
@@ -2693,24 +2691,24 @@ class VoiceManager {
 
   _scheduleRelayScreenRepublish() {
     if (!this.isScreenSharing || !this._relay) return;
-    try { clearTimeout(this._relayBitrateTimer); } catch {}
+    clearTimeout(this._relayBitrateTimer);
     this._relayBitrateTimer = null;
     const token = this._relayScreenToken();
     const delay = Number.isSafeInteger(this._relayBitrateDebounceMs)
       ? this._relayBitrateDebounceMs
       : 750;
     if (delay <= 0) {
-      this._republishRelayScreenBitrate(token).catch(() => {});
+      this._republishRelayScreenBitrate(token).catch((err) => console.warn('[Relay] screen bitrate republish failed:', err?.message || err));
       return;
     }
     this._relayBitrateTimer = setTimeout(() => {
       this._relayBitrateTimer = null;
-      this._republishRelayScreenBitrate(token).catch(() => {});
+      this._republishRelayScreenBitrate(token).catch((err) => console.warn('[Relay] screen bitrate republish failed:', err?.message || err));
     }, delay);
   }
 
   _cancelRelayScreenRepublish() {
-    try { clearTimeout(this._relayBitrateTimer); } catch {}
+    clearTimeout(this._relayBitrateTimer);
     this._relayBitrateTimer = null;
     this._pendingRelayRepublish = false;
     this._pendingRelayToken = null;
@@ -2776,7 +2774,7 @@ class VoiceManager {
       this._pendingRelayToken = null;
       if (this._pendingRelayRepublish && this.isScreenSharing && this._relay) {
         this._pendingRelayRepublish = false;
-        this._republishRelayScreenBitrate(pendingToken).catch(() => {});
+        this._republishRelayScreenBitrate(pendingToken).catch((err) => console.warn('[Relay] screen bitrate republish failed:', err?.message || err));
       }
     }
   }
@@ -2839,7 +2837,7 @@ class VoiceManager {
         try {
           producer = await relay.publish('screen', v, fresh.opts);
         } catch (err) {
-          try { console.warn('[Relay] Screen bitrate update failed:', err?.message || err); } catch {}
+          console.warn('[Relay] Screen bitrate update failed:', err?.message || err);
           failures += 1;
           if (failures > 3) return;
           if (!alive()) return;
@@ -2852,16 +2850,14 @@ class VoiceManager {
         // (v is checked live above); produce failures throw and retry above.
         failures = 0;
         if (!alive()) {
-          try {
-            if (producer && relay.producers?.get?.('screen') === producer &&
-                typeof relay.unpublishIf === 'function') {
-              await relay.unpublishIf('screen', producer).catch(() => {});
-            } else if (producer && !relay.producers && typeof relay.unpublish === 'function') {
-              // Sessions without a visible producer map (test mocks): fall
-              // back to a plain unpublish. Real sessions expose producers.
-              await relay.unpublish('screen').catch(() => {});
-            }
-          } catch {}
+          if (producer && relay.producers?.get?.('screen') === producer &&
+              typeof relay.unpublishIf === 'function') {
+            await relay.unpublishIf('screen', producer).catch((err) => console.warn('[Relay] could not drop a stale screen producer:', err?.message || err));
+          } else if (producer && !relay.producers && typeof relay.unpublish === 'function') {
+            // Sessions without a visible producer map (test mocks): fall
+            // back to a plain unpublish. Real sessions expose producers.
+            await relay.unpublish('screen').catch((err) => console.warn('[Relay] could not drop a stale screen producer:', err?.message || err));
+          }
           return;
         }
         this._lastRelayScreenBitrateKey = fresh.key;
@@ -4019,13 +4015,13 @@ class VoiceManager {
       ? document.getElementById(`voice-audio-screen-${userId}`)
       : null;
     if (audioEl) {
-      try { audioEl.pause(); } catch {}
+      audioEl.pause();
       audioEl.srcObject = null;
       audioEl.remove();
     }
     const gainNode = this.screenGainNodes?.get(userId);
     if (gainNode) {
-      try { gainNode.disconnect(); } catch {}
+      gainNode.disconnect();
       this.screenGainNodes?.delete(userId);
     }
   }

@@ -385,7 +385,7 @@ _removeScreenSharePiP(userId) {
   const tile = document.getElementById(`screen-tile-${key}`);
   const nativePipVideo = document.pictureInPictureElement;
   if (nativePipVideo && tile?.contains(nativePipVideo)) {
-    document.exitPictureInPicture?.().catch(() => {});
+    document.exitPictureInPicture?.().catch(() => { /* already left picture-in-picture */ });
   }
   const pip = document.getElementById(`stream-pip-${key}`);
   const pipVideo = pip?.querySelector('video');
@@ -566,7 +566,7 @@ _popOutStream(tile, userId) {
         const newerActive = this._screenPipNativeActive?.get(key);
         if (document.pictureInPictureElement === video &&
             !newerRequest && !newerActive) {
-          document.exitPictureInPicture?.().catch(() => {});
+          document.exitPictureInPicture?.().catch(() => { /* already left picture-in-picture */ });
         }
         return;
       }
