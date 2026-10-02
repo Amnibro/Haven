@@ -1992,9 +1992,11 @@ function setupSocketHandlers(io, db, opts = {}) {
         return next(new Error('Your IP has been banned from this server'));
       }
     } catch (err) {
-      // Fails open on purpose, like the HTTP gate: a broken ban list must not
-      // lock every user out. Login still applies, and the log says the gate
-      // is down (throttled, since this runs per connection).
+      // The ban list itself does not throw here: when it cannot be read, the
+      // cached list in server.js keeps the last known bans. What can still
+      // fail is reading the client's address, and that lets the connection
+      // through rather than locking everyone out; login still applies, and
+      // the log says so (throttled, since this runs per connection).
       throttledWarn('IP ban check failed, connection allowed', err);
     }
     next();
