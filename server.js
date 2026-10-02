@@ -443,13 +443,39 @@ function verifyAdminFromDb(user) {
   } catch { return false; }
 }
 
+// The permission check the rest of Haven uses (roles, the level thresholds
+// and permissions set on one person), made once the database is open.
+let _permissions = null;
+function permissionsModule() {
+  if (!_permissions) _permissions = require('./src/socketHandlers/permissions')(require('./src/database').getDb());
+  return _permissions;
+}
+
+// For the HTTP routes. It used to look only at roles, so someone given a
+// permission through the level thresholds or on their own (which the app shows
+// as granted) was refused here, uploads included, and someone denied one on
+// their own was still let through by a role.
 function userHasPermission(userId, permission) {
   if (!userId) return false;
   try {
     const { getDb } = require('./src/database');
-    const isAdmin = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+    const db = getDb();
+    const isAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
     if (isAdmin && isAdmin.is_admin) return true;
-    const row = getDb().prepare(`
+    // A server-wide setting on the person decides first, allow or deny.
+    let own = null;
+    try {
+      own = db.prepare(`
+        SELECT allowed FROM user_role_perms
+        WHERE user_id = ? AND permission = ? AND channel_id IS NULL
+        ORDER BY allowed ASC LIMIT 1
+      `).get(userId, permission);
+    } catch { /* table may not exist yet */ }
+    if (own) return own.allowed === 1;
+    if (permissionsModule().userHasPermission(userId, permission)) return true;
+    // These routes aren't tied to one channel, so a role held in any channel
+    // still counts, as it always has here.
+    const row = db.prepare(`
       SELECT 1 FROM role_permissions rp
       JOIN roles r ON rp.role_id = r.id
       JOIN user_roles ur ON r.id = ur.role_id
@@ -1212,13 +1238,8 @@ app.post('/api/upload-border', uploadLimiter, uploadDiskGuard, (req, res) => {
   if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
 
   // Enforce upload_files permission (admin always allowed)
-  if (!verifyAdminFromDb(user)) {
-    const hasPerm = getDb().prepare(`
-      SELECT 1 FROM role_permissions rp
-      JOIN user_roles ur ON rp.role_id = ur.role_id
-      WHERE ur.user_id = ? AND rp.permission = 'upload_files' AND rp.allowed = 1 LIMIT 1
-    `).get(user.id);
-    if (!hasPerm) return res.status(403).json({ error: 'You don\'t have permission to upload files' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'upload_files')) {
+    return res.status(403).json({ error: 'You don\'t have permission to upload files' });
   }
 
   upload.single('border')(req, res, (err) => {
@@ -1919,13 +1940,8 @@ app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
   if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
 
   // Enforce upload_files permission (admin always allowed)
-  if (!verifyAdminFromDb(user)) {
-    const hasPerm = getDb().prepare(`
-      SELECT 1 FROM role_permissions rp
-      JOIN user_roles ur ON rp.role_id = ur.role_id
-      WHERE ur.user_id = ? AND rp.permission = 'upload_files' AND rp.allowed = 1 LIMIT 1
-    `).get(user.id);
-    if (!hasPerm) return res.status(403).json({ error: 'You don\'t have permission to upload files' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'upload_files')) {
+    return res.status(403).json({ error: 'You don\'t have permission to upload files' });
   }
 
   upload.single('image')(req, res, (err) => {
@@ -1992,13 +2008,8 @@ app.post('/api/upload-file', uploadLimiter, uploadDiskGuard, (req, res) => {
   if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
 
   // Enforce upload_files permission (admin always allowed)
-  if (!verifyAdminFromDb(user)) {
-    const hasPerm = getDb().prepare(`
-      SELECT 1 FROM role_permissions rp
-      JOIN user_roles ur ON rp.role_id = ur.role_id
-      WHERE ur.user_id = ? AND rp.permission = 'upload_files' AND rp.allowed = 1 LIMIT 1
-    `).get(user.id);
-    if (!hasPerm) return res.status(403).json({ error: 'You don\'t have permission to upload files' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'upload_files')) {
+    return res.status(403).json({ error: 'You don\'t have permission to upload files' });
   }
 
   fileUpload.single('file')(req, res, (err) => {
