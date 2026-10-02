@@ -16574,6 +16574,29 @@ ul.chat-list { list-style-type: disc; }
   overflow-y: auto;
   padding-right: 0.875rem;
 }
+/* With a role open, its settings scroll and the Members, Duplicate and Delete
+   row stays put underneath, since those act on the role, not its permissions. */
+.role-detail:has(> .role-detail-scroll) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-right: 0;
+}
+.role-detail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.875rem;
+}
+.role-detail-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border, rgba(255,255,255,0.12));
+}
 .role-detail-form {
   display: flex;
   flex-direction: column;

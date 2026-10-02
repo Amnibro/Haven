@@ -4593,7 +4593,10 @@ _renderRoleDetail() {
   const permLabels = PERM_LABELS;
   const rolePerms = role.permissions || [];
 
+  // The role's own settings scroll; the buttons that act on the role as a
+  // whole sit below them and stay in view.
   panel.innerHTML = `
+    <div class="role-detail-scroll">
     <div class="role-detail-form">
       <label class="settings-label">${t('settings.admin.role_form.name')}</label>
       <input type="text" class="settings-text-input" id="role-edit-name" value="${this._escapeHtml(role.name)}" maxlength="30">
@@ -4639,11 +4642,12 @@ _renderRoleDetail() {
           </label>`;
         }).join('')}
       </div>
-      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn-sm btn-accent" id="role-members-btn">👥 ${t('settings.admin.role_form.members')}</button>
-        <button class="btn-sm" id="duplicate-role-btn">📋 ${t('settings.admin.role_form.duplicate')}</button>
-        <button class="btn-sm danger" id="delete-role-btn">${t('settings.admin.role_form.delete')}</button>
-      </div>
+    </div>
+    </div>
+    <div class="role-detail-actions">
+      <button class="btn-sm btn-accent" id="role-members-btn">👥 ${t('settings.admin.role_form.members')}</button>
+      <button class="btn-sm" id="duplicate-role-btn">📋 ${t('settings.admin.role_form.duplicate')}</button>
+      <button class="btn-sm danger" id="delete-role-btn">${t('settings.admin.role_form.delete')}</button>
     </div>
   `;
 
