@@ -619,18 +619,23 @@ _applyServerSettings() {
   const invBpsTokenToggle = document.getElementById('invites-bypass-registration-token');
   if (invBpsTokenToggle) invBpsTokenToggle.checked = this.serverSettings.invites_bypass_registration_token === 'true';
 
-  const capToggle = document.getElementById('registration-captcha-enabled');
-  if (capToggle) capToggle.checked = this.serverSettings.registration_captcha_enabled === 'true';
-  const capSite = document.getElementById('turnstile-site-key');
-  if (capSite) capSite.value = this.serverSettings.turnstile_site_key || '';
-  const capSecret = document.getElementById('turnstile-secret-key');
-  if (capSecret) capSecret.value = this.serverSettings.turnstile_secret_key || '';
-  const rlToggle = document.getElementById('registration-rate-limit-enabled');
-  if (rlToggle) rlToggle.checked = this.serverSettings.registration_rate_limit_enabled === 'true';
-  const rlNum = document.getElementById('registration-rate-limit-per-hour');
-  if (rlNum) rlNum.value = this.serverSettings.registration_rate_limit_per_hour || '20';
-  const maxInvUses = document.getElementById('max-invite-uses');
-  if (maxInvUses) maxInvUses.value = this.serverSettings.max_invite_uses || '0';
+  // These save with the Save button, so leave them alone while the panel is
+  // open: the token switches above save at once, and the refresh that follows
+  // used to put back the stored values over whatever was being typed here.
+  if (!modalOpen) {
+    const capToggle = document.getElementById('registration-captcha-enabled');
+    if (capToggle) capToggle.checked = this.serverSettings.registration_captcha_enabled === 'true';
+    const capSite = document.getElementById('turnstile-site-key');
+    if (capSite) capSite.value = this.serverSettings.turnstile_site_key || '';
+    const capSecret = document.getElementById('turnstile-secret-key');
+    if (capSecret) capSecret.value = this.serverSettings.turnstile_secret_key || '';
+    const rlToggle = document.getElementById('registration-rate-limit-enabled');
+    if (rlToggle) rlToggle.checked = this.serverSettings.registration_rate_limit_enabled === 'true';
+    const rlNum = document.getElementById('registration-rate-limit-per-hour');
+    if (rlNum) rlNum.value = this.serverSettings.registration_rate_limit_per_hour || '20';
+    const maxInvUses = document.getElementById('max-invite-uses');
+    if (maxInvUses) maxInvUses.value = this.serverSettings.max_invite_uses || '0';
+  }
   
 
   // (#5345) Default join channels — re-render when settings or channel list refresh
@@ -1390,6 +1395,18 @@ _cancelAdminSettings() {
     if (dl) dl.value = snap.default_locale || '';
     const ct = document.getElementById('custom-tos-input');
     if (ct) ct.value = snap.custom_tos || '';
+    const rcap = document.getElementById('registration-captcha-enabled');
+    if (rcap) rcap.checked = snap.registration_captcha_enabled === 'true';
+    const tss = document.getElementById('turnstile-site-key');
+    if (tss) tss.value = snap.turnstile_site_key || '';
+    const tsk = document.getElementById('turnstile-secret-key');
+    if (tsk) tsk.value = snap.turnstile_secret_key || '';
+    const rrl = document.getElementById('registration-rate-limit-enabled');
+    if (rrl) rrl.checked = snap.registration_rate_limit_enabled === 'true';
+    const rrn = document.getElementById('registration-rate-limit-per-hour');
+    if (rrn) rrn.value = snap.registration_rate_limit_per_hour || '20';
+    const miu = document.getElementById('max-invite-uses');
+    if (miu) miu.value = snap.max_invite_uses || '0';
   }
   document.getElementById('settings-modal').style.display = 'none';
 },
