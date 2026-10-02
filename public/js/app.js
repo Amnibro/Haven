@@ -17,7 +17,13 @@ import SettingsMethods from './modules/app-settings.js?v=4.17.3';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.4';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.17.2';
 import MobileMethods from './modules/app-mobile.js?v=4.17.2';
-import MediaMethods    from './modules/app-media.js?v=4.17.1';
+import MediaMethods    from './modules/app-media.js?v=4.17.5';
+import AttachmentMethods from './modules/app-attachments.js?v=4.17.5';
+import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.17.5';
+import AppearanceMethods from './modules/app-appearance.js?v=4.17.5';
+import SoundMethods from './modules/app-sounds.js?v=4.17.5';
+import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.17.5';
+import BotMethods from './modules/app-bots.js?v=4.17.5';
 import ContextMethods  from './modules/app-context.js?v=4.17.1';
 import ChannelMethods  from './modules/app-channels.js?v=4.17.1';
 import MessageMethods  from './modules/app-messages.js?v=4.17.1';
@@ -484,6 +490,12 @@ Object.assign(HavenApp.prototype,
   ServerBarMethods,
   MobileMethods,
   MediaMethods,
+  AttachmentMethods,
+  AvatarEditorMethods,
+  AppearanceMethods,
+  SoundMethods,
+  EmojiStickerMethods,
+  BotMethods,
   ContextMethods,
   ChannelMethods,
   MessageMethods,
