@@ -1812,7 +1812,7 @@ _setupUI() {
     } catch { this._mediaGallerySort = 'date-desc'; }
     sortSel.addEventListener('change', () => {
       this._mediaGallerySort = sortSel.value || 'date-desc';
-      try { localStorage.setItem('mediaGallerySort', this._mediaGallerySort); } catch {}
+      try { localStorage.setItem('mediaGallerySort', this._mediaGallerySort); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
     });
   }
@@ -1823,7 +1823,7 @@ _setupUI() {
     this._applyMediaTileSize();
     tileSlider.addEventListener('input', () => {
       const px = this._mediaTilePx(tileSlider.value);
-      try { localStorage.setItem('mediaGalleryTile', String(px)); } catch {}
+      try { localStorage.setItem('mediaGalleryTile', String(px)); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       this._applyMediaTileSize(px);
     });
   }
@@ -1831,10 +1831,10 @@ _setupUI() {
   const shapeSel = document.getElementById('media-gallery-shape');
   if (shapeSel && this._tileShapeOptionsHtml) {
     let saved = 'square';
-    try { saved = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch {}
+    try { saved = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch { /* storage blocked (private mode): keep the default */ }
     shapeSel.innerHTML = this._tileShapeOptionsHtml(saved);
     shapeSel.addEventListener('change', () => {
-      try { localStorage.setItem('mediaGalleryShape', this._forumParseShape(shapeSel.value)); } catch {}
+      try { localStorage.setItem('mediaGalleryShape', this._forumParseShape(shapeSel.value)); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       this._applyMediaTileSize();
     });
   }
@@ -2168,7 +2168,7 @@ _setupUI() {
         const gid = e.data.game || 'flappy';
         const scores = this.highScores?.[gid] || [];
         const target = e.source || (this._gameIframe?.contentWindow);
-        try { target?.postMessage({ type: 'leaderboard-data', leaderboard: scores }, e.origin); } catch {}
+        try { target?.postMessage({ type: 'leaderboard-data', leaderboard: scores }, e.origin); } catch { /* game frame closed mid-reply */ }
       }
     });
     this._gameScoreListenerAdded = true;
@@ -2200,7 +2200,7 @@ _setupUI() {
         if (iframe?.contentWindow) {
           iframe.contentWindow.postMessage({ type: 'set-volume', volume: val / 100 }, window.location.origin);
         }
-      } catch {}
+      } catch { /* game frame closed or not loaded yet */ }
     });
   }
 
@@ -4424,7 +4424,7 @@ _setupUI() {
         }
       };
       this.socket?.on('restore-progress', onExtractProgress);
-      const cleanup = () => { try { this.socket?.off('restore-progress', onExtractProgress); } catch {} };
+      const cleanup = () => { this.socket?.off('restore-progress', onExtractProgress); };
 
       if (progWrap) progWrap.style.display = 'block';
       setBar(0, false);
@@ -4452,7 +4452,7 @@ _setupUI() {
           };
           xhr.onload = () => {
             let d = {};
-            try { d = JSON.parse(xhr.responseText); } catch {}
+            try { d = JSON.parse(xhr.responseText); } catch { /* no JSON body: the status code below decides */ }
             if (xhr.status >= 200 && xhr.status < 300) resolve(d);
             else reject(new Error(d.error || `HTTP ${xhr.status}`));
           };
@@ -4623,7 +4623,7 @@ _setupUI() {
     // If the user clicks Run before clicking Check, do the check first so
     // we always have a fresh `lastUpdateCheck` to act on. (#5267)
     if (!lastUpdateCheck) {
-      try { document.getElementById('update-check-btn')?.click(); } catch {}
+      document.getElementById('update-check-btn')?.click();
       if (status) {
         if (status.style) status.style.display = 'block';
         status.textContent = t('settings.admin.update_check_first');
@@ -4640,7 +4640,7 @@ _setupUI() {
     if (!lastUpdateCheck.runnable) {
       // Most common case: Docker install. Re-run check to surface the
       // copyable command block instead of silently doing nothing.
-      try { document.getElementById('update-check-btn')?.click(); } catch {}
+      document.getElementById('update-check-btn')?.click();
       this._showToast?.(lastUpdateCheck.message || t('settings.admin.update_not_supported', { method: lastUpdateCheck.method }), 'info');
       return;
     }
@@ -4782,7 +4782,7 @@ _setupUI() {
     try {
       const res = await window.havenDesktop?.clipboardWriteText?.(tok);
       if (res?.ok) return onCopied();
-    } catch {}
+    } catch { /* desktop bridge refused: try the browser clipboard next */ }
     try {
       if (!navigator.clipboard?.writeText) throw new Error('no clipboard api');
       await navigator.clipboard.writeText(tok);
@@ -5448,7 +5448,7 @@ _copyTextFallback(text, onCopied) {
 _pushServerListToServer() {
   const wrappingKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
   if (wrappingKey && this.serverManager && this.token) {
-    this.serverManager._pushToServer(this.token, wrappingKey).catch(() => {});
+    this.serverManager._pushToServer(this.token, wrappingKey).catch((err) => { console.warn('[Sync] could not push the server list', err); });
   }
 },
 
@@ -5461,10 +5461,10 @@ _pushServersToDesktopHistory() {
     const historyUrls = new Set((history || []).map(h => h.url));
     for (const s of this.serverManager.getAll()) {
       if (!historyUrls.has(s.url)) {
-        window.havenDesktop.addServerHistory(s.url, s.name).catch(() => {});
+        window.havenDesktop.addServerHistory(s.url, s.name).catch((err) => { console.warn('[Desktop] could not add to server history', err); });
       }
     }
-  }).catch(() => {});
+  }).catch((err) => { console.warn('[Desktop] could not read server history', err); });
 },
 
 // ═══════════════════════════════════════════════════════
@@ -5511,7 +5511,7 @@ _setupServerBar() {
       if (window.havenDesktop.addServerHistory) {
         for (const s of this.serverManager.getAll()) {
           if (!historyUrls.has(s.url)) {
-            window.havenDesktop.addServerHistory(s.url, s.name).catch(() => {});
+            window.havenDesktop.addServerHistory(s.url, s.name).catch((err) => { console.warn('[Desktop] could not add to server history', err); });
           }
         }
       }
@@ -5524,7 +5524,7 @@ _setupServerBar() {
         this._renderServerBar();
         this._pushServerListToServer();
       }
-    }).catch(() => {});
+    }).catch((err) => { console.warn('[Desktop] could not read server history', err); });
   }
 
   this._renderServerBar();
@@ -5774,7 +5774,7 @@ _addServer() {
       if (window.havenDesktop?.addServerHistory) {
         const cleanUrl = url.replace(/\/+$/, '');
         const finalUrl = /^https?:\/\//.test(cleanUrl) ? cleanUrl : 'https://' + cleanUrl;
-        window.havenDesktop.addServerHistory(finalUrl, name).catch(() => {});
+        window.havenDesktop.addServerHistory(finalUrl, name).catch((err) => { console.warn('[Desktop] could not add to server history', err); });
       }
       // Auto-pull icon after health check completes
       if (autoPull) {
@@ -5917,7 +5917,7 @@ _renderManageServersList() {
       this.serverManager.remove(s.url);
       // Also drop from Desktop's cross-server history so it stops getting
       // re-merged into other servers' sidebars on the next sync.
-      window.havenDesktop?.removeServerHistory?.(s.url)?.catch?.(() => {});
+      window.havenDesktop?.removeServerHistory?.(s.url)?.catch?.((err) => { console.warn('[Desktop] could not remove from server history', err); });
       this._renderServerBar();
       this._renderManageServersList();
       this._showToast(t('toasts.server_removed_named', { name: s.name }), 'success');
@@ -5977,7 +5977,7 @@ _updateServerBadgeDots(payload) {
   // current view's own origin never has an icon in its own sidebar (filtered
   // out as "self"), so treat it as covered.
   const covered = new Set();
-  try { covered.add(norm(window.location.origin)); } catch {}
+  try { covered.add(norm(window.location.origin)); } catch { /* unparsable origin: nothing to mark as covered */ }
   document.querySelectorAll('#server-list .server-icon.remote').forEach(el => {
     const url = el.dataset.url;
     const dot = el.querySelector('.server-unread-dot');
@@ -6049,14 +6049,14 @@ _setupServerBarDrag(list) {
     if (!el) return;
     list._serverDragSrc = el;
     el.classList.add('server-dragging');
-    try { e.dataTransfer.effectAllowed = 'move'; } catch {}
-    try { e.dataTransfer.setData('text/plain', el.dataset.url || ''); } catch {}
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', el.dataset.url || '');
   });
 
   list.addEventListener('dragover', (e) => {
     if (!list._serverDragSrc) return;
     e.preventDefault();
-    try { e.dataTransfer.dropEffect = 'move'; } catch {}
+    e.dataTransfer.dropEffect = 'move';
     const tgt = e.target.closest('.server-icon.remote');
     if (!tgt || tgt === list._serverDragSrc) { indicator.remove(); return; }
     const rect = tgt.getBoundingClientRect();
@@ -6113,7 +6113,7 @@ _reportKnownServerUrls() {
     const u = norm(el.dataset.url);
     if (u) known.add(u);
   });
-  try { window.havenDesktop.reportKnownServerUrls(Array.from(known)); } catch { /* ignore */ }
+  try { window.havenDesktop.reportKnownServerUrls(Array.from(known)); } catch (err) { console.warn('[Desktop] could not report known servers', err); }
 },
 
 // Append a stable cache-buster query param to icon URLs. This forces the
@@ -6189,7 +6189,7 @@ _renderServerBar() {
         this.serverManager.remove(el.dataset.url);
         // Also drop from Desktop's cross-server history so it stops getting
         // re-merged into other servers' sidebars on the next sync.
-        window.havenDesktop?.removeServerHistory?.(el.dataset.url)?.catch?.(() => {});
+        window.havenDesktop?.removeServerHistory?.(el.dataset.url)?.catch?.((err) => { console.warn('[Desktop] could not remove from server history', err); });
         this._renderServerBar();
         this._showToast(t('toasts.server_removed'), 'success');
         this._pushServerListToServer();
@@ -7462,7 +7462,7 @@ _setupMobileBridge() {
 
 _postToShell(msg) {
   if (!this._isMobileApp) return;
-  try { window.parent.postMessage(msg, '*'); } catch (_) {}
+  try { window.parent.postMessage(msg, '*'); } catch (err) { console.warn('[Shell] postMessage failed', err); }
 },
 
 _handleMobileBack() {
@@ -7609,7 +7609,7 @@ _uploadWithProgress(url, formData) {
         catch { reject(new Error(t('toasts.invalid_json_response'))); }
       } else {
         let errMsg = t('toasts.upload_failed_status', { status: xhr.status });
-        try { const d = JSON.parse(xhr.responseText); errMsg = d.error || errMsg; } catch {}
+        try { const d = JSON.parse(xhr.responseText); errMsg = d.error || errMsg; } catch { /* no JSON error body: keep the status message */ }
         reject(new Error(errMsg));
       }
     });
@@ -7937,7 +7937,7 @@ _applyMediaTileSize(px) {
   if (modal) modal.style.setProperty('--media-tile', `${size}px`);
   if (modal && this._tileShapes) {
     let shape = 'square';
-    try { shape = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch {}
+    try { shape = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch { /* storage blocked (private mode): keep the default */ }
     modal.style.setProperty('--media-shape', this._tileShapes()[shape] || '1 / 1');
   }
   const slider = document.getElementById('media-gallery-tile');
@@ -8142,7 +8142,7 @@ _renderMediaGalleryTab(tab) {
   } else if (tab === 'links') {
     body.innerHTML = `<div class="media-list">${items.map(it => {
       let host = '';
-      try { host = new URL(it.url).hostname; } catch {}
+      try { host = new URL(it.url).hostname; } catch { /* not a full address: no host shown */ }
       return `
       <a class="media-list-item" href="${esc(it.url)}" target="_blank" rel="noopener noreferrer nofollow">
         <div class="media-list-icon">🔗</div>
@@ -8572,14 +8572,14 @@ _openVideoLightbox(src) {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) {
       const v = overlay.querySelector('video');
-      if (v) { try { v.pause(); } catch {} }
+      if (v) { v.pause(); }
       overlay.remove();
     }
   });
   const closeOnEsc = (e) => {
     if (e.key === 'Escape') {
       const v = overlay.querySelector('video');
-      if (v) { try { v.pause(); } catch {} }
+      if (v) { v.pause(); }
       overlay.remove();
       document.removeEventListener('keydown', closeOnEsc);
     }

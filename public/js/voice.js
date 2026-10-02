@@ -263,7 +263,7 @@ class VoiceManager {
       const done = () => {
         if (settled) return;
         settled = true;
-        try { pc && pc.close(); } catch { /* ignore */ }
+        try { pc && pc.close(); } catch { /* probe connection already closed */ }
         resolve(result);
       };
       try {
@@ -329,7 +329,7 @@ class VoiceManager {
       const done = ok => {
         if (settled) return;
         settled = true;
-        try { pc && pc.close(); } catch { /* ignore */ }
+        try { pc && pc.close(); } catch { /* probe connection already closed */ }
         resolve({ url, ok });
       };
       try {
@@ -511,7 +511,7 @@ class VoiceManager {
     if (live === 0 && !micLive) return false;              // genuinely not in voice
     let code = this.currentChannel || this._softLeftChannel;
     if (!code) {
-      try { code = localStorage.getItem('haven_voice_channel'); } catch { /* ignore */ }
+      try { code = localStorage.getItem('haven_voice_channel'); } catch { /* storage blocked (private mode): keep the default */ }
     }
     if (!code) return false; // live media but no idea which channel — leave it alone
     console.warn('[Voice] Local state said not-in-voice but media is live',
@@ -520,7 +520,7 @@ class VoiceManager {
     this.inVoice = true;
     this._voiceSessionGeneration = (this._voiceSessionGeneration || 0) + 1;
     this._softLeftChannel = null;
-    try { localStorage.setItem('haven_voice_channel', code); } catch { /* ignore */ }
+    try { localStorage.setItem('haven_voice_channel', code); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     // Our socket may have been rebound while we thought we were out; rejoin so
     // the server roster and our peers agree with us again. Throttled so a
     // repeatedly-failing repair can't spam signalling.
@@ -597,7 +597,7 @@ class VoiceManager {
         const name = String(codec?.mimeType || '').replace(/^video\//i, '').toUpperCase();
         if (name === 'H264' || name === 'AV1' || name === 'H265') codecs.add(name);
       }
-    } catch {}
+    } catch { /* no codec list in this runtime: the H.264 baseline below still applies */ }
     // H.264 is the protocol baseline and is available in supported Chromium builds.
     if (codecs.size === 0) codecs.add('H264');
     return ['H264', 'AV1', 'H265'].filter(codec => codecs.has(codec));
@@ -933,7 +933,7 @@ class VoiceManager {
         // connection unable to traverse NAT. (haven#vc-late-join)
         if (peer._pendingCandidates && peer._pendingCandidates.length) {
           for (const c of peer._pendingCandidates) {
-            try { await conn.addIceCandidate(new RTCIceCandidate(c)); } catch (e) { /* ignore */ }
+            try { await conn.addIceCandidate(new RTCIceCandidate(c)); } catch (e) { /* stale candidate from an earlier negotiation; the others still connect */ }
           }
           peer._pendingCandidates = [];
         }
@@ -981,7 +981,7 @@ class VoiceManager {
             // Flush buffered ICE candidates that arrived before the answer
             if (peer._pendingCandidates && peer._pendingCandidates.length) {
               for (const c of peer._pendingCandidates) {
-                try { await peer.connection.addIceCandidate(new RTCIceCandidate(c)); } catch (e) { /* ignore */ }
+                try { await peer.connection.addIceCandidate(new RTCIceCandidate(c)); } catch (e) { /* stale candidate from an earlier negotiation; the others still connect */ }
               }
               peer._pendingCandidates = [];
             }
@@ -1069,7 +1069,7 @@ class VoiceManager {
         window.havenDesktop?.nativeScreen?.removePeer?.({
           peerId: data.user.id,
           sessionId: this._nativeScreenSessionId,
-        }).catch(() => {});
+        }).catch((err) => { console.warn('[Screen] native removePeer failed', err); });
       }
       // If they were screen sharing, clean up
       this._screenDelivered.delete(data.user.id);
@@ -1461,7 +1461,7 @@ class VoiceManager {
     });
 
     for (const candidate of pending) {
-      if (candidate) await connection.addIceCandidate(candidate).catch(() => {});
+      if (candidate) await connection.addIceCandidate(candidate).catch(() => { /* stale candidate from an earlier negotiation; the others still connect */ });
     }
   }
 
@@ -1550,7 +1550,7 @@ class VoiceManager {
           await this._withNativeScreenTimeout(
             api.removePeer?.({ peerId, sessionId: data.sessionId }),
             'remove peer'
-          ).catch(() => {});
+          ).catch((err) => { console.warn('[Screen] native removePeer failed', err); });
         }
         throw err;
       } finally {
@@ -1571,7 +1571,7 @@ class VoiceManager {
     await this._withNativeScreenTimeout(
       api?.removePeer?.({ peerId, sessionId }),
       'remove peer'
-    ).catch(() => {});
+    ).catch((err) => { console.warn('[Screen] native removePeer failed', err); });
     if (!this._nativeScreenSharing || this._nativeScreenSessionId !== sessionId) return;
     await this._withNativeScreenTimeout(api?.addPeer?.({ peerId, sessionId }), 'add peer');
   }
@@ -1620,7 +1620,7 @@ class VoiceManager {
     if (entry) {
       this._nativeScreenPeers.delete(userId);
       if (entry.disconnectTimer) clearTimeout(entry.disconnectTimer);
-      try { entry.connection.close(); } catch {}
+      try { entry.connection.close(); } catch { /* already closed */ }
     }
     for (const key of this._pendingNativeScreenCandidates.keys()) {
       if (key.startsWith(`${userId}:`) &&
@@ -1769,13 +1769,13 @@ class VoiceManager {
           await this._withNativeScreenTimeout(
             api.stop({ sessionId: result.sessionId }),
             'stop'
-          ).catch(() => {});
+          ).catch((err) => { console.warn('[Screen] native stop failed', err); });
         }
         return false;
       }
       if (!result?.started || !/^[A-Za-z0-9_-]{8,64}$/.test(String(result.sessionId || '')) ||
           !compatibleCodecs.includes(result.codec)) {
-        await this._withNativeScreenTimeout(api.stop(), 'stop').catch(() => {});
+        await this._withNativeScreenTimeout(api.stop(), 'stop').catch((err) => { console.warn('[Screen] native stop failed', err); });
         return result?.cancelled ? false : null;
       }
 
@@ -1798,7 +1798,7 @@ class VoiceManager {
         await this._withNativeScreenTimeout(
           api.stop({ sessionId: result.sessionId }),
           'stop'
-        ).catch(() => {});
+        ).catch((err) => { console.warn('[Screen] native stop failed', err); });
         return startResponse.error === 'incompatible_viewer' ? null : false;
       }
 
@@ -1828,7 +1828,7 @@ class VoiceManager {
         await this._withNativeScreenTimeout(
           api.stop({ sessionId: result.sessionId }),
           'stop'
-        ).catch(() => {});
+        ).catch((err) => { console.warn('[Screen] native stop failed', err); });
         if (this._nativeScreenSessionId === result.sessionId) {
           this._nativeScreenSharing = false;
           this._nativeScreenSessionId = null;
@@ -1848,9 +1848,9 @@ class VoiceManager {
         await this._withNativeScreenTimeout(
           api.stop({ sessionId: startedSessionId }),
           'stop'
-        ).catch(() => {});
+        ).catch((err) => { console.warn('[Screen] native stop failed', err); });
       } else if (operationIsCurrent && !this._nativeScreenSessionId) {
-        await this._withNativeScreenTimeout(api.stop(), 'stop').catch(() => {});
+        await this._withNativeScreenTimeout(api.stop(), 'stop').catch((err) => { console.warn('[Screen] native stop failed', err); });
       }
       if (announced) {
         const signalCode = this._screenSignalCode(channelCode, voiceGeneration);
@@ -1982,7 +1982,7 @@ class VoiceManager {
         const track = receiver.track;
         return track?.kind === 'video' && track.readyState === 'live' && !track.muted;
       })) return true;
-    } catch { /* ignore */ }
+    } catch { /* peer closed mid-check: try the next source */ }
     if (this._nativeScreenAnnouncements.has(sharerId)) return false;
     try {
       const peer = this.peers.get(sharerId);
@@ -1995,13 +1995,13 @@ class VoiceManager {
         });
         if (live) return true;
       }
-    } catch { /* ignore */ }
+    } catch { /* peer closed mid-check: try the next source */ }
     try {
       const tile = document.getElementById(`screen-tile-${sharerId}`);
       const vid = tile && tile.querySelector('video');
       const track = vid && vid.srcObject && vid.srcObject.getVideoTracks?.()[0];
       if (track && track.readyState === 'live' && vid.videoWidth > 0) return true;
-    } catch { /* ignore */ }
+    } catch { /* tile removed mid-check: treat as not live */ }
     return false;
   }
 
@@ -2030,7 +2030,7 @@ class VoiceManager {
       // #5380 — "Always join muted" user preference. If set, force mute on
       // every join so users who like to lurk-first never accidentally hot-mic.
       let muteOnJoin = false;
-      try { muteOnJoin = localStorage.getItem('haven_mute_on_join') === '1'; } catch {}
+      try { muteOnJoin = localStorage.getItem('haven_mute_on_join') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
 
       // Don't attempt to join while the socket is disconnected. The
       // emit() would otherwise be buffered by socket.io and flushed on
@@ -2051,7 +2051,7 @@ class VoiceManager {
 
       // Create/resume AudioContext with user gesture (needed for volume boost)
       this._ensureAudioCtx();
-      await this.audioCtx.resume().catch(() => {});
+      await this.audioCtx.resume().catch(() => { /* resumes on the next user gesture */ });
 
       // Use saved input device if the user picked one
       const savedInputId = localStorage.getItem('haven_input_device') || '';
@@ -2100,7 +2100,7 @@ class VoiceManager {
       // Opt out of Windows audio ducking (Desktop app only).
       // Must be called after getUserMedia so our audio session exists.
       if (window.havenDesktop?.audio?.optOutOfDucking) {
-        setTimeout(() => window.havenDesktop.audio.optOutOfDucking().catch(() => {}), 500);
+        setTimeout(() => window.havenDesktop.audio.optOutOfDucking().catch((err) => { console.warn('[Voice] could not opt out of OS audio ducking', err); }), 500);
       }
 
       if (this.isListenerOnly) {
@@ -2167,7 +2167,7 @@ class VoiceManager {
           this.localStream = null;
         }
         if (this.audioCtx) {
-          this.audioCtx.close().catch(() => {});
+          this.audioCtx.close().catch(() => { /* already closed */ });
           this.audioCtx = null;
         }
         return false;
@@ -2184,13 +2184,13 @@ class VoiceManager {
       this._applyMuteStateToLocalTracks();
 
       // Persist voice channel for auto-rejoin after page refresh or server restart
-      try { localStorage.setItem('haven_voice_channel', channelCode); } catch {}
+      try { localStorage.setItem('haven_voice_channel', channelCode); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
 
       this.socket.emit('voice-join', { code: channelCode, ...this.getNativeScreenClientInfo() });
       // Inform peers / UI about our mute state so they show the muted icon
       // immediately instead of waiting for someone to query.
       if (this.isMuted) {
-        try { this.socket.emit('voice-mute-state', { code: channelCode, muted: true }); } catch {}
+        try { this.socket.emit('voice-mute-state', { code: channelCode, muted: true }); } catch (err) { console.warn('[Voice] could not send mute state', err); }
       }
 
       // Start local talk indicator (use raw stream for accurate detection).
@@ -2210,19 +2210,17 @@ class VoiceManager {
   leave() {
     // Breadcrumb for the maximize/resize "fake disconnect" bug — if leave()
     // runs when the user didn't click Disconnect, the stack tells us why.
-    try {
-      console.warn('[Voice] leave() invoked', {
-        channel: this.currentChannel,
-        inVoice: this.inVoice,
-        peers: this.peers.size,
-        stack: new Error().stack
-      });
-    } catch {}
+    console.warn('[Voice] leave() invoked', {
+      channel: this.currentChannel,
+      inVoice: this.inVoice,
+      peers: this.peers.size,
+      stack: new Error().stack
+    });
     const pendingScreenStart = this._screenStartInFlight;
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
     this._screenStartInFlight = false;
     if (pendingScreenStart && !this.isScreenSharing) {
-      window.havenDesktop?.nativeScreen?.stop?.().catch(() => {});
+      window.havenDesktop?.nativeScreen?.stop?.().catch((err) => { console.warn('[Screen] native stop failed', err); });
     }
     // Stop screen share and webcam first if active, in teardown mode: the
     // peers are closed a few lines down, so there is nobody to renegotiate
@@ -2302,14 +2300,14 @@ class VoiceManager {
 
     // Close AudioContext to free resources
     if (this.audioCtx) {
-      this.audioCtx.close().catch(() => {});
+      this.audioCtx.close().catch(() => { /* already closed */ });
       this.audioCtx = null;
     }
     // Clear cached silent track
     this._cachedSilentTrack = null;
     
     // Clear persisted voice channel
-    try { localStorage.removeItem('haven_voice_channel'); } catch {}
+    try { localStorage.removeItem('haven_voice_channel'); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     
     // Clear any pending disconnect-recovery timers
     if (this._disconnectTimers) {
@@ -2334,7 +2332,7 @@ class VoiceManager {
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
     this._screenStartInFlight = false;
     if (pendingScreenStart && !this.isScreenSharing) {
-      window.havenDesktop?.nativeScreen?.stop?.().catch(() => {});
+      window.havenDesktop?.nativeScreen?.stop?.().catch((err) => { console.warn('[Screen] native stop failed', err); });
     }
 
     // Stop screen share / webcam (local cleanup only)
@@ -2348,7 +2346,7 @@ class VoiceManager {
       this._pendingScreenStop = { sessionId: this._nativeScreenSessionId };
       window.havenDesktop?.nativeScreen?.stop?.({
         sessionId: this._nativeScreenSessionId,
-      }).catch(() => {});
+      }).catch((err) => { console.warn('[Screen] native stop failed', err); });
       this._nativeScreenSharing = false;
       this._nativeScreenSessionId = null;
       this._nativeScreenSenderStates.clear();
@@ -2402,7 +2400,7 @@ class VoiceManager {
     this._vcDest = null;
 
     if (this.audioCtx) {
-      this.audioCtx.close().catch(() => {});
+      this.audioCtx.close().catch(() => { /* already closed */ });
       this.audioCtx = null;
     }
     this._cachedSilentTrack = null;
@@ -2436,7 +2434,7 @@ class VoiceManager {
       bufferSource.connect(localGain);
       localGain.connect(this.audioCtx.destination);
       bufferSource.start(0);
-    }).catch(() => {});
+    }).catch((err) => { console.warn('[Voice] soundboard clip could not be played into voice', err); });
     return true;
   }
 
@@ -2458,7 +2456,7 @@ class VoiceManager {
     audio.volume = this.isDeafened ? 0 : 1;
     const savedOutput = localStorage.getItem('haven_output_device');
     const sinkReady = savedOutput && typeof audio.setSinkId === 'function'
-      ? audio.setSinkId(savedOutput).catch(() => {})
+      ? audio.setSinkId(savedOutput).catch((err) => { console.warn('[Voice] saved output device unavailable, using the default', err); })
       : Promise.resolve();
     audio.addEventListener('ended', () => {
       if (this._botAudio === playback) this.stopBotAudio(playback.id);
@@ -2700,7 +2698,7 @@ class VoiceManager {
     } catch (err) {
       console.error('Screen share failed:', err);
       if (capturedStream && this.screenStream === capturedStream && this.isScreenSharing) {
-        await this.stopScreenShare().catch(() => {});
+        await this.stopScreenShare().catch((err) => { console.warn('[Screen] cleanup after a failed start did not finish', err); });
       } else if (capturedStream) {
         capturedStream.getTracks().forEach(track => track.stop());
       }
@@ -2718,8 +2716,8 @@ class VoiceManager {
     if (!this.isScreenSharing) return;
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
     if (this._relay) {
-      await this._relay.unpublish('screen').catch(() => {});
-      await this._relay.unpublish('screen-audio').catch(() => {});
+      await this._relay.unpublish('screen').catch(() => { /* unpublish logs its own failures */ });
+      await this._relay.unpublish('screen-audio').catch(() => { /* unpublish logs its own failures */ });
     }
     this._screenStartInFlight = false;
 
@@ -2779,11 +2777,11 @@ class VoiceManager {
       tracks.forEach(track => {
         const sender = senders.find(s => s.track === track);
         if (sender) {
-          try { peer.connection.removeTrack(sender); } catch {}
+          try { peer.connection.removeTrack(sender); } catch { /* connection already closed: nothing to remove */ }
         }
       });
       // Renegotiate and track the promise so we can wait for completion
-      renegotiations.push(this._renegotiate(userId, peer.connection).catch(() => {}));
+      renegotiations.push(this._renegotiate(userId, peer.connection).catch(() => { /* _renegotiate logs its own failures */ }));
     }
 
     // Wait for ALL renegotiations to actually finish before tearing the
@@ -2796,12 +2794,10 @@ class VoiceManager {
     // On the next startScreenShare the new addTrack would reuse that broken
     // transceiver and ontrack would never fire on the viewer side — exactly
     // the symptom users reported. Use allSettled with a generous safety cap.
-    try {
-      await Promise.race([
-        Promise.allSettled(renegotiations),
-        new Promise(resolve => setTimeout(resolve, 8000))
-      ]);
-    } catch { /* proceed anyway */ }
+    await Promise.race([
+      Promise.allSettled(renegotiations),
+      new Promise(resolve => setTimeout(resolve, 8000))
+    ]);
 
     // Now safe to stop tracks — all peers have detached them
     tracks.forEach(t => t.stop());
@@ -2865,7 +2861,7 @@ class VoiceManager {
 
   async stopWebcam({ teardown = false } = {}) {
     if (!this.isWebcamActive || !this.webcamStream) return;
-    if (this._relay) await this._relay.unpublish('webcam').catch(() => {});
+    if (this._relay) await this._relay.unpublish('webcam').catch(() => { /* unpublish logs its own failures */ });
 
     const tracks = this.webcamStream.getTracks();
 
@@ -2886,18 +2882,17 @@ class VoiceManager {
       tracks.forEach(track => {
         const sender = senders.find(s => s.track === track);
         if (sender) {
-          try { peer.connection.removeTrack(sender); } catch {}
+          try { peer.connection.removeTrack(sender); } catch { /* connection already closed: nothing to remove */ }
         }
       });
-      renegotiations.push(this._renegotiate(userId, peer.connection).catch(() => {}));
+      renegotiations.push(this._renegotiate(userId, peer.connection).catch(() => { /* _renegotiate logs its own failures */ }));
     }
 
-    try {
-      await Promise.race([
-        Promise.all(renegotiations),
-        new Promise(resolve => setTimeout(resolve, 3000))
-      ]);
-    } catch {}
+    // Each renegotiation catches its own failure, so this only waits.
+    await Promise.race([
+      Promise.all(renegotiations),
+      new Promise(resolve => setTimeout(resolve, 3000))
+    ]);
 
     tracks.forEach(t => t.stop());
 
@@ -3127,7 +3122,7 @@ class VoiceManager {
             params.encodings[0].maxFramerate = this.screenFrameRate;
           }
           params.degradationPreference = relayProfile ? 'balanced' : 'maintain-framerate';
-          sender.setParameters(params).catch(() => {});
+          sender.setParameters(params).catch(() => { /* browser rejected the hint: the encoder keeps its defaults */ });
         }
       }
       // Protect audio from the video ramp-up. (#5426)
@@ -3156,7 +3151,7 @@ class VoiceManager {
         if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
         params.encodings[0].networkPriority = 'high';
         params.encodings[0].priority = 'high';   // older Chromium spelling
-        sender.setParameters(params).catch(() => {});
+        sender.setParameters(params).catch(() => { /* browser rejected the hint: audio still flows */ });
       }
     } catch { /* unsupported — audio still flows, just without the hint */ }
   }
@@ -3178,7 +3173,7 @@ class VoiceManager {
             params.encodings = [{}];
           }
           params.encodings[0].maxBitrate = this.audioBitrate * 1000;
-          sender.setParameters(params).catch(() => {});
+          sender.setParameters(params).catch(() => { /* browser rejected the cap: the encoder keeps its defaults */ });
         }
       }
     } catch (e) { /* setParameters not supported */ }
@@ -3276,7 +3271,7 @@ class VoiceManager {
     const wantsIceRestart = !!peer._queuedIceRestart;
     peer._renegotiateQueued = false;
     peer._queuedIceRestart = false;
-    this._renegotiate(userId, peer.connection, { iceRestart: wantsIceRestart }).catch(() => {});
+    this._renegotiate(userId, peer.connection, { iceRestart: wantsIceRestart }).catch(() => { /* _renegotiate logs its own failures */ });
   }
 
   async _renegotiate(userId, connection, { iceRestart = false } = {}) {
@@ -3852,7 +3847,7 @@ class VoiceManager {
     // After the ICE sweep, re-check every active screen share. A heal that
     // restores voice audio often leaves screen video undelivered because
     // ontrack doesn't re-fire for an already-negotiated transceiver.
-    setTimeout(() => { try { this._rearmScreenWatchdogs(); } catch {} }, 2500);
+    setTimeout(() => { try { this._rearmScreenWatchdogs(); } catch (err) { console.warn('[Voice] screen watchdog re-arm failed', err); } }, 2500);
     // Only a path that is actually broken gets restarted. This sweep used to
     // restart every peer, healthy or not, and the other person's client ran
     // the same sweep at the same moment: after a server restart or a channel
@@ -3902,7 +3897,7 @@ class VoiceManager {
       peer._offerIsIceRestart = false;
       peer._offerChannelCode = null;
       if (connection.signalingState === 'have-local-offer') {
-        rollbacks.push(connection.setLocalDescription({ type: 'rollback' }).catch(() => {}));
+        rollbacks.push(connection.setLocalDescription({ type: 'rollback' }).catch((err) => { console.warn('[Voice] offer rollback after a channel code change failed', err); }));
       }
     }
     if (rollbacks.length) await Promise.all(rollbacks);
@@ -3948,7 +3943,7 @@ class VoiceManager {
       const silentTrack = this._createSilentAudioTrack();
       // Store original track for restore
       peer._originalAudioTrack = audioSender.track;
-      audioSender.replaceTrack(silentTrack).catch(() => {});
+      audioSender.replaceTrack(silentTrack).catch((err) => { console.warn('[Voice] could not swap in the silent track', err); });
     }
   }
 
@@ -3963,7 +3958,7 @@ class VoiceManager {
       const audioSender = senders.find(s => s.track && s.track.kind === 'audio' &&
         (!this.screenStream || !this.screenStream.getAudioTracks().includes(s.track)));
       if (audioSender) {
-        audioSender.replaceTrack(peer._originalAudioTrack).catch(() => {});
+        audioSender.replaceTrack(peer._originalAudioTrack).catch((err) => { console.warn('[Voice] could not restore the microphone track', err); });
       }
       peer._originalAudioTrack = null;
     }
@@ -4144,7 +4139,7 @@ class VoiceManager {
   // setting on (the default) nothing changes.
   _screenAudioDeferred(userId) {
     let autoAccept = true;
-    try { autoAccept = localStorage.getItem('haven_auto_accept_streams') !== 'false'; } catch {}
+    try { autoAccept = localStorage.getItem('haven_auto_accept_streams') !== 'false'; } catch { /* storage blocked (private mode): keep the default */ }
     if (autoAccept) return false;
     return !document.getElementById(`screen-tile-${userId}`);
   }
@@ -4174,7 +4169,7 @@ class VoiceManager {
       // Apply saved output device
       const savedOutput = localStorage.getItem('haven_output_device');
       if (savedOutput && typeof audioEl.setSinkId === 'function') {
-        audioEl.setSinkId(savedOutput).catch(() => {});
+        audioEl.setSinkId(savedOutput).catch((err) => { console.warn('[Voice] saved output device unavailable, using the default', err); });
       }
     }
     audioEl.srcObject = stream;
@@ -4183,7 +4178,7 @@ class VoiceManager {
     // so we rebuild the AudioContext chain for the new source.
     const existingGain = this.screenGainNodes.get(userId);
     if (existingGain) {
-      try { existingGain.disconnect(); } catch {}
+      try { existingGain.disconnect(); } catch { /* not connected: nothing to undo */ }
       this.screenGainNodes.delete(userId);
     }
 
@@ -4202,7 +4197,7 @@ class VoiceManager {
     // Debug ("Web Audio mixing for screen-share audio"). iOS/WebKit always uses
     // native playout (createMediaStreamSource yields silence there).
     let _useWebAudioScreen = false;
-    try { _useWebAudioScreen = localStorage.getItem('screen_audio_webaudio') === '1'; } catch {}
+    try { _useWebAudioScreen = localStorage.getItem('screen_audio_webaudio') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
     if (_IS_IOS_WEBKIT || !_useWebAudioScreen) {
       const savedVolume = Math.min(1, this._getSavedStreamVolume(userId));
       if (this.isDeafened) {
@@ -4211,7 +4206,7 @@ class VoiceManager {
       } else {
         audioEl.volume = savedVolume;
       }
-      audioEl.play().catch(() => {});
+      audioEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
       // Native playout is now the default path, so still announce that this
       // share has audio — this is what reveals the 🔊 badge and the per-stream
       // volume controls on the tile. (#5426)
@@ -4392,13 +4387,13 @@ class VoiceManager {
           // Tear the dead node out so audio keeps flowing unprocessed
           // rather than sitting on a forever-passthrough worklet that
           // claims to be "AI suppression".
-          try { this._disableRNNoise(); } catch {}
+          try { this._disableRNNoise(); } catch (err) { console.warn('[Voice] RNNoise disable failed', err); }
         }
       };
       node.port.onmessageerror = () => {
         console.warn('[Voice] RNNoise port messageerror (WASM payload failed to clone)');
         this._rnnoiseReady = false;
-        try { this._disableRNNoise(); } catch {}
+        try { this._disableRNNoise(); } catch (err) { console.warn('[Voice] RNNoise disable failed', err); }
       };
 
       // Post raw bytes (transfer a copy so our cached buffer stays usable
@@ -4560,17 +4555,17 @@ class VoiceManager {
       // Best-effort: if sinkId-in-options wasn't honored but setSinkId() is
       // available on the instance, apply it now.
       if (savedOutput && typeof this.audioCtx.setSinkId === 'function') {
-        this.audioCtx.setSinkId(savedOutput).catch(() => {});
+        this.audioCtx.setSinkId(savedOutput).catch((err) => { console.warn('[Voice] saved output device unavailable, using the default', err); });
       }
       // Attach watchdog once so it survives future suspend/resume cycles.
       this.audioCtx.addEventListener('statechange', () => {
         if (this.audioCtx && this.audioCtx.state === 'suspended') {
-          this.audioCtx.resume().catch(() => {});
+          this.audioCtx.resume().catch(() => { /* resumes on the next user gesture */ });
         }
       });
     }
     if (this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume().catch(() => {});
+      this.audioCtx.resume().catch(() => { /* resumes on the next user gesture */ });
     }
     return this.audioCtx;
   }
@@ -4718,7 +4713,7 @@ class VoiceManager {
       // Apply saved output device
       const savedOutput = localStorage.getItem('haven_output_device');
       if (savedOutput && typeof audioEl.setSinkId === 'function') {
-        audioEl.setSinkId(savedOutput).catch(() => {});
+        audioEl.setSinkId(savedOutput).catch((err) => { console.warn('[Voice] saved output device unavailable, using the default', err); });
       }
     }
     audioEl.srcObject = stream;
@@ -4747,8 +4742,8 @@ class VoiceManager {
       }
       // iOS also blocks play() outside a user gesture; ontrack fires after
       // the join-voice tap so we should be fine, but kick play() anyway
-      // for safety and swallow the rejection if it ever happens.
-      audioEl.play().catch(() => {});
+      // for safety; a refusal here is not an error.
+      audioEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
       return;
     }
 

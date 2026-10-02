@@ -40,13 +40,11 @@ _syncChannelMutePref(code, muted) {
   if (!code) return;
   const tok = localStorage.getItem('haven_token');
   if (!tok) return;
-  try {
-    fetch('/api/user/channel-prefs/mute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
-      body: JSON.stringify({ code, muted: !!muted }),
-    }).catch(() => { /* best-effort */ });
-  } catch { /* ignore */ }
+  fetch('/api/user/channel-prefs/mute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
+    body: JSON.stringify({ code, muted: !!muted }),
+  }).catch((err) => { console.warn('[Mute] could not save the channel mute to the server', err); });
 },
 
 /** One-shot reconciliation between localStorage and the server-side
@@ -75,7 +73,7 @@ async _bootstrapChannelPrefs() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
         body: JSON.stringify({ codes: union }),
-      }).catch(() => {});
+      }).catch((err) => { console.warn('[Mute] could not sync local mutes to the server', err); });
     }
   } catch {
     this._channelPrefsSynced = false;
@@ -184,7 +182,7 @@ _setMaxSeenPinId(code, id) {
   try {
     const cur = this._getMaxSeenPinId(code) || 0;
     if ((id | 0) > cur) localStorage.setItem(this._pinSeenKey(code), String(id | 0));
-  } catch {}
+  } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
 },
 
 _updatePinIndicator(count) {
@@ -489,7 +487,7 @@ _isEmojiOnly(str) {
   }
   if (s.trim().length > 0) return false;
   let unicodeCount = 0;
-  try { unicodeCount = (str.match(/[\p{Extended_Pictographic}]/gu) || []).length; } catch {}
+  try { unicodeCount = (str.match(/[\p{Extended_Pictographic}]/gu) || []).length; } catch { /* no Unicode property escapes in this browser: count only custom emoji */ }
   const total = resolvedCustom.length + unicodeCount + discordEmotes;
   return total >= 1 && total <= 27;
 },
@@ -893,7 +891,7 @@ _formatContent(str) {
           </button>
         </div>`;
       }
-    } catch {}
+    } catch { /* unreadable attachment data: show the error line below */ }
     return `<span class="muted-text">${t('app.messages.e2e_file_parse_error')}</span>`;
   }
 
@@ -2580,7 +2578,7 @@ _sendGifMessage(url) {
   if (dmCh && dmCh.is_dm && input && typeof this._sendMessage === 'function') {
     const draft = input.value;
     input.value = url;
-    Promise.resolve(this._sendMessage()).catch(() => {}).then((sent) => {
+    Promise.resolve(this._sendMessage()).catch((err) => { console.warn('[GIF] send failed', err); }).then((sent) => {
       // Backing out of an unencrypted send leaves the GIF's link in the box,
       // and the draft is what belongs there.
       if (sent === false || (draft && !input.value)) {
@@ -2636,7 +2634,7 @@ _sendStickerMessage(url) {
       if (sent !== false) return;
       input.value = draft;
       input.dispatchEvent(new Event('input', { bubbles: true }));
-    }).catch(() => {});
+    }).catch((err) => { console.warn('[GIF] send failed', err); });
   } else this.socket.emit('send-message', { code: this.currentChannel, content: url });
 },
 
@@ -2876,7 +2874,7 @@ _hideReactionPopout() {
 _getQuickEmojis() {
   const saved = localStorage.getItem('haven_quick_emojis');
   if (saved) {
-    try { const arr = JSON.parse(saved); if (Array.isArray(arr) && arr.length === 8) return arr; } catch {}
+    try { const arr = JSON.parse(saved); if (Array.isArray(arr) && arr.length === 8) return arr; } catch { /* corrupt saved list: use the defaults below */ }
   }
   return ['👍','👎','😂','❤️','🔥','💯','😮','😢'];
 },
@@ -3488,7 +3486,7 @@ _clearThreadMentionsForChannel(channelCode) {
   this._updateThreadMentionsPill();
 },
 _persistThreadMentions() {
-  try { localStorage.setItem('haven_thread_mentions', JSON.stringify(this._threadMentions || {})); } catch {}
+  try { localStorage.setItem('haven_thread_mentions', JSON.stringify(this._threadMentions || {})); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
 },
 _updateThreadMentionsPill() {
   const pill = document.getElementById('thread-mentions-pill');
@@ -3528,7 +3526,7 @@ _openDMPiP(code) {
   const ch = (this.channels || []).find(c => c.code === code);
   if (!ch || !ch.is_dm) return;
   this._activeDMPip = code;
-  try { localStorage.setItem('haven_active_dm_pip', code); } catch {}
+  try { localStorage.setItem('haven_active_dm_pip', code); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   // Keep the DM PiP cleared from the unread badge AND tell the server
   // we've read up to its latest message.  Without the server emit the
   // local mirror gets clobbered the next time `channels-list` snapshots
@@ -3543,11 +3541,11 @@ _openDMPiP(code) {
   this.unreadCounts[code] = 0;
   this._updateBadge?.(code);
   if (ch.latestMessageId) {
-    try { this.socket.emit('mark-read', { code, messageId: ch.latestMessageId }); } catch {}
+    try { this.socket.emit('mark-read', { code, messageId: ch.latestMessageId }); } catch (err) { console.warn('[DM PiP] could not mark the conversation read', err); }
   }
-  try { this._updateDmSectionBadge?.(); } catch {}
-  try { this._updateTabTitle?.(); } catch {}
-  try { this._updateDesktopBadge?.(); } catch {}
+  try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[DM PiP] _updateDmSectionBadge failed', err); }
+  try { this._updateTabTitle?.(); } catch (err) { console.warn('[DM PiP] _updateTabTitle failed', err); }
+  try { this._updateDesktopBadge?.(); } catch (err) { console.warn('[DM PiP] _updateDesktopBadge failed', err); }
 
   const panel = document.getElementById('dm-pip-panel');
   if (!panel) {
@@ -3556,7 +3554,7 @@ _openDMPiP(code) {
     // where users were seeing the toast but no panel — issue: SerChiz v3.8).
     console.warn('[DM] PiP panel not found in DOM, falling back to switchChannel');
     this._activeDMPip = null;
-    try { localStorage.removeItem('haven_active_dm_pip'); } catch {}
+    try { localStorage.removeItem('haven_active_dm_pip'); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     this.switchChannel?.(code);
     return;
   }
@@ -3669,7 +3667,7 @@ _openDMPiPBody(ch, code, panel) {
     if (ch.is_self_dm && this.e2e && this.e2e.publicKeyJwk) {
       this._dmPublicKeys[ch.dm_target.id] = this.e2e.publicKeyJwk;
     } else {
-      try { this._fetchDMPartnerKey?.(ch); } catch {}
+      try { this._fetchDMPartnerKey?.(ch); } catch (err) { console.warn('[DM PiP] _fetchDMPartnerKey failed', err); }
     }
   }
   this.socket.emit('get-messages', { code });
@@ -3699,14 +3697,14 @@ _closeDMPiP() {
   this._pipImageQueueTarget = null;
   this._renderPiPImageQueue?.();
   clearTimeout(this._dmPipLoadingTimer);
-  try { localStorage.removeItem('haven_active_dm_pip'); } catch {}
+  try { localStorage.removeItem('haven_active_dm_pip'); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   const panel = document.getElementById('dm-pip-panel');
   if (panel) panel.style.display = 'none';
 },
 
 _applyDMPiPGeometry(panel) {
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem('haven_dm_pip_rect') || 'null'); } catch {}
+  try { saved = JSON.parse(localStorage.getItem('haven_dm_pip_rect') || 'null'); } catch { /* corrupt saved position: use the default placement */ }
   const minW = 320, minH = 280;
   const maxW = Math.min(720, window.innerWidth - 28);
   const maxH = Math.max(minH, window.innerHeight - 28);
@@ -3755,7 +3753,7 @@ _bindDMPiPDrag() {
         width: panel.offsetWidth,
         height: panel.offsetHeight
       }));
-    } catch {}
+    } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   };
   window.addEventListener('mouseup', () => {
     if (dragging) { dragging = false; persist(); }
@@ -3801,14 +3799,14 @@ _appendDMPiPMessage(msg) {
   const el = this._createMessageEl(msg, prevMsg);
   list.appendChild(el);
   // Async content (link previews, E2E images/files, videos) — hook into existing pipelines
-  try { this._fetchLinkPreviews?.(el); } catch {}
-  try { this._setupVideos?.(el); } catch {}
-  try { this._decryptE2EImages?.(el); } catch {}
-  try { this._decryptE2EFiles?.(el); } catch {}
+  try { this._fetchLinkPreviews?.(el); } catch (err) { console.warn('[DM PiP] _fetchLinkPreviews failed', err); }
+  try { this._setupVideos?.(el); } catch (err) { console.warn('[DM PiP] _setupVideos failed', err); }
+  try { this._decryptE2EImages?.(el); } catch (err) { console.warn('[DM PiP] _decryptE2EImages failed', err); }
+  try { this._decryptE2EFiles?.(el); } catch (err) { console.warn('[DM PiP] _decryptE2EFiles failed', err); }
   // DM PiP is unambiguously a DM view, so enforce directly rather than
   // routing through _isDmContainer. (#5483)
-  try { this._enforceDmLinkPolicy?.(el); } catch {}
-  try { this._wireBurnMessages?.(el); } catch {}
+  try { this._enforceDmLinkPolicy?.(el); } catch (err) { console.warn('[DM PiP] _enforceDmLinkPolicy failed', err); }
+  try { this._wireBurnMessages?.(el); } catch (err) { console.warn('[DM PiP] _wireBurnMessages failed', err); }
   if (wasAtBottom) list.scrollTop = list.scrollHeight;
 },
 
@@ -3822,15 +3820,15 @@ _renderDMPiPHistory(messages) {
     const el = this._createMessageEl(m, prev);
     list.appendChild(el);
   });
-  try { this._fetchLinkPreviews?.(list); } catch {}
-  try { this._setupVideos?.(list); } catch {}
-  try { this._decryptE2EImages?.(list); } catch {}
-  try { this._decryptE2EFiles?.(list); } catch {}
+  try { this._fetchLinkPreviews?.(list); } catch (err) { console.warn('[DM PiP] _fetchLinkPreviews failed', err); }
+  try { this._setupVideos?.(list); } catch (err) { console.warn('[DM PiP] _setupVideos failed', err); }
+  try { this._decryptE2EImages?.(list); } catch (err) { console.warn('[DM PiP] _decryptE2EImages failed', err); }
+  try { this._decryptE2EFiles?.(list); } catch (err) { console.warn('[DM PiP] _decryptE2EFiles failed', err); }
   // DM PiP is unambiguously a DM view, so enforce directly rather than
   // routing through _isDmContainer. (#5483)
-  try { this._enforceDmLinkPolicy?.(list); } catch {}
-  try { this._maybeShowDmSafetyNotice?.(list); } catch {}
-  try { this._wireBurnMessages?.(list); } catch {}
+  try { this._enforceDmLinkPolicy?.(list); } catch (err) { console.warn('[DM PiP] _enforceDmLinkPolicy failed', err); }
+  try { this._maybeShowDmSafetyNotice?.(list); } catch (err) { console.warn('[DM PiP] _maybeShowDmSafetyNotice failed', err); }
+  try { this._wireBurnMessages?.(list); } catch (err) { console.warn('[DM PiP] _wireBurnMessages failed', err); }
   list.scrollTop = list.scrollHeight;
 },
 
@@ -3992,7 +3990,7 @@ _sendDMPiPMessage() {
         }
       }
       this.socket.emit('send-message', payload);
-      try { this.notifications?.play?.('sent'); } catch {}
+      try { this.notifications?.play?.('sent'); } catch { /* the send sound is cosmetic */ }
     }
 
     // Flush any queued images (same as main channel behavior, #5324)
@@ -4056,7 +4054,7 @@ _setThreadPiPEnabled(enabled) {
 
   if (isOn) {
     let saved = null;
-    try { saved = JSON.parse(localStorage.getItem('haven_thread_panel_pip_rect') || 'null'); } catch {}
+    try { saved = JSON.parse(localStorage.getItem('haven_thread_panel_pip_rect') || 'null'); } catch { /* corrupt saved position: use the default placement */ }
 
     const minW = 320;
     const maxW = Math.min(760, window.innerWidth - 28);
@@ -4249,10 +4247,10 @@ _appendThreadMessage(msg) {
   container.appendChild(el);
   // Link cards in threads, the same as in the channel (#5620).
   this._fetchLinkPreviews(el);
-  try { this._decryptE2EImages?.(el); } catch {}
-  try { this._decryptE2EFiles?.(el); } catch {}
-  try { if (this._isDmContainer(el)) this._enforceDmLinkPolicy?.(el); } catch {}
-  try { this._setupVideos?.(el); } catch {}
+  try { this._decryptE2EImages?.(el); } catch (err) { console.warn('[Thread] _decryptE2EImages failed', err); }
+  try { this._decryptE2EFiles?.(el); } catch (err) { console.warn('[Thread] _decryptE2EFiles failed', err); }
+  try { if (this._isDmContainer(el)) this._enforceDmLinkPolicy?.(el); } catch (err) { console.warn('[Thread] _enforceDmLinkPolicy failed', err); }
+  try { this._setupVideos?.(el); } catch (err) { console.warn('[Thread] _setupVideos failed', err); }
   container.scrollTop = container.scrollHeight;
 },
 
@@ -4667,7 +4665,7 @@ _dmLinkBlocked(text) {
 // check, not a control. Dismissed globally, remembered in localStorage.
 _maybeShowDmSafetyNotice(container) {
   if (!container) return;
-  try { if (localStorage.getItem('haven_dm_safety_dismissed') === '1') return; } catch {}
+  try { if (localStorage.getItem('haven_dm_safety_dismissed') === '1') return; } catch { /* storage blocked (private mode): show the notice */ }
   // Already present in this container — don't stack copies on re-render.
   if (container.querySelector(':scope > .dm-safety-notice')) return;
 
@@ -4679,7 +4677,7 @@ _maybeShowDmSafetyNotice(container) {
     `<button type="button" class="dm-safety-dismiss">${t('dm_runtime.safety_dismiss')}</button>`;
 
   notice.querySelector('.dm-safety-dismiss').addEventListener('click', () => {
-    try { localStorage.setItem('haven_dm_safety_dismissed', '1'); } catch {}
+    try { localStorage.setItem('haven_dm_safety_dismissed', '1'); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     // Clear it everywhere it might be showing (main pane + any open PiP).
     document.querySelectorAll('.dm-safety-notice').forEach(n => n.remove());
   });
@@ -4722,7 +4720,7 @@ _enforceDmLinkPolicy(containerEl) {
     if (!hostBlocked(a.href)) return;
 
     let host = a.href;
-    try { host = new URL(a.href).hostname; } catch {}
+    try { host = new URL(a.href).hostname; } catch { /* unparsable address: the tooltip shows it whole */ }
     const span = document.createElement('span');
     span.className = 'blocked-link';
     span.title = t('dm_runtime.blocked_link_tooltip', { host });

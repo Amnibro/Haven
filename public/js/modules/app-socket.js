@@ -37,14 +37,14 @@ _migrateChannelCodeState(oldCode, newCode) {
     if (localStorage.getItem('haven_voice_channel') === oldCode) {
       localStorage.setItem('haven_voice_channel', newCode);
     }
-  } catch {}
+  } catch { /* storage blocked: the saved voice channel keeps the old code and simply will not auto-rejoin */ }
   for (const key of ['haven_muted_channels', 'haven_hidden_channels']) {
     try {
       const values = JSON.parse(localStorage.getItem(key) || '[]');
       if (!Array.isArray(values) || !values.includes(oldCode)) continue;
       const migrated = values.map(code => code === oldCode ? newCode : code);
       localStorage.setItem(key, JSON.stringify([...new Set(migrated)]));
-    } catch {}
+    } catch { /* storage blocked or corrupt list: this preference keeps the old code */ }
   }
   try {
     const moveStorageKey = (oldKey, newKey) => {
@@ -439,7 +439,7 @@ _setupSocketListeners() {
             this._savedVoiceRejoinTimer = null;
             if (this.voice && !this.voice.inVoice) {
               let currentSavedChannel = savedVoiceChannel;
-              try { currentSavedChannel = localStorage.getItem('haven_voice_channel') || savedVoiceChannel; } catch {}
+              try { currentSavedChannel = localStorage.getItem('haven_voice_channel') || savedVoiceChannel; } catch { /* storage blocked (private mode): keep the default */ }
               console.log('[Voice] Auto-rejoining saved voice channel:', currentSavedChannel);
               const ok = await this.voice.join(currentSavedChannel);
               if (ok) {
@@ -450,7 +450,7 @@ _setupSocketListeners() {
             }
           }, 1500);
         }
-      } catch {}
+      } catch (err) { console.warn('[Voice] auto-rejoin check failed', err); }
     }
     // Apply any queued status change from when we were disconnected
     if (this._pendingStatus) {
@@ -498,8 +498,8 @@ _setupSocketListeners() {
       const voiceLive = !!(this.voice && this.voice.inVoice &&
         ((this.voice.liveVoicePeerCount?.() || 0) > 0 || this.voice.localStream));
       if (hiddenForMs > 30000 && this.socket && !voiceLive) {
-        try { this.socket.disconnect(); } catch {}
-        try { this.socket.connect(); } catch {}
+        try { this.socket.disconnect(); } catch (err) { console.warn('[Socket] disconnect before reconnect failed', err); }
+        try { this.socket.connect(); } catch (err) { console.warn('[Socket] reconnect failed', err); }
         return;
       }
       if (this.socket && !this.socket.connected) {
@@ -582,7 +582,7 @@ _setupSocketListeners() {
             }
           }, 500);
         }
-      } catch {}
+      } catch (err) { console.warn('[Voice] auto-rejoin check failed', err); }
     }
   });
 
@@ -686,7 +686,7 @@ _setupSocketListeners() {
     // Route through _pingSend so this probe's send time is queued too. It is a
     // real round trip and should show up as one; emitting 'ping-check' directly
     // here is what desynced the queue-less reading.
-    try { this._pingSend(); } catch {}
+    try { this._pingSend(); } catch { /* a ping that never goes out shows up as a missed reading below */ }
     const probeMs = voiceLive ? 10000 : 6000;
     setTimeout(() => {
       this.socket?.off('pong-check', ackHandler);
@@ -830,7 +830,7 @@ _setupSocketListeners() {
     const rotations = this._collectChannelCodeRotations(channels);
     const activeRotation = rotations.find(rotation => rotation.oldCode === this.currentChannel) || null;
     let savedVoiceCode = null;
-    try { savedVoiceCode = localStorage.getItem('haven_voice_channel'); } catch {}
+    try { savedVoiceCode = localStorage.getItem('haven_voice_channel'); } catch { /* storage blocked (private mode): keep the default */ }
     const voiceRotation = rotations.find(rotation =>
       rotation.oldCode === this.voice?.currentChannel ||
       rotation.oldCode === this.voice?._softLeftChannel ||
@@ -1335,10 +1335,10 @@ _setupSocketListeners() {
           // can't ever clobber a newer real id.
           this.unreadCounts[data.channelCode] = 0;
           this._updateBadge(data.channelCode);
-          try { this.socket.emit('mark-read', { code: data.channelCode, messageId: data.message.id }); } catch {}
-          try { this._updateDmSectionBadge?.(); } catch {}
-          try { this._updateTabTitle?.(); } catch {}
-          try { this._updateDesktopBadge?.(); } catch {}
+          try { this.socket.emit('mark-read', { code: data.channelCode, messageId: data.message.id }); } catch (err) { console.warn('[DM] could not mark the conversation read', err); }
+          try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[DM] _updateDmSectionBadge failed', err); }
+          try { this._updateTabTitle?.(); } catch (err) { console.warn('[DM] _updateTabTitle failed', err); }
+          try { this._updateDesktopBadge?.(); } catch (err) { console.warn('[DM] _updateDesktopBadge failed', err); }
         } else if (!_isMuted2) {
           this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
           this._updateBadge(data.channelCode);
@@ -1447,7 +1447,7 @@ _setupSocketListeners() {
     // them. Without this, a stale `inVoice === false` makes the filter below
     // delete us from our own voice panel — the "everyone sees me in voice
     // except me" report — and nothing ever undoes it.
-    try { this.voice?.reassertSessionIfLive(); } catch {}
+    try { this.voice?.reassertSessionIfLive(); } catch (err) { console.warn('[Voice] reassertSessionIfLive failed', err); }
     const isInVoice = !!(this.voice && this.voice.inVoice && this.voice.currentChannel === data.channelCode);
     // (#5347 v3.16.1) Defensively filter ourselves out of the user list
     // when we're NOT in voice on this channel. Guards against an in-flight
@@ -1714,11 +1714,11 @@ _setupSocketListeners() {
     const channelCode = data.channelCode || this.currentChannel;
     if (data.parentContent && window.HavenE2E && HavenE2E.isEncrypted(data.parentContent)) {
       const wrapper = [{ content: data.parentContent }];
-      try { await this._decryptMessages(wrapper, channelCode); } catch {}
+      try { await this._decryptMessages(wrapper, channelCode); } catch (err) { console.warn('[Thread] could not decrypt the parent message', err); }
       data.parentContent = wrapper[0].content;
     }
     if (data.messages && data.messages.length) {
-      try { await this._decryptMessages(data.messages, channelCode); } catch {}
+      try { await this._decryptMessages(data.messages, channelCode); } catch (err) { console.warn('[Thread] could not decrypt thread messages', err); }
     }
 
     // Update parent preview from server (authoritative source)
@@ -1769,7 +1769,7 @@ _setupSocketListeners() {
     if (this._activeThreadParent === data.parentId) {
       // E2E: decrypt before render for DM threads
       if (data.message) {
-        try { await this._decryptMessages([data.message], data.channelCode); } catch {}
+        try { await this._decryptMessages([data.message], data.channelCode); } catch (err) { console.warn('[Thread] could not decrypt the new thread message', err); }
       }
       this._appendThreadMessage(data.message);
     }
@@ -1860,7 +1860,7 @@ _setupSocketListeners() {
     setTimeout(() => {
       const stillIn = !!(this.voice && this.voice.inVoice);
       if (stillIn) {
-        try { this.voice.leave(); } catch {}
+        try { this.voice.leave(); } catch (err) { console.warn('[Voice] leave after removal failed', err); }
         this._showToast(
           t('toasts.kicked_from_voice', { by: data.kickedBy || data.reason || t('toasts.a_moderator') }),
           'error'
@@ -1893,7 +1893,7 @@ _setupSocketListeners() {
       // mention regex falls back to login names. Re-render once members
       // are known so display names + valid-mention filtering kick in. (#5273)
       if (wasEmpty && this._lastRenderedMessages && this._lastRenderedMessages.length) {
-        try { this._renderMessages(this._lastRenderedMessages, this._lastRenderedReadId); } catch {}
+        try { this._renderMessages(this._lastRenderedMessages, this._lastRenderedReadId); } catch (err) { console.warn('[Messages] re-render after the member list arrived failed', err); }
       }
     }
   });
@@ -2174,13 +2174,13 @@ _setupSocketListeners() {
       msgEls.forEach((msgEl) => {
         const next = msgEl.nextElementSibling;
         if (next && next.classList.contains('message-compact')) {
-          try { this._promoteCompactToFull(next); } catch (e) { /* don't let promotion failure block removal */ }
+          try { this._promoteCompactToFull(next); } catch (e) { console.warn('[Messages] compact row promotion failed', e); }
         } else if (next && next.classList.contains('thread-compact')
                    && !msgEl.classList.contains('thread-compact')) {
           // Deleting the head of a thread group (a full row): promote the next
           // compact reply so it keeps an author header. Deleting a middle
           // compact row needs no promotion — the head above it still stands.
-          try { this._promoteThreadCompactToFull(next); } catch (e) { /* non-fatal */ }
+          try { this._promoteThreadCompactToFull(next); } catch (e) { console.warn('[Messages] thread row promotion failed', e); }
         }
         msgEl.remove();
       });
@@ -2262,7 +2262,7 @@ _setupSocketListeners() {
         if (msgEl) {
           const next = msgEl.nextElementSibling;
           if (next && next.classList.contains('message-compact')) {
-            try { this._promoteCompactToFull(next); } catch {}
+            try { this._promoteCompactToFull(next); } catch (err) { console.warn('[Messages] compact row promotion failed', err); }
           }
           msgEl.remove();
         }
@@ -2572,12 +2572,12 @@ _setupSocketListeners() {
     // Sync hide-own-score toggle to the server's stored value so reopening
     // settings on a fresh device shows the correct state.
     if (prefs.hide_nsfw != null) {
-      try { localStorage.setItem('haven_hide_nsfw', prefs.hide_nsfw); } catch {}
+      try { localStorage.setItem('haven_hide_nsfw', prefs.hide_nsfw); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       const nsfwToggle = document.getElementById('hide-nsfw-channels');
       if (nsfwToggle) nsfwToggle.checked = prefs.hide_nsfw === 'true';
     }
     if (prefs.hide_score_badge != null) {
-      try { localStorage.setItem('haven_hide_own_score', prefs.hide_score_badge); } catch {}
+      try { localStorage.setItem('haven_hide_own_score', prefs.hide_score_badge); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       const ownToggle = document.getElementById('hide-own-score');
       if (ownToggle) ownToggle.checked = prefs.hide_score_badge === 'true';
     }
@@ -2704,8 +2704,8 @@ _setupSocketListeners() {
       this._renderOnlineUsers(this._lastOnlineUsers);
     }
     // Relay to game window or iframe if open
-    try { if (this._gameWindow && !this._gameWindow.closed) this._gameWindow.postMessage({ type: 'leaderboard-data', leaderboard: data.leaderboard }, window.location.origin); } catch {}
-    try { if (this._gameIframe) this._gameIframe.contentWindow?.postMessage({ type: 'leaderboard-data', leaderboard: data.leaderboard }, window.location.origin); } catch {}
+    try { if (this._gameWindow && !this._gameWindow.closed) this._gameWindow.postMessage({ type: 'leaderboard-data', leaderboard: data.leaderboard }, window.location.origin); } catch { /* game window closed or navigated away mid-send */ }
+    try { if (this._gameIframe) this._gameIframe.contentWindow?.postMessage({ type: 'leaderboard-data', leaderboard: data.leaderboard }, window.location.origin); } catch { /* game frame closed or navigated away mid-send */ }
   });
 
   this.socket.on('new-high-score', (data) => {
@@ -2787,8 +2787,8 @@ _forceFullResync(reason) {
     return;
   }
 
-  try { this.socket.disconnect(); } catch {}
-  try { this.socket.connect(); } catch {}
+  try { this.socket.disconnect(); } catch (err) { console.warn('[Resync] disconnect failed', err); }
+  try { this.socket.connect(); } catch (err) { console.warn('[Resync] reconnect failed', err); }
   // Defensive: if for some reason 'connect' doesn't fire within 6 s,
   // emit the resync requests anyway against the current socket so the
   // user at least gets channel data refreshed. (The connect handler is
@@ -2798,13 +2798,13 @@ _forceFullResync(reason) {
       // Only do this if connect handler didn't already run very recently.
       const sinceConnect = Date.now() - (this._lastConnectTime || 0);
       if (sinceConnect > 5000) {
-        try { this.socket.emit('enter-channel', { code: this.currentChannel }); } catch {}
-        try { this.socket.emit('get-messages', { code: this.currentChannel }); } catch {}
-        try { this.socket.emit('get-channel-members', { code: this.currentChannel }); } catch {}
-        try { this.socket.emit('request-online-users', { code: this.currentChannel }); } catch {}
-        try { this.socket.emit('request-voice-users', { code: this.currentChannel }); } catch {}
+        try { this.socket.emit('enter-channel', { code: this.currentChannel }); } catch (err) { console.warn('[Resync] enter-channel failed', err); }
+        try { this.socket.emit('get-messages', { code: this.currentChannel }); } catch (err) { console.warn('[Resync] get-messages failed', err); }
+        try { this.socket.emit('get-channel-members', { code: this.currentChannel }); } catch (err) { console.warn('[Resync] get-channel-members failed', err); }
+        try { this.socket.emit('request-online-users', { code: this.currentChannel }); } catch (err) { console.warn('[Resync] request-online-users failed', err); }
+        try { this.socket.emit('request-voice-users', { code: this.currentChannel }); } catch (err) { console.warn('[Resync] request-voice-users failed', err); }
         if (this.voice?.inVoice && this.voice.currentChannel) {
-          try { this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() }); } catch {}
+          try { this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() }); } catch (err) { console.warn('[Resync] voice-rejoin failed', err); }
         }
       }
     }
@@ -2816,7 +2816,7 @@ _forceFullResync(reason) {
 _lightVoiceResync(reason) {
   console.log(`[light-resync] reason=${reason}`);
   if (!this.socket?.connected) {
-    try { this.socket?.connect(); } catch {}
+    try { this.socket?.connect(); } catch (err) { console.warn('[Resync] reconnect failed', err); }
     return;
   }
   try {
@@ -2833,8 +2833,8 @@ _lightVoiceResync(reason) {
       // socket (skipRenegotiate). Still safe — used only to refresh roster.
       this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() });
       // UI may have been flipped to "Join Voice" by a partial desync — restore.
-      try { this._reconcileVoiceUi?.(); } catch {}
-      try { this.voice.reassertScreenStreams?.(); } catch {}
+      try { this._reconcileVoiceUi?.(); } catch (err) { console.warn('[Resync] _reconcileVoiceUi failed', err); }
+      try { this.voice.reassertScreenStreams?.(); } catch (err) { console.warn('[Resync] reassertScreenStreams failed', err); }
     }
   } catch (e) {
     console.warn('[light-resync] failed:', e);

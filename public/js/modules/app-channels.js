@@ -229,13 +229,13 @@ async switchChannel(code) {
   // response then reported the user as fully caught up, and the
   // "NEW MESSAGES" divider + auto-scroll from #5259 never appeared.
   if (channel && channel.latestMessageId) {
-    try { this.socket.emit('mark-read', { code, messageId: channel.latestMessageId }); } catch {}
+    try { this.socket.emit('mark-read', { code, messageId: channel.latestMessageId }); } catch (err) { console.warn('[Channels] could not mark the channel read', err); }
     if (this.unreadCounts && this.unreadCounts[code]) {
       this.unreadCounts[code] = 0;
-      try { this._updateBadge?.(code); } catch {}
-      try { this._updateDmSectionBadge?.(); } catch {}
-      try { this._updateTabTitle?.(); } catch {}
-      try { this._updateDesktopBadge?.(); } catch {}
+      try { this._updateBadge?.(code); } catch (err) { console.warn('[Channels] _updateBadge failed', err); }
+      try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[Channels] _updateDmSectionBadge failed', err); }
+      try { this._updateTabTitle?.(); } catch (err) { console.warn('[Channels] _updateTabTitle failed', err); }
+      try { this._updateDesktopBadge?.(); } catch (err) { console.warn('[Channels] _updateDesktopBadge failed', err); }
     }
   }
   this.socket.emit('get-channel-members', { code });
@@ -947,7 +947,7 @@ _initDmContextMenu() {
           this.socket.emit('get-messages', { code, before, limit: PAGE_LIMIT });
         });
         if (page.length === 0) break;
-        try { await this._decryptMessages(page, code); } catch {}
+        try { await this._decryptMessages(page, code); } catch (err) { console.warn('[DM] could not decrypt a page while collecting attachments to delete', err); }
         _scanMsgsForAttachments(page);
         if (page.length < PAGE_LIMIT) break;
         // Messages arrive in DESC order; last item is the oldest — use it as cursor.
@@ -1484,8 +1484,8 @@ _renderOrganizeList() {
       if (!header || !listEl.contains(header)) return;
       listEl._catDragKey = header.dataset.tagKey;
       header.classList.add('org-dragging');
-      try { e.dataTransfer.setData('text/plain', listEl._catDragKey || ''); } catch {}
-      try { e.dataTransfer.effectAllowed = 'move'; } catch {}
+      e.dataTransfer.setData('text/plain', listEl._catDragKey || '');
+      e.dataTransfer.effectAllowed = 'move';
     });
     listEl.addEventListener('dragend', () => {
       listEl.querySelectorAll('.organize-tag-header').forEach(h => h.classList.remove('org-dragging', 'org-drop-above', 'org-drop-below'));
@@ -1496,7 +1496,7 @@ _renderOrganizeList() {
       const header = e.target.closest('.organize-tag-header');
       if (!header || header.dataset.tagKey === listEl._catDragKey) return;
       e.preventDefault();
-      try { e.dataTransfer.dropEffect = 'move'; } catch {}
+      e.dataTransfer.dropEffect = 'move';
       const rect = header.getBoundingClientRect();
       const before = (e.clientY - rect.top) < rect.height / 2;
       // Clear other indicators
@@ -3126,14 +3126,14 @@ _resyncDesktopBadgeOnFocus() {
       const ch = this.channels?.find(c => c.code === code);
       const latestId = ch?.latestMessageId || this._newestMsgId;
       this.unreadCounts[code] = 0;
-      try { this._updateBadge?.(code); } catch {}
-      try { this._updateDmSectionBadge?.(); } catch {}
-      try { this._updateTabTitle?.(); } catch {}
+      try { this._updateBadge?.(code); } catch (err) { console.warn('[Channels] _updateBadge failed', err); }
+      try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[Channels] _updateDmSectionBadge failed', err); }
+      try { this._updateTabTitle?.(); } catch (err) { console.warn('[Channels] _updateTabTitle failed', err); }
       if (latestId) {
-        try { this.socket.emit('mark-read', { code, messageId: latestId }); } catch {}
+        try { this.socket.emit('mark-read', { code, messageId: latestId }); } catch (err) { console.warn('[Channels] could not mark the channel read', err); }
       }
     }
-    try { this._updateDesktopBadge(); } catch {}
+    try { this._updateDesktopBadge(); } catch (err) { console.warn('[Channels] _updateDesktopBadge failed', err); }
   };
   window.addEventListener('focus', resync);
   document.addEventListener('visibilitychange', resync);

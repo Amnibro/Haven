@@ -625,7 +625,7 @@ _setupNotifications() {
   if (blurNsfwToggle) {
     blurNsfwToggle.checked = localStorage.getItem('haven_blur_nsfw') !== 'false';
     blurNsfwToggle.addEventListener('change', () => {
-      try { localStorage.setItem('haven_blur_nsfw', blurNsfwToggle.checked ? 'true' : 'false'); } catch {}
+      try { localStorage.setItem('haven_blur_nsfw', blurNsfwToggle.checked ? 'true' : 'false'); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       if (this._forumActive && this._forumReload) this._forumReload();
     });
   }
@@ -788,7 +788,7 @@ _setupNotifications() {
         document.execCommand('copy');
         ta.remove();
         _flashCopied();
-      } catch {}
+      } catch { /* could not copy: the Copied flash simply does not show */ }
     };
     statusUrlEl.addEventListener('click', () => {
       if (navigator.clipboard?.writeText) {
@@ -960,7 +960,7 @@ async _openActivitiesModal() {
       for (const rom of data.roms) flashStatus[rom.file] = rom.installed;
       this._flashAllInstalled = data.allInstalled;
     }
-  } catch {}
+  } catch (err) { console.warn('[Games] could not read the Flash ROM status', err); }
 
   // If any flash games are not installed, show a download banner at top
   const hasFlashGames = this._gamesRegistry.some(g => g.type === 'flash');

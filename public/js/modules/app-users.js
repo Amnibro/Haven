@@ -1398,7 +1398,7 @@ _setVoiceVolume(userId, vol) {
     const vols = JSON.parse(localStorage.getItem('haven_voice_volumes') || '{}');
     vols[userId] = vol;
     localStorage.setItem('haven_voice_volumes', JSON.stringify(vols));
-  } catch { /* ignore */ }
+  } catch { /* storage blocked or corrupt: the volume holds for this session only */ }
 },
 
 // ── Nicknames ─────────────────────────────────────────────

@@ -1243,7 +1243,7 @@ _viewerChatAnimPref() {
 
 _setViewerChatAnimPref(pref) {
   const value = (pref === 'hover' || pref === 'never') ? pref : 'always';
-  try { localStorage.setItem('haven_animate_chat', value); } catch { /* ignore */ }
+  try { localStorage.setItem('haven_animate_chat', value); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   document.querySelectorAll('#animate-chat-picker .density-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.animchat === value);
   });
@@ -1353,7 +1353,7 @@ _viewerAnimPref() {
 // flipping it takes effect without a reload.
 _setViewerAnimPref(pref) {
   const value = (pref === 'always' || pref === 'never') ? pref : 'hover';
-  try { localStorage.setItem('haven_animate_pfp', value); } catch { /* ignore */ }
+  try { localStorage.setItem('haven_animate_pfp', value); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   document.querySelectorAll('#animate-pfp-picker .density-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.animpfp === value);
   });
@@ -2528,7 +2528,7 @@ _setupSoundManagement() {
         });
         if (!res.ok) {
           let errMsg = t('toasts.upload_failed_status', { status: res.status });
-          try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+          try { const d = await res.json(); errMsg = d.error || errMsg; } catch { /* no JSON error body: keep the status message */ }
           return this._showToast(errMsg, 'error');
         }
         this._showToast(t('media_runtime.sound.uploaded', { name }), 'success');
@@ -3148,7 +3148,7 @@ _playSoundFile(url) {
     // Fallback: play locally only
     const audio = new Audio(url);
     audio.volume = vol;
-    audio.play().catch(() => {});
+    audio.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
   } catch { /* audio not available */ }
 },
 
@@ -3178,7 +3178,7 @@ async _loadCustomSounds() {
     if (sbPanel && !sbPanel.classList.contains('sb-hidden')) {
       this._renderSoundboardSidebar(document.getElementById('sb-sidebar-search')?.value?.trim() || '');
     }
-  } catch { /* ignore */ }
+  } catch (err) { console.warn('[Sounds] could not load custom sounds', err); }
 },
 
 async _loadUserSoundPrefs() {
@@ -3202,7 +3202,7 @@ async _saveUserSoundPrefs() {
       },
       body: JSON.stringify({ prefs: this._soundPrefs })
     });
-  } catch { /* non-critical */ }
+  } catch (err) { console.warn('[Sounds] could not save sound preferences', err); }
 },
 
 _updateSoundSelects(sounds) {
@@ -3350,7 +3350,7 @@ _renderSoundList(sounds) {
             this._loadCustomSounds();
           } else {
             let errMsg = t('media_runtime.sound.rename_failed');
-            try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+            try { const d = await res.json(); errMsg = d.error || errMsg; } catch { /* no JSON error body: keep the status message */ }
             this._showToast(errMsg, 'error');
             const span = document.createElement('span');
             span.className = 'custom-sound-name';
@@ -3620,7 +3620,7 @@ _setupEmojiManagement() {
       });
       if (!res.ok) {
         let errMsg = t('toasts.upload_failed_status', { status: res.status });
-        try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+        try { const d = await res.json(); errMsg = d.error || errMsg; } catch { /* no JSON error body: keep the status message */ }
         return this._showToast(errMsg, 'error');
       }
       this._showToast(t('media_runtime.emoji.uploaded', { name }), 'success');
@@ -3664,7 +3664,7 @@ _setupEmojiManagement() {
         });
         if (!res.ok) {
           let errMsg = t('toasts.upload_failed_status', { status: res.status });
-          try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+          try { const d = await res.json(); errMsg = d.error || errMsg; } catch { /* no JSON error body: keep the status message */ }
           return this._showToast(errMsg, 'error');
         }
         const data = await res.json();
@@ -3917,7 +3917,7 @@ async _loadCustomEmojis() {
     const data = await res.json();
     this.customEmojis = data.emojis || []; // [{name, url}]
     this._renderEmojiList(this.customEmojis);
-  } catch { /* ignore */ }
+  } catch (err) { console.warn('[Emoji] could not load custom emojis', err); }
 },
 
 _renderEmojiList(emojis) {
@@ -3971,7 +3971,7 @@ async _loadStickers() {
     const data = await res.json();
     this.stickers = data.stickers || [];
     this._renderStickerList(this.stickers);
-  } catch { /* ignore */ }
+  } catch (err) { console.warn('[Stickers] could not load stickers', err); }
 },
 
 _renderStickerList(stickers) {
@@ -4063,7 +4063,7 @@ _setupStickerManagement() {
         });
         if (!res.ok) {
           let errMsg = t('toasts.upload_failed_status', { status: res.status });
-          try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+          try { const d = await res.json(); errMsg = d.error || errMsg; } catch { /* no JSON error body: keep the status message */ }
           return this._showToast(errMsg, 'error');
         }
         const data = await res.json();
@@ -4110,7 +4110,7 @@ _setupStickerManagement() {
         });
         if (!res.ok) {
           let errMsg = t('toasts.upload_failed_status', { status: res.status });
-          try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+          try { const d = await res.json(); errMsg = d.error || errMsg; } catch { /* no JSON error body: keep the status message */ }
           return this._showToast(errMsg, 'error');
         }
 
@@ -4553,12 +4553,12 @@ _setupEmojiSizePicker() {
 _setupDebugSection() {
   const cb = document.getElementById('pref-debug-local-talk-indicator');
   if (!cb) return;
-  try { cb.checked = localStorage.getItem('debug_local_talk_indicator') === '1'; } catch {}
+  try { cb.checked = localStorage.getItem('debug_local_talk_indicator') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
   cb.addEventListener('change', () => {
     try {
       if (cb.checked) localStorage.setItem('debug_local_talk_indicator', '1');
       else localStorage.removeItem('debug_local_talk_indicator');
-    } catch {}
+    } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   });
 
   // #5379 — opt-in toggle to re-apply voice processing (echoCancellation /
@@ -4569,12 +4569,12 @@ _setupDebugSection() {
   // voice processing regardless of this setting.
   const sspCb = document.getElementById('pref-debug-screen-share-voice-proc');
   if (sspCb) {
-    try { sspCb.checked = localStorage.getItem('screen_share_voice_processing') === '1'; } catch {}
+    try { sspCb.checked = localStorage.getItem('screen_share_voice_processing') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
     sspCb.addEventListener('change', () => {
       try {
         if (sspCb.checked) localStorage.setItem('screen_share_voice_processing', '1');
         else localStorage.removeItem('screen_share_voice_processing');
-      } catch {}
+      } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     });
   }
 
@@ -4586,12 +4586,12 @@ _setupDebugSection() {
   // just no longer the default.
   const sadCb = document.getElementById('pref-debug-screen-audio-direct');
   if (sadCb) {
-    try { sadCb.checked = localStorage.getItem('screen_audio_webaudio') === '1'; } catch {}
+    try { sadCb.checked = localStorage.getItem('screen_audio_webaudio') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
     sadCb.addEventListener('change', () => {
       try {
         if (sadCb.checked) localStorage.setItem('screen_audio_webaudio', '1');
         else localStorage.removeItem('screen_audio_webaudio');
-      } catch {}
+      } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       // Apply immediately to any screen audio that's already playing.
       if (this.voice && typeof this.voice.reapplyScreenAudioRouting === 'function') {
         this.voice.reapplyScreenAudioRouting();
@@ -4609,12 +4609,12 @@ _setupDebugSection() {
   // re-applied here so flipping it mid-share works without restarting it.
   const relayCb = document.getElementById('pref-debug-screen-relay-profile');
   if (relayCb) {
-    try { relayCb.checked = localStorage.getItem('haven_screen_relay_profile') === '1'; } catch {}
+    try { relayCb.checked = localStorage.getItem('haven_screen_relay_profile') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
     relayCb.addEventListener('change', () => {
       try {
         if (relayCb.checked) localStorage.setItem('haven_screen_relay_profile', '1');
         else localStorage.removeItem('haven_screen_relay_profile');
-      } catch {}
+      } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       if (this.voice && typeof this.voice.reapplyScreenBitrate === 'function') {
         this.voice.reapplyScreenBitrate();
       }
@@ -4625,12 +4625,12 @@ _setupDebugSection() {
   // person switched it off; voice.js reads the flag live on every apply.
   const relayAutoCb = document.getElementById('pref-debug-screen-relay-auto');
   if (relayAutoCb) {
-    try { relayAutoCb.checked = localStorage.getItem('haven_screen_relay_auto') !== '0'; } catch {}
+    try { relayAutoCb.checked = localStorage.getItem('haven_screen_relay_auto') !== '0'; } catch { /* storage blocked (private mode): keep the default */ }
     relayAutoCb.addEventListener('change', () => {
       try {
         if (relayAutoCb.checked) localStorage.removeItem('haven_screen_relay_auto');
         else localStorage.setItem('haven_screen_relay_auto', '0');
-      } catch {}
+      } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       if (this.voice && typeof this.voice.reapplyScreenBitrate === 'function') {
         this.voice.reapplyScreenBitrate();
       }
@@ -4644,36 +4644,36 @@ _setupDebugSection() {
   // live by voice.js on each renegotiation, so no reload is needed.
   const glareCb = document.getElementById('pref-debug-voice-glare-ice-fix');
   if (glareCb) {
-    try { glareCb.checked = localStorage.getItem('haven_voice_glare_ice_fix') === '1'; } catch {}
+    try { glareCb.checked = localStorage.getItem('haven_voice_glare_ice_fix') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
     glareCb.addEventListener('change', () => {
       try {
         if (glareCb.checked) localStorage.setItem('haven_voice_glare_ice_fix', '1');
         else localStorage.removeItem('haven_voice_glare_ice_fix');
-      } catch {}
+      } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     });
   }
 
   // #5380 — always join voice muted
   const moCb = document.getElementById('pref-voice-mute-on-join');
   if (moCb) {
-    try { moCb.checked = localStorage.getItem('haven_mute_on_join') === '1'; } catch {}
+    try { moCb.checked = localStorage.getItem('haven_mute_on_join') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
     moCb.addEventListener('change', () => {
       try {
         if (moCb.checked) localStorage.setItem('haven_mute_on_join', '1');
         else localStorage.removeItem('haven_mute_on_join');
-      } catch {}
+      } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     });
   }
 
   // #5380 — listener-only (skip mic) voice mode
   const loCb = document.getElementById('pref-voice-listener-only');
   if (loCb) {
-    try { loCb.checked = localStorage.getItem('haven_listener_only') === '1'; } catch {}
+    try { loCb.checked = localStorage.getItem('haven_listener_only') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
     loCb.addEventListener('change', () => {
       try {
         if (loCb.checked) localStorage.setItem('haven_listener_only', '1');
         else localStorage.removeItem('haven_listener_only');
-      } catch {}
+      } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     });
   }
 },
@@ -5123,7 +5123,7 @@ _normalizeImgSrc(u) {
 _loadHiddenImages() {
   if (this._hiddenImageSet) return this._hiddenImageSet;
   let arr = [];
-  try { arr = JSON.parse(localStorage.getItem('haven_hidden_images') || '[]'); } catch {}
+  try { arr = JSON.parse(localStorage.getItem('haven_hidden_images') || '[]'); } catch { /* corrupt or blocked storage: start with nothing hidden */ }
   this._hiddenImageSet = new Set(Array.isArray(arr) ? arr : []);
   return this._hiddenImageSet;
 },
@@ -5131,7 +5131,7 @@ _loadHiddenImages() {
 _saveHiddenImages() {
   try {
     localStorage.setItem('haven_hidden_images', JSON.stringify([...this._loadHiddenImages()]));
-  } catch {}
+  } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
 },
 
 _isImageHidden(u) {
@@ -5190,7 +5190,7 @@ _freshImageUrl(img) {
   if (img && img.dataset && img.dataset.e2eSrc && this._e2eImageBlob) {
     return this._e2eImageBlob(img).then(blob => {
       const url = URL.createObjectURL(blob);
-      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 60000);
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* already revoked */ } }, 60000);
       return { url, blob, ephemeral: true };
     });
   }
@@ -5209,9 +5209,9 @@ _openImageInNewTab(img) {
     // first and only the PNG is opened.
     const inert = await this._inertImageBlob(blob);
     if (inert === blob) { window.open(url, '_blank'); return; }
-    try { URL.revokeObjectURL(url); } catch {}
+    try { URL.revokeObjectURL(url); } catch { /* already revoked */ }
     const safeUrl = URL.createObjectURL(inert);
-    setTimeout(() => { try { URL.revokeObjectURL(safeUrl); } catch {} }, 60000);
+    setTimeout(() => { try { URL.revokeObjectURL(safeUrl); } catch { /* already revoked */ } }, 60000);
     window.open(safeUrl, '_blank');
   }).catch(() => this._showToast?.(t('media_runtime.image.open_failed'), 'error'));
 },
@@ -5232,7 +5232,7 @@ async _inertImageBlob(blob) {
     canvas.getContext('2d').drawImage(pic, 0, 0, canvas.width, canvas.height);
     return await new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('not drawable'))), 'image/png'));
   } finally {
-    try { URL.revokeObjectURL(src); } catch {}
+    try { URL.revokeObjectURL(src); } catch { /* already revoked */ }
   }
 },
 
@@ -5241,7 +5241,7 @@ _suggestedImageFilename(src, blob) {
   try {
     const path = new URL(src, window.location.origin).pathname;
     name = decodeURIComponent(path.split('/').pop() || '');
-  } catch {}
+  } catch { /* odd address: the generic name below is used */ }
   name = String(name || '').replace(/[<>:"|?*\\]/g, '');
   if (!name || name === 'media-proxy' || name === 'proxy' || name.length > 80 || !/\.[a-z0-9]{2,5}$/i.test(name)) {
     const ext = ((blob?.type || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
@@ -5531,7 +5531,7 @@ _showImageContextMenu(e, src, opts = {}) {
         // multi‑MB screenshots.
         if (window.havenDesktop?.clipboardWriteImage) {
           try {
-            try { window.focus(); } catch {}
+            window.focus();
             const png = await resolvePngBlob();
             const b64 = await blobToBase64(png);
             const res = await window.havenDesktop.clipboardWriteImage(b64);
@@ -5555,7 +5555,7 @@ _showImageContextMenu(e, src, opts = {}) {
           // here. Pull focus back before asking, and give the focus change a
           // frame to land.
           if (!document.hasFocus()) {
-            try { window.focus(); } catch {}
+            window.focus();
             await new Promise(r => requestAnimationFrame(r));
           }
           // Reuse the blob the menu started fetching on open where possible, so

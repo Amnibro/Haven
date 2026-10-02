@@ -269,7 +269,7 @@ _reconcileVoiceUi() {
   try {
     const restored = this.voice.reassertScreenStreams?.();
     if (restored) console.warn('[Voice] Restored', restored, 'stream tile(s) after UI desync');
-  } catch {}
+  } catch (err) { console.warn('[Voice] reassertScreenStreams failed', err); }
 },
 
 _startVoiceUiReconciler() {
@@ -622,9 +622,9 @@ _handleWebcamStream(userId, stream) {
         const vid = tile.querySelector('video');
         const target = vid || tile;
         if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
         } else {
-          (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => {});
+          (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
         }
       });
       tile.appendChild(fsBtnWC);
@@ -684,8 +684,8 @@ _handleWebcamStream(userId, stream) {
     const videoEl = tile.querySelector('video');
     if (videoEl.srcObject === stream) videoEl.srcObject = null;
     videoEl.srcObject = stream;
-    videoEl.play().catch(() => {});
-    videoEl.onloadedmetadata = () => { videoEl.play().catch(() => {}); };
+    videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
+    videoEl.onloadedmetadata = () => { videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ }); };
 
     // Retry playback for late-arriving tracks
     let _retries = 0;
@@ -698,7 +698,7 @@ _handleWebcamStream(userId, stream) {
           videoEl.srcObject = null;
           videoEl.srcObject = s;
         }
-        videoEl.play().catch(() => {});
+        videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
         setTimeout(_retryPlay, 500);
       }
     };
@@ -852,7 +852,7 @@ _popOutWebcam(tile, userId) {
 
   // If already in PiP, exit it
   if (document.pictureInPictureElement === video) {
-    document.exitPictureInPicture().catch(() => {});
+    document.exitPictureInPicture().catch(() => { /* already left picture-in-picture */ });
     return;
   }
 
@@ -916,7 +916,7 @@ _popOutWebcamOverlay(tile, userId) {
   const mirrorCss = (userId === this.user.id) ? 'transform:scaleX(-1);' : '';
   pipVideo.style.cssText = `width:100%;height:100%;object-fit:cover;display:block;${mirrorCss}`;
   pip.querySelector('.stream-pip-video').appendChild(pipVideo);
-  pipVideo.play().catch(() => {});
+  pipVideo.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
 
   const popoutBtn = tile.querySelector('.stream-popout-btn');
   if (popoutBtn) { popoutBtn.textContent = '⧈'; popoutBtn.title = t('media.pop_in_camera'); }
@@ -941,9 +941,9 @@ _popOutWebcamOverlay(tile, userId) {
     const vid = pip.querySelector('video');
     const target = vid || pip;
     if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
     } else {
-      (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => {});
+      (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
     }
   });
 
@@ -1069,7 +1069,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
           const vols = JSON.parse(localStorage.getItem('haven_stream_volumes') || '{}');
           vols[userId] = val;
           localStorage.setItem('haven_stream_volumes', JSON.stringify(vols));
-        } catch {}
+        } catch { /* storage blocked or corrupt: the volume holds for this session only */ }
       });
 
       controls.appendChild(muteBtn);
@@ -1104,9 +1104,9 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
         const vid = tile.querySelector('video');
         const target = vid || tile;
         if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
         } else {
-          (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => {});
+          (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
         }
       });
       tile.appendChild(fsBtn);
@@ -1177,9 +1177,9 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       }
       videoEl.srcObject = stream;
     }
-    videoEl.play().catch(() => {});
+    videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
     // Also re-play when metadata loads (handles late-arriving tracks)
-    videoEl.onloadedmetadata = () => { videoEl.play().catch(() => {}); };
+    videoEl.onloadedmetadata = () => { videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ }); };
 
     // WebRTC video tracks often arrive muted (no frames yet). Retry playback
     // until the video actually has dimensions, which means frames are flowing.
@@ -1209,7 +1209,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
             sharerId: userId
           });
         }
-        videoEl.play().catch(() => {});
+        videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
         setTimeout(_retryPlay, 500);
       }
     };
@@ -1284,7 +1284,7 @@ _startStreamStallWatchdog(tileId, userId) {
     try {
       const q = videoEl.getVideoPlaybackQuality && videoEl.getVideoPlaybackQuality();
       if (q && typeof q.totalVideoFrames === 'number') return q.totalVideoFrames;
-    } catch {}
+    } catch { /* no playback stats: fall back to the WebKit counter below */ }
     return typeof videoEl.webkitDecodedFrameCount === 'number'
       ? videoEl.webkitDecodedFrameCount
       : -1;
@@ -1329,7 +1329,7 @@ _startStreamStallWatchdog(tileId, userId) {
       const s = videoEl.srcObject;
       videoEl.srcObject = null;
       videoEl.srcObject = s;
-      videoEl.play().catch(() => {});
+      videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
     } else if (stalls === 4 && userId && userId !== this.user.id &&
                this.voice && this.voice.inVoice) {
       // ~6s. Re-attaching didn't help, so the problem is upstream of us.
@@ -1400,7 +1400,7 @@ async _populateAudioDevices() {
     if (!hasLabels) {
       try {
         tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch {}
+      } catch { /* microphone refused: devices are listed without names */ }
     }
     devices = await navigator.mediaDevices.enumerateDevices();
     if (tempStream) tempStream.getTracks().forEach(t => t.stop());
@@ -1656,7 +1656,7 @@ _hideStreamTile(tile, userId, who, muteAudio = false) {
     this.voice.setStreamVolume(userId, 0);
     // Also pause the underlying audio element to guarantee silence
     const audioEl = document.getElementById(`voice-audio-screen-${userId}`);
-    if (audioEl) { audioEl.volume = 0; try { audioEl.pause(); } catch {} }
+    if (audioEl) { audioEl.volume = 0; audioEl.pause(); }
   }
   // Notify server we stopped watching this stream
   if (this.voice && this.voice.inVoice && userId && userId !== this.user.id) {
@@ -1673,7 +1673,7 @@ _showStreamTile(tileId, userId) {
     delete tile.dataset.hidden;
     // Re-play video (browsers may pause while display:none)
     const vid = tile.querySelector('video');
-    if (vid && vid.srcObject) vid.play().catch(() => {});
+    if (vid && vid.srcObject) vid.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
     // Restore audio if it was muted by close
     if (tile.dataset.muted === 'true') {
       delete tile.dataset.muted;
@@ -1730,7 +1730,7 @@ _updateHiddenStreamsBar() {
       const uid = t.id.replace('screen-tile-', '');
       // Re-play video (browsers may pause while display:none)
       const vid = t.querySelector('video');
-      if (vid && vid.srcObject) vid.play().catch(() => {});
+      if (vid && vid.srcObject) vid.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
       // Restore audio if it was muted by close
       if (t.dataset.muted === 'true') {
         delete t.dataset.muted;
@@ -1984,7 +1984,7 @@ _popOutStream(tile, userId) {
 
   // If already in Picture-in-Picture, exit it
   if (document.pictureInPictureElement === video) {
-    document.exitPictureInPicture().catch(() => {});
+    document.exitPictureInPicture().catch(() => { /* already left picture-in-picture */ });
     return;
   }
 
@@ -2056,7 +2056,7 @@ _popOutStreamWindow(tile, userId) {
   pipVideo.srcObject = stream;
   pipVideo.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block';
   pip.querySelector('.stream-pip-video').appendChild(pipVideo);
-  pipVideo.play().catch(() => {});
+  pipVideo.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
 
   const popoutBtn = tile.querySelector('.stream-popout-btn');
   if (popoutBtn) { popoutBtn.textContent = '⧈'; popoutBtn.title = t('media.pop_in_stream'); }
@@ -2090,9 +2090,9 @@ _popOutStreamWindow(tile, userId) {
     const vid = pip.querySelector('video');
     const target = vid || pip;
     if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
     } else {
-      (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => {});
+      (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
     }
   });
 
@@ -2159,7 +2159,7 @@ _getYouTubePlaylistInfo(url) {
       ? parsed.pathname.replace(/^\/+/, '').split('/')[0]
       : parsed.searchParams.get('v');
     if (videoId) return { isPlaylistOnly: false, videoId, playlistId: listId };
-  } catch {}
+  } catch { /* not a valid address, so not a YouTube link */ }
   return null;
 },
 
@@ -3210,9 +3210,9 @@ _popOutMusicPlayer() {
     const toggleMusicFS = () => {
       const el = pip;
       if (document.fullscreenElement === el) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
       } else {
-        (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen).call(el).catch(() => {});
+        (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen).call(el).catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
       }
     };
     document.getElementById('music-pip-fullscreen').addEventListener('click', toggleMusicFS);

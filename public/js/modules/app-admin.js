@@ -640,21 +640,21 @@ _applyServerSettings() {
 
   // (#5345) Default join channels — re-render when settings or channel list refresh
   if (typeof this._renderDefaultJoinChannels === 'function') {
-    try { this._renderDefaultJoinChannels(); } catch { /* non-critical */ }
+    try { this._renderDefaultJoinChannels(); } catch (err) { console.warn('[Admin] _renderDefaultJoinChannels failed', err); }
   }
 
   // (#5381) Guest channel whitelist — re-render when settings change
   if (typeof this._renderGuestChannels === 'function') {
-    try { this._renderGuestChannels(); } catch { /* non-critical */ }
+    try { this._renderGuestChannels(); } catch (err) { console.warn('[Admin] _renderGuestChannels failed', err); }
   }
 
   // Managed invite links — paint the create-form channel list and pull the
   // current set of codes from the server (list arrives via 'invite-codes-list').
   if (typeof this._renderInviteCreateChannels === 'function') {
-    try { this._renderInviteCreateChannels(); } catch { /* non-critical */ }
+    try { this._renderInviteCreateChannels(); } catch (err) { console.warn('[Admin] _renderInviteCreateChannels failed', err); }
   }
   if (this.socket?.connected) {
-    try { this.socket.emit('get-invite-codes'); } catch { /* non-critical */ }
+    try { this.socket.emit('get-invite-codes'); } catch (err) { console.warn('[Admin] could not request invite codes', err); }
   }
 
   // Apply configurable message length limit to message input and edit textareas
@@ -2529,9 +2529,9 @@ _openInviteLinksModal() {
   if (!modal) return;
   if (!this.user.isAdmin && !this._hasGlobalPerm('manage_server') && !this._hasGlobalPerm('invite_users')) return this._showToast(t('settings.admin.invite_links_no_permission'), 'error');
   if (typeof this._renderInviteCreateChannels === 'function') {
-    try { this._renderInviteCreateChannels(true); } catch { /* non-critical */ }
+    try { this._renderInviteCreateChannels(true); } catch (err) { console.warn('[Admin] _renderInviteCreateChannels failed', err); }
   }
-  if (this.socket?.connected) { try { this.socket.emit('get-invite-codes'); } catch { /* non-critical */ } }
+  if (this.socket?.connected) { try { this.socket.emit('get-invite-codes'); } catch (err) { console.warn('[Admin] could not request invite codes', err); } }
   modal.style.display = 'flex';
 
   // Setup max invite uses input limits.
@@ -2679,7 +2679,7 @@ _showMentionDropdown() {
     if (this.currentChannel && this.socket?.connected && now - (this._lastMemberRefetch || 0) > 3000) {
       this._lastMemberRefetch = now;
       console.warn('[Haven] @mention: channelMembers empty, re-requesting for', this.currentChannel);
-      try { this.socket.emit('get-channel-members', { code: this.currentChannel }); } catch {}
+      try { this.socket.emit('get-channel-members', { code: this.currentChannel }); } catch (err) { console.warn('[Mentions] could not re-request channel members', err); }
     }
   }
 
@@ -6237,7 +6237,7 @@ _initDonorsModal() {
       if (toggle) toggle.style.display = '';
     }
     renderDonorList('chronological');
-  }).catch(() => {});
+  }).catch((err) => { console.warn('[Donors] could not load the donor list', err); });
 
   // Sort toggle buttons
   document.getElementById('donors-sort-toggle')?.addEventListener('click', (e) => {
@@ -6582,7 +6582,7 @@ _renderAutomodWordGroups(raw) {
   if (!host) return;
   host.innerHTML = '';
   let groups = [];
-  try { groups = JSON.parse(raw || '[]'); } catch {}
+  try { groups = JSON.parse(raw || '[]'); } catch (err) { console.warn('[Automod] word groups setting is not valid JSON', err); }
   (Array.isArray(groups) ? groups : []).forEach(g => this._addAutomodWordGroupRow(g || {}));
 },
 

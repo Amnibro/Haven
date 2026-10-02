@@ -1313,7 +1313,7 @@ _promoteCompactToFull(compactEl) {
   // Border fit stored on the compact element (offline-safe), same as avatar above.
   const border = compactEl.dataset.border || (onlineUser && onlineUser.border) || null;
   let borderTransform = (onlineUser && onlineUser.borderTransform) || null;
-  try { if (compactEl.dataset.borderTransform) borderTransform = JSON.parse(compactEl.dataset.borderTransform); } catch {}
+  try { if (compactEl.dataset.borderTransform) borderTransform = JSON.parse(compactEl.dataset.borderTransform); } catch { /* malformed border data: keep the member list value */ }
   const animateProfile = compactEl.dataset.animateProfile || (onlineUser && onlineUser.animateProfile) || 'trigger';
   const avatarHtml = avatar
     ? `<img class="message-avatar message-avatar-img ${shapeClass}"${this._animAttr(animateProfile)} src="${this._escapeHtml(avatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
@@ -1532,7 +1532,7 @@ _renderPinsPiPList(pins) {
 /** Restore saved PiP position + size from localStorage. */
 _applyPinsPiPGeometry(panel) {
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem('haven_pins_pip_rect') || 'null'); } catch {}
+  try { saved = JSON.parse(localStorage.getItem('haven_pins_pip_rect') || 'null'); } catch { /* corrupt saved position: use the default placement */ }
   const minW = 280, minH = 220;
   const maxW = Math.min(600, window.innerWidth - 28);
   const maxH = Math.max(minH, window.innerHeight - 28);
@@ -1583,7 +1583,7 @@ _bindPinsPiPDrag() {
         width:  panel.offsetWidth,
         height: panel.offsetHeight
       }));
-    } catch {}
+    } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   };
   window.addEventListener('mouseup', () => {
     if (dragging) { dragging = false; persist(); }
@@ -1632,7 +1632,7 @@ _setupVideos(containerEl) {
             playbackRate: video.playbackRate || 1,
           });
         }
-      } catch {}
+      } catch { /* no MediaSession support: the PiP window just has no seek bar */ }
     };
     video.addEventListener('enterpictureinpicture', () => {
       try {
@@ -1652,7 +1652,7 @@ _setupVideos(containerEl) {
         video.addEventListener('timeupdate', updatePos);
         video.addEventListener('playing', updatePos);
         updatePos();
-      } catch {}
+      } catch { /* no MediaSession support: the PiP window just has no seek bar */ }
     });
     video.addEventListener('leavepictureinpicture', () => {
       try {
@@ -1662,7 +1662,7 @@ _setupVideos(containerEl) {
         navigator.mediaSession.setActionHandler('play', null);
         navigator.mediaSession.setActionHandler('pause', null);
         navigator.mediaSession.metadata = null;
-      } catch {}
+      } catch { /* no MediaSession support: the PiP window just has no seek bar */ }
       video.removeEventListener('timeupdate', updatePos);
       video.removeEventListener('playing', updatePos);
     });
@@ -1965,7 +1965,7 @@ _fetchLinkPreviews(containerEl) {
         // a point-in-time scrollHeight check that content-visibility can skew.
         if (wasAtBottom) this._scrollToBottom(true);
       })
-      .catch(() => {});
+      .catch((err) => { console.warn('[Links] could not render the preview card', err); });
   });
 },
 
@@ -2107,7 +2107,7 @@ _extractYouTubeVideoId(url) {
       const pathMatch = u.pathname.match(/^\/(?:embed|shorts|live|v)\/([\w-]{11})/);
       if (pathMatch) return pathMatch[1];
     }
-  } catch {}
+  } catch { /* not a valid address, so not a YouTube link */ }
   return null;
 },
 
