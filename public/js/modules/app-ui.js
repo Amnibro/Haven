@@ -8642,8 +8642,8 @@ _renderUserProfileGroupsList() {
     else {
       // render list of user's current groups
       list.innerHTML = groups.map(r => {
-        const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
-          return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>`;
+        const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._roleFill(r, 'var(--text-muted)')}"></span>`;
+          return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${this._roleNameHtml(r, r.name)}</span>`;
       }).join('');
     }
   }
@@ -8670,13 +8670,13 @@ _showGroupManager() {
   const userGroupIds = new Set(groups.map(g => g.id));
   manager.innerHTML = availableGroups.map(r => {
     const isMember = userGroupIds.has(r.id);
-    const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+    const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._roleFill(r, 'var(--text-muted)')}"></span>`;
 
     return `
       <label class="toggle-row user-group-toggle-row">
         <span class="user-group-name">
           <button class="user-group-channel-info" data-role="${r.id}" style="visibility:hidden" title="">#i</button>
-          <span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>
+          <span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${this._roleNameHtml(r, r.name)}</span>
         </span>
         <input type="checkbox" class="user-group-checkbox" data-role="${r.id}"${isMember ? ' checked' : ''}>
       </label>

@@ -858,6 +858,10 @@ function setupSocketHandlers(io, db, opts = {}) {
           return {
             id: u.id, username: u.username,
             roleColor: role ? role.color : null,
+            // Gradient end and shimmer for the same role (null and false
+            // for a plain color). New fields, so older apps keep working.
+            roleColor2: (role && role.color2) || null,
+            roleShimmer: !!(role && role.color2 && role.color_shimmer),
             roleName: role ? role.name : null,
             roles,
             isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,

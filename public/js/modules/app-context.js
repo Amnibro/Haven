@@ -287,15 +287,19 @@ _renderOnlineOverlay() {
 
 _renderOverlayUserItem(u) {
   const initial = (u.username || '?')[0].toUpperCase();
-  const color = this._safeColor(u.roleColor || u.avatarColor, '#7c5cfc');
+  // Member list entries carry their role as `role`; roleColor is the flat
+  // shape some older callers used.
+  const role = u.role || (u.roleColor ? u : null);
+  const roleColor = role ? (role.color !== undefined ? role.color : role.roleColor) : null;
+  const color = this._safeColor(roleColor || u.avatarColor, '#7c5cfc');
   const statusClass = u.online !== false ? 'online' : 'offline';
   const avatar = u.avatarUrl
     ? `<img src="${this._escapeHtml(u.avatarUrl)}" class="online-overlay-avatar-img" alt="">`
     : `<div class="online-overlay-avatar" style="background:${color}">${initial}</div>`;
-  const nameColor = u.roleColor ? ` style="color:${this._safeColor(u.roleColor)}"` : '';
+  const nameColor = this._safeColor(roleColor) ? ` style="color:${this._safeColor(roleColor)}"` : '';
   return `<div class="online-overlay-user ${statusClass}">
     ${avatar}
-    <span class="online-overlay-username"${nameColor}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
+    <span class="online-overlay-username"${nameColor}>${this._roleNameHtml(role, this._getNickname(u.id, u.username))}</span>
     <span class="online-overlay-status-dot ${statusClass}"></span>
   </div>`;
 },

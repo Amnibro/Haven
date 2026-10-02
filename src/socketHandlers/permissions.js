@@ -192,7 +192,7 @@ module.exports = function createPermissions(db) {
 
   function getUserRoles(userId) {
     return db.prepare(`
-      SELECT r.id, r.name, r.level, r.scope, r.color, ur.channel_id
+      SELECT r.id, r.name, r.level, r.scope, r.color, r.color2, r.color_shimmer, ur.channel_id
       FROM roles r
       JOIN user_roles ur ON r.id = ur.role_id
       WHERE ur.user_id = ?
@@ -228,7 +228,7 @@ module.exports = function createPermissions(db) {
 
     const serverRows = db.prepare(`
       SELECT r.id, r.name, COALESCE(ur.custom_level, r.level) as level,
-             r.color, r.icon, r.transparent, r.scope, ur.channel_id
+             r.color, r.color2, r.color_shimmer, r.icon, r.transparent, r.scope, ur.channel_id
       FROM roles r JOIN user_roles ur ON r.id = ur.role_id
       WHERE ur.user_id = ? AND ur.channel_id IS NULL
     `).all(userId);
@@ -240,7 +240,7 @@ module.exports = function createPermissions(db) {
         const placeholders = chain.map(() => '?').join(',');
         const chRows = db.prepare(`
           SELECT r.id, r.name, COALESCE(ur.custom_level, r.level) as level,
-                 r.color, r.icon, r.transparent, r.scope, ur.channel_id
+                 r.color, r.color2, r.color_shimmer, r.icon, r.transparent, r.scope, ur.channel_id
           FROM roles r JOIN user_roles ur ON r.id = ur.role_id
           WHERE ur.user_id = ? AND ur.channel_id IN (${placeholders})
         `).all(userId, ...chain);
@@ -249,6 +249,11 @@ module.exports = function createPermissions(db) {
     }
 
     const out = Array.from(byId.values());
+    // These rows ride on every member list entry, so a role without a
+    // gradient leaves the gradient fields out instead of sending empty ones.
+    for (const r of out) {
+      if (!r.color2) { delete r.color2; delete r.color_shimmer; }
+    }
     out.sort((a, b) => (b.level || 0) - (a.level || 0));
     return out;
   }

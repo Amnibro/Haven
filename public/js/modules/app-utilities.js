@@ -92,6 +92,58 @@ _safeColor(c, fallback = '') {
   return fallback;
 },
 
+// ── Gradient role colors ──
+// A role draws names in its color, or as a gradient from `color` to `color2`
+// that can slowly shimmer. Role rows carry color / color2 / color_shimmer;
+// voice entries carry the same as roleColor / roleColor2 / roleShimmer.
+
+/** The colors a role draws a name with: { c1, c2, shimmer }, c2 null for a
+ *  plain color. Null when the role has no usable color. */
+_roleLook(role) {
+  if (!role) return null;
+  const c1 = this._safeColor(role.color !== undefined ? role.color : role.roleColor);
+  if (!c1) return null;
+  const c2 = this._safeColor(role.color2 !== undefined ? role.color2 : role.roleColor2) || null;
+  const shimmer = !!(c2 && (role.color_shimmer || role.roleShimmer));
+  return { c1, c2, shimmer };
+},
+
+/** A name as HTML in the role's style. A plain color is left to the caller's
+ *  own `color:` style, as before; a gradient wraps the text in a span sized to
+ *  the text, so the whole gradient shows however wide the row is. */
+_roleNameHtml(role, text) {
+  const safe = this._escapeHtml(text == null ? '' : String(text));
+  const look = this._roleLook(role);
+  if (!look || !look.c2) return safe;
+  return `<span class="role-gradient${look.shimmer ? ' role-shimmer' : ''}" style="--role-c1:${look.c1};--role-c2:${look.c2}">${safe}</span>`;
+},
+
+/** The same for an element already on the page: sets its color and puts the
+ *  name in it, gradient span included. Null role means no role color. */
+_applyRoleName(el, role, text, fallback = '') {
+  if (!el) return;
+  const look = this._roleLook(role);
+  el.style.color = look ? look.c1 : fallback;
+  el.innerHTML = this._roleNameHtml(role, text);
+},
+
+/** The role that colors a person's name in chat, read from the member lists,
+ *  or null when they have none or names are not shown in role colors. */
+_chatNameRole(userId) {
+  if ((localStorage.getItem('haven-role-display') || 'colored-name') !== 'colored-name') return null;
+  const pool = (this._lastOnlineUsers || []).concat(this.channelMembers || []);
+  const u = pool.find(x => x.id === userId);
+  return u && u.role && this._roleLook(u.role) ? u.role : null;
+},
+
+/** A background (dot, swatch) in the role's colors: the gradient when it has
+ *  one, else its color, else `fallback`. */
+_roleFill(role, fallback = '') {
+  const look = this._roleLook(role);
+  if (!look) return fallback;
+  return look.c2 ? `linear-gradient(90deg, ${look.c1}, ${look.c2})` : look.c1;
+},
+
 /**
  * Toggle a small dot on the 📌 pinned-toggle button when the active channel
  * has UNREAD pinned messages. Read-receipt model:
@@ -496,7 +548,7 @@ _refreshMentionableRoles() {
       const roles = res && Array.isArray(res.roles) ? res.roles : [];
       this._mentionableRoles = roles
         .filter(r => r && r.name)
-        .map(r => ({ id: r.id, name: String(r.name), color: r.color || null, level: r.level }));
+        .map(r => ({ id: r.id, name: String(r.name), color: r.color || null, color2: r.color2 || null, color_shimmer: r.color_shimmer || 0, level: r.level }));
     });
   } catch { /* offline: keep whatever we had */ }
 },
@@ -1108,7 +1160,7 @@ _formatContent(str) {
   for (const r of (this._mentionableRoles || [])) {
     if (!r || !r.name) continue;
     const low = r.name.toLowerCase();
-    roleByName.set(low, { name: r.name, color: r.color, mine: myRoleIds.has(r.id) });
+    roleByName.set(low, { name: r.name, color: r.color, color2: r.color2, color_shimmer: r.color_shimmer, mine: myRoleIds.has(r.id) });
     validNames.add(low);
   }
   const allNames = [...validNames].sort((a, b) => b.length - a.length);
@@ -1128,7 +1180,7 @@ _formatContent(str) {
     const role = roleByName.get(lower);
     if (role && !nameToUserId.has(lower) && !isSelf) {
       const style = role.color ? ` style="--role-color:${this._escapeHtml(role.color)}"` : '';
-      return `<span class="mention mention-role${role.mine ? ' mention-self' : ''}"${style}>@${this._escapeHtml(role.name)}</span>`;
+      return `<span class="mention mention-role${role.mine ? ' mention-self' : ''}"${style}>${this._roleNameHtml(role, '@' + role.name)}</span>`;
     }
     // Prefer the viewer's personal nickname for that user, then the
     // server-side display name, then the raw token. (#5290)
@@ -4083,6 +4135,9 @@ _appendThreadMessage(msg) {
   const displayName = this._getNickname?.(msg.user_id, msg.username) || msg.username;
   const color = this._getUserColor(msg.username);
   const initial = displayName.charAt(0).toUpperCase();
+  // Author name in role colors, as in the channel itself.
+  const authorRole = this._chatNameRole(msg.user_id);
+  const authorColor = authorRole ? this._roleLook(authorRole).c1 : color;
   let avatarHtml;
   if (msg.avatar) {
     avatarHtml = `<img class="thread-msg-avatar" src="${this._escapeHtml(msg.avatar)}" alt="${initial}">`;
@@ -4160,7 +4215,7 @@ _appendThreadMessage(msg) {
         ${avatarHtml}
         <div class="thread-msg-body">
           <div class="thread-msg-header">
-            <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
+            <span class="thread-msg-author" style="color:${authorColor}">${this._roleNameHtml(authorRole, displayName)}</span>
             <span class="thread-msg-time"${this._timeAttr(msg.created_at)}>${this._formatTime(msg.created_at)}</span>
             <span class="thread-msg-header-spacer"></span>
             <div class="thread-msg-toolbar">
@@ -4197,6 +4252,8 @@ _promoteThreadCompactToFull(compactEl) {
   const time = compactEl.dataset.time;
   const color = this._getUserColor(rawUsername);
   const initial = (displayName || '?').charAt(0).toUpperCase();
+  const authorRole = this._chatNameRole(userId);
+  const authorColor = authorRole ? this._roleLook(authorRole).c1 : color;
 
   // Preserve the already-rendered content, toolbar, and reactions.
   const contentHtml = compactEl.querySelector('.thread-msg-content')?.innerHTML || '';
@@ -4217,7 +4274,7 @@ _promoteThreadCompactToFull(compactEl) {
       ${avatarHtml}
       <div class="thread-msg-body">
         <div class="thread-msg-header">
-          <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
+          <span class="thread-msg-author" style="color:${authorColor}">${this._roleNameHtml(authorRole, displayName)}</span>
           <span class="thread-msg-time"${this._timeAttr(time)}>${this._formatTime(time)}</span>
           <span class="thread-msg-header-spacer"></span>
           ${toolbarHtml}

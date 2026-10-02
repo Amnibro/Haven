@@ -1303,14 +1303,14 @@ module.exports = function register(socket, ctx) {
       }
 
       const roleRows = db.prepare(`
-        SELECT ur.user_id, r.id as role_id, r.name, r.level, r.color
+        SELECT ur.user_id, r.id as role_id, r.name, r.level, r.color, r.color2, r.color_shimmer
         FROM user_roles ur JOIN roles r ON ur.role_id = r.id
         GROUP BY ur.user_id, r.id ORDER BY r.level DESC
       `).all();
       const userRoles = {};
       roleRows.forEach(r => {
         if (!userRoles[r.user_id]) userRoles[r.user_id] = [];
-        userRoles[r.user_id].push({ id: r.role_id, name: r.name, level: r.level, color: r.color });
+        userRoles[r.user_id].push({ id: r.role_id, name: r.name, level: r.level, color: r.color, color2: r.color2, color_shimmer: r.color_shimmer });
       });
 
       const bannedRows = db.prepare('SELECT user_id FROM bans').all();

@@ -2092,7 +2092,7 @@ _renderAllMembers(members) {
 
   list.innerHTML = members.map(m => {
     const rolesHtml = m.roles.map(r =>
-      `<span class="aml-role-badge" style="border-color:${this._safeColor(r.color, '#888')};color:${this._safeColor(r.color, '#888')}">${this._escapeHtml(r.name)}</span>`
+      `<span class="aml-role-badge" style="border-color:${this._safeColor(r.color, '#888')};color:${this._safeColor(r.color, '#888')}">${this._roleNameHtml(r, r.name)}</span>`
     ).join('');
     const adminBadge = m.isAdmin ? `<span class="aml-admin-badge">${t('settings.admin.badge_admin')}</span>` : '';
     const bannedBadge = m.banned ? `<span class="aml-banned-badge">${t('settings.admin.badge_banned')}</span>` : '';
@@ -4482,7 +4482,7 @@ _renderRolesPreview() {
   }
   container.innerHTML = this._allRoles.map(r =>
     `<div class="role-preview-item">
-      <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
+      <span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span>
       <span>${this._escapeHtml(r.name)}${r.auto_assign ? ` <span title="${t('settings.admin.role_form.auto_assign')}" style="font-size:0.625rem;opacity:0.6">⚡</span>` : ''}</span>
       <span class="muted-text" style="font-size:0.6875rem;margin-left:auto">Lv.${r.level}</span>
     </div>`
@@ -4539,7 +4539,7 @@ _renderRoleSidebar() {
   const leveledRoles = this._allRoles.filter(r => r.level > 0);
   html += leveledRoles.map(r =>
     `<div class="role-sidebar-item${this._selectedRoleId === r.id ? ' active' : ''}" data-role-id="${r.id}">
-      <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
+      <span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span>
       ${this._escapeHtml(r.name)}
       <span class="role-sidebar-level">Lv.${r.level}</span>
     </div>`
@@ -4553,7 +4553,7 @@ _renderRoleSidebar() {
   }
   html += groups.map(r =>
     `<div class="role-sidebar-item${this._selectedRoleId === r.id ? ' active' : ''}" data-role-id="${r.id}">
-      <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
+      <span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span>
       ${this._escapeHtml(r.name)}
     </div>`
   ).join('');
@@ -4621,6 +4621,7 @@ _renderRoleDetail() {
       <input type="number" class="settings-number-input" id="role-edit-level" value="${role.level}" min="0" max="99">
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.color')}</label>
       <input type="color" id="role-edit-color" value="${role.color || '#aaaaaa'}" style="width:50px;height:30px;border:none;cursor:pointer">
+      ${this._roleGradientFieldsHtml('role-edit', role)}
       <label class="toggle-row" style="margin-top:8px;">
         <span>${t('settings.admin.role_form.transparent')}</span>
         <input type="checkbox" id="role-edit-transparent" ${role.transparent ? 'checked' : ''}>
@@ -4670,6 +4671,7 @@ _renderRoleDetail() {
 
   // Toggle permissions visibility based on the current role level.
   this._updateRoleLevelPermsVis('role-edit-level', 'role-permissions-list', 'perm-admin-note');
+  const readRoleLook = this._wireRoleGradientFields('role-edit', 'role-edit-color', 'role-edit-name');
 
   // Role icon upload/remove
   this._pendingRoleIcon = undefined;
@@ -4729,6 +4731,8 @@ _renderRoleDetail() {
       name: document.getElementById('role-edit-name').value.trim(),
       level: parseInt(document.getElementById('role-edit-level').value, 10),
       color: document.getElementById('role-edit-color').value,
+      color2: readRoleLook().color2,
+      shimmer: readRoleLook().shimmer,
       transparent: document.getElementById('role-edit-transparent').checked,
       icon: this._pendingRoleIcon !== undefined ? this._pendingRoleIcon : role.icon,
       autoAssign: document.getElementById('role-edit-auto-assign').checked,
@@ -4776,7 +4780,8 @@ _renderRoleDetail() {
   });
 
   // Duplicate: prompt for new name (default = "<original> (copy)") then
-  // create a fresh role with the same level, color, icon, and permissions.
+  // create a fresh role with the same level, color (gradient included), icon,
+  // and permissions.
   // Channel-access linkage and auto-assign are intentionally NOT copied —
   // both are rarely what an admin wants on a freshly cloned role.
   document.getElementById('duplicate-role-btn')?.addEventListener('click', async () => {
@@ -4788,6 +4793,8 @@ _renderRoleDetail() {
       name: trimmed,
       level: role.level,
       color: role.color || '#aaaaaa',
+      color2: role.color2 || null,
+      shimmer: !!role.color_shimmer,
       transparent: !!role.transparent,
       icon: role.icon || null,
       autoAssign: false,
@@ -4815,6 +4822,61 @@ _renderRoleDetail() {
     keepEnabledIds: ['role-members-btn'],
     formSelector: '.role-detail-form'
   });
+},
+
+// Gradient controls under a role's Color picker, shared by both role
+// editors: a Gradient switch that reveals the end color and a Shimmer switch,
+// plus a sample name in the role's style. `prefix` keeps the ids apart;
+// `compact` matches the channel roles panel, whose checkboxes sit before
+// their labels.
+_roleGradientFieldsHtml(prefix, role, compact = false) {
+  const on = !!role.color2;
+  const sw = (id, label, checked) => compact
+    ? `<label class="cr-perm-toggle" style="margin-top:6px"><input type="checkbox" id="${id}"${checked ? ' checked' : ''}><span>${label}</span></label>`
+    : `<label class="toggle-row" style="margin-top:8px;"><span>${label}</span><input type="checkbox" id="${id}"${checked ? ' checked' : ''}></label>`;
+  return `
+    ${sw(`${prefix}-gradient`, t('settings.admin.role_form.gradient'), on)}
+    <div id="${prefix}-gradient-opts"${on ? '' : ' style="display:none"'}>
+      <div class="role-gradient-opts">
+        <label class="${compact ? 'cr-role-label' : 'settings-label'}" for="${prefix}-color2" style="margin:0">${t('settings.admin.role_form.gradient_end')}</label>
+        <input type="color" id="${prefix}-color2" value="${this._safeColor(role.color2, '#ffd166')}" style="width:50px;height:30px;border:none;cursor:pointer;background:none">
+      </div>
+      ${sw(`${prefix}-shimmer`, t('settings.admin.role_form.shimmer'), !!role.color_shimmer)}
+    </div>
+    <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.gradient_hint')}</small>
+    <div class="role-style-preview">
+      <span class="muted-text">${t('settings.admin.role_form.style_preview')}</span>
+      <span class="role-style-preview-name" id="${prefix}-style-preview"></span>
+    </div>`;
+},
+
+// Keeps the end color's visibility and the sample name in step with the
+// controls, and returns a reader for the values to save.
+_wireRoleGradientFields(prefix, colorInputId, nameInputId) {
+  const $ = (id) => document.getElementById(id);
+  const read = () => {
+    const gradient = !!$(`${prefix}-gradient`)?.checked;
+    return {
+      color: $(colorInputId)?.value || null,
+      color2: gradient ? ($(`${prefix}-color2`)?.value || null) : null,
+      shimmer: gradient && !!$(`${prefix}-shimmer`)?.checked,
+    };
+  };
+  const update = () => {
+    const v = read();
+    const opts = $(`${prefix}-gradient-opts`);
+    if (opts) opts.style.display = $(`${prefix}-gradient`)?.checked ? '' : 'none';
+    const name = ($(nameInputId)?.value || '').trim() || t('settings.admin.role_form.style_preview_name');
+    this._applyRoleName($(`${prefix}-style-preview`), { color: v.color, color2: v.color2, color_shimmer: v.shimmer ? 1 : 0 }, name);
+  };
+  [colorInputId, nameInputId, `${prefix}-gradient`, `${prefix}-color2`, `${prefix}-shimmer`].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('input', update);
+    el.addEventListener('change', update);
+  });
+  update();
+  return read;
 },
 
 // Disables the whole role editor for a non-admin when `role.level` is at or
@@ -4874,7 +4936,7 @@ _openRoleMembersModal(role) {
         ? `<img class="rac-user-avatar" src="${this._escapeHtml(u.avatar)}" alt="${initial}" style="${shapeStyle}">`
         : `<span class="rac-user-avatar" style="background-color:${color};${shapeStyle}">${initial}</span>`;
       const badgeHtml = hasRole
-        ? `<span class="role-member-badge" style="background:${this._safeColor(role.color,'#aaa')}22;color:${this._safeColor(role.color,'#aaa')};border:1px solid ${this._safeColor(role.color,'#aaa')}44;border-radius:4px;padding:1px 6px;font-size:0.6875rem;white-space:nowrap">${this._escapeHtml(role.name)}</span>`
+        ? `<span class="role-member-badge" style="background:${this._safeColor(role.color,'#aaa')}22;color:${this._safeColor(role.color,'#aaa')};border:1px solid ${this._safeColor(role.color,'#aaa')}44;border-radius:4px;padding:1px 6px;font-size:0.6875rem;white-space:nowrap">${this._roleNameHtml(role, role.name)}</span>`
         : '';
       return `<div class="rac-user-item" style="cursor:default;gap:10px" data-uid="${u.id}">
         ${avatarHtml}
@@ -5039,7 +5101,7 @@ _renderChannelRolesMembers() {
     const badges = m.isAdmin
       ? `<span class="channel-roles-badge badge-admin"><span class="badge-dot" style="background:#e74c3c"></span>${t('settings.admin.badge_admin')}</span>`
       : (m.roles || []).map(r =>
-          `<span class="channel-roles-badge"><span class="badge-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>${this._escapeHtml(r.name)}<span class="badge-scope">${r.scope === 'channel' ? `📌 ${t('settings.admin.roles_scope_channel')}` : `🌐 ${t('settings.admin.roles_scope_server')}`}</span><span class="revoke-btn" data-uid="${m.id}" data-rid="${r.roleId}" data-scope="${r.scope}" title="${t('settings.admin.roles_revoke')}">✕</span></span>`
+          `<span class="channel-roles-badge"><span class="badge-dot" style="background:${this._roleFill(r, '#aaa')}"></span>${this._escapeHtml(r.name)}<span class="badge-scope">${r.scope === 'channel' ? `📌 ${t('settings.admin.roles_scope_channel')}` : `🌐 ${t('settings.admin.roles_scope_server')}`}</span><span class="revoke-btn" data-uid="${m.id}" data-rid="${r.roleId}" data-scope="${r.scope}" title="${t('settings.admin.roles_revoke')}">✕</span></span>`
         ).join('') || `<span class="channel-roles-no-role">${t('settings.admin.roles_no_roles')}</span>`;
 
     return `<div class="channel-roles-member${sel}" data-uid="${m.id}">
@@ -5103,7 +5165,7 @@ _showChannelRolesActions(userId) {
     currentDiv.innerHTML = `<span class="channel-roles-badge badge-admin"><span class="badge-dot" style="background:#e74c3c"></span>${t('settings.admin.badge_admin')}</span>`;
   } else if (member.roles.length) {
     currentDiv.innerHTML = member.roles.map(r =>
-      `<span class="channel-roles-badge"><span class="badge-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>${this._escapeHtml(r.name)} <span class="badge-scope">${r.scope === 'channel' ? `📌 ${t('settings.admin.roles_scope_channel')}` : `🌐 ${t('settings.admin.roles_scope_server')}`}</span></span>`
+      `<span class="channel-roles-badge"><span class="badge-dot" style="background:${this._roleFill(r, '#aaa')}"></span>${this._escapeHtml(r.name)} <span class="badge-scope">${r.scope === 'channel' ? `📌 ${t('settings.admin.roles_scope_channel')}` : `🌐 ${t('settings.admin.roles_scope_server')}`}</span></span>`
     ).join('');
   } else {
     currentDiv.innerHTML = `<span style="font-size:0.78rem;color:var(--text-muted)">${t('settings.admin.roles_no_assigned')}</span>`;
@@ -5155,7 +5217,7 @@ _renderChannelRolesRoleList() {
 
   const renderRole = r =>
     `<div class="channel-roles-role-item${this._channelRolesSelectedRole === r.id ? ' active' : ''}" data-role-id="${r.id}">
-      <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
+      <span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span>
       <span class="channel-roles-role-name">${this._escapeHtml(r.name)}</span>
       <span class="channel-roles-role-level">Lv.${r.level}</span>
     </div>`;
@@ -5208,6 +5270,7 @@ _renderChannelRolesRoleDetail() {
           <input type="color" id="cr-role-color" value="${role.color || '#aaaaaa'}" style="width:36px;height:28px;border:none;cursor:pointer;background:none">
         </div>
       </div>
+      ${this._roleGradientFieldsHtml('cr-role', role, true)}
       <label class="cr-perm-toggle" style="margin-top:6px">
         <input type="checkbox" id="cr-role-auto-assign" ${role.auto_assign ? 'checked' : ''}>
         <span>${t('settings.admin.role_form.auto_assign')}</span>
@@ -5234,6 +5297,7 @@ _renderChannelRolesRoleDetail() {
 
   // Toggle permissions visibility based on the current role level.
   this._updateRoleLevelPermsVis('cr-role-level', 'cr-role-permissions-list', 'cr-perm-admin-note');
+  const readCrRoleLook = this._wireRoleGradientFields('cr-role', 'cr-role-color', 'cr-role-name');
 
   document.getElementById('cr-save-role-btn').addEventListener('click', () => {
     const perms = [...panel.querySelectorAll('.cr-perm-cb:checked')].map(cb => cb.dataset.perm);
@@ -5244,6 +5308,8 @@ _renderChannelRolesRoleDetail() {
       name: document.getElementById('cr-role-name').value.trim(),
       level: newLevel,
       color: document.getElementById('cr-role-color').value,
+      color2: readCrRoleLook().color2,
+      shimmer: readCrRoleLook().shimmer,
       autoAssign: document.getElementById('cr-role-auto-assign').checked,
       permissions: perms
     }, (res) => {
@@ -5328,7 +5394,7 @@ _openAssignRoleModal(userId, username) {
     }
     container.innerHTML = this._allRoles.map(r => {
       const checked = heldRoleIds.has(r.id) ? ' checked' : '';
-      const dot = `<span class="role-color-dot" style="background:${this._safeColor ? this._safeColor(r.color, '#888') : (r.color || '#888')}"></span>`;
+      const dot = `<span class="role-color-dot" style="background:${this._roleFill(r, '#888')}"></span>`;
       return `
         <label class="assign-role-checkbox-row">
           <input type="checkbox" class="assign-role-checkbox" value="${r.id}"${checked}>

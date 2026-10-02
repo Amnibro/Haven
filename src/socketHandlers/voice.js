@@ -140,7 +140,11 @@ module.exports = function register(socket, ctx) {
 
   function serializeVoiceRosterUser(user, channelId) {
     const role = getUserHighestRole(user.id, channelId);
-    return { ...serializeVoicePeer(user), roleColor: role ? role.color : null };
+    return {
+      ...serializeVoicePeer(user), roleColor: role ? role.color : null,
+      roleColor2: (role && role.color2) || null,
+      roleShimmer: !!(role && role.color2 && role.color_shimmer),
+    };
   }
 
   // ── Local helper: broadcast stream/viewer info ──────────

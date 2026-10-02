@@ -165,17 +165,20 @@ _renderUserItem(u, scoreLookup) {
   const roleIconBefore = roleIconHtml && !iconAfterName ? roleIconHtml : '';
   const roleIconAfter = roleIconHtml && iconAfterName ? roleIconHtml : '';
   const roleDot = (roleDisplayMode === 'dot' && u.role)
-    ? `<span class="user-role-dot" style="background:${roleColor}" title="${this._escapeHtml(u.role.name)}"></span>`
+    ? `<span class="user-role-dot" style="background:${this._roleFill(u.role, roleColor)}" title="${this._escapeHtml(u.role.name)}"></span>`
     : '';
 
   // In colored-name mode, apply role color to the username
   const nameStyle = (roleDisplayMode === 'colored-name' && u.role && roleColor)
     ? ` style="color:${roleColor}"`
     : '';
+  // A gradient role paints the name itself (see _roleNameHtml).
+  const nameText = this._getNickname(u.id, u.username);
+  const nameHtml = nameStyle ? this._roleNameHtml(u.role, nameText) : this._escapeHtml(nameText);
 
   // Keep the old badge for message area (msg-role-badge) but hide in sidebar
   const roleBadge = u.role
-    ? `<span class="user-role-badge" style="color:${this._safeColor(u.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(u.role.name)}">${this._escapeHtml(u.role.name)}</span>`
+    ? `<span class="user-role-badge" style="color:${this._safeColor(u.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(u.role.name)}">${this._roleNameHtml(u.role, u.role.name)}</span>`
     : '';
   // (#5381) Mark guest accounts with a small badge so people know not to
   // expect long-term presence.
@@ -223,7 +226,7 @@ _renderUserItem(u, scoreLookup) {
       <div class="user-item-text">
         <div class="user-item-line">
           ${roleDot}${roleIconBefore}
-          <span class="user-item-name"${nameStyle}${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
+          <span class="user-item-name"${nameStyle}${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${nameHtml}</span>
           ${roleIconAfter}
           ${roleBadge}
           ${guestBadge}
@@ -811,8 +814,8 @@ _showProfilePopup(profile) {
   // Roles
   const rolesHtml = (profile.roles && profile.roles.length > 0)
     ? profile.roles.map(r => {
-        const rIcon = r.icon ? `<img class="role-icon" src="${this._escapeHtml(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
-        return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${this._escapeHtml(r.name)}</span>`;
+        const rIcon = r.icon ? `<img class="role-icon" src="${this._escapeHtml(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._roleFill(r, 'var(--text-muted)')}"></span>`;
+        return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${this._roleNameHtml(r, r.name)}</span>`;
       }).join('')
     : '';
 
@@ -1108,7 +1111,9 @@ _renderVoiceUsers(users, channelCode) {
     const isSelf = u.id === this.user.id;
     const talking = this.voice && ((isSelf && this.voice.talkingState.get('self')) || this.voice.talkingState.get(u.id));
     const dotColor = this._safeColor(u.roleColor);
-    const dotStyle = dotColor ? ` style="background:${dotColor};--voice-dot-color:${dotColor}"` : '';
+    // A gradient role fills the dot with its gradient; the talking glow
+    // keeps the role's first color.
+    const dotStyle = dotColor ? ` style="background:${this._roleFill(u, dotColor)};--voice-dot-color:${dotColor}"` : '';
 
     // Stream indicators: is this user streaming? watching?
     // We treat the user as streaming if EITHER the server-side `streams`
@@ -1523,7 +1528,8 @@ _refreshNicknameDisplays() {
       const nick = this._getNickname(uid, realName);
       const authorEl = el.querySelector('.message-author');
       if (authorEl) {
-        authorEl.textContent = nick;
+        // A gradient role name keeps its span; only the words change.
+        (authorEl.querySelector('.role-gradient') || authorEl).textContent = nick;
         authorEl.title = nick !== realName ? realName : '';
       }
     }

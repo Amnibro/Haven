@@ -15,6 +15,10 @@ module.exports = function register(socket, ctx) {
   const { channelUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
+  // A role color is a short hex code (#abc or #aabbcc); anything else is
+  // stored as no color.
+  const safeRoleColor = (c) => (isString(c, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(c)) ? c : null;
+
   // ── Helper: apply role-linked channel access ────────────
   function applyRoleChannelAccess(roleId, userId, direction) {
     const role = db.prepare('SELECT link_channel_access FROM roles WHERE id = ?').get(roleId);
@@ -157,10 +161,10 @@ module.exports = function register(socket, ctx) {
       const entries = Array.isArray(data.roles) ? data.roles : [];
       if (!entries.length) return [];
       const ph = entries.map(() => '?').join(',');
-      const roles = db.prepare(`SELECT id, name, color, icon, level FROM roles WHERE id IN (${ph})`).all(...entries.map(e => e.roleId));
+      const roles = db.prepare(`SELECT id, name, color, color2, color_shimmer, icon, level FROM roles WHERE id IN (${ph})`).all(...entries.map(e => e.roleId));
       return entries.map(e => {
         const r = roles.find(x => x.id === e.roleId);
-        return r ? { id: r.id, name: r.name, color: r.color, icon: r.icon, emoji: e.emoji } : null;
+        return r ? { id: r.id, name: r.name, color: r.color, color2: r.color2, color_shimmer: r.color_shimmer, icon: r.icon, emoji: e.emoji } : null;
       }).filter(Boolean);
     } catch { return []; }
   }
@@ -450,7 +454,7 @@ module.exports = function register(socket, ctx) {
     if (memberIds.length > 0) {
       const placeholders = memberIds.map(() => '?').join(',');
       const roleRows = db.prepare(`
-        SELECT ur.user_id, r.id as role_id, r.name, r.level, r.color, r.icon, ur.channel_id
+        SELECT ur.user_id, r.id as role_id, r.name, r.level, r.color, r.color2, r.color_shimmer, r.icon, ur.channel_id
         FROM user_roles ur
         JOIN roles r ON ur.role_id = r.id
         WHERE ur.user_id IN (${placeholders})
@@ -461,7 +465,8 @@ module.exports = function register(socket, ctx) {
         if (!userRolesMap[row.user_id]) userRolesMap[row.user_id] = [];
         userRolesMap[row.user_id].push({
           roleId: row.role_id, name: row.name, level: row.level,
-          color: row.color, icon: row.icon, scope: row.channel_id ? 'channel' : 'server'
+          color: row.color, color2: row.color2, color_shimmer: row.color_shimmer,
+          icon: row.icon, scope: row.channel_id ? 'channel' : 'server'
         });
       });
     }
@@ -488,7 +493,11 @@ module.exports = function register(socket, ctx) {
 
     const level = isInt(data.level) && data.level >= 0 && data.level <= 99 ? data.level : 25;
     const scope = data.scope === 'channel' ? 'channel' : 'server';
-    const color = isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color) ? data.color : null;
+    const color = safeRoleColor(data.color);
+    // Gradient: color is the start, color2 the end. Shimmer only means
+    // something when there is a gradient to move.
+    const color2 = safeRoleColor(data.color2);
+    const shimmer = color2 && data.shimmer ? 1 : 0;
     const autoAssign = data.autoAssign ? 1 : 0;
     const transparent = data.transparent ? 1 : 0;
     const icon = isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon) ? data.icon : null;
@@ -508,8 +517,8 @@ module.exports = function register(socket, ctx) {
         db.prepare('UPDATE roles SET auto_assign = 0').run();
       }
       const result = db.prepare(
-        'INSERT INTO roles (name, level, scope, color, transparent, auto_assign, icon, max_upload_mb) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(name, level, scope, color, transparent, autoAssign, icon, maxUploadMb);
+        'INSERT INTO roles (name, level, scope, color, color2, color_shimmer, transparent, auto_assign, icon, max_upload_mb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(name, level, scope, color, color2, shimmer, transparent, autoAssign, icon, maxUploadMb);
 
       const perms = level > 0 && Array.isArray(data.permissions) ? data.permissions : [];
       const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
@@ -523,7 +532,7 @@ module.exports = function register(socket, ctx) {
       cb({ success: true, roleId: result.lastInsertRowid });
       _audit({ actor: socket.user, action: 'role_create',
         target_type: 'role', target_id: result.lastInsertRowid, target_name: name,
-        details: { level, scope, color, autoAssign: !!autoAssign, permissions: perms } });
+        details: { level, scope, color, color2, shimmer: !!shimmer, autoAssign: !!autoAssign, permissions: perms } });
     } catch (err) {
       console.error('Create role error:', err);
       cb({ error: 'Failed to create role' });
@@ -569,8 +578,17 @@ module.exports = function register(socket, ctx) {
       if (isString(data.name, 1, 30)) { updates.push('name = ?'); values.push(data.name.trim()); }
       if (isInt(data.level) && data.level >= 0 && data.level <= 99) { updates.push('level = ?'); values.push(data.level); }
       if (data.color !== undefined) {
-        const safeColor = (isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color)) ? data.color : null;
-        updates.push('color = ?'); values.push(safeColor);
+        updates.push('color = ?'); values.push(safeRoleColor(data.color));
+      }
+      // Clearing the end color turns the gradient off, and its shimmer with it.
+      const color2 = data.color2 !== undefined ? safeRoleColor(data.color2) : undefined;
+      if (color2 !== undefined) {
+        updates.push('color2 = ?'); values.push(color2);
+      }
+      if (color2 === null) {
+        updates.push('color_shimmer = 0');
+      } else if (data.shimmer !== undefined) {
+        updates.push('color_shimmer = ?'); values.push(data.shimmer ? 1 : 0);
       }
       if (data.transparent !== undefined) {
         updates.push('transparent = ?'); values.push(data.transparent ? 1 : 0);
@@ -974,7 +992,7 @@ module.exports = function register(socket, ctx) {
         if (sharedChannels.length === 0 && !callerIsAdmin) continue;
 
         const currentRoles = db.prepare(`
-          SELECT ur.role_id, ur.channel_id, r.name, r.level, r.color
+          SELECT ur.role_id, ur.channel_id, r.name, r.level, r.color, r.color2, r.color_shimmer
           FROM user_roles ur
           JOIN roles r ON ur.role_id = r.id
           WHERE ur.user_id = ?

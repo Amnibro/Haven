@@ -1135,7 +1135,7 @@ _createMessageEl(msg, prevMsg) {
     ? _allRoles.map(r => r.name).join('\n')
     : (onlineUser && onlineUser.role ? onlineUser.role.name : '');
   const msgRoleBadge = onlineUser && onlineUser.role
-    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle)}">${this._escapeHtml(onlineUser.role.name)}${_allRoles.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles.length - 1}</span>` : ''}</span>`
+    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle)}">${this._roleNameHtml(onlineUser.role, onlineUser.role.name)}${_allRoles.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles.length - 1}</span>` : ''}</span>`
     : '';
 
   // Role icon in chat
@@ -1149,9 +1149,13 @@ _createMessageEl(msg, prevMsg) {
 
   // Role color display mode: colored-name uses role color for the author name
   const roleDisplayMode = localStorage.getItem('haven-role-display') || 'colored-name';
-  const authorColor = (roleDisplayMode === 'colored-name' && onlineUser && onlineUser.role && onlineUser.role.color)
+  const authorRoleStyled = roleDisplayMode === 'colored-name' && onlineUser && onlineUser.role && onlineUser.role.color;
+  const authorColor = authorRoleStyled
     ? this._safeColor(onlineUser.role.color, color)
     : color;
+  // The author name, painted by a gradient role when the author has one.
+  const authorText = msg.persona_id ? msg.username : this._getNickname(msg.user_id, msg.username);
+  const authorHtml = authorRoleStyled ? this._roleNameHtml(onlineUser.role, authorText) : this._escapeHtml(authorText);
 
   const botBadge = msg.imported_from === 'discord'
     ? '<span class="discord-badge">DISCORD</span>'
@@ -1215,7 +1219,7 @@ _createMessageEl(msg, prevMsg) {
         ${replyHtml}
         <div class="message-header">
           ${msgRoleIconBefore}
-          <span class="message-author" style="color:${authorColor}"${!msg.persona_id && this._nicknames[msg.user_id] ? ` title="${this._escapeHtml(msg.username)}"` : ''}>${this._escapeHtml(msg.persona_id ? msg.username : this._getNickname(msg.user_id, msg.username))}</span>
+          <span class="message-author" style="color:${authorColor}"${!msg.persona_id && this._nicknames[msg.user_id] ? ` title="${this._escapeHtml(msg.username)}"` : ''}>${authorHtml}</span>
           ${msgRoleIconAfter}
           ${botBadge}
           ${personaBadge}
@@ -1291,7 +1295,7 @@ _promoteCompactToFull(compactEl) {
     ? _allRoles2.map(r => r.name).join('\n')
     : (onlineUser && onlineUser.role ? onlineUser.role.name : '');
   const msgRoleBadge = onlineUser && onlineUser.role
-    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle2)}">${this._escapeHtml(onlineUser.role.name)}${_allRoles2.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles2.length - 1}</span>` : ''}</span>`
+    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle2)}">${this._roleNameHtml(onlineUser.role, onlineUser.role.name)}${_allRoles2.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles2.length - 1}</span>` : ''}</span>`
     : '';
 
   // Role icon in chat (compact-to-full)
@@ -1302,6 +1306,14 @@ _promoteCompactToFull(compactEl) {
     : '';
   const msgRoleIconBefore2 = msgRoleIcon2 && !iconAfterName2 ? msgRoleIcon2 : '';
   const msgRoleIconAfter2 = msgRoleIcon2 && iconAfterName2 ? msgRoleIcon2 : '';
+
+  // Author name in the role's style, the same rule as a freshly rendered
+  // message (this path used to drop the role color).
+  const roleStyled2 = (localStorage.getItem('haven-role-display') || 'colored-name') === 'colored-name'
+    && onlineUser && onlineUser.role && onlineUser.role.color;
+  const authorColor2 = roleStyled2 ? this._safeColor(onlineUser.role.color, color) : color;
+  const authorText2 = this._getNickname(userId, username);
+  const authorHtml2 = roleStyled2 ? this._roleNameHtml(onlineUser.role, authorText2) : this._escapeHtml(authorText2);
 
   // Replace the compact element in-place
   const wasAnnouncement = compactEl.classList.contains('announcement');
@@ -1319,7 +1331,7 @@ _promoteCompactToFull(compactEl) {
       <div class="message-body">
         <div class="message-header">
           ${msgRoleIconBefore2}
-          <span class="message-author" style="color:${color}"${this._nicknames[userId] ? ` title="${this._escapeHtml(username)}"` : ''}>${this._escapeHtml(this._getNickname(userId, username))}</span>
+          <span class="message-author" style="color:${authorColor2}"${this._nicknames[userId] ? ` title="${this._escapeHtml(username)}"` : ''}>${authorHtml2}</span>
           ${msgRoleIconAfter2}
           ${msgRoleBadge}
           <span class="message-time"${this._timeAttr(time)}>${this._formatTime(time)}</span>

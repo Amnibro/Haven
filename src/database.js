@@ -1610,6 +1610,17 @@ function initDatabase() {
     db.exec('ALTER TABLE roles ADD COLUMN transparent INTEGER NOT NULL DEFAULT 0');
   }
 
+  // ── Migration: gradient role colors ─────────────────────
+  // A role can draw names as a gradient from `color` to `color2`, and
+  // color_shimmer slowly moves that gradient along the name. No color2
+  // means a plain color, exactly as before.
+  try {
+    db.prepare('SELECT color2, color_shimmer FROM roles LIMIT 0').get();
+  } catch {
+    try { db.exec('ALTER TABLE roles ADD COLUMN color2 TEXT DEFAULT NULL'); } catch { /* already there */ }
+    try { db.exec('ALTER TABLE roles ADD COLUMN color_shimmer INTEGER NOT NULL DEFAULT 0'); } catch { /* already there */ }
+  }
+
   // One-time: the made-up Admin role, which only lived in the
   // 'admin_role_display' setting, becomes a real role at the top with every
   // permission a role can hold, worn by the admin so they look the same.

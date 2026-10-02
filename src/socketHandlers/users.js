@@ -267,7 +267,7 @@ module.exports = function register(socket, ctx) {
       if (!row) return;
 
       const roles = db.prepare(
-        `SELECT DISTINCT r.id, r.name, r.level, r.color
+        `SELECT DISTINCT r.id, r.name, r.level, r.color, r.color2, r.color_shimmer
          FROM roles r
          JOIN user_roles ur ON r.id = ur.role_id
          WHERE ur.user_id = ? AND ur.channel_id IS NULL
@@ -283,7 +283,7 @@ module.exports = function register(socket, ctx) {
           if (chain.length > 0) {
             const placeholders = chain.map(() => '?').join(',');
             const channelRoles = db.prepare(
-              `SELECT DISTINCT r.id, r.name, COALESCE(ur.custom_level, r.level) as level, r.color
+              `SELECT DISTINCT r.id, r.name, COALESCE(ur.custom_level, r.level) as level, r.color, r.color2, r.color_shimmer
                FROM roles r
                JOIN user_roles ur ON r.id = ur.role_id
                WHERE ur.user_id = ? AND ur.channel_id IN (${placeholders})
