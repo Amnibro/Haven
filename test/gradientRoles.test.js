@@ -158,8 +158,8 @@ test('gradient roles: saved, validated and carried to clients', async (t) => {
 
   await t.test('duplicate carries the gradient', async () => {
     // Duplicate in the role editor re-creates the role from its row; this is
-    // the payload it sends (app-admin.js).
-    const src = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-admin.js'), 'utf8');
+    // the payload it sends (app-roles.js).
+    const src = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-roles.js'), 'utf8');
     const dup = src.slice(src.indexOf("getElementById('duplicate-role-btn')?.addEventListener"));
     assert.match(dup.slice(0, 1500), /color2: role\.color2 \|\| null,\s*shimmer: !!role\.color_shimmer,/);
 

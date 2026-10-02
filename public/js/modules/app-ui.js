@@ -1,7 +1,7 @@
 // Page setup: _setupUI wires every part of the page by calling each area's
 // _bind method in turn. Also here: the header search and pinned-message
 // buttons, the sidebar collapse, the encryption menu, keyboard shortcuts,
-// games, member search, and file uploads.
+// games, member search, file uploads, resizable sidebars, and the donors list.
 
 export default {
 
@@ -740,6 +740,321 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
     if (err?.aborted) return;
     this._showToast(err.message || t('toasts.upload_failed'), 'error');
   }
+},
+
+// ═══════════════════════════════════════════════════════
+// ── General File Upload ───────────────────────────────
+// ═══════════════════════════════════════════════════════
+
+_setupFileUpload() {
+  // Merged into upload-btn — no separate file button needed.
+  // The unified upload button opens a file picker that accepts all types;
+  // images are queued (with preview), other files upload immediately.
+},
+
+_handleFileUpload(input) {
+  if (!input.files.length || !this.currentChannel) return;
+  const file = input.files[0];
+  this._uploadGeneralFile(file);
+  input.value = '';
+},
+
+/** Upload any file via /api/upload-file — used by drag & drop, paste, and 📎 button */
+_uploadGeneralFile(file, targetCode) {
+  const code = targetCode || this.currentChannel;
+  if (!code) return this._showToast(t('media.select_channel_first'), 'error');
+  // Block media uploads if disabled in this channel
+  const _ugCh = this.channels.find(c => c.code === code);
+  if (_ugCh && _ugCh.media_enabled === 0) {
+    return this._showToast(t('media.uploads_disabled'), 'error');
+  }
+  const maxMb = this._uploadCapMb();
+  if (file.size > maxMb * 1024 * 1024) {
+    this._showToast(t('media.file_too_large', { maxMb }), 'error');
+    return;
+  }
+
+  // E2E DM path (#5310, #5308): if this channel is an E2E DM, encrypt the
+  // file bytes before upload and send the metadata as an encrypted text
+  // message. Without this, drag-drop / 📎 / paste / PiP-paste of any non-image
+  // file (and any image pasted into the PiP) lands plaintext on the server
+  // filesystem, defeating the DM's E2E guarantee.
+  this._maybeUploadEncryptedDmFile(file, code, _ugCh).then(handled => {
+    if (handled) return;
+
+    const formData = new FormData();
+    // Tells the server which column this lands in on the admin storage
+    // report. It only ever splits this uploader's own total. (#5521)
+    formData.append('scope', _ugCh && _ugCh.is_dm ? 'dm' : 'channel');
+    formData.append('file', file);
+    this._uploadWithProgress('/api/upload-file', formData)
+    .then(data => {
+      if (data.error) {
+        this._showToast(data.error, 'error');
+        return;
+      }
+      // Send as a message with file attachment format
+      const sizeStr = this._formatFileSize(data.fileSize);
+      let content;
+      if (data.isImage) {
+        content = data.url; // images render inline already
+      } else {
+        // Use a special file attachment format: [file:name](url|size)
+        content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
+      }
+      this.socket.emit('send-message', {
+        code,
+        content,
+        replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null,
+        ...(file && file._tags && file._tags.length ? { attachmentTags: file._tags } : {})
+      });
+      if (file && file._tags && file._tags.length) this._recordFrequentTags(file._tags);
+      this.notifications.play('sent');
+      if (code === this.currentChannel) this._clearReply();
+    })
+    .catch(err => {
+      if (err?.aborted) return;
+      this._showToast(err.message || t('settings.admin.upload_failed'), 'error');
+    });
+  });
+},
+
+/**
+ * If `code` is an E2E DM and the partner key is available, encrypt `file`,
+ * upload as an opaque blob, then send the metadata as an encrypted
+ * `e2e-file:{json}` text message. Returns true if handled (sent, or the
+ * sender backed out of sending it unencrypted), false when the caller should
+ * upload it as it is. (#5310, #5308)
+ */
+async _maybeUploadEncryptedDmFile(file, code, ch) {
+  if (!ch || !ch.is_dm || !ch.dm_target) return false;
+  const gate = await this._dmSendGate(code);
+  if (!gate) return true;
+  const partner = gate.partner;
+  if (!partner) return false;
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const encrypted = await this.e2e.encryptBytes(arrayBuffer, partner.userId, partner.publicKeyJwk);
+    const blob = new Blob([encrypted], { type: 'application/octet-stream' });
+    const formData = new FormData();
+    formData.append('scope', 'dm');
+    formData.append('file', blob, 'e2e-file.enc');
+    const data = await this._uploadWithProgress('/api/upload-file', formData);
+    if (!data || !data.url) {
+      this._showToast(t('toasts.encrypted_image_failed'), 'error');
+      return true;
+    }
+    const meta = JSON.stringify({
+      mime: file.type || 'application/octet-stream',
+      size: file.size,
+      url: data.url,
+      name: file.name || 'file'
+    });
+    // Images (including SVG) use e2e-img: so they render inline (#5309)
+    const isImage = (file.type || '').startsWith('image/');
+    const marker = isImage
+      ? `e2e-img:${file.type || 'image/png'}:${data.url}`
+      : `e2e-file:${meta}`;
+    const encryptedText = await this.e2e.encrypt(marker, partner.userId, partner.publicKeyJwk);
+    this.socket.emit('send-message', {
+      code,
+      content: encryptedText,
+      encrypted: true,
+      // The server cannot see this inside the encrypted text; naming it lets
+      // deleting the message remove the file too (#5699).
+      files: [data.url],
+      replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null
+    });
+    this.notifications.play('sent');
+    if (code === this.currentChannel) this._clearReply();
+    return true;
+  } catch (err) {
+    if (err?.aborted) return true;
+    console.error('[E2E] File encryption failed:', err);
+    const _detail = err?.message ? ` — ${err.message}` : '';
+    this._showToast(`${t('toasts.encrypted_image_failed')}${_detail}`, 'error');
+    return true;
+  }
+},
+
+_formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+},
+
+// ═══════════════════════════════════════════════════════
+// ── Resizable Sidebars ─────────────────────────────────
+
+_setupResizableSidebars() {
+  // Left sidebar resize (delta-based so it works with mod-mode panel repositioning)
+  const sidebar = document.querySelector('.sidebar');
+  const leftHandle = document.getElementById('sidebar-resize-handle');
+  if (sidebar && leftHandle) {
+    const savedLeft = localStorage.getItem('haven_sidebar_width');
+    if (savedLeft) sidebar.style.width = savedLeft + 'px';
+
+    let dragging = false, startX = 0, startW = 0;
+    leftHandle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      dragging = true;
+      startX = e.clientX;
+      startW = sidebar.getBoundingClientRect().width;
+      leftHandle.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      // Flip direction when mod mode has moved this sidebar to the right
+      const factor = sidebar.dataset.panelPos === 'right' ? -1 : 1;
+      let w = startW + (e.clientX - startX) * factor;
+      w = Math.max(200, Math.min(400, w));
+      sidebar.style.width = w + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      leftHandle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      localStorage.setItem('haven_sidebar_width', parseInt(sidebar.style.width));
+    });
+  }
+
+  // Right sidebar resize (delta-based)
+  const rightSidebar = document.getElementById('right-sidebar');
+  const rightHandle = document.getElementById('right-sidebar-resize-handle');
+  if (rightSidebar && rightHandle) {
+    const savedRight = localStorage.getItem('haven_right_sidebar_width');
+    if (savedRight) rightSidebar.style.width = savedRight + 'px';
+
+    let dragging = false, startX = 0, startW = 0;
+    rightHandle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      dragging = true;
+      startX = e.clientX;
+      startW = rightSidebar.getBoundingClientRect().width;
+      rightHandle.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      // Default right-side: shrinks when moving right; flip if mod moved it left
+      const factor = rightSidebar.dataset.panelPos === 'left' ? 1 : -1;
+      let w = startW + (e.clientX - startX) * factor;
+      w = Math.max(200, Math.min(400, w));
+      rightSidebar.style.width = w + 'px';
+      window._updateSbToggleRight?.(); // keep both collapse btns aligned during drag
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      rightHandle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      localStorage.setItem('haven_right_sidebar_width', parseInt(rightSidebar.style.width));
+      window._updateSbToggleRight?.();
+    });
+  }
+
+  // Sidebar split handle (channels/DM divider)
+  const splitHandle = document.getElementById('sidebar-split-handle');
+  const splitContainer = document.getElementById('sidebar-split');
+  const channelsPane = document.getElementById('channels-pane');
+  const dmPane = document.getElementById('dm-pane');
+  if (splitHandle && splitContainer && channelsPane && dmPane) {
+    const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
+    if (savedRatio) {
+      channelsPane.style.flex = `${savedRatio} 1 0`;
+      dmPane.style.flex = `${1 - parseFloat(savedRatio)} 1 0`;
+    }
+
+    let dragging = false;
+    splitHandle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      dragging = true;
+      splitHandle.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const rect = splitContainer.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const total = rect.height;
+      let ratio = y / total;
+      ratio = Math.max(0.05, Math.min(0.95, ratio));
+      channelsPane.style.flex = `${ratio} 1 0`;
+      dmPane.style.flex = `${1 - ratio} 1 0`;
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      splitHandle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      const chFlex = parseFloat(channelsPane.style.flex) || 0.6;
+      localStorage.setItem('haven_sidebar_split_ratio', chFlex);
+    });
+  }
+},
+
+_initDonorsModal() {
+  const modal = document.getElementById('donors-modal');
+  if (!modal) return;
+
+  let donorData = null;
+
+  const renderDonorList = (sort) => {
+    const sg = document.getElementById('sponsors-grid');
+    const dg = document.getElementById('donors-grid');
+    sg.innerHTML = '';
+    dg.innerHTML = '';
+    if (!donorData) return;
+    const sponsors = sort === 'featured' && donorData.featuredSponsors ? donorData.featuredSponsors : (donorData.sponsors || []);
+    const allDonors = sort === 'featured' && donorData.featuredDonors ? donorData.featuredDonors : (donorData.donors || []);
+    const sponsorSet = new Set(sponsors.map(n => n.toLowerCase()));
+    const donors = allDonors.filter(n => !sponsorSet.has(n.toLowerCase()));
+    sponsors.forEach(n => { const s = document.createElement('span'); s.className = 'donor-chip donor-sponsor'; s.textContent = n; sg.appendChild(s); });
+    donors.forEach(n => { const s = document.createElement('span'); s.className = 'donor-chip'; s.textContent = n; dg.appendChild(s); });
+  };
+
+  // Fetch donor/sponsor list from server
+  fetch('/api/donors').then(r => r.json()).then(d => {
+    donorData = d;
+    // Show toggle if featured order is available
+    if (d.featuredSponsors || d.featuredDonors) {
+      const toggle = document.getElementById('donors-sort-toggle');
+      if (toggle) toggle.style.display = '';
+    }
+    renderDonorList('chronological');
+  }).catch((err) => { console.warn('[Donors] could not load the donor list', err); });
+
+  // Sort toggle buttons
+  document.getElementById('donors-sort-toggle')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.donors-sort-btn');
+    if (!btn) return;
+    document.querySelectorAll('.donors-sort-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderDonorList(btn.dataset.sort);
+  });
+
+  // Open on heart button click
+  document.getElementById('donors-btn')?.addEventListener('click', () => {
+    modal.style.display = 'flex';
+  });
+
+  // Close on X button
+  document.getElementById('donors-close-btn')?.addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+
+  // Close on overlay click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  });
 },
 
 };

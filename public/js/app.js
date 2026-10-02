@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.17.1';
-import UIBindMethods   from './modules/app-ui.js?v=4.17.2';
+import UIBindMethods   from './modules/app-ui.js?v=4.17.4';
 import ComposerMethods from './modules/app-composer.js?v=4.17.3';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.2';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.17.2';
@@ -14,7 +14,7 @@ import MessageActionMethods from './modules/app-message-actions.js?v=4.17.2';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.17.2';
 import PeopleMethods from './modules/app-people.js?v=4.17.2';
 import SettingsMethods from './modules/app-settings.js?v=4.17.3';
-import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.2';
+import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.4';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.17.2';
 import MobileMethods from './modules/app-mobile.js?v=4.17.2';
 import MediaMethods    from './modules/app-media.js?v=4.17.1';
@@ -24,7 +24,15 @@ import MessageMethods  from './modules/app-messages.js?v=4.17.1';
 import UserMethods     from './modules/app-users.js?v=4.17.1';
 import VoiceMethods    from './modules/app-voice.js?v=4.17.1';
 import UtilityMethods  from './modules/app-utilities.js?v=4.17.1';
-import AdminMethods    from './modules/app-admin.js?v=4.17.1';
+import AdminMethods    from './modules/app-admin.js?v=4.17.4';
+import BrandingMethods from './modules/app-branding.js?v=4.17.4';
+import MembersAdminMethods from './modules/app-members-admin.js?v=4.17.4';
+import AutocompleteMethods from './modules/app-autocomplete.js?v=4.17.4';
+import StatusMethods from './modules/app-status.js?v=4.17.4';
+import DiscordImportMethods from './modules/app-discord-import.js?v=4.17.4';
+import RoleMethods from './modules/app-roles.js?v=4.17.4';
+import RoleAssignMethods from './modules/app-role-assign.js?v=4.17.4';
+import ModerationMethods from './modules/app-moderation.js?v=4.17.4';
 import PlatformMethods from './modules/app-platform.js?v=4.17.1';
 import SearchMethods   from './modules/app-search.js?v=4.10.1';
 import FerryMethods    from './modules/app-ferry.js?v=4.17.0';
@@ -483,6 +491,14 @@ Object.assign(HavenApp.prototype,
   VoiceMethods,
   UtilityMethods,
   AdminMethods,
+  BrandingMethods,
+  MembersAdminMethods,
+  AutocompleteMethods,
+  StatusMethods,
+  DiscordImportMethods,
+  RoleMethods,
+  RoleAssignMethods,
+  ModerationMethods,
   PlatformMethods,
   SearchMethods,
   FerryMethods,
