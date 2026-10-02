@@ -3354,7 +3354,10 @@ initFerry({
           id: result.lastInsertRowid,
           content,
           created_at: createdAt,
-          username,
+          // Marked like every relayed author in channel history, so a Discord
+          // nickname cannot pass for a Haven member's name. The stored and
+          // webhook_username copies stay bare, so the prefix is added once.
+          username: `[BOT] ${username}`,
           user_id: null,
           avatar: avatarUrl || null,
           avatar_shape: 'square',
@@ -3371,6 +3374,8 @@ initFerry({
       });
 
       const count = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE thread_id = ?').get(parentId).n;
+      // Participants are Haven accounts only, the same as for a Haven reply,
+      // so a relayed Discord author never shows there under any name.
       const participants = db.prepare(`
         SELECT DISTINCT COALESCE(u.display_name, u.username) as username, u.avatar
         FROM messages m JOIN users u ON m.user_id = u.id

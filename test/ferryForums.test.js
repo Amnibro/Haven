@@ -75,6 +75,8 @@ async function bootServer() {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env, PORT: String(PORT), HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin', FORCE_HTTP: 'true',
+      // Ferry only honours the stand-in Discord addresses under NODE_ENV=test.
+      NODE_ENV: 'test',
       FERRY_TEST_DISCORD_API: `http://127.0.0.1:${DISCORD_PORT}`,
       FERRY_TEST_DISCORD_GATEWAY: `ws://127.0.0.1:${DISCORD_PORT}`,
     },
@@ -204,10 +206,20 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
 
   await t.test('a Discord reply becomes a Haven reply, and its edit follows', async () => {
     const id = discord.newId();
+    const live = next(A, 'new-thread-message', (d) => d && d.parentId === topic1.id && d.message.content === 'Same here');
     discord.dispatch('MESSAGE_CREATE', discordMessage(id, TH1, BOB, 'Same here'));
-    const reply = await until(async () => (await threadOf(A, topic1.id)).messages.find((m) => m.content === 'Same here'));
-    assert.ok(reply, 'the reply landed in the topic');
-    assert.strictEqual(reply.username, 'Bob');
+    const liveMsg = await live;
+    assert.ok(liveMsg, 'the reply was broadcast live');
+    assert.strictEqual(liveMsg.message.username, '[BOT] Bob', 'marked as relayed when it arrives');
+    assert.strictEqual(liveMsg.message.webhook_username, 'Bob', 'the stored name stays bare');
+    const thread = await until(async () => {
+      const th = await threadOf(A, topic1.id);
+      return th.messages.some((m) => m.content === 'Same here') ? th : null;
+    });
+    assert.ok(thread, 'the reply landed in the topic');
+    const reply = thread.messages.find((m) => m.content === 'Same here');
+    assert.strictEqual(reply.username, '[BOT] Bob', 'marked as relayed in thread history, prefixed once');
+    assert.strictEqual(thread.parentUsername, '[BOT] Alice', 'the relayed topic author is marked too');
     discord.dispatch('MESSAGE_UPDATE', { id, channel_id: TH1, guild_id: GUILD_ID, content: 'Same here, on Linux', author: BOB, mentions: [] });
     assert.ok(await until(async () => (await threadOf(A, topic1.id)).messages.find((m) => m.content === 'Same here, on Linux')));
   });
@@ -288,6 +300,19 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
   });
 
   await t.test('renaming, retagging and locking a Discord post update its topic', async () => {
+    // After the restart Ferry has no earlier state for these posts (the fake
+    // guild sends no threads), so their first update only teaches it the
+    // current state and changes nothing in Haven.
+    discord.dispatch('THREAD_UPDATE', discordThread(TH1, 'Something else', [], { thread_metadata: { archived: true, locked: true } }));
+    discord.dispatch('THREAD_UPDATE', discordThread(TH_CONFIG, 'Config location', []));
+    await wait(500);
+    const untouched = (await history(A, forum.code)).messages.find((m) => m.id === topic1.id);
+    assert.strictEqual(untouched.title, 'Crash on start', 'an update with nothing to compare against is not applied');
+    assert.ok(!untouched.closed);
+    discord.dispatch('THREAD_UPDATE', discordThread(TH1, 'Crash on start', [TAG_BUG, TAG_STAFF]));
+    await wait(300);
+    assert.deepStrictEqual(tagsOf((await history(A, forum.code)).messages.find((m) => m.id === topic1.id)).sort(), ['Staff', 'bug']);
+
     discord.dispatch('THREAD_UPDATE', discordThread(TH1, 'Crash on start (solved)', []));
     const renamed = await until(async () => (await history(A, forum.code)).messages
       .find((m) => m.id === topic1.id && m.title === 'Crash on start (solved)'));
@@ -296,6 +321,61 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     assert.ok(!renamed.closed, 'still open');
     discord.dispatch('THREAD_UPDATE', discordThread(TH_CONFIG, 'Config location', [], { thread_metadata: { archived: true, locked: true } }));
     assert.ok(await until(async () => (await history(A, forum.code)).messages.find((m) => m.title === 'Config location' && m.closed)), 'locked closes it');
+  });
+
+  await t.test('Discord archiving a post does not undo Haven moderation of its topic', async () => {
+    const TH = discord.newId();
+    discord.dispatch('THREAD_CREATE', discordThread(TH, 'Printer jam', [TAG_BUG], { newly_created: true }));
+    discord.dispatch('MESSAGE_CREATE', discordMessage(TH, TH, BOB, 'Paper stuck again'));
+    const topic = await until(async () => (await history(A, forum.code)).messages.find((m) => m.title === 'Printer jam'));
+    assert.ok(topic);
+
+    // A Haven moderator retitles, retags and closes it.
+    const updated = next(A, 'topic-updated', (d) => d && d.messageId === topic.id);
+    A.emit('set-topic-meta', { messageId: topic.id, title: 'Printer jam (see FAQ)', tags: ['Staff'], closed: true });
+    assert.ok(await updated);
+
+    // Discord archives the quiet post, then a message wakes it up again.
+    discord.dispatch('THREAD_UPDATE', discordThread(TH, 'Printer jam', [TAG_BUG], { thread_metadata: { archived: true, locked: false } }));
+    discord.dispatch('THREAD_UPDATE', discordThread(TH, 'Printer jam', [TAG_BUG]));
+    await wait(500);
+    let now = (await history(A, forum.code)).messages.find((m) => m.id === topic.id);
+    assert.strictEqual(now.title, 'Printer jam (see FAQ)', 'the Haven title stays');
+    assert.deepStrictEqual(tagsOf(now), ['Staff'], 'the Haven tags stay');
+    assert.ok(now.closed, 'the topic stays closed');
+
+    // A real rename on Discord still comes across, and only the name changes.
+    discord.dispatch('THREAD_UPDATE', discordThread(TH, 'Printer jam fixed', [TAG_BUG]));
+    now = await until(async () => (await history(A, forum.code)).messages.find((m) => m.id === topic.id && m.title === 'Printer jam fixed'));
+    assert.ok(now, 'the Discord rename applied');
+    assert.deepStrictEqual(tagsOf(now), ['Staff'], 'tags Discord did not change stay as Haven set them');
+    assert.ok(now.closed, 'still closed, Discord did not unlock anything');
+  });
+
+  await t.test('an NSFW Haven topic is not sent to a Discord forum that is not age-restricted', async () => {
+    const before = discord.executions.length;
+    const held = next(A, 'error-msg', (m) => /NSFW/.test(m || ''));
+    A.emit('send-message', { code: forum.code, content: 'Not for work', title: 'Spicy', nsfw: true });
+    assert.match(await held || '', /age-restricted/, 'the author is told it stayed in Haven');
+    const topic = await until(async () => (await history(A, forum.code)).messages.find((m) => m.title === 'Spicy'));
+    assert.ok(topic && topic.nsfw, 'the topic was made in Haven');
+    const cfg = next(A, 'ferry:config');
+    A.emit('ferry:get-config');
+    assert.match((await cfg).links[0].last_error || '', /NSFW/, 'the pairing says why');
+
+    await new Promise((res) => A.emit('send-thread-message', { parentId: topic.id, content: 'spicy reply' }, res));
+    await wait(500);
+    assert.ok(!discord.executions.slice(before).some((e) => e.body && (e.body.thread_name === 'Spicy' || e.body.content === 'spicy reply')),
+      'neither the topic nor its reply reached Discord');
+
+    // Once Discord says the forum is age-restricted, NSFW topics go through.
+    discord.dispatch('CHANNEL_UPDATE', { ...discord.forumChannel(), guild_id: GUILD_ID, nsfw: true });
+    await wait(200);
+    A.emit('send-message', { code: forum.code, content: 'Also not for work', title: 'Spicy two', nsfw: true });
+    assert.ok(await until(() => discord.executions.slice(before).find((e) => e.body && e.body.thread_name === 'Spicy two')),
+      'sent to an age-restricted forum');
+    discord.dispatch('CHANNEL_UPDATE', { ...discord.forumChannel(), guild_id: GUILD_ID });
+    await wait(200);
   });
 
   await t.test('a post deleted on Discord closes its topic and unlinks it', async () => {

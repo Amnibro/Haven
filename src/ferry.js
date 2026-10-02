@@ -41,12 +41,13 @@ const { stripRoleMentions } = require('./socketHandlers/helpers');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
- * FERRY_TEST_DISCORD_API and FERRY_TEST_DISCORD_GATEWAY. Only a loopback
+ * FERRY_TEST_DISCORD_API and FERRY_TEST_DISCORD_GATEWAY. They only count when
+ * NODE_ENV is "test", so a real server ignores them, and only a loopback
  * address is honoured, so a stray environment variable can never send the bot
  * token anywhere but Discord or this same computer.
  */
 function loopbackOverride(value, fallback, protocols) {
-  if (!value) return fallback;
+  if (!value || process.env.NODE_ENV !== 'test') return fallback;
   try {
     const u = new URL(String(value));
     const host = u.hostname.replace(/^\[|\]$/g, '');
@@ -561,10 +562,14 @@ function handleDispatch(type, d) {
       takePendingStarter(d && d.id);
       break;
 
-    case 'THREAD_UPDATE':
+    case 'THREAD_UPDATE': {
+      // What the post looked like before this update, read before the cache
+      // is overwritten, so only what Discord actually changed is passed on.
+      const before = d && d.id ? threads.get(String(d.id)) || null : null;
       cacheThread(d);
-      relayThreadUpdateToHaven(d);
+      relayThreadUpdateToHaven(d, before);
       break;
+    }
 
     case 'THREAD_DELETE':
       if (d && d.id) {
@@ -600,8 +605,9 @@ function isForumType(type) {
   return FORUM_TYPES.has(Number(type));
 }
 
-// The forum-only parts of a Discord channel: its tags, and whether a post
-// must carry one. Empty for every other kind of channel.
+// The forum-only parts of a Discord channel: its tags, whether a post must
+// carry one, and whether the forum is age-restricted (NSFW), which decides if
+// an NSFW Haven topic may go there. Empty for every other kind of channel.
 function forumFields(c) {
   if (!isForumType(c.type)) return {};
   return {
@@ -609,6 +615,7 @@ function forumFields(c) {
       .filter(t => t && t.id && t.name)
       .map(t => ({ id: String(t.id), name: String(t.name), moderated: !!t.moderated })),
     requireTag: !!((Number(c.flags) || 0) & FLAG_REQUIRE_TAG),
+    nsfw: c.nsfw === true,
   };
 }
 
@@ -1029,27 +1036,41 @@ function relayForumStarter(msg, thread) {
  * Haven belongs to its Haven author, and a Discord moderator does not get to
  * retitle it. A lock closes the topic and an unlock opens it again. Archiving
  * is ignored, because Discord archives every quiet post on a timer.
+ *
+ * Discord sends the post's whole current state, archive and unarchive
+ * included, so only the fields that changed since the previous state are
+ * passed on. Otherwise a Haven moderator's close, new title or tag would be
+ * undone the next time Discord archived the post. With no previous state
+ * (after a restart, or for a post that was archived when Ferry connected)
+ * there is no telling what Discord changed, so nothing is passed on; the next
+ * real change on Discord's side is.
  */
-function relayThreadUpdateToHaven(t) {
+function relayThreadUpdateToHaven(t, before) {
   try {
-    if (!t || !t.id) return;
+    if (!t || !t.id || !before) return;
     const thread = threads.get(String(t.id));
     if (!thread) return;
+    const renamed = thread.name !== before.name;
+    const retagged = [...thread.appliedTags].sort().join(',') !== [...before.appliedTags].sort().join(',');
+    const relocked = thread.locked !== before.locked;
+    if (!renamed && !retagged && !relocked) return;
     const rows = mappedTopics(thread.id).filter(r => r.inbound && r.origin === 'discord');
     if (!rows.length) return;
 
-    const title = havenTopicTitle(thread.name);
+    const title = renamed ? havenTopicTitle(thread.name) : '';
     const tagNames = discordTagNames(thread);
     for (const r of rows) {
       const current = deps.db.prepare('SELECT title, tags, closed FROM messages WHERE id = ?').get(r.topic_message_id);
       if (!current) continue;
-      const forumTags = deps.db.prepare('SELECT forum_tags FROM channels WHERE id = ?').get(r.channel_id)?.forum_tags;
-      const tags = matchForumTags(tagNames, forumTags);
-      const tagsJson = tags.length ? JSON.stringify(tags) : null;
       const update = {};
       if (title && title !== current.title) update.title = title;
-      if (tagsJson !== (current.tags || null)) update.tags = tags;
-      if (!!current.closed !== thread.locked) update.closed = thread.locked;
+      if (retagged) {
+        const forumTags = deps.db.prepare('SELECT forum_tags FROM channels WHERE id = ?').get(r.channel_id)?.forum_tags;
+        const tags = matchForumTags(tagNames, forumTags);
+        const tagsJson = tags.length ? JSON.stringify(tags) : null;
+        if (tagsJson !== (current.tags || null)) update.tags = tags;
+      }
+      if (relocked && !!current.closed !== thread.locked) update.closed = thread.locked;
       if (!Object.keys(update).length) continue;
       deps.updateHavenTopic({ messageId: r.topic_message_id, channelCode: r.channel_code, ...update });
     }
@@ -1634,17 +1655,41 @@ function forumThreadName(title, body) {
   return name;
 }
 
+const NSFW_HELD = 'This topic is marked NSFW and the paired Discord forum is not age-restricted, so it stayed in Haven. Mark the Discord forum as age-restricted to carry NSFW topics.';
+
+// Whether a Haven topic is marked NSFW, read from the stored topic so it holds
+// whatever the caller passed along.
+function topicIsNsfw(topicId) {
+  if (!Number.isInteger(topicId)) return false;
+  try {
+    return !!deps.db.prepare('SELECT nsfw FROM messages WHERE id = ?').get(topicId)?.nsfw;
+  } catch { return false; }
+}
+
+// Whether the paired Discord forum is age-restricted. Comes from the channel
+// Discord sent on connect and on every change. Not knowing counts as no.
+function discordForumIsNsfw(guild, link) {
+  const forum = guild && guild.channels.get(String(link.discord_channel_id));
+  return !!(forum && forum.nsfw === true);
+}
+
 /**
  * A new topic in a paired Haven forum becomes a new post in the Discord forum,
  * made through the pairing's webhook so it shows the Haven author. Discord
  * makes the post when the webhook call carries `thread_name`, and answers with
  * the post's first message, whose channel is the new post.
  */
-async function sendTopicToDiscord(link, { username, avatar, content, title, tags, topicId }) {
+async function sendTopicToDiscord(link, { username, avatar, content, title, tags, topicId, nsfw = false }) {
   const guild = guilds.get(String(link.guild_id || ''));
   const body = outboundBody(content, guild);
   if (!body.trim()) return;
   if (!isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
+  // An NSFW topic only goes to a Discord forum that is age-restricted too.
+  // Held back, it has no Discord post, so its replies stay in Haven as well.
+  if ((nsfw === true || topicIsNsfw(topicId)) && !discordForumIsNsfw(guild, link)) {
+    touchLink(link.id, NSFW_HELD);
+    throw new Error(NSFW_HELD);
+  }
 
   return enqueue(`ch:${link.discord_channel_id}`, async () => {
     try {
@@ -1688,6 +1733,11 @@ async function sendReplyToDiscord(link, { username, avatar, content, topicId }) 
       'SELECT discord_thread_id FROM ferry_forum_threads WHERE topic_message_id = ? AND channel_id = ? AND discord_forum_id = ?'
     ).get(topicId, link.channel_id, String(link.discord_channel_id));
     if (!row) return;
+    // A topic marked NSFW after its post was made stops sending replies to a
+    // forum that is not age-restricted.
+    if (topicIsNsfw(topicId) && !discordForumIsNsfw(guild, link)) {
+      throw new Error('This topic is marked NSFW and the paired Discord forum is not age-restricted, so this reply stayed in Haven.');
+    }
     try {
       const hook = await ensureLinkWebhook(link);
       await executeWebhook(hook.id, hook.token,

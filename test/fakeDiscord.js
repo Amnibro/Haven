@@ -10,9 +10,9 @@
  *   FERRY_TEST_DISCORD_API=http://127.0.0.1:<port>
  *   FERRY_TEST_DISCORD_GATEWAY=ws://127.0.0.1:<port>
  *
- * Ferry only honours those for a loopback address. The test then plays
- * Discord's side by calling dispatch() with gateway events, and reads what
- * Haven sent through `executions`.
+ * and NODE_ENV=test. Ferry only honours those under NODE_ENV=test and for a
+ * loopback address. The test then plays Discord's side by calling dispatch()
+ * with gateway events, and reads what Haven sent through `executions`.
  */
 
 const http = require('node:http');
@@ -36,6 +36,17 @@ function startFakeDiscord(port) {
   let seq = 0;
   let identified = 0;
 
+  // The forum as Discord describes it. Not age-restricted: Discord leaves
+  // `nsfw` false on a channel until a moderator turns it on.
+  const forumChannel = () => ({
+    id: FORUM_ID, name: 'help-forum', type: 15, parent_id: null, flags: 0, nsfw: false,
+    available_tags: [
+      { id: TAG_BUG, name: 'Bug', moderated: false },
+      { id: TAG_IDEA, name: 'Idea', moderated: false },
+      { id: TAG_STAFF, name: 'Staff', moderated: true },
+    ],
+  });
+
   const guild = () => ({
     id: GUILD_ID,
     name: 'Test Guild',
@@ -45,14 +56,7 @@ function startFakeDiscord(port) {
     threads: [],
     channels: [
       { id: TEXT_ID, name: 'general', type: 0, parent_id: null },
-      {
-        id: FORUM_ID, name: 'help-forum', type: 15, parent_id: null, flags: 0,
-        available_tags: [
-          { id: TAG_BUG, name: 'Bug', moderated: false },
-          { id: TAG_IDEA, name: 'Idea', moderated: false },
-          { id: TAG_STAFF, name: 'Staff', moderated: true },
-        ],
-      },
+      forumChannel(),
     ],
   });
 
@@ -141,6 +145,7 @@ function startFakeDiscord(port) {
     server.listen(port, '127.0.0.1', () => resolve({
       port,
       dispatch,
+      forumChannel,
       executions,
       webhooks,
       newId,

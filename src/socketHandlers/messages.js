@@ -1472,7 +1472,7 @@ module.exports = function register(socket, ctx) {
           // Every top-level message in a forum is a topic, and goes to a
           // paired Discord forum as a new post.
           topic: channel.is_forum
-            ? { id: result.lastInsertRowid, title: topicTitle, tags: topicTags ? JSON.parse(topicTags) : [] }
+            ? { id: result.lastInsertRowid, title: topicTitle, tags: topicTags ? JSON.parse(topicTags) : [], nsfw: !!topicNsfw }
             : null,
         });
       }
@@ -2725,12 +2725,18 @@ module.exports = function register(socket, ctx) {
     // switches, and a stale currentChannel would silently empty the thread
     // (issue: web users seeing 28 replies but no messages, mobile fine).
     const parentRow = db.prepare(
-      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, c.code as channel_code, c.is_dm as is_dm,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
+      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, c.code as channel_code, c.is_dm as is_dm, m.is_webhook, m.webhook_username, m.imported_from,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
     ).get(parentId);
     if (!parentRow) return;
     if (parentRow.is_dm) return; // Threads are not available in DMs
     const channel = { id: parentRow.channel_id };
     const parent = parentRow;
+    // A relayed or bot author is marked the same way channel history marks
+    // it, so a Discord nickname cannot pass for a Haven member's name.
+    if (parent.is_webhook && !parent.imported_from) {
+      parent.username = `[BOT] ${parent.webhook_username || 'Bot'}`;
+      parent.avatar_shape = 'square';
+    }
 
     // Verify the user is a member of the channel (admins exempt).
     const member = db.prepare(
@@ -2818,6 +2824,16 @@ module.exports = function register(socket, ctx) {
       if (obj.edited_at && !obj.edited_at.endsWith('Z')) obj.edited_at = utcStamp(obj.edited_at);
       obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
       obj.reactions = reactionMap.get(m.id) || [];
+      // Same marking as channel history: a relayed or bot author gets the
+      // [BOT] prefix, so a Discord nickname cannot pass for a Haven member.
+      // webhook_username stays the bare name, so the prefix is added once.
+      // Imported history keeps its original author's name, as it does there.
+      if (m.is_webhook && !m.imported_from) {
+        obj.is_webhook = true;
+        obj.username = `[BOT] ${m.webhook_username || 'Bot'}`;
+        obj.avatar_shape = 'square';
+        obj.border = null; obj.borderTransform = null; obj.animateProfile = 'trigger';
+      }
       return obj;
     });
 
