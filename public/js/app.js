@@ -27,7 +27,10 @@ import SoundMethods from './modules/app-sounds.js?v=4.17.5';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.17.5';
 import BotMethods from './modules/app-bots.js?v=4.17.5';
 import ContextMethods  from './modules/app-context.js?v=4.17.1';
-import ChannelMethods  from './modules/app-channels.js?v=4.17.1';
+import ChannelMethods  from './modules/app-channels.js?v=4.17.10';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.17.10';
+import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.17.10';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.17.10';
 import MessageMethods  from './modules/app-messages.js?v=4.17.1';
 import UserMethods     from './modules/app-users.js?v=4.17.1';
 import VoiceMethods    from './modules/app-voice.js?v=4.17.1';
@@ -506,6 +509,9 @@ Object.assign(HavenApp.prototype,
   BotMethods,
   ContextMethods,
   ChannelMethods,
+  ChannelContextMethods,
+  ChannelOrganizeMethods,
+  ChannelUnreadMethods,
   MessageMethods,
   UserMethods,
   VoiceMethods,
