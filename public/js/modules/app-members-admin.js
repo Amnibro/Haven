@@ -1,6 +1,7 @@
 // Members as admins see them: the ban, banned IP and deleted user lists, the
 // all members window with its actions, bulk cleanup, storage use, and the
-// per-member channel picker.
+// per-member channel picker, and the kick, ban, password reset and transfer
+// admin windows.
 
 export default {
 
@@ -695,6 +696,336 @@ _openMemberChannelPicker(userId, username, mode, channelsOverride = null) {
     this._showToast(t(toastKey, { count: selected.length }), 'success');
     // Refresh after a short delay
     setTimeout(() => this._openAllMembersModal(), 800);
+  });
+},
+
+// ═══════════════════════════════════════════════════════
+// ADMIN MODERATION UI
+// ═══════════════════════════════════════════════════════
+
+_showAdminActionModal(action, userId, username) {
+  this.adminActionTarget = { action, userId, username };
+  const modal = document.getElementById('admin-action-modal');
+  const title = document.getElementById('admin-action-title');
+  const desc = document.getElementById('admin-action-desc');
+  const durationGroup = document.getElementById('admin-duration-group');
+  const scrubGroup = document.getElementById('admin-scrub-group');
+  const scrubCheckbox = document.getElementById('admin-scrub-checkbox');
+  const scrubScopeRow = document.getElementById('admin-scrub-scope-row');
+  const confirmBtn = document.getElementById('confirm-admin-action-btn');
+
+  const labels = {
+    kick: t('modals.admin_action.label_kick'),
+    ban: t('modals.admin_action.label_ban'),
+    mute: t('modals.admin_action.label_mute'),
+    'delete-user': t('modals.admin_action.label_delete_user')
+  };
+  title.textContent = `${labels[action] || action} — ${username}`;
+  desc.textContent = action === 'ban'
+    ? t('modals.admin_action.desc_ban')
+    : action === 'mute'
+      ? t('modals.admin_action.desc_mute')
+      : action === 'delete-user'
+        ? t('modals.admin_action.desc_delete_user')
+        : t('modals.admin_action.desc_kick');
+
+  durationGroup.style.display = action === 'mute' ? 'block' : 'none';
+
+  // Show scrub option for kick, ban, and delete-user
+  const hasScrub = ['kick', 'ban', 'delete-user'].includes(action);
+  scrubGroup.style.display = hasScrub ? 'block' : 'none';
+  scrubCheckbox.checked = false;
+  // Kick gets scope dropdown (channel vs server), ban/delete are server-wide only
+  scrubScopeRow.style.display = 'none';
+  if (action === 'kick') {
+    scrubCheckbox.onchange = () => { scrubScopeRow.style.display = scrubCheckbox.checked ? 'block' : 'none'; };
+  } else {
+    scrubCheckbox.onchange = null;
+  }
+
+  // Purge option: replace messages with placeholder. Ban-only for now —
+  // it's a softer, less destructive alternative to scrub. Mutually exclusive
+  // with scrub (you can't both delete and replace the same messages).
+  const purgeGroup = document.getElementById('admin-purge-group');
+  const purgeCheckbox = document.getElementById('admin-purge-checkbox');
+  const purgeMessageRow = document.getElementById('admin-purge-message-row');
+  const purgeMessageInput = document.getElementById('admin-purge-message');
+  if (purgeGroup) {
+    purgeGroup.style.display = action === 'ban' ? 'block' : 'none';
+    if (purgeCheckbox) purgeCheckbox.checked = false;
+    if (purgeMessageRow) purgeMessageRow.style.display = 'none';
+    if (purgeMessageInput) purgeMessageInput.value = '';
+    if (purgeCheckbox && action === 'ban') {
+      purgeCheckbox.onchange = () => {
+        if (purgeMessageRow) purgeMessageRow.style.display = purgeCheckbox.checked ? 'block' : 'none';
+        // Mutually exclusive with scrub
+        if (purgeCheckbox.checked && scrubCheckbox.checked) {
+          scrubCheckbox.checked = false;
+          if (scrubScopeRow) scrubScopeRow.style.display = 'none';
+        }
+      };
+      const origScrubChange = scrubCheckbox.onchange;
+      scrubCheckbox.onchange = () => {
+        if (typeof origScrubChange === 'function') origScrubChange();
+        if (scrubCheckbox.checked && purgeCheckbox.checked) {
+          purgeCheckbox.checked = false;
+          if (purgeMessageRow) purgeMessageRow.style.display = 'none';
+        }
+      };
+    }
+  }
+
+  confirmBtn.textContent = labels[action] || t('modals.common.confirm');
+
+  // IP-ban option: visible only for the ban action, and only when the current
+  // user has either admin or the ban_ip permission. Default to unchecked.
+  const banIpGroup = document.getElementById('admin-ban-ip-group');
+  const banIpCheckbox = document.getElementById('admin-ban-ip-checkbox');
+  if (banIpGroup) {
+    // ban_ip is a server-wide permission, so it arrives in globalPermissions;
+    // checking only `permissions` (the channel-scoped set) meant the option
+    // stayed hidden for moderators who genuinely held it. (v3.43.0)
+    const _has = (p) => {
+      if (!this.user) return false;
+      if (this.user.isAdmin) return true;
+      const scoped = Array.isArray(this.user.permissions) ? this.user.permissions : [];
+      const global = Array.isArray(this.user.globalPermissions) ? this.user.globalPermissions : [];
+      return scoped.includes('*') || global.includes('*') || scoped.includes(p) || global.includes(p);
+    };
+    const canBanIp = _has('ban_ip');
+    banIpGroup.style.display = (action === 'ban' && canBanIp) ? 'block' : 'none';
+    if (banIpCheckbox) banIpCheckbox.checked = false;
+  }
+
+  document.getElementById('admin-action-reason').value = '';
+  document.getElementById('admin-action-duration').value = '10';
+  document.getElementById('admin-scrub-scope').value = 'channel';
+  modal.style.display = 'flex';
+  modal.style.zIndex = '100002';
+},
+
+// ── Admin password reset (#5300) ───────────────────────
+// Three-stage flow: (1) confirm with explicit DM-loss warning and
+// escape-hatch explanation, (2) emit socket event to server which
+// gates on the target user having 2FA enabled, (3) reveal modal that
+// shows the temp password once for the admin to transmit out-of-band.
+_confirmAdminResetPassword(userId, username) {
+  this._hideUserContextMenu();
+  this._closeProfilePopup();
+  const safeName = this._escapeHtml(username);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay admin-reset-pw-overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '100002';
+  overlay.innerHTML = `
+    <div class="modal admin-reset-pw-modal">
+      <div class="modal-header">
+        <h4>🔑 ${t('modals.admin_reset_pw.title')}</h4>
+        <button class="modal-close-btn admin-reset-pw-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>${t('modals.admin_reset_pw.confirm_prompt').replace('{username}', safeName)}</p>
+        <div style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:0.85rem;">
+          <strong>⚠️ ${t('modals.admin_reset_pw.dm_warning_title')}</strong>
+          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.dm_warning_body')}</p>
+        </div>
+        <div style="background:rgba(241,196,15,0.12);border:1px solid rgba(241,196,15,0.4);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:0.85rem;">
+          <strong>🔐 ${t('modals.admin_reset_pw.mfa_required_title')}</strong>
+          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.mfa_required_body')}</p>
+        </div>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;">${t('modals.admin_reset_pw.transmit_hint')}</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm admin-reset-pw-cancel">${t('modals.common.cancel')}</button>
+        <button class="btn-sm btn-accent btn-danger-fill admin-reset-pw-confirm">${t('modals.admin_reset_pw.confirm_btn')}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('.admin-reset-pw-close').addEventListener('click', close);
+  overlay.querySelector('.admin-reset-pw-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('.admin-reset-pw-confirm').addEventListener('click', () => {
+    const confirmBtn = overlay.querySelector('.admin-reset-pw-confirm');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = t('modals.admin_reset_pw.working');
+    this.socket.emit('admin-reset-user-password', { userId }, (resp) => {
+      close();
+      if (!resp || resp.error) {
+        // The 2FA gate (#5300) is intended behavior, not a failure. Showing it
+        // as a red error toast made people think the feature was broken (#5451),
+        // so explain it calmly in its own info modal instead.
+        if (resp?.code === 'mfa_required') {
+          this._showAdminResetMfaRequired(username);
+          return;
+        }
+        const msg = resp?.error || t('modals.admin_reset_pw.errors.generic');
+        if (this._showToast) this._showToast(msg, 'error', 8000);
+        else alert(msg);
+        return;
+      }
+      this._showAdminResetPwReveal(resp.username, resp.tempPassword);
+    });
+  });
+},
+
+// Shown when an admin tries to reset the password of a user who has not yet
+// enabled 2FA. This is a deliberate security requirement (#5300), not a bug,
+// so it gets a plain informational modal that says exactly why and what to do
+// next, rather than a red error toast that reads like something broke (#5451).
+_showAdminResetMfaRequired(username) {
+  const safeName = this._escapeHtml(username);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay admin-reset-mfa-overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '100003';
+  overlay.innerHTML = `
+    <div class="modal admin-reset-mfa-modal">
+      <div class="modal-header">
+        <h4>🔐 ${t('modals.admin_reset_pw.mfa_required_title')}</h4>
+        <button class="modal-close-btn admin-reset-mfa-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>${t('modals.admin_reset_pw.mfa_blocked_prompt').replace('{username}', safeName)}</p>
+        <div style="background:rgba(52,152,219,0.12);border:1px solid rgba(52,152,219,0.4);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:0.85rem;">
+          <strong>💡 ${t('modals.admin_reset_pw.mfa_blocked_why_title')}</strong>
+          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.mfa_blocked_why_body')}</p>
+        </div>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:8px;">${t('modals.admin_reset_pw.mfa_blocked_action').replace('{username}', safeName)}</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm btn-accent admin-reset-mfa-ok" type="button">${t('modals.common.got_it')}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('.admin-reset-mfa-close').addEventListener('click', close);
+  overlay.querySelector('.admin-reset-mfa-ok').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+},
+
+_showAdminResetPwReveal(username, tempPassword) {
+  const safeName = this._escapeHtml(username);
+  const safePw = this._escapeHtml(tempPassword);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay admin-reset-pw-reveal-overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '100003';
+  overlay.innerHTML = `
+    <div class="modal admin-reset-pw-reveal-modal">
+      <div class="modal-header">
+        <h4>🔑 ${t('modals.admin_reset_pw.reveal_title')}</h4>
+      </div>
+      <div class="modal-body">
+        <p>${t('modals.admin_reset_pw.reveal_prompt').replace('{username}', safeName)}</p>
+        <div style="display:flex;gap:8px;align-items:center;margin:12px 0;">
+          <code id="admin-reset-pw-value" style="flex:1;font-family:monospace;font-size:1.2rem;letter-spacing:0.05em;padding:10px 12px;background:var(--bg-secondary,#222);border:1px solid var(--border-color,#444);border-radius:6px;user-select:all;">${safePw}</code>
+          <button class="btn-sm admin-reset-pw-copy" type="button">📋 ${t('modals.common.copy')}</button>
+        </div>
+        <div style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:8px 12px;font-size:0.85rem;">
+          <strong>⚠️ ${t('modals.admin_reset_pw.reveal_warning_title')}</strong>
+          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.reveal_warning_body')}</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm btn-accent admin-reset-pw-reveal-close" type="button">${t('modals.common.done')}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('.admin-reset-pw-reveal-close').addEventListener('click', close);
+  overlay.querySelector('.admin-reset-pw-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(tempPassword);
+      const btn = overlay.querySelector('.admin-reset-pw-copy');
+      const orig = btn.textContent;
+      btn.textContent = '✓ ' + t('modals.common.copied');
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    } catch {
+      if (this._showToast) this._showToast(t('modals.common.copy_failed'), 'error');
+    }
+  });
+},
+
+_confirmTransferAdmin(userId, username) {
+  // Build a custom modal for transfer admin with a confirmation step.
+  // An SSO admin has no Haven password, so they confirm with an authenticator
+  // code instead. The server decides which it will accept and rejects the
+  // wrong one, this only picks which field to put in front of you. (#5539)
+  this._hideUserContextMenu();
+  const ssoConfirm = !!this.user?.isSso;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay transfer-admin-overlay';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="modal transfer-admin-modal">
+      <div class="modal-header">
+        <h4>🔑 ${t('modals.transfer_admin.title')}</h4>
+        <button class="modal-close-btn transfer-admin-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="transfer-admin-warning">
+          <div class="transfer-admin-warning-icon">⚠️</div>
+          <div class="transfer-admin-warning-text">
+            ${t('modals.transfer_admin.warning', { username: this._escapeHtml(username) })}
+          </div>
+        </div>
+        <p class="transfer-admin-note">${t('modals.transfer_admin.note')}</p>
+        <div class="form-group">
+          <label class="form-label">${ssoConfirm ? t('modals.transfer_admin.totp_label') : t('modals.transfer_admin.password_label')}</label>
+          <input type="${ssoConfirm ? 'text' : 'password'}" id="transfer-admin-pw" class="form-input" placeholder="${ssoConfirm ? t('modals.transfer_admin.totp_placeholder') : t('modals.transfer_admin.password_placeholder')}" ${ssoConfirm ? 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"' : 'autocomplete="current-password"'}>
+        </div>
+        <p id="transfer-admin-error" class="transfer-admin-error"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary transfer-admin-cancel">${t('modals.common.cancel')}</button>
+        <button class="btn-danger-fill transfer-admin-confirm">${t('modals.transfer_admin.confirm_btn')}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const pwInput = overlay.querySelector('#transfer-admin-pw');
+  const errorEl = overlay.querySelector('#transfer-admin-error');
+  const confirmBtn = overlay.querySelector('.transfer-admin-confirm');
+  const close = () => overlay.remove();
+
+  overlay.querySelector('.transfer-admin-close').addEventListener('click', close);
+  overlay.querySelector('.transfer-admin-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  pwInput.focus();
+  pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmBtn.click(); });
+
+  confirmBtn.addEventListener('click', () => {
+    const secret = pwInput.value.trim();
+    if (!secret) {
+      errorEl.textContent = ssoConfirm
+        ? t('modals.transfer_admin.error_totp_required')
+        : t('modals.transfer_admin.error_required');
+      errorEl.style.display = '';
+      pwInput.focus();
+      return;
+    }
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = t('modals.transfer_admin.transferring');
+    const payload = ssoConfirm ? { userId, totpCode: secret } : { userId, password: secret };
+    this.socket.emit('transfer-admin', payload, (res) => {
+      if (res && res.error) {
+        errorEl.textContent = res.error;
+        errorEl.style.display = '';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = t('modals.transfer_admin.confirm_btn');
+        pwInput.value = '';
+        pwInput.focus();
+      } else if (res && res.success) {
+        close();
+        this._showToast(t('modals.transfer_admin.success'), 'info');
+      }
+    });
   });
 },
 

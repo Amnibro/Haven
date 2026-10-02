@@ -11,7 +11,7 @@ import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.2';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.17.2';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.17.2';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.17.2';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.17.2';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.17.6';
 import PeopleMethods from './modules/app-people.js?v=4.17.2';
 import SettingsMethods from './modules/app-settings.js?v=4.17.3';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.4';
@@ -29,10 +29,14 @@ import ChannelMethods  from './modules/app-channels.js?v=4.17.1';
 import MessageMethods  from './modules/app-messages.js?v=4.17.1';
 import UserMethods     from './modules/app-users.js?v=4.17.1';
 import VoiceMethods    from './modules/app-voice.js?v=4.17.1';
-import UtilityMethods  from './modules/app-utilities.js?v=4.17.1';
+import UtilityMethods  from './modules/app-utilities.js?v=4.17.6';
+import MessageContentMethods from './modules/app-message-content.js?v=4.17.6';
+import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.17.6';
+import GifPickerMethods from './modules/app-gif-picker.js?v=4.17.6';
+import ThreadMethods from './modules/app-threads.js?v=4.17.6';
 import AdminMethods    from './modules/app-admin.js?v=4.17.4';
 import BrandingMethods from './modules/app-branding.js?v=4.17.4';
-import MembersAdminMethods from './modules/app-members-admin.js?v=4.17.4';
+import MembersAdminMethods from './modules/app-members-admin.js?v=4.17.6';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.17.4';
 import StatusMethods from './modules/app-status.js?v=4.17.4';
 import DiscordImportMethods from './modules/app-discord-import.js?v=4.17.4';
@@ -502,6 +506,10 @@ Object.assign(HavenApp.prototype,
   UserMethods,
   VoiceMethods,
   UtilityMethods,
+  MessageContentMethods,
+  EmojiPickerMethods,
+  GifPickerMethods,
+  ThreadMethods,
   AdminMethods,
   BrandingMethods,
   MembersAdminMethods,
