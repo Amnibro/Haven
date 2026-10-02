@@ -33,7 +33,10 @@ import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.17.10'
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.17.10';
 import MessageMethods  from './modules/app-messages.js?v=4.17.1';
 import UserMethods     from './modules/app-users.js?v=4.17.1';
-import VoiceMethods    from './modules/app-voice.js?v=4.17.1';
+import VoiceMethods    from './modules/app-voice.js?v=4.17.11';
+import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.17.11';
+import StreamTileMethods from './modules/app-stream-tiles.js?v=4.17.11';
+import MusicMethods from './modules/app-music.js?v=4.17.11';
 import UtilityMethods  from './modules/app-utilities.js?v=4.17.6';
 import MessageContentMethods from './modules/app-message-content.js?v=4.17.7';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.17.6';
@@ -515,6 +518,9 @@ Object.assign(HavenApp.prototype,
   MessageMethods,
   UserMethods,
   VoiceMethods,
+  ScreenWebcamMethods,
+  StreamTileMethods,
+  MusicMethods,
   UtilityMethods,
   MessageContentMethods,
   EmojiPickerMethods,
