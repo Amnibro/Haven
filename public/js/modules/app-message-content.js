@@ -181,8 +181,12 @@ _formatContent(str) {
   }
 
   // ── Extract fenced code blocks before escaping ──
+  // A word right after the opening fence is a language name only when the
+  // line ends there, as in Discord: "```js" then a new line. On one line,
+  // "```chmod +x start.sh```" is all code; reading "chmod" as the language
+  // used to drop it from the block.
   const codeBlocks = [];
-  const withPlaceholders = str.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+  const withPlaceholders = str.replace(/```(?:(\w+)[ \t]*\n|\n)?([\s\S]*?)```/g, (_, lang, code) => {
     const idx = codeBlocks.length;
     codeBlocks.push({ lang: lang || '', code });
     return `\x00CODEBLOCK_${idx}\x00`;
