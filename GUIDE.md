@@ -1111,6 +1111,33 @@ Pairings are also the boundary: members can only send to Discord channels paired
 the Haven channel they are in. They cannot reach other servers the bot happens to
 belong to.
 
+#### Forums
+
+A Haven forum channel pairs with a Discord forum (or media) channel, and only with one.
+A chat channel pairs with a Discord text or announcement channel. The pairing form only
+offers the matching kind once you pick the Haven channel, and Haven refuses a mixed pair.
+
+- A new post on Discord becomes a new topic in the Haven forum: the post's name is the
+  title, its first message is the body, and any tags with the same name in both forums
+  carry over. Messages in the post become replies in the topic
+- A new topic in Haven becomes a new post in the Discord forum, under the author's
+  Haven name and picture, with the shared tags. Replies in the topic go into that post
+- Forum pairings always carry every post and reply, so they have no **Outgoing** setting
+- Only posts made after you pair cross. Replies in older posts stay on their own side
+- Editing the first message or a reply on Discord updates the Haven copy. For a topic
+  that started on Discord, renaming or retagging the post updates the topic, and locking
+  it closes the topic. Edits made in Haven stay in Haven, the same as chat messages
+- Deleting a post on Discord unlinks it, and closes its Haven topic if the topic started
+  on Discord. Deleting a topic in Haven unlinks it too, and the Discord post stays.
+  Removing the pairing forgets every link between its topics and posts
+- If the Discord forum requires a tag on every post, give the Haven forum a tag with the
+  same name as one of the Discord tags and use it on topics. Tags only Discord moderators
+  may set are never applied from Haven
+
+Forums need nothing extra on Discord: no new intent and no new permission. The bot
+needs to see the forum and have **Manage Webhooks** there, the same as for a text
+channel.
+
 ### 4. Grant the permission
 
 Sending to Discord needs the **Send to Discord (Ferry)** role permission
@@ -1165,6 +1192,8 @@ The Ferry panel shows the connection state and the last error on each pairing.
 | Discord rejected the bot token | Reset the token in the portal and paste the new one |
 | The bot needs "Manage Webhooks" | Give the bot that permission in the Discord channel |
 | Discord refused the Server Members intent | Turn it on in the portal, or leave DMs off |
+| This pairing joins a forum to a channel that is not a forum | A paired Haven channel was switched to or from a forum. Remove the pairing and pair matching kinds |
+| That Discord forum requires a tag on every post | Add a Haven forum tag named like one of the Discord forum's tags and tag the topic with it |
 
 ---
 

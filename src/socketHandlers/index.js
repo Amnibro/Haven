@@ -1586,7 +1586,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     try {
       return db.prepare(`
         SELECT id, channel_id, guild_id, guild_name, discord_channel_id, discord_channel_name,
-               direction, out_mode, webhook_id, webhook_token
+               direction, out_mode, webhook_id, webhook_token, discord_channel_type
         FROM ferry_links
         WHERE channel_id = ? AND is_active = 1 AND direction IN ('both', 'to_discord')
       `).all(channelId);
@@ -1616,7 +1616,7 @@ function setupSocketHandlers(io, db, opts = {}) {
    * so failures land on the pairing's health row and in a toast to the
    * author, never as a thrown error in the message path.
    */
-  function ferryRelay({ channelId, user, body, target, personaUsername, personaAvatar, notify }) {
+  function ferryRelay({ channelId, user, body, target, personaUsername, personaAvatar, notify, topic = null }) {
     const cfg = ferry.getConfig();
     if (!cfg.enabled || !cfg.token) return;
 
@@ -1668,7 +1668,35 @@ function setupSocketHandlers(io, db, opts = {}) {
     if (!body.trim()) return;
 
     for (const link of destinations) {
-      ferry.sendToDiscord(link, { ...identity, content: body })
+      // A topic in a Haven forum becomes a new post in a Discord forum. The
+      // send functions refuse a pairing of mismatched kinds and say so on it.
+      const send = topic
+        ? ferry.sendTopicToDiscord(link, { ...identity, content: body, title: topic.title, tags: topic.tags, topicId: topic.id })
+        : ferry.sendToDiscord(link, { ...identity, content: body });
+      Promise.resolve(send).catch(err => notify(`Discord relay failed: ${err.message}`));
+    }
+  }
+
+  /**
+   * Relays one just-sent reply in a Haven forum topic into the Discord forum
+   * post that topic is linked to. Same rules as ferryRelay: Ferry on, the
+   * sender holds use_ferry, and only the channel's own pairings. A topic with
+   * no Discord post keeps its replies in Haven (see sendReplyToDiscord).
+   */
+  function ferryRelayReply({ channelId, parentId, user, body, notify }) {
+    const cfg = ferry.getConfig();
+    if (!cfg.enabled || !cfg.token) return;
+    const links = ferryLinksFor(channelId).filter(l => ferry.isForumType(l.discord_channel_type));
+    if (!links.length || !String(body || '').trim()) return;
+    const ch = db.prepare('SELECT is_forum FROM channels WHERE id = ?').get(channelId);
+    if (!ch || !ch.is_forum) return;
+    // Silent, like an untargeted message in a mirrored channel.
+    if (!user.isAdmin && !userHasPermission(user.id, 'use_ferry', channelId)) return;
+
+    // Thread replies have no persona prefix, so the real name always goes.
+    const identity = { username: user.displayName, avatar: user.avatar || null };
+    for (const link of links) {
+      ferry.sendReplyToDiscord(link, { ...identity, content: body, topicId: parentId })
         .catch(err => notify(`Discord relay failed: ${err.message}`));
     }
   }
@@ -2578,7 +2606,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, dmCalls,
       // Ferry (Discord bridge)
-      ferry, ferryLinksFor, parseFerryTarget, ferryRelay,
+      ferry, ferryLinksFor, parseFerryTarget, ferryRelay, ferryRelayReply,
       // Slash commands
       processSlashCommand,
       // Music helpers

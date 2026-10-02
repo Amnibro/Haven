@@ -5644,17 +5644,24 @@ initFerry({
   db,
   io,
   sanitizeText,
-  insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content }) => {
+  // A Discord forum post arrives through here too, with a title and tags, and
+  // becomes a forum topic.
+  insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content, title = null, tags = null }) => {
+    // Topic titles get the same clean-up as titles typed in Haven.
+    title = typeof title === 'string' && title ? (sanitizeText(title) || null) : null;
     try {
+      const tagList = Array.isArray(tags) && tags.length ? tags : null;
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar) VALUES (?, ?, ?, 1, ?, ?)'
-      ).run(channelId, null, content, username, avatarUrl || null);
+        'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, title, tags) VALUES (?, ?, ?, 1, ?, ?, ?, ?)'
+      ).run(channelId, null, content, username, avatarUrl || null, title || null, tagList ? JSON.stringify(tagList) : null);
 
       io.to(`channel:${channelCode}`).emit('new-message', {
         channelCode,
         message: {
           id: result.lastInsertRowid,
           content,
+          title: title || undefined,
+          tags: tagList || undefined,
           created_at: new Date().toISOString(),
           username: `[BOT] ${username}`,
           user_id: null,
@@ -5693,6 +5700,86 @@ initFerry({
       });
     } catch (err) {
       console.error('Ferry could not apply a Discord edit:', err.message);
+    }
+  },
+
+  // A message inside a Discord forum post becomes a reply in its Haven topic.
+  // Same events a Haven reply sends, so an open thread panel shows it and the
+  // topic's reply count and bump follow.
+  insertHavenThreadReply: ({ channelId, channelCode, parentId, username, avatarUrl, content }) => {
+    try {
+      const result = db.prepare(
+        'INSERT INTO messages (channel_id, user_id, content, thread_id, is_webhook, webhook_username, webhook_avatar) VALUES (?, ?, ?, ?, 1, ?, ?)'
+      ).run(channelId, null, content, parentId, username, avatarUrl || null);
+      const createdAt = new Date().toISOString();
+
+      io.to(`channel:${channelCode}`).emit('new-thread-message', {
+        channelCode,
+        parentId,
+        message: {
+          id: result.lastInsertRowid,
+          content,
+          created_at: createdAt,
+          username,
+          user_id: null,
+          avatar: avatarUrl || null,
+          avatar_shape: 'square',
+          reply_to: null,
+          replyContext: null,
+          reactions: [],
+          edited_at: null,
+          is_webhook: 1,
+          webhook_username: username,
+          webhook_avatar: avatarUrl || null,
+          thread_id: parentId,
+          from_discord: true
+        }
+      });
+
+      const count = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE thread_id = ?').get(parentId).n;
+      const participants = db.prepare(`
+        SELECT DISTINCT COALESCE(u.display_name, u.username) as username, u.avatar
+        FROM messages m JOIN users u ON m.user_id = u.id
+        WHERE m.thread_id = ? ORDER BY m.created_at DESC LIMIT 5
+      `).all(parentId);
+      io.to(`channel:${channelCode}`).emit('thread-updated', {
+        channelCode,
+        parentId,
+        thread: {
+          count,
+          lastReplyAt: createdAt,
+          lastReplyId: result.lastInsertRowid,
+          senderId: null,
+          participants: participants.map(p => ({ username: p.username, avatar: p.avatar }))
+        }
+      });
+      return result.lastInsertRowid;
+    } catch (err) {
+      console.error('Ferry could not store a Discord forum reply:', err.message);
+      return null;
+    }
+  },
+
+  // A Discord post was renamed, retagged, locked or unlocked. Reuses the
+  // `topic-updated` event a Haven edit of the topic sends. Only the fields
+  // given change.
+  updateHavenTopic: ({ messageId, channelCode, title, tags, closed }) => {
+    try {
+      if (typeof title === 'string' && title) {
+        const clean = sanitizeText(title);
+        if (clean) db.prepare('UPDATE messages SET title = ? WHERE id = ?').run(clean, messageId);
+      }
+      if (Array.isArray(tags)) db.prepare('UPDATE messages SET tags = ? WHERE id = ?').run(tags.length ? JSON.stringify(tags) : null, messageId);
+      if (typeof closed === 'boolean') db.prepare('UPDATE messages SET closed = ? WHERE id = ?').run(closed ? 1 : 0, messageId);
+      const row = db.prepare('SELECT title, tags, closed, nsfw FROM messages WHERE id = ?').get(messageId);
+      if (!row) return;
+      let tagList = [];
+      try { tagList = JSON.parse(row.tags || '[]'); } catch { tagList = []; }
+      io.to(`channel:${channelCode}`).emit('topic-updated', {
+        channelCode, messageId, title: row.title || null, tags: tagList, closed: !!row.closed, nsfw: !!row.nsfw
+      });
+    } catch (err) {
+      console.error('Ferry could not update a forum topic:', err.message);
     }
   }
 });

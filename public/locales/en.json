@@ -3541,7 +3541,13 @@
       "token_required": "Paste a bot token first",
       "remove_token_confirm": "Remove the Discord bot token? Ferry stops immediately. Your pairings are kept.",
       "remove_pairing_confirm": "Remove this pairing? Messages stop crossing between those two channels.",
-      "pairing_required": "Pick a Haven channel, a Discord server, and a Discord channel"
+      "pairing_required": "Pick a Haven channel, a Discord server, and a Discord channel",
+      "kind_forum": "forum",
+      "kind_rule_hint": "A Haven forum pairs only with a Discord forum or media channel. Any other Haven channel pairs with a Discord text or announcement channel.",
+      "forum_pair_hint": "Forum pairing: each new post becomes a topic on the other side, with its title and any tags both forums share, and replies follow it. Only posts made after pairing cross.",
+      "forum_mirrors": "Every post and reply",
+      "no_matching_forum": "The bot cannot see any forum channels in this server",
+      "no_matching_chat": "The bot cannot see any text channels in this server"
     }
   },
   "context_menu": {

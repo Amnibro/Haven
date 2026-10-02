@@ -29,7 +29,7 @@ function contentCap(maxChars, channel, content) {
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
-          touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay,
+          touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
           logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
 
@@ -1461,6 +1461,11 @@ module.exports = function register(socket, ctx) {
           target: ferryTarget,
           personaUsername, personaAvatar,
           notify: (msg) => socket.emit('error-msg', msg),
+          // Every top-level message in a forum is a topic, and goes to a
+          // paired Discord forum as a new post.
+          topic: channel.is_forum
+            ? { id: result.lastInsertRowid, title: topicTitle, tags: topicTags ? JSON.parse(topicTags) : [] }
+            : null,
         });
       }
 
@@ -2740,7 +2745,7 @@ module.exports = function register(socket, ctx) {
 
     const messages = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
-             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
+             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
       FROM messages m LEFT JOIN users u ON m.user_id = u.id
       WHERE m.thread_id = ?
       ORDER BY m.created_at ASC, m.id ASC
@@ -2947,6 +2952,16 @@ module.exports = function register(socket, ctx) {
           senderId: socket.user.id,
           participants: participants.map(p => ({ username: p.username, avatar: p.avatar }))
         }
+      });
+
+      // A reply in a forum topic follows the topic to its Discord post, after
+      // the broadcast so Discord never holds up the Haven side.
+      ferryRelayReply?.({
+        channelId: channel.id,
+        parentId,
+        user: socket.user,
+        body: safeContent,
+        notify: (msg) => socket.emit('error-msg', msg),
       });
 
       if (typeof callback === 'function') callback({ success: true });

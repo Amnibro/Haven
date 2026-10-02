@@ -1058,6 +1058,40 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_ferry_links_channel ON ferry_links(channel_id);
     CREATE INDEX IF NOT EXISTS idx_ferry_links_discord ON ferry_links(discord_channel_id);
   `);
+  // The Discord channel's type at pairing time (0 text, 5 announcement, 15
+  // forum, 16 media). A forum only pairs with a forum, so the relay needs to
+  // know which kind it is talking to without asking Discord. Older rows are
+  // NULL, which means text: forums could not be paired before this column.
+  try { db.prepare('SELECT discord_channel_type FROM ferry_links LIMIT 0').get(); }
+  catch { db.exec('ALTER TABLE ferry_links ADD COLUMN discord_channel_type INTEGER DEFAULT NULL'); }
+
+  // ── Migration: Ferry forum posts ────────────────────────
+  // Which Haven forum topic is which Discord forum post, so replies keep
+  // landing in the right place after a restart. One topic can be carried to
+  // several Discord forums (a Haven forum paired more than once), and one
+  // Discord post into several Haven forums, so each side is unique only
+  // together with the other side's channel.
+  //
+  //   origin  'discord' the post started on Discord and Ferry made the topic
+  //           'haven'   the topic started in Haven and Ferry made the post
+  //
+  // Deleting the Haven topic (or its channel) removes the row through the
+  // foreign key. A post deleted on Discord removes it in src/ferry.js.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ferry_forum_threads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic_message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      guild_id TEXT NOT NULL,
+      discord_forum_id TEXT NOT NULL,
+      discord_thread_id TEXT NOT NULL,
+      origin TEXT NOT NULL DEFAULT 'discord',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(topic_message_id, discord_forum_id),
+      UNIQUE(discord_thread_id, channel_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ferry_forum_threads_thread ON ferry_forum_threads(discord_thread_id);
+  `);
 
   // ── Migration: mobile FCM push tokens ───────────────────
   db.exec(`
