@@ -70,6 +70,7 @@ Haven runs under Podman as well. Three things differ from Docker:
   ```bash
   podman unshare chown -R 1000:1000 ./haven-data
   ```
+  If you start the container with `--userns=keep-id`, uid 1000 in the container is your own account (when your account is uid 1000), so use `sudo chown -R $(id -u):$(id -g) ./haven-data` instead.
 
 ### Updating
 
