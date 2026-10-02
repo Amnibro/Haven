@@ -58,7 +58,7 @@ Replace the `haven_data:/data` line in `docker-compose.yml`.
 
 ### Podman (Fedora and similar)
 
-Haven runs under Podman as well. Three things differ from Docker:
+Haven runs under Podman as well. A few things differ from Docker:
 
 - **SELinux.** On Fedora, add `:Z` to a folder mount so the container may use it: `-v ./haven-data:/data:Z`.
 - **Ports below 1024.** Rootless Podman cannot listen on 443. Publish Haven's own port (`-p 3000:3000`) and, if you want people outside to reach it on 443, forward it in the firewall:
@@ -71,6 +71,12 @@ Haven runs under Podman as well. Three things differ from Docker:
   podman unshare chown -R 1000:1000 ./haven-data
   ```
   If you start the container with `--userns=keep-id`, uid 1000 in the container is your own account (when your account is uid 1000), so use `sudo chown -R $(id -u):$(id -g) ./haven-data` instead.
+- **Updating.** The container runs the copy of Haven built into the image, not files on your machine, so extracting a new zip or running Haven outside the container does not update it (and running it outside against the data folder changes the file owners). Pull the new image and recreate the container; the data folder stays as it is:
+  ```bash
+  podman pull ghcr.io/ancsemi/haven:latest
+  podman rm -f haven
+  ```
+  Then run the same `podman run` command you started it with.
 
 ### Updating
 
