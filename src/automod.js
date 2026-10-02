@@ -141,7 +141,8 @@ const extractUrls = rules.extractUrls;
 // Content check
 // ══════════════════════════════════════════════════════════════════════
 
-// ctx: { userId, isAdmin, effectiveLevel, createdAt, surface }
+// ctx: { userId, isAdmin, effectiveLevel, createdAt, surface, markdown }
+// markdown: the text is a chat message, so bare addresses inside code do not count.
 // surface is one of 'message' | 'edit' | 'dm' | 'profile' | 'channel'.
 //
 // Returns { ok: true } or { ok: false, rule, message, host, excerpt }.
@@ -184,7 +185,9 @@ function checkText(text, ctx = {}) {
     }
   }
 
-  const links = extractUrls(text);
+  // A chat message's code only counts its full links (see automod-rules.js).
+  const linkOpts = { markdown: !!ctx.markdown };
+  const links = extractUrls(text, linkOpts);
   if (!links.length) return { ok: true };
 
   // ── New-account link gate ──
@@ -210,7 +213,7 @@ function checkText(text, ctx = {}) {
 
   // Domain policy itself is evaluated by the shared rules module, so the
   // server and the browser reach identical verdicts on identical input.
-  const hit = rules.checkText(text, policy());
+  const hit = rules.checkText(text, policy(), linkOpts);
   if (hit) {
     return {
       ok: false,

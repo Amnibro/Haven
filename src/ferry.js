@@ -1209,7 +1209,7 @@ function buildHavenContent(msg) {
   // Discord's CDN to the allowlist instead would have opened that domain to
   // everybody on the server rather than just to the bridge.
   try {
-    if (authoredText && automod.checkText(authoredText, { surface: 'message' }).ok === false) return '';
+    if (authoredText && automod.checkText(authoredText, { surface: 'message', markdown: true }).ok === false) return '';
   } catch (err) { noteAutomodFault(err); }
 
   // A picture referenced from both a component and an attachment goes once.

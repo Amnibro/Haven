@@ -2418,7 +2418,8 @@ function setupSocketHandlers(io, db, opts = {}) {
           isAdmin: socket.user.isAdmin,
           effectiveLevel: getUserEffectiveLevel(socket.user.id, opts.channelId || null),
           createdAt: opts.createdAt || socket.user.createdAt,
-          surface: opts.surface || 'message'
+          surface: opts.surface || 'message',
+          markdown: !!opts.markdown
         });
       } catch (err) {
         // Never let an automod fault take chat down with it.

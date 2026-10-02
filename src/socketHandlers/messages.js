@@ -1168,7 +1168,7 @@ module.exports = function register(socket, ctx) {
     // Runs before the message is persisted or broadcast. A blocked message
     // never reaches another client, which is the only way to stop the passive
     // IP leak from inline images and link-preview og:image fetches.
-    if (enforceAutomod(content, { surface: channel.is_dm ? 'dm' : 'message', channelId: channel.id })) return;
+    if (enforceAutomod(content, { surface: channel.is_dm ? 'dm' : 'message', channelId: channel.id, markdown: true })) return;
 
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
       return socket.emit('error-msg', 'This channel is read-only');
@@ -1702,7 +1702,7 @@ module.exports = function register(socket, ctx) {
     const content = sanitizeText(pingSafe(data.content.trim(), socket.user.id, channel.id));
     if (!content) return cb({ error: 'Nothing to send' });
     // The same checks a live send gets, at the moment it is queued.
-    if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return cb({ error: 'That message was blocked' });
+    if (enforceAutomod(content, { surface: 'message', channelId: channel.id, markdown: true })) return cb({ error: 'That message was blocked' });
     const pending = db.prepare('SELECT COUNT(*) AS c FROM scheduled_messages WHERE user_id = ?').get(socket.user.id).c;
     if (pending >= SCHEDULE_MAX_PENDING) return cb({ error: `You already have ${SCHEDULE_MAX_PENDING} messages waiting to send` });
     try {
@@ -1729,7 +1729,7 @@ module.exports = function register(socket, ctx) {
     if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
     const content = sanitizeText(data.content.trim());
     if (!content) return cb({ error: 'Nothing to send' });
-    if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id })) return cb({ error: 'That message was blocked' });
+    if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id, markdown: true })) return cb({ error: 'That message was blocked' });
     db.prepare('UPDATE scheduled_messages SET content = ?, send_at = ? WHERE id = ?').run(content, sendAt, row.id);
     cb({ success: true, items: scheduledList(socket.user.id) });
   });
@@ -1901,7 +1901,7 @@ module.exports = function register(socket, ctx) {
 
     // Edits get the same link policy as sends. Without this the filter is
     // trivially bypassed: post something harmless, then edit the payload in.
-    if (enforceAutomod(newContent, { surface: 'edit', channelId: channel.id })) return;
+    if (enforceAutomod(newContent, { surface: 'edit', channelId: channel.id, markdown: true })) return;
 
     if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(newContent)) {
       const origMsg = db.prepare('SELECT original_name FROM messages WHERE id = ?').get(data.messageId);
@@ -2902,7 +2902,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'This channel is read-only');
     }
 
-    if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return;
+    if (enforceAutomod(content, { surface: 'message', channelId: channel.id, markdown: true })) return;
 
     const safeContent = sanitizeText(pingSafe(content, socket.user.id, channel.id));
     if (!safeContent) return;
