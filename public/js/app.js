@@ -31,7 +31,9 @@ import ChannelMethods  from './modules/app-channels.js?v=4.17.10';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.17.10';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.17.10';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.17.10';
-import MessageMethods  from './modules/app-messages.js?v=4.17.1';
+import MessageMethods  from './modules/app-messages.js?v=4.17.12';
+import LinkPreviewMethods from './modules/app-link-previews.js?v=4.17.12';
+import MessageToolMethods from './modules/app-message-tools.js?v=4.17.12';
 import UserMethods     from './modules/app-users.js?v=4.17.1';
 import VoiceMethods    from './modules/app-voice.js?v=4.17.11';
 import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.17.11';
@@ -516,6 +518,8 @@ Object.assign(HavenApp.prototype,
   ChannelOrganizeMethods,
   ChannelUnreadMethods,
   MessageMethods,
+  LinkPreviewMethods,
+  MessageToolMethods,
   UserMethods,
   VoiceMethods,
   ScreenWebcamMethods,
