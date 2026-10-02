@@ -4,7 +4,9 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.17.1';
+import SocketMethods   from './modules/app-socket.js?v=4.17.9';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.17.9';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.17.9';
 import UIBindMethods   from './modules/app-ui.js?v=4.17.4';
 import ComposerMethods from './modules/app-composer.js?v=4.17.3';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.2';
@@ -481,6 +483,8 @@ class HavenApp {
 // ── Merge all method groups onto the prototype ────────────
 Object.assign(HavenApp.prototype,
   SocketMethods,
+  SocketChannelMethods,
+  SocketEventMethods,
   UIBindMethods,
   ComposerMethods,
   ChannelMenuMethods,
