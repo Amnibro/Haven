@@ -1,6 +1,5 @@
-// Discord import
-// Moved out of server.js unchanged. Values server.js sets up later (or
-// reassigns) are read through `late` at the moment they are used.
+// Discord history import: upload a DiscordChatExporter file and preview it,
+// or read a server straight from Discord's API, then run the import. Admin only.
 
 const fs = require('fs');
 const path = require('path');

@@ -1,6 +1,8 @@
-// Backup download and restore (admin only)
-// Moved out of server.js unchanged. Values server.js sets up later (or
-// reassigns) are read through `late` at the moment they are used.
+// Backup download (GET /api/admin/backup) and restore (POST /api/admin/restore),
+// admin only. A restore is staged on disk, then swapped in while the server
+// exits, so the process supervisor starts Haven again on the restored data.
+// `late` holds values server.js creates after this file is loaded (the
+// socket server, bot audio); they are read from it when a request needs them.
 
 const fs = require('fs');
 const path = require('path');
@@ -9,8 +11,7 @@ const { DATA_DIR, DB_PATH, UPLOADS_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 
 module.exports = function registerBackup(deps) {
-  const { app, verifyAdminFromDb } = deps;
-  const { late } = deps;
+  const { app, verifyAdminFromDb, late } = deps;
   // ── Admin: Server backup download (admin only) ──
   // Configurable per-section via ?include=channels,users,settings,messages,files
   // Backwards-compat: ?mode=structure → channels,users,settings ;

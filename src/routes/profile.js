@@ -1,6 +1,5 @@
-// Profile pictures, borders and personas
-// Moved out of server.js unchanged. Values server.js sets up later (or
-// reassigns) are read through `late` at the moment they are used.
+// Profile pictures, picture borders and their fit, avatar shape and animation,
+// bot (webhook) avatars, and personas.
 
 const fs = require('fs');
 const path = require('path');

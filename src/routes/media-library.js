@@ -1,6 +1,5 @@
-// Sounds, custom emoji and stickers
-// Moved out of server.js unchanged. Values server.js sets up later (or
-// reassigns) are read through `late` at the moment they are used.
+// Sounds, custom emoji and stickers: uploads and deletes (for admins and
+// members with the matching permission) and the lists every client loads.
 
 const fs = require('fs');
 const path = require('path');
@@ -25,7 +24,7 @@ module.exports = function registerMediaLibrary(deps) {
   // (#5426) Custom sounds, emojis and stickers are uploaded/deleted over HTTP,
   // so other connected clients never heard about the change and only saw it
   // after a full app restart. Broadcast a lightweight signal so every client
-  // re-fetches the relevant library live. `io` is created later in the file, so
+  // re-fetches the relevant library live. `io` is created later in server.js, so
   // resolve it at request time via app.set('io', io).
   function broadcastLibraryUpdate(req, kind) {
     try { req.app.get('io')?.emit('library-updated', { kind }); } catch { /* live refresh hint only; clients still see the change on next load */ }

@@ -1,6 +1,5 @@
-// Image and file uploads, and Flash ROMs
-// Moved out of server.js unchanged. Values server.js sets up later (or
-// reassigns) are read through `late` at the moment they are used.
+// Attachments: image and file uploads for messages, and the Flash ROM pack
+// used by the built-in games.
 
 const fs = require('fs');
 const path = require('path');

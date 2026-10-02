@@ -1,6 +1,7 @@
-// Auto-cleanup, auto-backup, dynamic DNS and updates
-// Moved out of server.js unchanged. Values server.js sets up later (or
-// reassigns) are read through `late` at the moment they are used.
+// Background jobs and the admin routes that drive them: auto-cleanup of old
+// messages and files, scheduled backups, dynamic DNS and in-app updates.
+// `late` holds values server.js creates after this file is loaded (the
+// socket server, bot audio); they are read from it when a request needs them.
 
 const fs = require('fs');
 const path = require('path');
@@ -11,8 +12,7 @@ const { verifyToken } = require('../auth');
 const { getDdnsStatus, triggerDdnsNow } = require('../ddns');
 
 module.exports = function registerMaintenance(deps) {
-  const { app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted, verifyAdminFromDb, buildBackupFile, db } = deps;
-  const { late } = deps;
+  const { app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted, verifyAdminFromDb, buildBackupFile, db, late } = deps;
   // ── Auto-cleanup interval (runs every 15 minutes) ───────
   function runAutoCleanup() {
     try {

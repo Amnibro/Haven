@@ -1,6 +1,5 @@
-// Link previews and the media proxy
-// Moved out of server.js unchanged. Values server.js sets up later (or
-// reassigns) are read through `late` at the moment they are used.
+// Link previews (Open Graph and oEmbed) and the media proxy, which fetches
+// remote images for clients so their own addresses never reach other sites.
 
 const { verifyToken } = require('../auth');
 
