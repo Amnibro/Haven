@@ -4606,8 +4606,8 @@ _setupUI() {
             navigator.clipboard.writeText(data.command).then(() => {
               copyBtn.textContent = `✅ ${t('common.copied')}`;
               setTimeout(() => { copyBtn.textContent = `📋 ${t('common.copy')}`; }, 1500);
-            });
-          } catch {}
+            }).catch(() => { /* clipboard refused: the button keeps saying Copy and the command stays selectable */ });
+          } catch { /* no clipboard API (plain http): the command stays selectable */ }
         });
       }
       // Keep the Update Now button enabled even when the install method

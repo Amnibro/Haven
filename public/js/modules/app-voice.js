@@ -1679,7 +1679,7 @@ _showStreamTile(tileId, userId) {
       delete tile.dataset.muted;
       // Resume the audio element that was paused when hiding
       const audioEl = document.getElementById(`voice-audio-screen-${userId}`);
-      if (audioEl && audioEl.paused) { try { audioEl.play(); } catch {} }
+      if (audioEl && audioEl.paused) audioEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
       // Check if the user had manually muted the stream before closing —
       // if so, keep it muted instead of restoring volume
       const muteBtn = tile.querySelector('.stream-mute-btn');
@@ -1736,7 +1736,7 @@ _updateHiddenStreamsBar() {
         delete t.dataset.muted;
         // Resume the audio element that was paused when hiding
         const audioEl = document.getElementById(`voice-audio-screen-${uid}`);
-        if (audioEl && audioEl.paused) { try { audioEl.play(); } catch {} }
+        if (audioEl && audioEl.paused) audioEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
         // Check if the user had manually muted before closing
         const muteBtn = t.querySelector('.stream-mute-btn');
         if (muteBtn && muteBtn.dataset.muted === 'true') {
