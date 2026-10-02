@@ -20,15 +20,43 @@ let db;
 const _stmtCache = new Map();
 const MAX_STMT_CACHE = 500;   // safety cap — shouldn't be hit in practice
 
+// The usual reason Haven cannot open its database is file ownership: the data
+// folder (or haven.db in it) belongs to another user than the one Haven runs
+// as, for example after copying it in from another machine or starting Haven
+// once outside its container. Say that plainly instead of a bare SQLite error.
+function explainOpenFailure(err) {
+  const code = String(err && err.code || '');
+  if (!/^SQLITE_(CANTOPEN|READONLY|PERM|AUTH)/.test(code) && err.code !== 'EACCES') return err;
+  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  const who = uid === null ? 'the user Haven runs as' : `the user Haven runs as (uid ${uid})`;
+  const e = new Error(
+    `Haven cannot open its database at ${DB_PATH} (${code || err.message}). ` +
+    `The folder ${path.dirname(DB_PATH)} and everything in it must be readable and writable by ${who}. ` +
+    'If you copied the data in from elsewhere, or ran Haven outside its container, fix the owner of those files. ' +
+    'In Docker or Podman, restarting the container fixes it when it can; otherwise run ' +
+    '"chown -R 1000:1000 <data folder>" (Docker) or "podman unshare chown -R 1000:1000 <data folder>" (rootless Podman) on the host.'
+  );
+  e.cause = err;
+  return e;
+}
+
 function initDatabase() {
-  db = new Database(DB_PATH);
+  try {
+    db = new Database(DB_PATH);
+  } catch (err) {
+    throw explainOpenFailure(err);
+  }
 
   // ── Performance settings (memory-conscious) ────────────
   // These were originally set much higher (64 MB cache, 256 MB mmap) which
   // combined to reserve ~320 MB of native memory for SQLite alone.  On the
   // Haven Desktop machine that also runs Electron + a renderer, that left
   // too little headroom and caused the Oilpan OOM crash.
-  db.pragma('journal_mode = WAL');
+  try {
+    db.pragma('journal_mode = WAL');
+  } catch (err) {
+    throw explainOpenFailure(err);
+  }
   db.pragma('foreign_keys = ON');
   db.pragma('synchronous = NORMAL');       // safe with WAL, 2-3x faster writes
   db.pragma('cache_size = -8000');          // 8 MB page cache (was 64 MB — overkill for a chat app)

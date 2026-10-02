@@ -56,6 +56,21 @@ volumes:
 
 Replace the `haven_data:/data` line in `docker-compose.yml`.
 
+### Podman (Fedora and similar)
+
+Haven runs under Podman as well. Three things differ from Docker:
+
+- **SELinux.** On Fedora, add `:Z` to a folder mount so the container may use it: `-v ./haven-data:/data:Z`.
+- **Ports below 1024.** Rootless Podman cannot listen on 443. Publish Haven's own port (`-p 3000:3000`) and, if you want people outside to reach it on 443, forward it in the firewall:
+  ```bash
+  sudo firewall-cmd --permanent --add-forward-port=port=443:proto=tcp:toport=3000
+  sudo firewall-cmd --reload
+  ```
+- **File owners.** Inside the container Haven runs as uid 1000, and the container hands the data folder to that user each time it starts. If you copy data in from another machine, or run Haven once outside the container against the same folder, and the container cannot fix the owner itself, it says so in the log. Fix it from the host with:
+  ```bash
+  podman unshare chown -R 1000:1000 ./haven-data
+  ```
+
 ### Updating
 
 **Option A — Pre-built image** (default, recommended):
