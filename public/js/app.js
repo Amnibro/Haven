@@ -5,7 +5,18 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.17.1';
-import UIBindMethods   from './modules/app-ui.js?v=4.17.1';
+import UIBindMethods   from './modules/app-ui.js?v=4.17.2';
+import ComposerMethods from './modules/app-composer.js?v=4.17.2';
+import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.2';
+import VoiceControlMethods from './modules/app-voice-controls.js?v=4.17.2';
+import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.17.2';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.17.2';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.17.2';
+import PeopleMethods from './modules/app-people.js?v=4.17.2';
+import SettingsMethods from './modules/app-settings.js?v=4.17.2';
+import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.2';
+import ServerBarMethods from './modules/app-server-bar.js?v=4.17.2';
+import MobileMethods from './modules/app-mobile.js?v=4.17.2';
 import MediaMethods    from './modules/app-media.js?v=4.17.1';
 import ContextMethods  from './modules/app-context.js?v=4.17.1';
 import ChannelMethods  from './modules/app-channels.js?v=4.17.1';
@@ -453,6 +464,17 @@ class HavenApp {
 Object.assign(HavenApp.prototype,
   SocketMethods,
   UIBindMethods,
+  ComposerMethods,
+  ChannelMenuMethods,
+  VoiceControlMethods,
+  MediaGalleryMethods,
+  MessageActionMethods,
+  PipPanelMethods,
+  PeopleMethods,
+  SettingsMethods,
+  AdminControlMethods,
+  ServerBarMethods,
+  MobileMethods,
   MediaMethods,
   ContextMethods,
   ChannelMethods,
