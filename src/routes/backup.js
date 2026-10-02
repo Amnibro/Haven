@@ -413,17 +413,25 @@ module.exports = function registerBackup(deps) {
         late.botAudioManager?.shutdown();
         try {
           if (fs.existsSync(stagedDb)) {
+            const liveDb = require('../database').getDb();
             // Fold recent writes from the WAL into haven.db first, so the safety
             // copy below has everything, not just what was last checkpointed.
-            try { require('../database').getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (err2) {
+            try {
+              const [cp] = liveDb.pragma('wal_checkpoint(TRUNCATE)');
+              if (cp && cp.busy) console.warn('[Restore] The database was busy during the checkpoint, so haven.db.pre-restore may miss the last few writes');
+            } catch (err2) {
               console.warn('[Restore] Could not checkpoint the database before copying it:', err2.message);
             }
             try { fs.copyFileSync(DB_PATH, DB_PATH + '.pre-restore'); } catch (err2) {
               // Without a copy of the current database, the restore would leave
-              // no way back, so stop here and keep running on what is there.
-              throw new Error(`Could not save haven.db.pre-restore (${err2.message}), so the restore was not applied and the current database is unchanged`);
+              // no way back, so it is not applied and the server comes back up
+              // on the database it has now.
+              throw new Error(`Could not save haven.db.pre-restore (${err2.message}), so the restore was not applied; the server restarts on its current database`);
             }
-            // Remove stale WAL/SHM so SQLite reopens against the restored file
+            // Close the database before swapping files. Windows will not replace
+            // or delete a file that is still open, so without this the restore
+            // never took effect there. Closing also removes the WAL and SHM.
+            liveDb.close();
             try { fs.unlinkSync(DB_PATH + '-wal'); } catch (err2) {
               if (err2.code !== 'ENOENT') console.error('[Restore] Could not remove old haven.db-wal:', err2.message);
             }
@@ -440,6 +448,14 @@ module.exports = function registerBackup(deps) {
           }
         } catch (e) {
           console.error('[Restore] Swap failed:', e);
+          // Whatever was not applied is removed: a staged copy can be gigabytes,
+          // and the backup file it came from is still with the admin.
+          try { fs.rmSync(stagedDb, { force: true }); } catch (err2) {
+            console.error('[Restore] Could not remove the staged database:', err2.message);
+          }
+          try { fs.rmSync(stagedUploads, { recursive: true, force: true }); } catch (err2) {
+            console.error('[Restore] Could not remove the staged uploads:', err2.message);
+          }
         }
         process.exit(0);
       }, 1500);
