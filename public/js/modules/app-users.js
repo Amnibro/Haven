@@ -4,6 +4,7 @@ export default {
 
 _renderOnlineUsers(users) {
   this._lastOnlineUsers = users;
+  try { this._restyleMessageAuthors?.(); } catch { /* cosmetic */ }
   this._refreshOpenProfileCard();
   if (this._activeDMPip) this._refreshDMPipHeader?.();   // (#5574)
   const el = document.getElementById('online-users');

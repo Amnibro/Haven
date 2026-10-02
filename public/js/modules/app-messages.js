@@ -359,6 +359,42 @@ _jumpToMessage(msgId) {
   this.socket.emit('get-messages', { code: this.currentChannel, around: msgId });
 },
 
+// Opening a channel draws its history before the member list with everyone's
+// roles has arrived, so those names came out in plain colors with no role
+// badge. Once the list is in, give the names still on screen their role style.
+// Only names that never got one are touched, so presence updates cost little.
+_restyleMessageAuthors() {
+  const container = document.getElementById('messages');
+  if (!container) return;
+  const byId = new Map();
+  for (const u of (this._lastOnlineUsers || []).concat(this.channelMembers || [])) {
+    if (u && !byId.has(String(u.id))) byId.set(String(u.id), u);
+  }
+  if (!byId.size) return;
+  const coloredNames = (localStorage.getItem('haven-role-display') || 'colored-name') === 'colored-name';
+  container.querySelectorAll('.message[data-user-id]').forEach(el => {
+    if (el.dataset.personaId || el.classList.contains('webhook-message') || el.classList.contains('imported-message')) return;
+    const header = el.querySelector('.message-header');
+    const author = header && header.querySelector('.message-author');
+    if (!author || header.querySelector('.msg-role-badge')) return;
+    const u = byId.get(el.dataset.userId);
+    if (!u || !u.role) return;
+    if (coloredNames && u.role.color) {
+      this._applyRoleName(author, u.role, author.textContent, author.style.color);
+    }
+    const all = Array.isArray(u.roles) ? u.roles : [];
+    const title = all.length > 1 ? all.map(r => r.name).join('\n') : u.role.name;
+    const badge = document.createElement('span');
+    badge.className = 'user-role-badge msg-role-badge';
+    badge.style.color = this._safeColor(u.role.color, 'var(--text-muted)');
+    badge.title = title;
+    badge.innerHTML = this._roleNameHtml(u.role, u.role.name)
+      + (all.length > 1 ? ` <span class="msg-role-extra-count">+${all.length - 1}</span>` : '');
+    const time = header.querySelector('.message-time');
+    header.insertBefore(badge, time || null);
+  });
+},
+
 _renderMessages(messages, lastReadMessageId) {
   // Cache the last batch so other handlers can re-render (e.g. mention
   // formatting after channel-members arrives on first load). (#5273)
