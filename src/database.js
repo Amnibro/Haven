@@ -557,7 +557,8 @@ function initDatabase() {
         'youtube.com', 'youtu.be', 'twitch.tv', 'x.com', 'twitter.com', 'bsky.app',
         'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'wikipedia.org',
         'imgur.com', 'giphy.com', 'tenor.com', 'spotify.com', 'soundcloud.com',
-        'steamcommunity.com', 'steampowered.com', 'last.fm', 'archive.org'
+        'steamcommunity.com', 'steampowered.com', 'last.fm', 'archive.org',
+        'haven-app.com'
       ];
       const seedAll = db.transaction((list) => { for (const d of list) addDomain.run(d); });
       seedAll(starter);
@@ -565,6 +566,23 @@ function initDatabase() {
     }
   } catch (err) {
     console.error('automod starter allowlist seed failed:', err.message);
+  }
+
+  // ── Migration: Haven's own website on the allowlist (v4.17.0) ──
+  // Servers seeded before haven-app.com existed blocked links to Haven's own
+  // guide. Added once, guarded by its own flag; INSERT OR IGNORE leaves an
+  // entry the admin already has for it (allowed or blocked) as it is, and a
+  // later removal is not undone.
+  try {
+    const added = db.prepare("SELECT value FROM server_settings WHERE key = 'automod_haven_site_v4170'").get();
+    if (!added || added.value !== 'true') {
+      db.prepare(
+        "INSERT OR IGNORE INTO automod_domains (domain, mode, include_subdomains, note) VALUES ('haven-app.com', 'allow', 1, 'Seeded default')"
+      ).run();
+      db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('automod_haven_site_v4170', 'true')").run();
+    }
+  } catch (err) {
+    console.error('automod: adding haven-app.com to the allowlist failed:', err.message);
   }
 
   // ── Migration: turn the safe protections on, once (v3.43.0) ──
