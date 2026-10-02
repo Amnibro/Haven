@@ -396,7 +396,13 @@ function _refreshIpBanCache() {
       else set.add(_clientIp.normalizeIp(r.ip));
     }
     _ipBanCache = { set, cidrs, expires: Date.now() + 30000 };
-  } catch { _ipBanCache = { set: new Set(), cidrs: [], expires: Date.now() + 30000 }; }
+  } catch (err) {
+    // Keep the bans already known rather than dropping them all: an empty
+    // list here would let every banned address back in until the next read.
+    // Try again in a few seconds.
+    console.warn('[ip-bans] Could not read the ban list, keeping the last one:', err.message);
+    _ipBanCache = { ..._ipBanCache, expires: Date.now() + 5000 };
+  }
 }
 function invalidateIpBanCache() { _ipBanCache.expires = 0; }
 function isIpBanned(ip) {
@@ -462,15 +468,14 @@ function userHasPermission(userId, permission) {
     const db = getDb();
     const isAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
     if (isAdmin && isAdmin.is_admin) return true;
-    // A server-wide setting on the person decides first, allow or deny.
-    let own = null;
-    try {
-      own = db.prepare(`
-        SELECT allowed FROM user_role_perms
-        WHERE user_id = ? AND permission = ? AND channel_id IS NULL
-        ORDER BY allowed ASC LIMIT 1
-      `).get(userId, permission);
-    } catch { /* table may not exist yet */ }
+    // A server-wide setting on the person decides first, allow or deny. The
+    // table is created at startup; if this read fails, the outer catch denies
+    // rather than skipping a personal deny and letting a role allow it.
+    const own = db.prepare(`
+      SELECT allowed FROM user_role_perms
+      WHERE user_id = ? AND permission = ? AND channel_id IS NULL
+      ORDER BY allowed ASC LIMIT 1
+    `).get(userId, permission);
     if (own) return own.allowed === 1;
     if (permissionsModule().userHasPermission(userId, permission)) return true;
     // These routes aren't tied to one channel, so a role held in any channel
@@ -1031,7 +1036,11 @@ app.get('/api/ice-servers', (req, res) => {
     if (require('./src/database').getDb().prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-  } catch { /* fall through to the normal answer */ }
+  } catch (err) {
+    // Fail closed: without the ban check a banned account would get TURN credentials.
+    console.error('[ice-servers] Ban check failed:', err.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 
   // Admin-configured STUN/TURN (#5399) live in server_settings and take
   // precedence over env vars, which in turn override the built-in pool.
@@ -3087,10 +3096,23 @@ app.post('/api/admin/restore', (req, res) => {
       botAudioManager?.shutdown();
       try {
         if (fs.existsSync(stagedDb)) {
-          try { fs.copyFileSync(DB_PATH, DB_PATH + '.pre-restore'); } catch {}
+          // Fold recent writes from the WAL into haven.db first, so the safety
+          // copy below has everything, not just what was last checkpointed.
+          try { require('./src/database').getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (err2) {
+            console.warn('[Restore] Could not checkpoint the database before copying it:', err2.message);
+          }
+          try { fs.copyFileSync(DB_PATH, DB_PATH + '.pre-restore'); } catch (err2) {
+            // Without a copy of the current database, the restore would leave
+            // no way back, so stop here and keep running on what is there.
+            throw new Error(`Could not save haven.db.pre-restore (${err2.message}), so the restore was not applied and the current database is unchanged`);
+          }
           // Remove stale WAL/SHM so SQLite reopens against the restored file
-          try { fs.unlinkSync(DB_PATH + '-wal'); } catch {}
-          try { fs.unlinkSync(DB_PATH + '-shm'); } catch {}
+          try { fs.unlinkSync(DB_PATH + '-wal'); } catch (err2) {
+            if (err2.code !== 'ENOENT') console.error('[Restore] Could not remove old haven.db-wal:', err2.message);
+          }
+          try { fs.unlinkSync(DB_PATH + '-shm'); } catch (err2) {
+            if (err2.code !== 'ENOENT') console.error('[Restore] Could not remove old haven.db-shm:', err2.message);
+          }
           fs.renameSync(stagedDb, DB_PATH);
         }
         if (fs.existsSync(stagedUploads)) {
@@ -3189,6 +3211,7 @@ app.get('/api/gif/trending', gifLimiter, (req, res) => {
 // ── Link preview (Open Graph metadata) ──────────────────
 const linkPreviewCache = new Map(); // url → { data, ts }
 const PREVIEW_CACHE_TTL = 30 * 60 * 1000; // 30 min
+let _previewGateErrorLogged = false;
 const PREVIEW_MAX_SIZE = 256 * 1024; // only read first 256 KB of page
 
 // Decode common HTML entities in OG-scraped attribute values.
@@ -3373,7 +3396,15 @@ app.get('/api/link-preview', async (req, res) => {
     if (!automod.previewAllowed(url)) {
       return res.status(403).json({ error: 'Link previews are not enabled for that domain' });
     }
-  } catch { /* automod unavailable — fall through rather than break previews */ }
+  } catch (err) {
+    // Fail closed: unfurling a host the admin has not allowed is the IP leak
+    // this gate exists to stop. Logged once so a broken gate cannot flood the log.
+    if (!_previewGateErrorLogged) {
+      _previewGateErrorLogged = true;
+      console.error('[link-preview] Domain allowlist check failed, refusing previews:', err.message);
+    }
+    return res.status(403).json({ error: 'Link previews are not enabled for that domain' });
+  }
 
   // Use a real browser UA — many sites (Twitter/X, Instagram, etc.) serve
   // JS-only pages to unknown bots, omitting the OG meta tags we need.
@@ -5615,7 +5646,12 @@ if (process.env.ADMIN_RESET_PASSWORD) {
 try {
   const fe = db.prepare("SELECT value FROM server_settings WHERE key = 'fcm_enabled'").get()?.value;
   setFcmAdminEnabled(fe !== 'false');
-} catch {}
+} catch (err) {
+  // Fail closed: if the admin turned FCM off for privacy, an unreadable
+  // setting must not quietly turn it back on.
+  setFcmAdminEnabled(false);
+  console.error('[fcm] Could not read the FCM Privacy setting, leaving FCM off:', err.message);
+}
 initFcm(DATA_DIR);
 app.set('io', io);   // expose to auth routes (session invalidation on password change)
 botAudioManager = new BotAudioManager(io, BOT_AUDIO_DIR);

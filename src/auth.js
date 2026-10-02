@@ -30,7 +30,12 @@ function _sessionExpiresIn() {
     const n = parseInt(row && row.value);
     if (n === 0) return null;
     if (Number.isFinite(n) && n >= 1 && n <= 365) return `${n}d`;
-  } catch {}
+  } catch (err) {
+    // If the setting cannot be read, do not hand out a token that never
+    // expires; fall back to the old 7 day default instead.
+    console.warn('[auth] Could not read session duration, using 7 days:', err.message);
+    return '7d';
+  }
   return null;
 }
 

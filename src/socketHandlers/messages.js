@@ -932,7 +932,11 @@ module.exports = function register(socket, ctx) {
           `SELECT allowed FROM user_role_perms WHERE user_id = ? AND permission = 'delete_own_messages' AND (channel_id IS NULL OR channel_id IN (${ph})) ORDER BY allowed ASC LIMIT 1`
         ).get(socket.user.id, ...chain);
         if (deny && deny.allowed === 0) allowOwnDelete = false;
-      } catch { /* table may not exist */ }
+      } catch (err) {
+        // Could not rule out a deny override, so fail closed.
+        allowOwnDelete = false;
+        console.error('bulk delete: delete_own_messages check failed:', err.message);
+      }
     }
 
     const placeholders = ids.map(() => '?').join(',');
@@ -1956,7 +1960,11 @@ module.exports = function register(socket, ctx) {
           if (deny && deny.allowed === 0) {
             return socket.emit('error-msg', 'You don\'t have permission to delete messages');
           }
-        } catch { /* table may not exist */ }
+        } catch (err) {
+          // Could not rule out a deny override, so fail closed.
+          console.error('delete-message: delete_own_messages check failed:', err.message);
+          return socket.emit('error-msg', 'Failed to delete message');
+        }
       }
     } else {
       const canDeleteAny = socket.user.isAdmin || userHasPermission(socket.user.id, 'delete_message', channel.id);

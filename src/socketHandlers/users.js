@@ -931,7 +931,12 @@ module.exports = function register(socket, ctx) {
     try {
       const filePath = path.join(DATA_DIR, 'beta-signups.json');
       let signups = [];
-      try { signups = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { /* first signup */ }
+      try { signups = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (err) {
+        // No file yet means this is the first signup. Anything else (an
+        // unreadable or corrupt file) must not be treated as empty, or the
+        // write below would wipe every earlier signup.
+        if (err.code !== 'ENOENT') throw err;
+      }
 
       if (signups.some(s => s.email === email)) {
         return callback({ ok: true });

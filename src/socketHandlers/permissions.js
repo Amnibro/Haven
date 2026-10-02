@@ -1,5 +1,16 @@
 // ── Permission system helpers (factory — closes over db) ──
 
+// A failed read of the per-user overrides (user_role_perms) means an explicit
+// deny cannot be ruled out, so callers fail closed. The read runs on every
+// permission check, so the log line is limited to once a minute.
+let _overrideReadWarnedAt = 0;
+function warnOverrideRead(where, err) {
+  const now = Date.now();
+  if (now - _overrideReadWarnedAt < 60 * 1000) return;
+  _overrideReadWarnedAt = now;
+  console.error(`[permissions] ${where}: override read failed, denying:`, err && err.message);
+}
+
 module.exports = function createPermissions(db) {
 
   // ── Role inheritance: get the channel hierarchy chain for role cascading ──
@@ -74,7 +85,11 @@ module.exports = function createPermissions(db) {
         if (override.allowed === 0) return false;
         if (override.allowed === 1) return true;
       }
-    } catch { /* table may not exist yet */ }
+    } catch (err) {
+      // Fail closed: carrying on to the role checks would ignore a deny.
+      warnOverrideRead('userHasPermission', err);
+      return false;
+    }
 
     // Check level-based permission thresholds
     const thresholds = getPermissionThresholds();
@@ -134,7 +149,12 @@ module.exports = function createPermissions(db) {
           if (idx !== -1) perms.splice(idx, 1);
         }
       }
-    } catch { /* user_role_perms table may not exist yet */ }
+    } catch (err) {
+      // Fail closed: role perms without their deny overrides could over-grant,
+      // and callers use this list to decide what someone may hand out.
+      warnOverrideRead('permission list', err);
+      return [];
+    }
 
     const thresholds = getPermissionThresholds();
     const level = getUserEffectiveLevel(userId);
@@ -177,7 +197,12 @@ module.exports = function createPermissions(db) {
           if (idx !== -1) perms.splice(idx, 1);
         }
       }
-    } catch { /* user_role_perms table may not exist yet */ }
+    } catch (err) {
+      // Fail closed: role perms without their deny overrides could over-grant,
+      // and callers use this list to decide what someone may hand out.
+      warnOverrideRead('permission list', err);
+      return [];
+    }
 
     // getUserEffectiveLevel(userId) with no channelId arg already only
     // considers server-scoped roles, so threshold-derived perms are

@@ -176,7 +176,11 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
         `SELECT key, value FROM user_preferences
          WHERE user_id = ? AND key IN ('share_activity','share_game_activity','share_music_activity')`
       ).all(userId);
-    } catch { /* table missing on a very old DB */ }
+    } catch {
+      // If the opt-outs cannot be read, share nothing rather than assume
+      // consent. Not logged: this runs on every presence update.
+      return { master: false, games: false, music: false };
+    }
     const map = {};
     rows.forEach(r => { map[r.key] = r.value; });
     return {
@@ -197,7 +201,9 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
       const row = db.prepare('SELECT status FROM users WHERE id = ?').get(userId);
       return !!row && row.status === 'invisible';
     } catch {
-      return false;
+      // Unknown status: treat them as invisible, so someone who chose to hide
+      // is never shown because a read failed.
+      return true;
     }
   }
 
