@@ -82,6 +82,46 @@ test('a new server\'s admin wears the Admin role, and a transfer passes it on', 
 
   assert.ok(serverRoles(bobId).includes('Admin'), 'the new admin has the Admin role');
   assert.deepEqual(serverRoles(adminId), ['Former Admin'], 'the old admin keeps Former Admin only');
+
+  // Reset roles to default: the Admin role comes back, on the current admin,
+  // and admin_role_id points at it rather than at a deleted role.
+  const sb = await connect(bob.body.token);
+  const reset = await new Promise((r) => sb.emit('reset-roles-to-default', {}, r));
+  assert.ok(reset && !reset.error, `reset failed: ${JSON.stringify(reset)}`);
+  sb.close();
+  assert.ok(serverRoles(bobId).includes('Admin'), 'the admin wears the Admin role after a reset');
+  const db = new Database(path.join(DATA, 'haven.db'), { readonly: true });
+  try {
+    const id = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_role_id'").get().value;
+    assert.equal(db.prepare('SELECT name FROM roles WHERE id = ?').get(id)?.name, 'Admin', 'admin_role_id points at the new Admin role');
+  } finally { db.close(); }
+});
+
+test('a converted server whose admin deleted the Admin role does not get it back', () => {
+  const dir = path.join(os.tmpdir(), `haven-admin-role-gone-${Date.now()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const run = (code) => execFileSync(process.execPath, ['-e', code], { cwd: ROOT, env: { ...process.env, HAVEN_DATA_DIR: dir }, encoding: 'utf8' });
+  try {
+    run(`
+      const db = require('./src/database').initDatabase();
+      db.prepare("INSERT INTO users (username, password_hash, is_admin) VALUES ('boss', 'x', 1)").run();
+      const role = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_role_id'").get().value;
+      db.prepare('DELETE FROM roles WHERE id = ?').run(role);
+      db.prepare("DELETE FROM server_settings WHERE key = 'admin_role_id'").run();
+      db.close();
+    `);
+    const out = run(`
+      const db = require('./src/database').initDatabase();
+      const id = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_role_id'").get().value;
+      const count = db.prepare("SELECT COUNT(*) c FROM roles WHERE level = 99").get().c;
+      process.stdout.write(JSON.stringify({ id, count }));
+    `);
+    const { id, count } = JSON.parse(out.slice(out.lastIndexOf('{"id"')));
+    assert.equal(id, 'none', 'noted as having no Admin role');
+    assert.equal(count, 0, 'no Admin role is made');
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
 });
 
 test('a server converted by the first version of the migration gets its role id noted', () => {

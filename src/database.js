@@ -1414,12 +1414,13 @@ function initDatabase() {
           }
         } else {
           // Converted by the first version of this step, which did not note
-          // the role's id: it is the level 99 role it gave the admin.
+          // the role's id: it is the level 99 role it gave the admin. If the
+          // admin holds none, they deleted it, and it stays deleted.
           const held = admin && db.prepare(`
             SELECT r.id FROM roles r JOIN user_roles ur ON ur.role_id = r.id
             WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.level = 99 AND r.name != 'Former Admin'
             ORDER BY r.id LIMIT 1`).get(admin.id);
-          roleId = held ? held.id : createAdminRole(db);
+          roleId = held ? held.id : null;
         }
         db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('admin_role_id', ?)").run(roleId ? String(roleId) : 'none');
         if (admin) grantAdminRole(db, admin.id);

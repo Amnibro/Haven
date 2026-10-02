@@ -3,7 +3,7 @@
 const bcrypt = require('bcryptjs');
 const OTPAuth = require('otpauth');
 const { isString, isInt, VALID_ROLE_PERMS } = require('./helpers');
-const { seedDefaultRoles, grantAdminRole } = require('../roleDefaults');
+const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('../roleDefaults');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -906,6 +906,13 @@ module.exports = function register(socket, ctx) {
       db.exec('DELETE FROM roles');
 
       seedDefaultRoles(db);
+      // The Admin role is part of the defaults a new server starts with, so a
+      // reset makes it again and gives it to the admin, rather than leaving
+      // admin_role_id pointing at the role that was just deleted.
+      const adminRoleId = createAdminRole(db);
+      db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('admin_role_id', ?)").run(String(adminRoleId));
+      const currentAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
+      if (currentAdmin) grantAdminRole(db, currentAdmin.id);
 
       const autoRoles = db.prepare('SELECT id FROM roles WHERE auto_assign = 1 AND scope = ?').all('server');
       for (const ar of autoRoles) {
