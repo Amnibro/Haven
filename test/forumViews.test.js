@@ -14,7 +14,7 @@ const test = require('node:test');
 const ROOT = path.join(__dirname, '..');
 const forum = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-forum.js'), 'utf8');
 const gallery = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-media-gallery.js'), 'utf8');
-const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8');
+const css = require('./coreCss').readCoreCss();
 const html = fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8');
 
 function parseView(v) { return v === 'gallery' || v === 'feed' ? v : 'list'; }

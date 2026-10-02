@@ -320,7 +320,7 @@ test('chat names follow the role display setting', () => {
 });
 
 test('shimmer is CSS only and stops for reduced motion', () => {
-  const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8');
+  const css = require('./coreCss').readCoreCss();
   assert.match(css, /\.role-gradient\.role-shimmer \{[^}]*animation: role-shimmer/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.role-gradient\.role-shimmer \{ animation: none; \}/);
 });
