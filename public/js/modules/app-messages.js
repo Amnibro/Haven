@@ -366,18 +366,14 @@ _jumpToMessage(msgId) {
 _restyleMessageAuthors() {
   const container = document.getElementById('messages');
   if (!container) return;
-  const byId = new Map();
-  for (const u of (this._lastOnlineUsers || []).concat(this.channelMembers || [])) {
-    if (u && !byId.has(String(u.id))) byId.set(String(u.id), u);
-  }
-  if (!byId.size) return;
+  if (!(this._lastOnlineUsers || []).length && !(this.channelMembers || []).length) return;
   const coloredNames = (localStorage.getItem('haven-role-display') || 'colored-name') === 'colored-name';
   container.querySelectorAll('.message[data-user-id]').forEach(el => {
     if (el.dataset.personaId || el.classList.contains('webhook-message') || el.classList.contains('imported-message')) return;
     const header = el.querySelector('.message-header');
     const author = header && header.querySelector('.message-author');
     if (!author || header.querySelector('.msg-role-badge')) return;
-    const u = byId.get(el.dataset.userId);
+    const u = this._memberById(el.dataset.userId);
     if (!u || !u.role) return;
     if (coloredNames && u.role.color) {
       this._applyRoleName(author, u.role, author.textContent, author.style.color);
@@ -1142,8 +1138,7 @@ _createMessageEl(msg, prevMsg) {
   const color = this._getUserColor(msg.username);
   const initial = msg.username.charAt(0).toUpperCase();
   // Look up user's role from online users list (falls back to channelMembers for offline users)
-  const _userPool = (this._lastOnlineUsers || []).concat(this.channelMembers || []);
-  const onlineUser = _userPool.find(u => u.id === msg.user_id) || null;
+  const onlineUser = this._memberById(msg.user_id);
   // Use the message sender's avatar_shape (from server), not the local user's preference
   const msgShape = msg.avatar_shape || (onlineUser && onlineUser.avatarShape) || 'circle';
   const shapeClass = 'avatar-' + msgShape;
@@ -1309,8 +1304,7 @@ _promoteCompactToFull(compactEl) {
 
   const color = this._getUserColor(username);
   const initial = username.charAt(0).toUpperCase();
-  const _userPool2 = (this._lastOnlineUsers || []).concat(this.channelMembers || []);
-  const onlineUser = _userPool2.find(u => u.id === userId) || null;
+  const onlineUser = this._memberById(userId);
   // Prefer the avatar stored on the compact element (set at render time from server data).
   // Fall back to the online-users list so newly-uploaded avatars still appear.
   const msgShape = compactEl.dataset.avatarShape || (onlineUser && onlineUser.avatarShape) || 'circle';

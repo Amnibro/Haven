@@ -131,9 +131,25 @@ _applyRoleName(el, role, text, fallback = '') {
  *  or null when they have none or names are not shown in role colors. */
 _chatNameRole(userId) {
   if ((localStorage.getItem('haven-role-display') || 'colored-name') !== 'colored-name') return null;
-  const pool = (this._lastOnlineUsers || []).concat(this.channelMembers || []);
-  const u = pool.find(x => x.id === userId);
+  const u = this._memberById(userId);
   return u && u.role && this._roleLook(u.role) ? u.role : null;
+},
+
+/** A person's entry from the online list, else the channel's member list.
+ *  Messages look this up for every author they draw, so the two lists are
+ *  indexed once and the index is rebuilt only when either list is replaced,
+ *  instead of copying and searching every member for every message. */
+_memberById(userId) {
+  const online = this._lastOnlineUsers || [];
+  const members = this.channelMembers || [];
+  const idx = this._memberIndex;
+  if (!idx || idx.online !== online || idx.members !== members) {
+    const map = new Map();
+    for (const u of online) if (u && !map.has(String(u.id))) map.set(String(u.id), u);
+    for (const u of members) if (u && !map.has(String(u.id))) map.set(String(u.id), u);
+    this._memberIndex = { online, members, map };
+  }
+  return this._memberIndex.map.get(String(userId)) || null;
 },
 
 /** A background (dot, swatch) in the role's colors: the gradient when it has
@@ -4261,8 +4277,7 @@ _promoteThreadCompactToFull(compactEl) {
   const reactionsHtml = compactEl.querySelector('.reactions-row')?.outerHTML || '';
 
   // Avatar: stored at render time, else the online/member list, else initial.
-  const _pool = (this._lastOnlineUsers || []).concat(this.channelMembers || []);
-  const onlineUser = _pool.find(u => u.id === userId) || null;
+  const onlineUser = this._memberById(userId);
   const avatar = compactEl.dataset.avatar || (onlineUser && onlineUser.avatar) || null;
   const avatarHtml = avatar
     ? `<img class="thread-msg-avatar" src="${this._escapeHtml(avatar)}" alt="${initial}">`
