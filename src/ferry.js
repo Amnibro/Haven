@@ -1532,7 +1532,7 @@ function enqueue(key, task) {
   // The stored chain swallows failures so one rejected send does not poison
   // every later message to the same destination. The caller still sees the
   // real rejection through `run`.
-  const chain = run.catch(() => {});
+  const chain = run.catch(() => { /* the caller sees this failure through run */ });
   sendQueues.set(key, chain);
   // Drop the entry once drained, so the map does not grow one dead promise per
   // destination for the life of the process.

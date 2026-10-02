@@ -808,9 +808,9 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
     // unconfigured. Registering unconditionally is what lets an admin paste
     // keys into Settings and have presence start working without a restart —
     // gating the intervals on boot-time config would strand them until reboot.
-    timers.push(setInterval(() => { pollSteam().catch(() => {}); }, STEAM_POLL_MS));
-    timers.push(setInterval(() => { pollSpotify().catch(() => {}); }, SPOTIFY_POLL_MS));
-    timers.push(setInterval(() => { pollLastfm().catch(() => {}); }, LASTFM_POLL_MS));
+    timers.push(setInterval(() => { pollSteam().catch((err) => console.warn('[Haven activity] Steam poll failed:', err.message)); }, STEAM_POLL_MS));
+    timers.push(setInterval(() => { pollSpotify().catch((err) => console.warn('[Haven activity] Spotify poll failed:', err.message)); }, SPOTIFY_POLL_MS));
+    timers.push(setInterval(() => { pollLastfm().catch((err) => console.warn('[Haven activity] Last.fm poll failed:', err.message)); }, LASTFM_POLL_MS));
     timers.forEach(t => t.unref?.());
     if (isSteamConfigured())   console.log('[Haven activity] Steam presence enabled');
     if (isSpotifyConfigured()) console.log('[Haven activity] Spotify presence enabled');

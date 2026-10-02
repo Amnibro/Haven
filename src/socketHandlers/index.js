@@ -1534,7 +1534,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         return;
       }
       if (resp.status >= 500 && attempt < 1) {
-        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch(() => {}), 5000);
+        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch((err) => console.error('Webhook delivery error:', err.message)), 5000);
         return;
       }
       _recordWebhookDelivery(bot.id, resp.status, `HTTP ${resp.status}`);
@@ -1546,7 +1546,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         return;
       }
       if (attempt < 1) {
-        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch(() => {}), 5000);
+        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch((err) => console.error('Webhook delivery error:', err.message)), 5000);
         return;
       }
       _recordWebhookDelivery(bot.id, 0, msg.slice(0, 200));
@@ -1585,7 +1585,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             'sha256=' + crypto.createHmac('sha256', bot.callback_secret).update(payload).digest('hex');
         }
 
-        _deliverWebhook(bot, payload, headers).catch(() => {});
+        _deliverWebhook(bot, payload, headers).catch((err) => console.error('Webhook delivery error:', err.message));
       }
     } catch (err) {
       console.error('Webhook event dispatch error:', err.message);

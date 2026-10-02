@@ -548,7 +548,7 @@ module.exports = function register(socket, ctx) {
     // still current, so this stays at most one request. (env override still wins)
     if (key === 'unicode_emoji_auto_update') {
       const emoji = require('../emoji');
-      emoji.ensureEmojiData(emoji.autoUpdateEnabled(value)).catch(() => {});
+      emoji.ensureEmojiData(emoji.autoUpdateEnabled(value)).catch((err) => console.warn('Emoji data refresh failed:', err.message));
     }
   });
 

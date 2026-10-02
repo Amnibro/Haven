@@ -769,7 +769,7 @@ module.exports = function register(socket, ctx) {
     // it now rather than waiting up to STEAM_POLL_MS for the next tick to pick
     // up the rotated key. Non-fatal: a failure here just means the old cadence.
     if (key === 'STEAM_API_KEY') {
-      try { activity.pollSteam().catch(() => {}); } catch { /* the regular poll picks up the new key anyway */ }
+      try { activity.pollSteam().catch((err) => console.warn('[Haven activity] Steam poll failed:', err.message)); } catch { /* the regular poll picks up the new key anyway */ }
     }
 
     _audit({
@@ -818,7 +818,7 @@ module.exports = function register(socket, ctx) {
     });
 
     // Populate straight away rather than waiting up to 30s for the next tick.
-    activity.pollLastfmUser(socket.user.id).catch(() => {});
+    activity.pollLastfmUser(socket.user.id).catch((err) => console.warn('[Haven activity] Last.fm poll failed:', err.message));
     if (socket.currentChannel) emitOnlineUsers(socket.currentChannel);
   });
 

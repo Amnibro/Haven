@@ -747,7 +747,7 @@ module.exports = function register(socket, ctx) {
     broadcastStreamInfo(data.code);
     // Relayed call: the screen's video starts flowing to this viewer now.
     if (state.voiceRelay?.currentKind(data.code) === 'relay') {
-      state.voiceRelay.setWatching(data.code, `u${socket.user.id}`, data.sharerId, true).catch(() => {});
+      state.voiceRelay.setWatching(data.code, `u${socket.user.id}`, data.sharerId, true).catch((err) => console.warn('[Relay] could not start sending the screen to a viewer:', err.message));
     }
   });
 
@@ -763,7 +763,7 @@ module.exports = function register(socket, ctx) {
     broadcastStreamInfo(data.code);
     // Relayed call: stop sending the screen's video to someone not looking.
     if (state.voiceRelay?.currentKind(data.code) === 'relay') {
-      state.voiceRelay.setWatching(data.code, `u${socket.user.id}`, data.sharerId, false).catch(() => {});
+      state.voiceRelay.setWatching(data.code, `u${socket.user.id}`, data.sharerId, false).catch((err) => console.warn('[Relay] could not stop sending the screen to a viewer:', err.message));
     }
   });
 

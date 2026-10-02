@@ -255,7 +255,7 @@ function createConnectRoutes(getActivity) {
 
       // Populate immediately so the user sees their game without waiting up to
       // a minute for the next poll tick.
-      req.activity.pollSteam().catch(() => {});
+      req.activity.pollSteam().catch((err) => console.warn('[Haven activity] Steam poll failed:', err.message));
       return finish(res, 'ok', 'steam');
     } catch (err) {
       console.error('[Haven activity] Steam link failed:', err.message);
@@ -328,7 +328,7 @@ function createConnectRoutes(getActivity) {
         expiresAt: Date.now() + ((Number(tok.expires_in) || 3600) * 1000),
       });
 
-      req.activity.pollSpotifyUser(userId).catch(() => {});
+      req.activity.pollSpotifyUser(userId).catch((err) => console.warn('[Haven activity] Spotify poll failed:', err.message));
       return finish(res, 'ok', 'spotify');
     } catch (err) {
       console.error('[Haven activity] Spotify link failed:', err.message);
