@@ -8,6 +8,7 @@ const OTPAuth = require('otpauth');
 const QRCode = require('qrcode');
 const https = require('https');
 const http = require('http');
+const { agentFor } = require('./outboundProxy');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -172,7 +173,7 @@ function downloadSSOAvatar(url) {
     }
 
     const fetcher = parsed.protocol === 'https:' ? https : http;
-    const request = fetcher.get(url, { timeout: 10000 }, (res) => {
+    const request = fetcher.get(url, { timeout: 10000, agent: agentFor(parsed) }, (res) => {
       if (res.statusCode !== 200) {
         res.resume();
         return reject(new Error(`HTTP ${res.statusCode}`));
