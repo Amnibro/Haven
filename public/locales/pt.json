@@ -1720,7 +1720,9 @@
       "disable_gpu_vsync": "Desativar vsync da GPU (correção para Nvidia G-Sync)",
       "disable_gpu_vsync_hint": "Solução para monitores Nvidia G-Sync/VRR em que o Haven Desktop cai para cerca de 5 FPS após a janela ser minimizada ou coberta. Faz o Chromium não esperar o sinal de vsync para desenhar quadros. Pode causar cortes visíveis em monitores sem taxa de atualização variável. Requer reinicialização.",
       "unlimit_frame_rate": "Remover limite de quadros do Chromium (correção para Nvidia G-Sync)",
-      "unlimit_frame_rate_hint": "Complementa a opção de vsync acima. Remove o limite interno de quadros do Chromium, que em algumas configurações Nvidia G-Sync fica preso em um valor muito baixo. Só é útil se a opção de vsync sozinha não resolver. Pode aumentar o uso de CPU/GPU. Requer reinicialização."
+      "unlimit_frame_rate_hint": "Complementa a opção de vsync acima. Remove o limite interno de quadros do Chromium, que em algumas configurações Nvidia G-Sync fica preso em um valor muito baixo. Só é útil se a opção de vsync sozinha não resolver. Pode aumentar o uso de CPU/GPU. Requer reinicialização.",
+      "linux_vaapi": "Codificação de vídeo por hardware no Linux (VA-API)",
+      "linux_vaapi_hint": "Somente Linux. Permite que o Haven Desktop use o codificador de vídeo VA-API da sua placa de vídeo no compartilhamento de tela mesmo quando a lista de bloqueio de drivers do Chromium não permitiria, inclusive em placas Nvidia. Pode reduzir o uso de CPU durante o compartilhamento, mas alguns drivers geram vídeo preto ou corrompido, por isso vem desligado. Requer reiniciar para ter efeito."
     },
     "admin": {
       "title": "Administração",
@@ -3275,7 +3277,8 @@
       "macos_installer": "Instalador para macOS",
       "color_updated": "Perfil de cores atualizado. Reinicie o Haven Desktop para aplicar.",
       "vsync_updated": "Configuração de vsync da GPU atualizada. Reinicie o Haven Desktop para aplicar.",
-      "frame_cap_updated": "Limite de quadros atualizado. Reinicie o Haven Desktop para aplicar."
+      "frame_cap_updated": "Limite de quadros atualizado. Reinicie o Haven Desktop para aplicar.",
+      "vaapi_updated": "Configuração de VA-API atualizada. Reinicie o Haven Desktop para aplicar."
     },
     "shortcuts": {
       "record": "Gravar",

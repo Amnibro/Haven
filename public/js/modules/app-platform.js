@@ -821,6 +821,7 @@ async _setupDesktopAppPrefs() {
   const menuBarEl = document.getElementById('pref-hide-menu-bar');
   const gpuVsyncEl     = document.getElementById('pref-disable-gpu-vsync');
   const unlimitFpsEl   = document.getElementById('pref-unlimit-frame-rate');
+  const linuxVaapiEl   = document.getElementById('pref-linux-vaapi');
   const versionEl = document.getElementById('desktop-version-info');
 
   if (startEl) { startEl.checked = !!prefs.startOnLogin; }
@@ -831,6 +832,7 @@ async _setupDesktopAppPrefs() {
   if (menuBarEl) { menuBarEl.checked = !!prefs.hideMenuBar; }
   if (gpuVsyncEl)   { gpuVsyncEl.checked   = !!prefs.disableGpuVsync; }
   if (unlimitFpsEl) { unlimitFpsEl.checked = !!prefs.unlimitFrameRate; }
+  if (linuxVaapiEl) { linuxVaapiEl.checked = !!prefs.linuxVaapiBypass; }
 
   // Show desktop version
   if (versionEl && window.havenDesktop.getVersion) {
@@ -890,6 +892,18 @@ async _setupDesktopAppPrefs() {
         this._showToast?.(t('platform.desktop.frame_cap_updated'), 'info');
       }
     } catch { unlimitFpsEl.checked = !unlimitFpsEl.checked; }
+  });
+
+  linuxVaapiEl?.addEventListener('change', async () => {
+    try {
+      const res = await window.havenDesktop.prefs.setLinuxVaapiBypass(linuxVaapiEl.checked);
+      if (res?.requiresRestart) {
+        this._showToast?.(t('platform.desktop.vaapi_updated'), 'info');
+      }
+    } catch (err) {
+      console.warn('[Desktop] could not save the VA-API setting', err);
+      linuxVaapiEl.checked = !linuxVaapiEl.checked;
+    }
   });
 },
 

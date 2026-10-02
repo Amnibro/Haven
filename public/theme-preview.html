@@ -2487,6 +2487,14 @@ console.log(haven);</code></pre></div></div>
           </label>
           <p class="settings-hint" data-i18n="settings.debug_section.unlimit_frame_rate_hint">Pairs with the GPU vsync toggle above. Removes Chromium's internal frame-rate limit, which on some Nvidia G-Sync setups gets stuck at a very low value and never recovers. Only useful if the vsync toggle alone didn't help. Can increase CPU/GPU usage. Requires restart to take effect.</p>
         </div>
+
+        <div class="desktop-pref-row" id="pref-linux-vaapi-row" style="display:none">
+          <label class="toggle-row">
+            <input type="checkbox" id="pref-linux-vaapi">
+            <span class="toggle-label" data-i18n="settings.debug_section.linux_vaapi">Hardware video encoding on Linux (VA-API)</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.debug_section.linux_vaapi_hint">Linux only. Lets Haven Desktop use your graphics card's VA-API video encoder for screen sharing even where Chromium's driver blocklist would not, including on Nvidia cards. It can lower CPU use while you share, but some drivers give black or broken video, so it is off by default. Requires restart to take effect.</p>
+        </div>
       </div>
 
         </div><!-- /settings-body-user -->
