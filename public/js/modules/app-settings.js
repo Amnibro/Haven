@@ -266,7 +266,7 @@ _bindSettings() {
       if (tab) { formatTab = tab.dataset.formatTab; renderFormatPicker(); return; }
       const row = e.target.closest('.format-row');
       if (!row) return;
-      if (row.dataset.cmd) this._insertSlashCommand(row.dataset.cmd);
+      if (row.dataset.cmd) this._insertGuideCommand(row.dataset.cmd);
       else this._wrapComposerSelection(row.dataset.before || '', row.dataset.after || '', row.dataset.sample || '', row.dataset.block === '1');
       formatPicker.style.display = 'none';
     });

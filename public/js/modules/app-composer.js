@@ -607,8 +607,11 @@ _wrapComposerSelection(before, after, sample = '', block = false) {
   input.dispatchEvent(new Event('input', { bubbles: true }));
 },
 
-// Put a command at the front of the message box, replacing one already there.
-_insertSlashCommand(cmd) {
+// Put a command at the front of the message box, replacing one already there
+// and keeping the rest of the draft. (The slash dropdown's _insertSlashCommand
+// in app-admin.js replaces the whole box, which is right for typing a command
+// but wiped the draft when this shared its name and lost to it.)
+_insertGuideCommand(cmd) {
   const input = document.getElementById('message-input');
   if (!input) return;
   input.value = '/' + cmd + ' ' + input.value.replace(/^\/\S*\s?/, '');
