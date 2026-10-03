@@ -52,7 +52,8 @@ function createDownloadFixture(responses, addresses = {}) {
               res.emit('data', Buffer.from(chunk));
             }
             if (!destroyed) {
-              res.emit('end');
+              // A connection reset closes the response without an 'end'.
+              if (!response.closeWithoutEnd) res.emit('end');
               res.emit('close');
             }
           });
@@ -157,5 +158,13 @@ test('redirects share the original deadline instead of restarting the timeout', 
   assert.equal(timer.duration, 5, 'only the time remaining before the original deadline is available');
   timer.handler();
   await rejected;
+  assert.equal(fixture.timers.size, 0);
+});
+
+test('a response that closes before it finishes rejects instead of hanging', async () => {
+  const fixture = createDownloadFixture({
+    [CANONICAL_URL]: { chunks: ['{"schema'], closeWithoutEnd: true },
+  });
+  await assert.rejects(fixture.download(CANONICAL_URL, 1024), /ended before it finished/);
   assert.equal(fixture.timers.size, 0);
 });

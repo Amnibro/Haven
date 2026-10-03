@@ -218,9 +218,18 @@ function downloadExtensionAsset(url, limit, redirects = 0, deadline = Date.now()
           if (size > limit) res.destroy(new Error('Download exceeds size limit.'));
           else chunks.push(chunk);
         });
+        // A connection that closes without finishing (a timeout or a reset)
+        // must reject, or the update lock stays taken until a restart.
+        let ended = false;
         res.on('error', reject);
-        res.on('end', () => resolve(Buffer.concat(chunks)));
-        res.on('close', () => clearTimeout(timer));
+        res.on('end', () => {
+          ended = true;
+          resolve(Buffer.concat(chunks));
+        });
+        res.on('close', () => {
+          clearTimeout(timer);
+          if (!ended) reject(new Error('Download ended before it finished.'));
+        });
       },
     );
     const timer = setTimeout(
