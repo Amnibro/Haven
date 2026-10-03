@@ -308,6 +308,18 @@ test('recovery completes metadata after interrupted file replacement', async t =
   assert.deepEqual(JSON.parse(fs.readFileSync(stateFile)), newState);
 });
 
+test('a leftover journal that cannot be recovered does not stop the server from starting', async t => {
+  const fixture = createUpdateFixture(t);
+  fs.writeFileSync(
+    path.join(fixture.options.stateDir, 'transaction.json'),
+    JSON.stringify({ item: { type: 'plugin', file: 'Gone.plugin.js' }, before: 'a', after: 'b', oldState: {}, newState: {} }),
+  );
+  let updater;
+  assert.doesNotThrow(() => { updater = createExtensionUpdater(fixture.options); });
+  // The problem is still reported to the admin on the next check.
+  await assert.rejects(updater.check('admin'));
+});
+
 test('manifest validation rejects traversal, duplicate IDs, bad hashes and unsupported schemas', () => {
   const entry = {
     id,

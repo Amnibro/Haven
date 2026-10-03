@@ -602,7 +602,14 @@ function createExtensionUpdater({
       return { reloadRequired: true, version: candidate.version };
     });
   }
-  recoverInterruptedUpdate();
+  // A leftover journal that no longer matches the files must not stop Haven
+  // from starting. The next check or update runs recovery again and shows
+  // the admin what is wrong.
+  try {
+    recoverInterruptedUpdate();
+  } catch (err) {
+    console.warn('[ExtensionUpdates] could not finish an interrupted update at startup:', err.message);
+  }
   return { check, apply };
 }
 
