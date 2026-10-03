@@ -1375,6 +1375,10 @@ has:
 - **Scheduled auto-backups**: on a daily or weekly schedule
 - **Restore**: upload a backup to restore a server. The previous database and
   uploads are kept as `.pre-restore` copies for one cycle as a safety net
+- **Restore on a new machine**: the setup wizard (`Install Haven.bat` on Windows,
+  `install.sh` elsewhere) has **Restore from a backup** on its first page, so
+  moving Haven to another computer brings your accounts back without creating a
+  new admin first. The backup needs Messages ticked
 
 Backups stream to and from disk rather than being held in memory, so a large
 uploads folder will not run the server out of RAM.
