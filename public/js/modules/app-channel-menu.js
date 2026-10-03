@@ -907,7 +907,7 @@ _copyChannelLink(code, messageId = null) {
     this._showToast?.(t('toasts.channel_link_unavailable'), 'error');
     return;
   }
-  const base = `${window.location.origin}/app.html?channel=${encodeURIComponent(code)}`;
+  const base = `${this._shareOrigin()}/app.html?channel=${encodeURIComponent(code)}`;
   const url = messageId ? `${base}&message=${encodeURIComponent(messageId)}` : base;
   const onCopied = () => {
     const key = messageId ? 'toasts.message_link_copied' : 'toasts.channel_link_copied';

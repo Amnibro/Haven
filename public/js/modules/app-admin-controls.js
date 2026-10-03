@@ -811,8 +811,18 @@ _bindAdminControls() {
     const maxUsesInput = restrictUses ? maxInvtUses : 100000;
     const minUsesInput = restrictUses ? 1 : 0;
 
-    const origin = window.location.origin;
-    host.innerHTML = this._inviteCodes.map(ic => {
+    // Invite links are for other people, so they carry the server's public
+    // address. Opened on the server machine itself, the page's own address
+    // is localhost, which only works there.
+    const origin = this._shareOrigin();
+    if (this._shareOriginAt === undefined) {
+      this._fetchShareOrigin().then(() => _renderInviteCodes(this._inviteCodes));
+    }
+    const localOnly = this._shareOriginValue === null &&
+      /^https?:\/\/(localhost|127\.0\.0\.1|\[?::1\]?)(:|$)/i.test(origin);
+    host.innerHTML = (localOnly
+      ? `<p class="settings-hint invite-local-hint" style="margin:0 0 8px">${t('settings.admin.invite_links.local_address_hint')}</p>`
+      : '') + this._inviteCodes.map(ic => {
       const status = !ic.enabled
         ? `<span style="color:var(--text-muted)">● ${t('settings.admin.invite_links.disabled')}</span>`
         : ic.max_uses > 0 && ic.use_count >= ic.max_uses

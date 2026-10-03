@@ -102,6 +102,36 @@ _roleEmojiSafe(safeHtml) {
   );
 },
 
+/** The address other people can open this server on, as the server reports
+ *  it (an active tunnel, PUBLIC_URL, or the host a proxy forwards), or null
+ *  when all it knows is a local address like localhost. Asked at most once a
+ *  minute, since a tunnel's address changes when it restarts; the last answer
+ *  stays in _shareOriginValue for code that cannot wait. */
+_fetchShareOrigin() {
+  const now = Date.now();
+  if (this._shareOriginPromise && now - this._shareOriginAt < 60000) return this._shareOriginPromise;
+  this._shareOriginAt = now;
+  this._shareOriginPromise = fetch('/api/connection-address', {
+    headers: { Authorization: `Bearer ${this.token || ''}` }
+  })
+    .then(r => (r.ok ? r.json() : null))
+    .then(data => {
+      this._shareOriginValue = data && data.url ? String(data.url).replace(/\/+$/, '') : null;
+      return this._shareOriginValue;
+    })
+    .catch(err => {
+      console.warn('[Share] could not ask the server for its public address:', err.message);
+      return this._shareOriginValue || null;
+    });
+  return this._shareOriginPromise;
+},
+
+/** The origin for links meant for other people (invites, channel links): the
+ *  public address once known, otherwise this page's own. */
+_shareOrigin() {
+  return this._shareOriginValue || window.location.origin;
+},
+
 /** The same for an element already on the page: sets its color and puts the
  *  name in it, gradient span included. Null role means no role color. */
 _applyRoleName(el, role, text, fallback = '') {

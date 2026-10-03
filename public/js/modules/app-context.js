@@ -748,22 +748,17 @@ _setupNotifications() {
     // Swap in the shareable address once the server reports it. `origin` is
     // read at call time by both the toggle and the copy handler, so they pick
     // this up without rewiring anything.
-    fetch('/api/connection-address', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('haven_token') || ''}` }
-    })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (data && data.url) {
-          origin = data.url;
-          applyUrlVis();
-        } else if (isLoopback(origin) && urlItem) {
-          // Nothing shareable exists and the local address is no use to
-          // anyone else, so hide the widget rather than offer to copy
-          // localhost.
-          urlItem.style.display = 'none';
-        }
-      })
-      .catch(() => { /* keep the local origin; the bar still works */ });
+    this._fetchShareOrigin().then(url => {
+      if (url) {
+        origin = url;
+        applyUrlVis();
+      } else if (isLoopback(origin) && urlItem) {
+        // Nothing shareable exists and the local address is no use to
+        // anyone else, so hide the widget rather than offer to copy
+        // localhost.
+        urlItem.style.display = 'none';
+      }
+    });
 
     statusUrlToggle.addEventListener('click', () => {
       urlVisible = !urlVisible;

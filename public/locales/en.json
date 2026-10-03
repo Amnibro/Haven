@@ -2237,6 +2237,7 @@
         "no_channels": "No channels yet.",
         "count": "({{active}} active / {{total}})",
         "none": "No invite links yet. Create one below.",
+        "local_address_hint": "These links use this computer's own address, so they only work on this computer. Set PUBLIC_URL in Haven's .env file to your public address (or turn on a tunnel) and they will use that instead.",
         "disabled": "Disabled",
         "used": "Used",
         "expired": "Expired",
