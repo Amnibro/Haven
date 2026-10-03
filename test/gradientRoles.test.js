@@ -302,6 +302,26 @@ test('a gradient role wraps the name in a gradient span, shimmering when asked',
   assert.match(app._roleNameHtml({ roleColor: '#ff0000', roleColor2: '#0000ff', roleShimmer: true }, 'Bob'), /role-shimmer/);
 });
 
+test('emoji in a gradient name get their own span so they keep their colors (#5720)', () => {
+  const app = loadApp();
+  const role = { color: '#ff0000', color2: '#0000ff' };
+  const wrap = (name) => app._roleNameHtml(role, name).replace(/^<span[^>]*>|<\/span>$/g, '');
+  assert.strictEqual(wrap('Bob 🎉'), 'Bob <span class="role-emoji">🎉</span>');
+  // A ZWJ family, a skin tone, a flag and a keycap each stay one emoji, and a
+  // run of emoji shares one span.
+  assert.strictEqual(wrap('👨‍👩‍👧 a'), '<span class="role-emoji">👨‍👩‍👧</span> a');
+  assert.strictEqual(wrap('👍🏽'), '<span class="role-emoji">👍🏽</span>');
+  assert.strictEqual(wrap('🇧🇷'), '<span class="role-emoji">🇧🇷</span>');
+  assert.strictEqual(wrap('#️⃣1'), '<span class="role-emoji">#️⃣</span>1');
+  assert.strictEqual(wrap('🔥🔥 hot'), '<span class="role-emoji">🔥🔥</span> hot');
+  // Escaping is untouched, and entities never count as emoji.
+  assert.strictEqual(wrap('Bob <3 & #1'), 'Bob &lt;3 &amp; #1');
+  // A plain color name has no spans added.
+  assert.strictEqual(app._roleNameHtml({ color: '#ff0000' }, 'Bob 🎉'), 'Bob 🎉');
+  const css = require('./coreCss').readCoreCss();
+  assert.match(css, /\.role-gradient \.role-emoji \{[^}]*-webkit-text-fill-color: currentColor/);
+});
+
 test('unsafe colors never reach the page', () => {
   const app = loadApp();
   assert.strictEqual(app._roleNameHtml({ color: '#ff0000', color2: 'red;background:url(x)' }, 'Bob'), 'Bob');

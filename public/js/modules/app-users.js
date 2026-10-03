@@ -1529,8 +1529,11 @@ _refreshNicknameDisplays() {
       const nick = this._getNickname(uid, realName);
       const authorEl = el.querySelector('.message-author');
       if (authorEl) {
-        // A gradient role name keeps its span; only the words change.
-        (authorEl.querySelector('.role-gradient') || authorEl).textContent = nick;
+        // A gradient role name keeps its span; only the words change, with
+        // any emoji in them kept out of the gradient (#5720).
+        const gradient = authorEl.querySelector('.role-gradient');
+        if (gradient) gradient.innerHTML = this._roleEmojiSafe(this._escapeHtml(nick));
+        else authorEl.textContent = nick;
         authorEl.title = nick !== realName ? realName : '';
       }
     }

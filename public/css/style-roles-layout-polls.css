@@ -93,6 +93,13 @@
   -webkit-text-fill-color: transparent;
   color: transparent;
 }
+/* Emoji in a gradient name keep their own colors (#5720). A transparent fill
+   hides color emoji, so they need a visible one; the color only shows on a
+   glyph that has none of its own. */
+.role-gradient .role-emoji {
+  -webkit-text-fill-color: currentColor;
+  color: var(--role-c1);
+}
 /* Shimmer: the gradient runs start, end, start over twice the width and
    slides one full width along, so the loop has no visible seam. CSS only,
    so a long member list costs no timers. */

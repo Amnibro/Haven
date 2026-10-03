@@ -89,7 +89,17 @@ _roleNameHtml(role, text) {
   const safe = this._escapeHtml(text == null ? '' : String(text));
   const look = this._roleLook(role);
   if (!look || !look.c2) return safe;
-  return `<span class="role-gradient${look.shimmer ? ' role-shimmer' : ''}" style="--role-c1:${look.c1};--role-c2:${look.c2}">${safe}</span>`;
+  return `<span class="role-gradient${look.shimmer ? ' role-shimmer' : ''}" style="--role-c1:${look.c1};--role-c2:${look.c2}">${this._roleEmojiSafe(safe)}</span>`;
+},
+
+/** Emoji inside a gradient name, each run wrapped in its own span so CSS can
+ *  draw them in their own colors instead of as gradient silhouettes (#5720).
+ *  Takes already escaped HTML: entities are plain ASCII and never match. */
+_roleEmojiSafe(safeHtml) {
+  return safeHtml.replace(
+    /(?:[\u{1F1E6}-\u{1F1FF}]{2}|[0-9#*]\u{FE0F}?\u{20E3}|\p{Extended_Pictographic}[\u{FE0F}\u{1F3FB}-\u{1F3FF}]*(?:\u{200D}\p{Extended_Pictographic}[\u{FE0F}\u{1F3FB}-\u{1F3FF}]*)*)+/gu,
+    m => `<span class="role-emoji">${m}</span>`
+  );
 },
 
 /** The same for an element already on the page: sets its color and puts the
