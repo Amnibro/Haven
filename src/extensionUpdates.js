@@ -257,6 +257,10 @@ function createExtensionUpdater({
   // Offers stay server-side: the browser submits a token, not replacement
   // metadata. A restart deliberately requires the admin to check again.
   const offers = new Map();
+  // Manifests from immutable releases never change, so each is fetched
+  // once per process. GitHub allows 60 unauthenticated requests an hour,
+  // and re-reading every manifest on each check ran out after a few.
+  const manifestCache = new Map();
   let busy = false;
   fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const stateFile = path.join(stateDir, 'state.json');
@@ -448,11 +452,18 @@ function createExtensionUpdater({
             for (const r of releases) {
               if (r.draft || r.prerelease || r.immutable !== true) continue;
               if (!r.assets?.some(a => a.name === 'haven-release.json')) continue;
-              assertValid(entries.length < 30, 'Too many release manifests to complete this check.');
+              // GitHub lists the newest releases first; the newest 30 are
+              // plenty to find an update, and older ones are not read.
+              if (entries.length >= 30) break;
               const a = findReleaseAsset(r, 'haven-release.json');
-              const m = validateReleaseManifest(
-                await fetchGitHubJson(`https://api.github.com/repos/${item.repo}/releases/assets/${a.id}`),
-              );
+              const cacheKey = item.repo.toLowerCase() + ':' + a.id;
+              let m = manifestCache.get(cacheKey);
+              if (!m) {
+                m = validateReleaseManifest(
+                  await fetchGitHubJson(`https://api.github.com/repos/${item.repo}/releases/assets/${a.id}`),
+                );
+                manifestCache.set(cacheKey, m);
+              }
               entries.push({ release: r, manifest: m });
             }
             repos.set(item.repo.toLowerCase(), entries);

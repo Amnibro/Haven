@@ -433,6 +433,38 @@ test('pagination limit is an error rather than a false up-to-date result', async
   assert.equal(row.offers.length, 0);
 });
 
+test('release manifests are fetched once and only the newest 30 are read', async t => {
+  const fixture = createUpdateFixture(t);
+  await fixture.offer();
+  await fixture.offer();
+  assert.equal(fixture.calls.filter(url => url.endsWith('/assets/2')).length, 1, 'immutable manifests are cached');
+
+  // Forty releases with manifests: the check reads 30 and still offers the update.
+  const fetchBytes = fixture.options.fetchBytes;
+  const many = Array.from({ length: 40 }, (_, i) => ({
+    ...fixture.release,
+    id: 100 + i,
+    assets: [{ id: 1000 + i, name: 'haven-release.json', state: 'uploaded' }, { id: 3, name: fixture.candidate.asset, state: 'uploaded' }],
+  }));
+  let manifestReads = 0;
+  fixture.updater = createExtensionUpdater({
+    ...fixture.options,
+    fetchBytes: url => {
+      if (url.includes('releases?')) return Buffer.from(JSON.stringify(many));
+      const manifest = url.match(/\/assets\/1(\d\d\d)$/);
+      if (manifest) {
+        manifestReads++;
+        const version = `1.${Number(manifest[1]) + 1}.0`;
+        return Buffer.from(JSON.stringify({ schemaVersion: 1, extensions: [{ ...fixture.candidate, version }] }));
+      }
+      return fetchBytes(url);
+    },
+  });
+  const row = (await fixture.updater.check('admin')).extensions[0];
+  assert.equal(row.error, undefined);
+  assert.equal(manifestReads, 30);
+});
+
 test('theme API incompatibility is rejected even with a matching Haven range', async t => {
   const fixture = createUpdateFixture(t);
   fs.unlinkSync(fixture.file);
