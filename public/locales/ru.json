@@ -876,7 +876,7 @@
       "view_all_members_btn": "Просмотр всех участников",
       "update_banner_label": "Баннер обновления (только для администраторов)",
       "whitelist_title": "Кто может зарегистрироваться",
-      "whitelist_enabled": "Включён",
+      "whitelist_enabled": "📋 Белый список",
       "whitelist_username_placeholder": "Имя пользователя...",
       "whitelist_add_btn": "Добавить",
       "settings_saved": "Настройки сохранены",

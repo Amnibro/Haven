@@ -871,7 +871,7 @@
       "view_all_members_btn": "Wyświetl wszystkich członków",
       "update_banner_label": "Informacja o aktualizacji (tylko administratorzy)",
       "whitelist_title": "Kto może się zarejestrować",
-      "whitelist_enabled": "Włączona",
+      "whitelist_enabled": "📋 Biała lista",
       "whitelist_username_placeholder": "Nazwa użytkownika...",
       "whitelist_add_btn": "Dodaj",
       "settings_saved": "Ustawienia zapisane",

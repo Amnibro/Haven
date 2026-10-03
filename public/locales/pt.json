@@ -2112,7 +2112,7 @@
       "view_all_members_btn": "Ver todos os membros",
       "update_banner_label": "Banner de atualização (somente administradores)",
       "whitelist_title": "Quem pode se cadastrar",
-      "whitelist_enabled": "Ativada",
+      "whitelist_enabled": "📋 Lista de permissões",
       "whitelist_username_placeholder": "Nome de usuário...",
       "whitelist_add_btn": "Adicionar",
       "registration_token_required": "🔑 Exigir token de convite",

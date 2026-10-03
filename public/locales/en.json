@@ -2139,7 +2139,7 @@
       "view_all_members_btn": "View All Members",
       "update_banner_label": "Update banner (admins only)",
       "whitelist_title": "Who can sign up",
-      "whitelist_enabled": "Enabled",
+      "whitelist_enabled": "📋 Whitelist",
       "whitelist_username_placeholder": "Username...",
       "whitelist_add_btn": "Add",
       "registration_token_required": "🔑 Require invite token",

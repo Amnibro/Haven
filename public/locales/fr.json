@@ -844,7 +844,7 @@
       "view_all_members_btn": "Voir tous les membres",
       "update_banner_label": "Bannière de mise à jour (admins uniquement)",
       "whitelist_title": "Qui peut s'inscrire",
-      "whitelist_enabled": "Activée",
+      "whitelist_enabled": "📋 Liste blanche",
       "whitelist_username_placeholder": "Nom d'utilisateur...",
       "whitelist_add_btn": "Ajouter",
       "settings_saved": "Paramètres enregistrés",
