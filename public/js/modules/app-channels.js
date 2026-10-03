@@ -2080,14 +2080,18 @@ _renderChannels() {
       // Adjust pane flex so DMs fill when channels collapsed
       const channelsPane = document.getElementById('channels-pane');
       const dmPane = document.getElementById('dm-pane');
+      const isOriginal = document.documentElement.hasAttribute('data-haven-original-layout');
       if (nowCollapsed) {
-        channelsPane.style.flex = '0 0 auto';
-        dmPane.style.flex = '1 1 0';
-      } else {
+        if (channelsPane) channelsPane.style.flex = '0 0 auto';
+        if (dmPane && isOriginal) dmPane.style.flex = '1 1 0';
+      } else if (isOriginal) {
         const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
         const ratio = savedRatio ? parseFloat(savedRatio) : 0.6;
-        channelsPane.style.flex = `${ratio} 1 0`;
-        dmPane.style.flex = `${1 - ratio} 1 0`;
+        if (channelsPane) channelsPane.style.flex = `${ratio} 1 0`;
+        if (dmPane) dmPane.style.flex = `${1 - ratio} 1 0`;
+      } else {
+        if (channelsPane) channelsPane.style.removeProperty('flex');
+        if (dmPane) dmPane.style.removeProperty('flex');
       }
     });
     // Organize Channels button (admin only)
@@ -2106,7 +2110,12 @@ _renderChannels() {
     const cp = document.getElementById('channels-pane');
     const dp = document.getElementById('dm-pane');
     if (cp) cp.style.flex = '0 0 auto';
-    if (dp) dp.style.flex = '1 1 0';
+    if (dp && document.documentElement.hasAttribute('data-haven-original-layout')) dp.style.flex = '1 1 0';
+  } else if (!document.documentElement.hasAttribute('data-haven-original-layout')) {
+    const cp = document.getElementById('channels-pane');
+    const dp = document.getElementById('dm-pane');
+    if (cp) cp.style.removeProperty('flex');
+    if (dp) dp.style.removeProperty('flex');
   }
 
   // ── Render channels grouped by category (case-insensitive) ──
@@ -2144,7 +2153,6 @@ _renderChannels() {
     if (cat) {
       const catLabel = document.createElement('h5');
       catLabel.className = 'section-label category-label';
-      catLabel.style.cssText = 'padding:10px 12px 4px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.5;user-select:none;cursor:pointer;display:flex;align-items:center;gap:4px';
       catLabel.dataset.category = cat;
       const arrow = document.createElement('span');
       arrow.className = 'cat-collapse-arrow' + (catCollapsed ? ' collapsed' : '');
@@ -2324,9 +2332,15 @@ _renderChannels() {
           if (dp) dp.style.flex = '0 0 auto';
           if (cp) cp.style.flex = '1 1 0';
         } else {
-          const r = parseFloat(localStorage.getItem('haven_sidebar_split_ratio')) || 0.6;
-          if (dp) dp.style.flex = `${1 - r} 1 0`;
-          if (cp) cp.style.flex = `${r} 1 0`;
+          const isOriginal = document.documentElement.hasAttribute('data-haven-original-layout');
+          if (isOriginal) {
+            const r = parseFloat(localStorage.getItem('haven_sidebar_split_ratio')) || 0.6;
+            if (dp) dp.style.flex = `${1 - r} 1 0`;
+            if (cp) cp.style.flex = `${r} 1 0`;
+          } else {
+            if (dp) dp.style.removeProperty('flex');
+            if (cp) cp.style.removeProperty('flex');
+          }
         }
       });
     }

@@ -3587,10 +3587,14 @@ _setupResizableSidebars() {
   const channelsPane = document.getElementById('channels-pane');
   const dmPane = document.getElementById('dm-pane');
   if (splitHandle && splitContainer && channelsPane && dmPane) {
+    const isOriginal = document.documentElement.hasAttribute('data-haven-original-layout');
     const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
-    if (savedRatio) {
+    if (isOriginal && savedRatio) {
       channelsPane.style.flex = `${savedRatio} 1 0`;
       dmPane.style.flex = `${1 - parseFloat(savedRatio)} 1 0`;
+    } else if (!isOriginal) {
+      channelsPane.style.removeProperty('flex');
+      dmPane.style.removeProperty('flex');
     }
 
     let dragging = false;

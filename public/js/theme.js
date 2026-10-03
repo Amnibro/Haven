@@ -586,6 +586,19 @@ function _setOriginalLayout(on) {
   if (on) document.documentElement.setAttribute('data-haven-original-layout', '1');
   else document.documentElement.removeAttribute('data-haven-original-layout');
   if (on) _setCompactLayout(false);
+  const channelsPane = document.getElementById('channels-pane');
+  const dmPane = document.getElementById('dm-pane');
+  if (channelsPane && dmPane) {
+    if (on) {
+      const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
+      const ratio = savedRatio ? parseFloat(savedRatio) : 0.6;
+      channelsPane.style.flex = `${ratio} 1 0`;
+      dmPane.style.flex = `${1 - ratio} 1 0`;
+    } else {
+      channelsPane.style.removeProperty('flex');
+      dmPane.style.removeProperty('flex');
+    }
+  }
   const container = document.getElementById('effect-selector');
   const mode = _getStoredEffectMode();
   applyEffects(mode);

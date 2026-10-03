@@ -20,6 +20,10 @@ const messages = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-messages
 
 test('channels header has a + menu with join, create, and temp', () => {
   assert.match(html, /id="channel-actions-btn"/);
+  assert.match(html, /channel-actions-add-btn/);
+  assert.match(css, /\.channels-toggle \.channel-actions-add-btn/);
+  assert.match(css, /\.channels-toggle \.channel-header-util/);
+  assert.match(css, /\.category-label\s*\{[^}]*border-top:\s*1px solid var\(--border\)/);
   assert.match(html, /id="channel-actions-menu"/);
   assert.match(html, /data-action="join"/);
   assert.match(html, /data-action="create"/);
@@ -120,6 +124,10 @@ test('Theme menu can restore the original Haven chrome', () => {
   assert.match(theme, /window\.setHavenOriginalLayout/);
   assert.match(themeInit, /data-haven-original-layout/);
   assert.match(css, /html:not\(\[data-haven-original-layout\]\) #voice-join-btn/);
+  assert.match(css, /html:not\(\[data-haven-original-layout\]\) \.sidebar-split \.channel-section/);
+  assert.match(css, /html\[data-haven-original-layout\] \.sidebar-split \.channel-section/);
+  assert.match(css, /html\[data-haven-original-layout\] \.sidebar-split-handle/);
+  assert.match(css, /html\[data-haven-original-layout\] \.sidebar-split \.dm-section-pane/);
   assert.match(css, /html\[data-haven-original-layout\] \.channel-join-voice/);
   assert.match(css, /html\[data-haven-original-layout\] #people-dock-btn/);
   assert.match(voice, /isHavenOriginalLayout/);

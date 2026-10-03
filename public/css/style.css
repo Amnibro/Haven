@@ -1,4 +1,4 @@
-﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    HAVEN — Multi-Theme Stylesheet
    Themes: Haven (default), Discord, Matrix, Tron, HALO, LoTR
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
@@ -6336,7 +6336,33 @@ html:not([data-haven-original-layout]) #gallery-toggle-btn,
 html:not([data-haven-original-layout]) #threads-toggle-btn,
 html:not([data-haven-original-layout]) .sidebar-settings-panel { display: none !important; }
 html[data-haven-original-layout] .channel-join-voice,
-html[data-haven-original-layout] #people-dock-btn { display: none !important; }
+html[data-haven-original-layout] #people-dock-btn,
+html[data-haven-original-layout] #dm-dock-btn { display: none !important; }
+
+html:not([data-haven-original-layout]) .sidebar-split .channel-section {
+  flex: 1 1 100%;
+}
+html[data-haven-original-layout] .sidebar-split .channel-section {
+  flex: 1 1 60%;
+  height: auto;
+}
+html[data-haven-original-layout] .sidebar-split-handle {
+  display: block !important;
+  cursor: row-resize;
+  border-top: 1px solid var(--border);
+  margin: 0 0.75rem;
+  padding: 0.25rem 0;
+}
+html[data-haven-original-layout] .sidebar-split .dm-section-pane {
+  display: flex !important;
+  position: static !important;
+  flex: 0 1 40%;
+  min-height: 3.75rem;
+  height: auto;
+  box-shadow: none !important;
+  border-top: none !important;
+  padding: 0 1rem;
+}
 .channel-join-voice.is-leave {
   background: var(--danger, #ed4245);
   color: var(--danger-text, #fff);
@@ -16521,6 +16547,32 @@ ul.chat-list { list-style-type: disc; }
   transform: rotate(-90deg);
 }
 
+/* ── Category label & dividers ──────────────────────── */
+.category-label {
+  padding: 0.625rem 0.5rem 0.25rem;
+  margin-top: 0.625rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  user-select: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+.category-label:hover {
+  color: var(--text-secondary);
+}
+#channel-list > .category-label:first-child,
+#channel-list > :first-child.category-label {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0.25rem;
+}
+
 /* ── Role management modal ───────────────────────────── */
 /* Make the role-modal flex its body so the sidebar/detail panes grow with the
    modal and the Close button pins to the bottom-right at any resize size. */
@@ -17440,6 +17492,44 @@ ul.chat-list { list-style-type: disc; }
   width: 1.625rem;
   height: 1.625rem;
   border-radius: 0.5rem;
+}
+.channels-toggle .channel-header-util {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-muted);
+  opacity: 0.65;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.channels-toggle .channel-header-util:hover {
+  opacity: 1;
+  color: var(--text-primary);
+  background: var(--bg-modifier-hover, rgba(255, 255, 255, 0.05));
+}
+.channels-toggle .channel-actions-add-btn {
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-modifier-selected, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.channels-toggle .channel-actions-add-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .chrome-chip:hover {
   background: var(--bg-hover);
