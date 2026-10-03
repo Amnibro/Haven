@@ -1,6 +1,6 @@
 'use strict';
 
-// Use the actual server.js handlers on loopback to check the HTTP authorization
+// Use the actual route handlers on loopback to check the HTTP authorization
 // boundary. The updater is a stub here; file/download behavior lives in the
 // unit tests. Flip admin status during apply to model an in-flight demotion.
 
@@ -8,7 +8,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const vm = require('node:vm');
 const express = require('express');
 
 test('admin API rejects anonymous and non-admin callers and rechecks authorization at apply', async t => {
@@ -16,13 +15,9 @@ test('admin API rejects anonymous and non-admin callers and rechecks authorizati
   app.use(express.json());
   let admin = true;
   let invoked = 0;
-  // Evaluate the route section with isolated dependencies. This exercises the
-  // production handlers without starting voice services or opening a user DB.
-  const source = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-  const start = source.indexOf('// ── Plugin & theme update endpoints');
-  const end = source.indexOf('// ── Push notification VAPID', start);
-  assert.ok(start >= 0 && end > start, 'extension route section exists');
-  vm.runInNewContext(source.slice(start, end), {
+  // Register the production routes with isolated dependencies, without
+  // starting voice services or opening a user DB.
+  require('../src/routes/extensionUpdates')({
     app,
     verifyToken: token => token === 'scoped' ? { id: 'admin', purpose: 'connect' } : { id: token },
     verifyAdminFromDb: user => user.id === 'admin' && admin,
@@ -34,8 +29,11 @@ test('admin API rejects anonymous and non-admin callers and rechecks authorizati
         throw new Error('Administrator permission is required.');
       },
     },
-    io: { emit() { assert.fail('failed update must not notify clients'); } },
+    late: { io: { emit() { assert.fail('failed update must not notify clients'); } } },
   });
+  // server.js registers them with the same dependencies.
+  const serverSource = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  assert.match(serverSource, /require\('\.\/src\/routes\/extensionUpdates'\)\(\{ app, verifyToken, verifyAdminFromDb, extensionUpdater, late \}\)/);
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
     server.once('listening', resolve);
@@ -64,10 +62,7 @@ test('a successful update broadcasts a reload notification to connected clients'
   const app = express();
   app.use(express.json());
   const emitted = [];
-  const source = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-  const start = source.indexOf('// ── Plugin & theme update endpoints');
-  const end = source.indexOf('// ── Push notification VAPID', start);
-  vm.runInNewContext(source.slice(start, end), {
+  require('../src/routes/extensionUpdates')({
     app,
     verifyToken: () => ({ id: 'admin' }),
     verifyAdminFromDb: () => true,
@@ -80,7 +75,7 @@ test('a successful update broadcasts a reload notification to connected clients'
         return { version: '1.1.0', reloadRequired: true };
       },
     },
-    io: { emit(event) { emitted.push(event); } },
+    late: { io: { emit(event) { emitted.push(event); } } },
   });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {

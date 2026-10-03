@@ -17,7 +17,7 @@ const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
 const CONTROLS_SOURCE = fs.readFileSync(
-  path.join(ROOT, 'public/js/modules/app-admin-controls.js'),
+  path.join(ROOT, 'public/js/modules/app-extension-updates.js'),
   'utf8',
 );
 
@@ -100,7 +100,7 @@ function loadControls(extensions = []) {
   vm.runInContext(
     CONTROLS_SOURCE.replace(/^export default/m, 'module.exports ='),
     context,
-    { filename: 'app-admin-controls.js' },
+    { filename: 'app-extension-updates.js' },
   );
   const app = Object.create(context.module.exports);
   app._escapeHtml = value => escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');

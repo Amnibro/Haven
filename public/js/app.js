@@ -16,7 +16,8 @@ import MessageActionMethods from './modules/app-message-actions.js?v=4.17.2';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.17.6';
 import PeopleMethods from './modules/app-people.js?v=4.17.2';
 import SettingsMethods from './modules/app-settings.js?v=4.17.15';
-import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.18';
+import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.19';
+import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.17.2';
 import MobileMethods from './modules/app-mobile.js?v=4.17.2';
 import MediaMethods    from './modules/app-media.js?v=4.17.5';
@@ -504,6 +505,7 @@ Object.assign(HavenApp.prototype,
   PeopleMethods,
   SettingsMethods,
   AdminControlMethods,
+  ExtensionUpdateMethods,
   ServerBarMethods,
   MobileMethods,
   MediaMethods,
