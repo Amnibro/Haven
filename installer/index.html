@@ -655,7 +655,9 @@
     const row = document.querySelector('[data-step="' + stepKey + '"]');
     if (!row) return;
     const icon = row.querySelector('.step-icon');
-    const text = row.querySelector('span:last-child');
+    // The row's own label. A plain 'span:last-child' also matched the spinner
+    // inside the icon while a step was running, so labels never updated.
+    const text = row.querySelector(':scope > span:last-child');
 
     row.className = 'step-row ' + state;
     if (state === 'active') { icon.innerHTML = '<span class="spinner"></span>'; }
