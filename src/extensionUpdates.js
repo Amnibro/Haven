@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Haven — Manual plugin and theme updates (#5578)
+ * Haven: manual plugin and theme updates (#5578)
  *
  * Check builds a short-lived offer from an immutable GitHub release. Apply
  * revalidates that offer, checks the downloaded bytes, and replaces the existing
@@ -267,10 +267,12 @@ function createExtensionUpdater({
   const journalFile = path.join(stateDir, 'transaction.json');
   // Stage beside the destination so rename stays on the same filesystem.
   // Readers see a complete old or new file, never a partly written download.
-  function writeFileAtomic(file, bytes) {
+  // `mode` is the new file's permissions: private for Haven's own state, the
+  // original file's for a replaced plugin or theme so it stays readable.
+  function writeFileAtomic(file, bytes, mode = 0o600) {
     const tmp = file + '.' + crypto.randomUUID() + '.tmp';
     try {
-      const fd = fs.openSync(tmp, 'wx', 0o600);
+      const fd = fs.openSync(tmp, 'wx', mode);
       try {
         fs.writeFileSync(fd, bytes);
         fs.fsyncSync(fd);
@@ -398,7 +400,8 @@ function createExtensionUpdater({
   async function fetchBlocklist() {
     try {
       return validateBlocklist(JSON.parse((await fetchBytes(BLOCKLIST_URL, 1024 * 1024)).toString('utf8')));
-    } catch {
+    } catch (err) {
+      console.warn('[ExtensionUpdates] blocklist check failed:', err.message);
       throw new Error(
         'The security blocklist could not be fetched or validated. Existing extensions keep running; installation and rollback are unavailable until a fresh check succeeds.',
       );
@@ -615,7 +618,7 @@ function createExtensionUpdater({
       if (offer.action === 'install')
         writeFileAtomic(path.join(stateDir, item.sha256 + '.backup'), oldBytes);
       writeJsonAtomic(journalFile, { item, before: item.sha256, after: candidate.sha256, oldState, newState });
-      writeFileAtomic(file, bytes);
+      writeFileAtomic(file, bytes, fs.statSync(file).mode & 0o777);
       writeJsonAtomic(stateFile, newState);
       fs.unlinkSync(journalFile);
       offers.clear();

@@ -433,6 +433,13 @@ test('pagination limit is an error rather than a false up-to-date result', async
   assert.equal(row.offers.length, 0);
 });
 
+test('an updated file keeps its original permissions', { skip: process.platform === 'win32' }, async t => {
+  const fixture = createUpdateFixture(t);
+  fs.chmodSync(fixture.file, 0o644);
+  await fixture.updater.apply((await fixture.offer()).token, 'admin');
+  assert.equal(fs.statSync(fixture.file).mode & 0o777, 0o644);
+});
+
 test('release manifests are fetched once and only the newest 30 are read', async t => {
   const fixture = createUpdateFixture(t);
   await fixture.offer();
