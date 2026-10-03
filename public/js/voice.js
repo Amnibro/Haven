@@ -1527,9 +1527,10 @@ class VoiceManager {
       // With a push to talk key bound in Haven Desktop, start muted so the key
       // is the only way to talk. Otherwise the mic was live from joining until
       // the first press and release (Haven-Desktop #60).
-      if (!muteOnJoin && window.havenDesktop?.shortcuts?.getConfig) {
+      const shortcutsApi = globalThis.havenDesktop?.shortcuts;
+      if (!muteOnJoin && shortcutsApi?.getConfig) {
         try {
-          const shortcuts = await window.havenDesktop.shortcuts.getConfig();
+          const shortcuts = await shortcutsApi.getConfig();
           if (shortcuts && shortcuts.ptt) muteOnJoin = true;
         } catch (err) {
           console.warn('[Voice] could not read the push to talk key:', err);
