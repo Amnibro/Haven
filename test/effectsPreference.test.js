@@ -24,6 +24,11 @@ test('every effects write in the picker goes through _persistEffects', () => {
   assert.equal(writes.length, 3, 'only the legacy migration, _persistEffects and the server sync write the key');
   assert.match(src, /function _persistEffects\(raw\)/);
   assert.match(src, /socket\.emit\('set-preference', \{ key: 'effects', value: raw \}\)/);
+  // The app page has no global `socket` (app.js is a module); the sync must use
+  // the socket the app publishes, or it silently never runs.
+  const persist = src.slice(src.indexOf('function _persistEffects(raw)'), src.indexOf('function syncEffectsFromServer(raw)'));
+  assert.match(persist, /const socket = window\.havenSocket;/);
+  assert.doesNotMatch(persist, /typeof socket !== 'undefined'/);
   assert.match(src, /function syncEffectsFromServer\(raw\)/);
 });
 

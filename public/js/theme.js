@@ -1293,7 +1293,10 @@ function _updateEffectButtons(container, mode) {
 // choice to user_preferences the way theme does.
 function _persistEffects(raw) {
   localStorage.setItem('haven_effects', raw);
-  if (typeof socket !== 'undefined' && socket && socket.connected) {
+  // The app's socket is window.havenSocket: app.js is a module, so there is
+  // no global `socket`, and checking for one meant this never sent anything.
+  const socket = window.havenSocket;
+  if (socket && socket.connected) {
     socket.emit('set-preference', { key: 'effects', value: raw });
   }
 }
