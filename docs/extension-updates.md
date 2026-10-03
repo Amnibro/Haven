@@ -157,10 +157,10 @@ and manifest.
 
 ## Security blocklist
 
-Haven reads its blocklist from
-`https://ancsemi.github.io/Haven/blocklist.json` before checking, installing,
-or rolling back an extension. That GitHub Pages address redirects to
-`https://haven-app.com/blocklist.json`. Both destinations are restricted to the
+Haven reads its blocklist from `https://haven-app.com/blocklist.json` (the
+repository's `docs/blocklist.json`) before checking, installing, or rolling
+back an extension. The old `https://ancsemi.github.io/Haven/blocklist.json`
+address redirects there and is still allowed. Both are restricted to the
 blocklist file. Each entry identifies a repository, extension ID,
 exact versions, and a reason:
 

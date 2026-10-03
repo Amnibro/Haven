@@ -20,7 +20,9 @@ const https = require('node:https');
 const dns = require('node:dns');
 const net = require('node:net');
 
-const BLOCKLIST_URL = 'https://ancsemi.github.io/Haven/blocklist.json';
+// Published from docs/blocklist.json by the website. The old github.io
+// address still redirects here and stays allowed for older servers.
+const BLOCKLIST_URL = 'https://haven-app.com/blocklist.json';
 const EXTENSION_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const REPOSITORY_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,38})\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
