@@ -126,6 +126,9 @@
   color: var(--text-primary);
   margin: 0;
 }
+/* The injected expand button sits beside the close button, not in the
+   middle of the space-between header (#5718). */
+.activities-header > .modal-expand-btn-inline { margin-left: auto; }
 .activities-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
