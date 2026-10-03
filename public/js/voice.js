@@ -1524,6 +1524,17 @@ class VoiceManager {
       // every join so users who like to lurk-first never accidentally hot-mic.
       let muteOnJoin = false;
       try { muteOnJoin = localStorage.getItem('haven_mute_on_join') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
+      // With a push to talk key bound in Haven Desktop, start muted so the key
+      // is the only way to talk. Otherwise the mic was live from joining until
+      // the first press and release (Haven-Desktop #60).
+      if (!muteOnJoin && window.havenDesktop?.shortcuts?.getConfig) {
+        try {
+          const shortcuts = await window.havenDesktop.shortcuts.getConfig();
+          if (shortcuts && shortcuts.ptt) muteOnJoin = true;
+        } catch (err) {
+          console.warn('[Voice] could not read the push to talk key:', err);
+        }
+      }
 
       // Don't attempt to join while the socket is disconnected. The
       // emit() would otherwise be buffered by socket.io and flushed on
