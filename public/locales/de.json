@@ -1058,6 +1058,7 @@
       "check_complete": "Prüfung abgeschlossen. Updates gelten für alle auf dieser Instanz.",
       "no_sources": "Keine installierten Erweiterungen geben ein Update-Repository an.",
       "rollback_title": "Erweiterung zurücksetzen",
+      "rollback_notes": "Die vorherige, auf diesem Server gespeicherte Version wiederherstellen.",
       "update_title": "Erweiterung aktualisieren",
       "plugin_warning": "Plugins führen JavaScript in Haven aus und können auf Nachrichten zugreifen oder in deinem Namen handeln. Installiere nur Code, dem du vertraust. Dadurch wird die Datei für alle auf dieser Instanz ersetzt.",
       "theme_warning": "Themes können Steuerelemente verändern oder ausblenden und externe Ressourcen laden. Installiere nur Themes, denen du vertraust. Dadurch wird die Datei für alle auf dieser Instanz ersetzt.",

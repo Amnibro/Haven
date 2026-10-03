@@ -1050,6 +1050,7 @@
       "check_complete": "Comprobación terminada. Las actualizaciones se aplican a todos los usuarios de esta instancia.",
       "no_sources": "Ninguna extensión instalada declara un repositorio de actualizaciones.",
       "rollback_title": "Revertir extensión",
+      "rollback_notes": "Restaurar la versión anterior guardada en este servidor.",
       "update_title": "Actualizar extensión",
       "plugin_warning": "Los plugins ejecutan JavaScript dentro de Haven y pueden acceder a mensajes o actuar en tu nombre. Instala únicamente código de confianza. Esto sustituye el archivo para todos los usuarios de esta instancia.",
       "theme_warning": "Los temas pueden cambiar u ocultar controles y cargar recursos externos. Instala únicamente temas de confianza. Esto sustituye el archivo para todos los usuarios de esta instancia.",

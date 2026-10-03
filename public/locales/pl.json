@@ -1098,6 +1098,7 @@
       "check_complete": "Sprawdzanie zakończone. Aktualizacje dotyczą wszystkich użytkowników tej instancji.",
       "no_sources": "Żadne zainstalowane rozszerzenie nie wskazuje repozytorium aktualizacji.",
       "rollback_title": "Przywróć rozszerzenie",
+      "rollback_notes": "Przywróć poprzednią wersję zapisaną na tym serwerze.",
       "update_title": "Zaktualizuj rozszerzenie",
       "plugin_warning": "Wtyczki uruchamiają JavaScript w Haven i mogą uzyskiwać dostęp do wiadomości lub działać w Twoim imieniu. Instaluj tylko zaufany kod. Spowoduje to zastąpienie pliku dla wszystkich użytkowników tej instancji.",
       "theme_warning": "Motywy mogą zmieniać lub ukrywać elementy sterujące oraz wczytywać zasoby zewnętrzne. Instaluj tylko zaufane motywy. Spowoduje to zastąpienie pliku dla wszystkich użytkowników tej instancji.",

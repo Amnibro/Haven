@@ -1050,6 +1050,7 @@
       "check_complete": "Vérification terminée. Les mises à jour s’appliquent à tous les utilisateurs de cette instance.",
       "no_sources": "Aucune extension installée ne déclare de dépôt de mise à jour.",
       "rollback_title": "Restaurer l’extension",
+      "rollback_notes": "Restaurer la version précédente enregistrée sur ce serveur.",
       "update_title": "Mettre à jour l’extension",
       "plugin_warning": "Les plugins exécutent du JavaScript dans Haven et peuvent accéder aux messages ou agir en votre nom. Installez uniquement du code fiable. Cette action remplace le fichier pour tous les utilisateurs de cette instance.",
       "theme_warning": "Les thèmes peuvent modifier ou masquer des commandes et charger des ressources externes. Installez uniquement des thèmes fiables. Cette action remplace le fichier pour tous les utilisateurs de cette instance.",

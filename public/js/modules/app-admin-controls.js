@@ -23,7 +23,10 @@ _setupExtensionUpdates() {
       headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await response.json();
+    let data = {};
+    // A proxy or size-limit error page is HTML, not JSON: show the generic
+    // message for it instead of a parser error.
+    try { data = await response.json(); } catch { data = {}; }
     if (!response.ok) throw new Error(data.error || t('settings.extension_updates.operation_failed'));
     return data;
   };
@@ -43,7 +46,7 @@ _setupExtensionUpdates() {
         : t('settings.extension_updates.theme_warning');
       const message = [
         item.file, item.repo, `${item.version} → ${offer.version}`, '',
-        offer.notes || t('settings.extension_updates.no_notes'),
+        rollback ? t('settings.extension_updates.rollback_notes') : (offer.notes || t('settings.extension_updates.no_notes')),
       ].join('\n');
       const confirmed = await this._showExtensionUpdateConfirm(
         title,
@@ -159,15 +162,17 @@ _showExtensionUpdateConfirm(title, message, warning, confirmLabel) {
       document.removeEventListener('keydown', onKey);
       resolve(value);
     };
+    // Enter is left to the focused button, so it never confirms while
+    // Cancel is the one selected.
     const onKey = event => {
       if (event.key === 'Escape') close(false);
-      if (event.key === 'Enter') close(true);
     };
     confirm.addEventListener('click', () => close(true));
     cancel.addEventListener('click', () => close(false));
     overlay.addEventListener('click', event => { if (event.target === overlay) close(false); });
     document.addEventListener('keydown', onKey);
-    setTimeout(() => confirm.focus(), 0);
+    // Start on Cancel: installing code should take a deliberate click.
+    setTimeout(() => cancel.focus(), 0);
   });
 },
 

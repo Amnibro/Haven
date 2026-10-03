@@ -1681,6 +1681,7 @@
       "check_complete": "Check complete. Updates apply to everyone on this instance.",
       "no_sources": "No installed extensions declare an update repository.",
       "rollback_title": "Roll back extension",
+      "rollback_notes": "Restore the previous version saved on this server.",
       "update_title": "Update extension",
       "plugin_warning": "Plugins run JavaScript inside Haven and can access messages or act as you. Only install code you trust. This replaces the file for everyone on this instance.",
       "theme_warning": "Themes can change or hide controls and load external resources. Only install themes you trust. This replaces the file for everyone on this instance.",
