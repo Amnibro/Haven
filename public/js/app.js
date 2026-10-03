@@ -6,7 +6,7 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.17.13';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.17.13';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.17.9';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.17.17';
 import UIBindMethods   from './modules/app-ui.js?v=4.17.4';
 import ComposerMethods from './modules/app-composer.js?v=4.17.3';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.2';
@@ -16,7 +16,7 @@ import MessageActionMethods from './modules/app-message-actions.js?v=4.17.2';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.17.6';
 import PeopleMethods from './modules/app-people.js?v=4.17.2';
 import SettingsMethods from './modules/app-settings.js?v=4.17.15';
-import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.4';
+import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.17';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.17.2';
 import MobileMethods from './modules/app-mobile.js?v=4.17.2';
 import MediaMethods    from './modules/app-media.js?v=4.17.5';
@@ -44,7 +44,7 @@ import MessageContentMethods from './modules/app-message-content.js?v=4.17.7';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.17.6';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.17.6';
 import ThreadMethods from './modules/app-threads.js?v=4.17.6';
-import AdminMethods    from './modules/app-admin.js?v=4.17.4';
+import AdminMethods    from './modules/app-admin.js?v=4.17.17';
 import BrandingMethods from './modules/app-branding.js?v=4.17.4';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.17.6';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.17.4';
@@ -370,6 +370,7 @@ class HavenApp {
     this._setupEmojiManagement();
     this._setupStickerManagement();
     this._setupWebhookManagement();
+    this._setupExtensionUpdates();
     this._setupDiscordImport();
     this._setupAuditLog();
     this._initRoleManagement();

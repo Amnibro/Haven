@@ -727,6 +727,7 @@ _syncSettingsNav() {
   // of roles listing the sub-sections they can access. ('*' for all subsection access)
   const settingsSectionsAccess = {
     'section-update':       [],
+    'section-extension-updates': [],
     'section-branding':     ['manage_server'],
     'section-presence':     [],
     'section-members':      ['manage_server'],

@@ -813,6 +813,10 @@ _listenAdminAndPrefs() {
     }
   });
 
+  // Extension files are replaced on the server, but each client keeps its
+  // current code until reload so running plugin state is not hot-swapped.
+  this.socket.on('extensions-updated', () => this._showExtensionReloadNotice());
+
   // ── Server settings ────────────────────────────────
   this.socket.on('server-settings', (settings, envInfo) => {
     this.serverSettings = settings;

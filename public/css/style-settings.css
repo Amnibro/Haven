@@ -333,6 +333,37 @@
   color: var(--text-muted);
   margin-top: 0.125rem;
 }
+#extension-update-results .plugin-card {
+  align-items: stretch;
+  flex-direction: column;
+}
+.extension-update-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.375rem;
+  margin-top: 0.625rem;
+}
+.extension-update-actions .btn-sm {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  min-height: 2rem;
+  text-align: center;
+  text-decoration: none;
+}
+@media (max-width: 600px) {
+  .extension-update-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #extension-update-results .extension-update-actions > .btn-sm {
+    justify-content: center;
+    min-width: 0;
+    width: 100%;
+    white-space: normal;
+  }
+}
 .plugin-empty {
   font-size: 0.75rem;
   color: var(--text-muted);
