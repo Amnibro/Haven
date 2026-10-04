@@ -219,6 +219,7 @@
       "title": "Theme",
       "layout": "Layout",
       "effect_overlay": "Effect Overlay",
+      "layout_original": "Original",
       "braid_layout": "Braid layout",
       "compact_layout": "Compact layout",
       "close": "Close",
