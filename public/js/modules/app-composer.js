@@ -270,6 +270,22 @@ _bindComposerModals() {
       this._showToast?.(t(toastKey), 'info');
     });
   }
+
+  // Self-destructing messages: a toggle that asks how long on the next send.
+  document.getElementById('self-destruct-btn')?.addEventListener('click', () => {
+    this._setSelfDestructArmed(!this._selfDestructArmed);
+  });
+  document.querySelectorAll('#self-destruct-modal [data-sd-unit]').forEach(b => {
+    b.addEventListener('click', () => {
+      this._setSelfDestructUnit(b.dataset.sdUnit);
+      this._updateSelfDestructPreview();
+      document.getElementById('sd-amount')?.focus();
+    });
+  });
+  document.getElementById('sd-amount')?.addEventListener('input', () => {
+    document.getElementById('sd-error').style.display = 'none';
+    this._updateSelfDestructPreview();
+  });
   document.getElementById('poll-cancel-btn').addEventListener('click', () => {
     document.getElementById('poll-modal').style.display = 'none';
   });
@@ -644,6 +660,13 @@ async _toggleVoiceMessage() {
   if (ch.media_enabled === 0) { this._showToast(t('media.uploads_disabled'), 'error'); return; }
   const choice = this._voiceMimeChoice();
   if (!choice || !navigator.mediaDevices?.getUserMedia) { this._showToast(t('voice_message.unsupported'), 'error'); return; }
+  // Self-destruct on: ask how long first and record only once confirmed.
+  // Backing out records nothing and leaves the toggle on.
+  let destructMs = 0;
+  if (this._selfDestructArmed) {
+    destructMs = await this._askSelfDestruct();
+    if (!destructMs || this.currentChannel !== ch.code) return;
+  }
   let stream;
   try {
     // The same microphone voice chat uses, when one was picked.
@@ -660,7 +683,7 @@ async _toggleVoiceMessage() {
   let recorder;
   try { recorder = new MediaRecorder(stream, { mimeType: choice.mime }); }
   catch { recorder = new MediaRecorder(stream); }
-  const rec = { recorder, stream, chunks, ext: choice.ext, mime: recorder.mimeType || choice.mime, startedAt: Date.now(), code: this.currentChannel, send: false, timer: null };
+  const rec = { recorder, stream, chunks, ext: choice.ext, mime: recorder.mimeType || choice.mime, startedAt: Date.now(), code: this.currentChannel, send: false, timer: null, destructMs };
   recorder.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) chunks.push(e.data); });
   recorder.addEventListener('stop', () => this._finishVoiceMessage(rec));
   try {
@@ -719,6 +742,12 @@ _finishVoiceMessage(rec) {
   // The length rides in the name so the message can show it without loading
   // the audio: voice-message-1m05s.weba.
   const file = new File([blob], `voice-message-${m}m${String(s).padStart(2, '0')}s.${rec.ext}`, { type });
+  // The timer counts from when it is sent, not from when recording began.
+  // Turning the flame off while recording sends it as a normal message.
+  if (rec.destructMs && this._selfDestructArmed) {
+    file._destructAt = Date.now() + rec.destructMs;
+    this._setSelfDestructArmed(false);
+  }
   this._uploadGeneralFile(file, rec.code);
 },
 
@@ -760,6 +789,99 @@ _bindInputResizer(handle) {
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
+},
+
+/* ── Self-destructing messages ──────────────────────── */
+_setSelfDestructArmed(on) {
+  this._selfDestructArmed = !!on;
+  const btn = document.getElementById('self-destruct-btn');
+  if (!btn) return;
+  btn.classList.toggle('active', this._selfDestructArmed);
+  btn.setAttribute('aria-pressed', String(this._selfDestructArmed));
+  btn.title = t(this._selfDestructArmed ? 'app.input_bar.self_destruct_btn_armed' : 'app.input_bar.self_destruct_btn');
+},
+
+_setSelfDestructUnit(unit) {
+  this._selfDestructUnit = unit === 'hours' ? 'hours' : 'minutes';
+  document.querySelectorAll('#self-destruct-modal [data-sd-unit]').forEach(b => {
+    b.classList.toggle('active', b.dataset.sdUnit === this._selfDestructUnit);
+  });
+},
+
+/** Milliseconds for what was typed, or null. Up to two decimals, a comma
+ *  works as the decimal point, and the result must be 30 seconds to 24 hours. */
+_parseSelfDestruct(raw, unit) {
+  const s = String(raw || '').trim().replace(',', '.');
+  if (!/^(\d{1,4}(\.\d{0,2})?|\.\d{1,2})$/.test(s)) return null;
+  const ms = Math.round(parseFloat(s) * (unit === 'hours' ? 3600000 : 60000));
+  return ms >= 30000 && ms <= 86400000 ? ms : null;
+},
+
+/** "Deletes in 1 hour, 30 minutes" under the input, exact rather than
+ *  rounded, in the reader's language. Hidden until the input makes sense. */
+_updateSelfDestructPreview() {
+  const el = document.getElementById('sd-preview');
+  if (!el) return;
+  const ms = this._parseSelfDestruct(document.getElementById('sd-amount')?.value, this._selfDestructUnit);
+  el.style.display = ms ? '' : 'none';
+  if (!ms) return;
+  const locale = this._timeLocale();
+  let secs = Math.round(ms / 1000);
+  const parts = [];
+  for (const [unit, size] of [['hour', 3600], ['minute', 60], ['second', 1]]) {
+    const n = Math.floor(secs / size);
+    secs -= n * size;
+    if (n) parts.push(new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'long' }).format(n));
+  }
+  el.textContent = t('modals.self_destruct.preview', { time: new Intl.ListFormat(locale, { style: 'long', type: 'unit' }).format(parts) });
+},
+
+/** Ask how long the message lives. Resolves milliseconds, or null when the
+ *  sender backs out (Cancel, the X, Escape or a click outside). */
+_askSelfDestruct() {
+  const modal = document.getElementById('self-destruct-modal');
+  const input = document.getElementById('sd-amount');
+  const error = document.getElementById('sd-error');
+  if (!modal || !input) return Promise.resolve(null);
+  input.value = '';
+  error.style.display = 'none';
+  this._setSelfDestructUnit('minutes');
+  this._updateSelfDestructPreview();
+  modal.style.display = 'flex';
+  // Focus now, not on a timer, so keys typed right after Enter land here.
+  input.focus();
+  return new Promise((resolve) => {
+    const close = (val) => {
+      modal.style.display = 'none';
+      modal.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKey, true);
+      resolve(val);
+    };
+    const submit = () => {
+      const ms = this._parseSelfDestruct(input.value, this._selfDestructUnit);
+      if (ms) return close(ms);
+      error.style.display = '';
+      input.focus();
+    };
+    const onClick = (e) => {
+      if (e.target === modal || e.target.closest('#sd-cancel, #sd-close')) close(null);
+      else if (e.target.closest('#sd-send')) submit();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); submit(); }
+    };
+    modal.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey, true);
+  });
+},
+
+/** The send-message field for a self-destruct deadline. Sent as the time
+ *  left rather than a clock time, so the sender's clock does not matter, and
+ *  attachments that finish uploading later still go at the same moment. */
+_destructField(at) {
+  if (!at) return {};
+  return { destructSeconds: Math.max(1, Math.min(86400, Math.round((at - Date.now()) / 1000))) };
 },
 
 /* ── Send later (#5638) ─────────────────────────────── */
