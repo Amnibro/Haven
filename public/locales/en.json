@@ -752,6 +752,7 @@
     "upload_files": "Upload Files",
     "use_voice": "Use Voice Chat",
     "use_tts": "Use Text-to-Speech",
+    "send_self_destruct": "Send Self-Destructing Messages",
     "manage_music_queue": "Manage Music Queue",
     "manage_tags": "Manage Tags",
     "manage_webhooks": "Manage Webhooks",
