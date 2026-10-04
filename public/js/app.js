@@ -21,6 +21,7 @@ import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18
 import ServerBarMethods from './modules/app-server-bar.js?v=4.17.2';
 import MobileMethods from './modules/app-mobile.js?v=4.17.2';
 import MediaMethods    from './modules/app-media.js?v=4.17.5';
+import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.18.1';
 import AttachmentMethods from './modules/app-attachments.js?v=4.17.5';
 import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.17.5';
 import AppearanceMethods from './modules/app-appearance.js?v=4.17.5';
@@ -389,6 +390,7 @@ class HavenApp {
     this._setupEmojiSizePicker();
     this._setupImageModePicker();
     this._setupLazyMedia();
+    this._setupFeedAnchor();
     this._setupEmbedSizePicker();
     this._setupRoleDisplayPicker();
     this._setupToolbarIconPicker();
@@ -509,6 +511,7 @@ Object.assign(HavenApp.prototype,
   ServerBarMethods,
   MobileMethods,
   MediaMethods,
+  FeedAnchorMethods,
   AttachmentMethods,
   AvatarEditorMethods,
   AppearanceMethods,
