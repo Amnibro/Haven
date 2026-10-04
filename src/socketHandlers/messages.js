@@ -1305,7 +1305,8 @@ module.exports = function register(socket, ctx) {
         if (slashResult.tts) message.tts = true;
 
         io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
-        sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName, slashResult.content);
+        sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName,
+          destructAt ? '🔥 Sent a self-destructing message' : slashResult.content);
         fireWebhookCallbacks(channel.id, code, message);
 
         try {
@@ -1481,14 +1482,18 @@ module.exports = function register(socket, ctx) {
       io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
       // Burn messages must not reveal their content in push notifications —
       // the whole point is that the recipient has to actively reveal them.
-      const pushContent = burnSeconds > 0 ? '🔥 Sent a burn message' : finalContent;
+      // A self-destructing message is kept out of push for the same reason: a
+      // notification outlives the message on the phone.
+      const pushContent = burnSeconds > 0 ? '🔥 Sent a burn message'
+        : destructAt ? '🔥 Sent a self-destructing message' : finalContent;
       const pushDisplayName = personaUsername || socket.user.displayName;
       sendPushNotifications(channel.id, code, channel.name, socket.user.id, pushDisplayName, pushContent);
       fireWebhookCallbacks(channel.id, code, message);
 
       // Deliberately after the broadcast: the Haven message is already sent and
-      // stored, so a slow or broken Discord never holds up the channel.
-      if (!channel.is_dm) {
+      // stored, so a slow or broken Discord never holds up the channel. A
+      // self-destructing message is not bridged: its Discord copy would stay.
+      if (!channel.is_dm && !destructAt) {
         ferryRelay({
           channelId: channel.id,
           user: socket.user,
