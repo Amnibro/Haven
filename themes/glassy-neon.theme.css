@@ -1,0 +1,222 @@
+/**
+ * @name Glassy Neon
+ * @description Cyberpunk glassmorphism with frosted dark purple-night surfaces, glowing electric cyan borders, and bold neon yellow accents.
+ * @author Amnibro
+ * @version 1.0
+ * @icon ⚡
+ * @haven-theme-api 1
+ */
+
+:root {
+  /* ── Backgrounds ───────────────────────────────── */
+  --bg-primary:    #090714;
+  --bg-secondary:  rgba(16, 11, 32, 0.88);
+  --bg-tertiary:   rgba(11, 7, 24, 0.85);
+  --bg-hover:      rgba(234, 255, 0, 0.08);
+  --bg-active:     rgba(0, 240, 255, 0.14);
+  --bg-input:      rgba(7, 4, 16, 0.78);
+  --bg-card:       rgba(20, 14, 40, 0.75);
+
+  /* ── Accent (Electric Neon Yellow) ─────────────── */
+  --accent:        #eaff00;
+  --accent-hover:  #f4ff47;
+  --accent-dim:    #b3c400;
+  --accent-glow:   rgba(234, 255, 0, 0.55);
+  --accent-text:   #090714;
+
+  /* ── Text ──────────────────────────────────────── */
+  --text-primary:  #f3f2fc;
+  --text-secondary:#b3aeca;
+  --text-muted:    #7b7496;
+  --text-link:     #00f0ff;
+
+  /* ── Borders ───────────────────────────────────── */
+  --border:        rgba(0, 240, 255, 0.22);
+  --border-light:  rgba(224, 38, 255, 0.35);
+
+  /* ── Status colors ─────────────────────────────── */
+  --success:       #00ff9d;
+  --success-text:  #090714;
+  --danger:        #ff1a60;
+  --danger-text:   #ffffff;
+  --warning:       #eaff00;
+  --warning-text:  #090714;
+
+  /* ── Online indicator LED ──────────────────────── */
+  --led-on:        #00ff9d;
+  --led-off:       #4c4566;
+  --led-glow:      rgba(0, 255, 157, 0.6);
+
+  /* ── Typography & Geometry ─────────────────────── */
+  --font-main:     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading:  system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:     "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --radius:        0.5rem;
+  --radius-sm:     0.375rem;
+  --transition:    0.15s ease-out;
+
+  --msg-glow:      0 0 16px rgba(0, 240, 255, 0.12);
+  --scanline:      none;
+}
+
+/* ── Cyberpunk Neon Backing ──────────────────────── */
+html[data-haven-theme-api="1"] {
+  color-scheme: dark;
+  background: var(--bg-primary);
+  background-image: 
+    radial-gradient(circle at 15% 20%, rgba(224, 38, 255, 0.16) 0%, transparent 45%),
+    radial-gradient(circle at 85% 75%, rgba(0, 240, 255, 0.14) 0%, transparent 48%),
+    radial-gradient(circle at 50% 90%, rgba(234, 255, 0, 0.06) 0%, transparent 38%);
+  background-attachment: fixed;
+}
+
+/* ── Frosted Glass Surfaces ──────────────────────── */
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="navigation-sidebar"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="context-sidebar"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="channel-header"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="composer"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="server-rail"] {
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="server-rail"] {
+  background: var(--bg-tertiary);
+  border-inline-end: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 rgba(0, 240, 255, 0.15);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="navigation-sidebar"] {
+  background: var(--bg-secondary);
+  border-inline-end: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 rgba(0, 240, 255, 0.12);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="context-sidebar"] {
+  background: var(--bg-secondary);
+  border-inline-start: 1px solid var(--border);
+  box-shadow: inset 1px 0 0 rgba(224, 38, 255, 0.12);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="main"] {
+  background: transparent;
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="channel-header"] {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(0, 240, 255, 0.25);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="composer"] {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Cyber-Deck Home Server Icon ─────────────────── */
+html[data-haven-theme-api="1"] .server-icon.home {
+  background: linear-gradient(135deg, #eaff00 0%, #b8c700 100%) !important;
+  color: #090714 !important;
+  box-shadow: 0 0 18px rgba(234, 255, 0, 0.6), 0 0 4px #00f0ff !important;
+  border: 1px solid #00f0ff !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+html[data-haven-theme-api="1"] .server-icon.home:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 26px rgba(234, 255, 0, 0.9), 0 0 8px #00f0ff !important;
+}
+
+/* ── Neon Status Pulse ───────────────────────────── */
+html[data-haven-theme-api="1"] .server-status-dot.online,
+html[data-haven-theme-api="1"] .status-dot.online {
+  background: var(--success);
+  box-shadow: 0 0 10px var(--led-glow), 0 0 3px #00ff9d;
+  animation: neon-glow-pulse 2s infinite ease-in-out;
+}
+@keyframes neon-glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 255, 157, 0.6); }
+  50% { box-shadow: 0 0 16px rgba(0, 255, 157, 0.95), 0 0 4px #00f0ff; }
+}
+
+/* ── High-Voltage Channel Rows ───────────────────── */
+html[data-haven-theme-api="1"] .channel-item {
+  border-left: 2px solid transparent;
+  transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+html[data-haven-theme-api="1"] .channel-item:hover {
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.12), transparent);
+  border-left-color: #00f0ff;
+  box-shadow: -3px 0 12px rgba(0, 240, 255, 0.3);
+}
+html[data-haven-theme-api="1"] .channel-item.active {
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.22), rgba(224, 38, 255, 0.08), transparent) !important;
+  border-left-color: var(--accent) !important;
+  box-shadow: -4px 0 16px rgba(234, 255, 0, 0.4);
+}
+
+/* ── Frosted Glass Cards & Modals ────────────────── */
+html[data-haven-theme-api="1"] [data-haven-region="auth-card"],
+html[data-haven-theme-api="1"] .modal-content,
+html[data-haven-theme-api="1"] .channel-action-sheet,
+html[data-haven-theme-api="1"] .theme-popup,
+html[data-haven-theme-api="1"] .home-server-menu,
+html[data-haven-theme-api="1"] .braid-server-dropdown-menu {
+  background: var(--bg-card);
+  border: 1px solid rgba(0, 240, 255, 0.32);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 240, 255, 0.18), inset 0 1px 0 rgba(224, 38, 255, 0.35);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border-radius: var(--radius);
+}
+
+/* ── Electric Buttons ────────────────────────────── */
+html[data-haven-theme-api="1"] .btn-accent,
+html[data-haven-theme-api="1"] .channel-actions-add-btn:hover {
+  background: linear-gradient(135deg, #eaff00 0%, #c8d900 100%);
+  color: var(--accent-text) !important;
+  font-weight: 700;
+  box-shadow: 0 0 18px var(--accent-glow);
+  border-color: var(--accent);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+html[data-haven-theme-api="1"] .btn-accent:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px rgba(234, 255, 0, 0.85);
+}
+
+/* ── Cyberpunk Inputs ────────────────────────────── */
+html[data-haven-theme-api="1"] input[type="text"],
+html[data-haven-theme-api="1"] input[type="password"],
+html[data-haven-theme-api="1"] input[type="email"],
+html[data-haven-theme-api="1"] textarea,
+html[data-haven-theme-api="1"] select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+html[data-haven-theme-api="1"] input:focus,
+html[data-haven-theme-api="1"] textarea:focus,
+html[data-haven-theme-api="1"] select:focus {
+  border-color: #00f0ff;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.45);
+}
+
+/* ── Neon Scrollbars ─────────────────────────────── */
+html[data-haven-theme-api="1"] ::-webkit-scrollbar {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+html[data-haven-theme-api="1"] ::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+html[data-haven-theme-api="1"] ::-webkit-scrollbar-thumb:hover {
+  background: #00f0ff;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+}

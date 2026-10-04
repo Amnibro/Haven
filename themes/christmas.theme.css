@@ -1,0 +1,204 @@
+/**
+ * @name Christmas
+ * @description Festive winter atmosphere with deep evergreen pine surfaces, holly berry crimson accents, and warm golden holiday lights.
+ * @author Amnibro
+ * @version 1.0
+ * @icon 🎄
+ * @haven-theme-api 1
+ */
+
+:root {
+  /* ── Backgrounds ───────────────────────────────── */
+  --bg-primary:    #0b1612;   /* deep midnight pine */
+  --bg-secondary:  #11221b;   /* spruce sidebar */
+  --bg-tertiary:   #0d1a15;   /* pine shadow panels */
+  --bg-hover:      #1a3329;   /* frosted needle hover */
+  --bg-active:     #234437;   /* winter garland active */
+  --bg-input:      #07100d;   /* winter night input */
+  --bg-card:       #14271f;   /* evergreen card */
+
+  /* ── Accent (Holly Berry Crimson) ──────────────── */
+  --accent:        #d62235;
+  --accent-hover:  #e63946;
+  --accent-dim:    #9e1322;
+  --accent-glow:   rgba(214, 34, 53, 0.45);
+  --accent-text:   #ffffff;
+
+  /* ── Text ──────────────────────────────────────── */
+  --text-primary:  #f8fafc;   /* winter frost white */
+  --text-secondary:#c6d7cf;   /* silver sage */
+  --text-muted:    #829e92;   /* pine needle muted */
+  --text-link:     #ffc857;   /* warm candlelight gold */
+
+  /* ── Borders ───────────────────────────────────── */
+  --border:        #233f33;
+  --border-light:  #325746;
+
+  /* ── Status colors ─────────────────────────────── */
+  --success:       #2dc653;   /* mistletoe green */
+  --success-text:  #08170e;
+  --danger:        #d90429;   /* holiday berry red */
+  --danger-text:   #ffffff;
+  --warning:       #ffb703;   /* star of Bethlehem gold */
+  --warning-text:  #1b1202;
+
+  /* ── Online indicator LED ──────────────────────── */
+  --led-on:        #2dc653;
+  --led-off:       #40554b;
+  --led-glow:      rgba(45, 198, 83, 0.55);
+
+  /* ── Typography & Geometry ─────────────────────── */
+  --font-main:     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading:  system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:     "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --radius:        0.5rem;
+  --radius-sm:     0.375rem;
+  --transition:    0.15s ease-out;
+
+  --msg-glow:      0 0 12px rgba(255, 200, 87, 0.08);
+  --scanline:      none;
+}
+
+/* ── Winter Twilight Backing ─────────────────────── */
+html[data-haven-theme-api="1"] {
+  color-scheme: dark;
+  background: var(--bg-primary);
+  background-image: 
+    radial-gradient(circle at 10% 15%, rgba(214, 34, 53, 0.14) 0%, transparent 42%),
+    radial-gradient(circle at 90% 85%, rgba(45, 198, 83, 0.12) 0%, transparent 46%),
+    radial-gradient(circle at 50% 45%, rgba(255, 200, 87, 0.07) 0%, transparent 52%);
+  background-attachment: fixed;
+}
+
+/* ── Application Regions ─────────────────────────── */
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="server-rail"] {
+  background: var(--bg-tertiary);
+  border-inline-end: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 rgba(45, 198, 83, 0.08);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="navigation-sidebar"] {
+  background: var(--bg-secondary);
+  border-inline-end: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 rgba(214, 34, 53, 0.06);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="context-sidebar"] {
+  background: var(--bg-secondary);
+  border-inline-start: 1px solid var(--border);
+  box-shadow: inset 1px 0 0 rgba(45, 198, 83, 0.06);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="main"] {
+  background: var(--bg-primary);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="channel-header"] {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 200, 87, 0.18);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="composer"] {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Holiday Ornament Home Server Icon ───────────── */
+html[data-haven-theme-api="1"] .server-icon.home {
+  background: linear-gradient(135deg, #d62235 0%, #9e1322 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 16px rgba(214, 34, 53, 0.6), inset 0 0 8px rgba(255, 200, 87, 0.3) !important;
+  border: 1px solid #ffc857 !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+html[data-haven-theme-api="1"] .server-icon.home:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 24px rgba(214, 34, 53, 0.85), 0 0 6px #ffc857 !important;
+}
+
+/* ── Mistletoe Status Indicators ─────────────────── */
+html[data-haven-theme-api="1"] .server-status-dot.online,
+html[data-haven-theme-api="1"] .status-dot.online {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--led-glow), 0 0 2px #f8fafc;
+}
+
+/* ── Frosted Evergreen Channel Rows ──────────────── */
+html[data-haven-theme-api="1"] .channel-item {
+  border-left: 2px solid transparent;
+  transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+html[data-haven-theme-api="1"] .channel-item:hover {
+  background: linear-gradient(90deg, rgba(45, 198, 83, 0.14), transparent);
+  border-left-color: var(--accent);
+  box-shadow: -3px 0 10px rgba(214, 34, 53, 0.2);
+}
+html[data-haven-theme-api="1"] .channel-item.active {
+  background: linear-gradient(90deg, rgba(214, 34, 53, 0.24), rgba(45, 198, 83, 0.08), transparent) !important;
+  border-left-color: var(--accent) !important;
+  box-shadow: -4px 0 14px rgba(214, 34, 53, 0.32);
+}
+
+/* ── Frosted Ice Cards & Modals ──────────────────── */
+html[data-haven-theme-api="1"] [data-haven-region="auth-card"],
+html[data-haven-theme-api="1"] .modal-content,
+html[data-haven-theme-api="1"] .channel-action-sheet,
+html[data-haven-theme-api="1"] .theme-popup,
+html[data-haven-theme-api="1"] .home-server-menu,
+html[data-haven-theme-api="1"] .braid-server-dropdown-menu {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 200, 87, 0.25);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 16px rgba(214, 34, 53, 0.14);
+  border-radius: var(--radius);
+}
+
+/* ── Holly Berry Buttons ─────────────────────────── */
+html[data-haven-theme-api="1"] .btn-accent,
+html[data-haven-theme-api="1"] .channel-actions-add-btn:hover {
+  background: linear-gradient(135deg, #d62235 0%, #b01828 100%);
+  color: var(--accent-text) !important;
+  font-weight: 700;
+  box-shadow: 0 0 16px var(--accent-glow);
+  border-color: var(--accent);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+html[data-haven-theme-api="1"] .btn-accent:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 20px rgba(214, 34, 53, 0.75);
+}
+
+/* ── Inputs ──────────────────────────────────────── */
+html[data-haven-theme-api="1"] input[type="text"],
+html[data-haven-theme-api="1"] input[type="password"],
+html[data-haven-theme-api="1"] input[type="email"],
+html[data-haven-theme-api="1"] textarea,
+html[data-haven-theme-api="1"] select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+html[data-haven-theme-api="1"] input:focus,
+html[data-haven-theme-api="1"] textarea:focus,
+html[data-haven-theme-api="1"] select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(214, 34, 53, 0.35);
+}
+
+/* ── Scrollbars ──────────────────────────────────── */
+html[data-haven-theme-api="1"] ::-webkit-scrollbar {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+html[data-haven-theme-api="1"] ::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+html[data-haven-theme-api="1"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(214, 34, 53, 0.5);
+}

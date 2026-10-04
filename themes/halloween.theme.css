@@ -1,0 +1,209 @@
+/**
+ * @name Halloween
+ * @description Eerie haunted gothic midnight with spectral obsidian surfaces, glowing jack-o'-lantern orange, and toxic slime green accents.
+ * @author Amnibro
+ * @version 1.0
+ * @icon 🎃
+ * @haven-theme-api 1
+ */
+
+:root {
+  /* ── Backgrounds ───────────────────────────────── */
+  --bg-primary:    #0a080e;   /* midnight crypt void */
+  --bg-secondary:  #120e19;   /* haunted manor sidebar */
+  --bg-tertiary:   #0e0b14;   /* obsidian tomb panel */
+  --bg-hover:      #20172e;   /* shadowy mist hover */
+  --bg-active:     #2e2042;   /* haunted purple active */
+  --bg-input:      #060408;   /* abyssal black input */
+  --bg-card:       #16111f;   /* gargoyle chamber card */
+
+  /* ── Accent (Glowing Jack-O'-Lantern) ──────────── */
+  --accent:        #ff6a00;
+  --accent-hover:  #ff8324;
+  --accent-dim:    #c45100;
+  --accent-glow:   rgba(255, 106, 0, 0.48);
+  --accent-text:   #08040b;
+
+  /* ── Text ──────────────────────────────────────── */
+  --text-primary:  #f4eff8;   /* bone white */
+  --text-secondary:#bbb3cb;   /* spectral fog gray */
+  --text-muted:    #7b718f;   /* cobweb muted */
+  --text-link:     #ff8c1a;   /* pumpkin flame links */
+
+  /* ── Borders ───────────────────────────────────── */
+  --border:        #291f37;
+  --border-light:  #3e2e54;
+
+  /* ── Status colors ─────────────────────────────── */
+  --success:       #2bdc36;   /* toxic slime green */
+  --success-text:  #041205;
+  --danger:        #eb0f3b;   /* vampire blood */
+  --danger-text:   #ffffff;
+  --warning:       #ff6a00;   /* eerie pumpkin fire */
+  --warning-text:  #08040b;
+
+  /* ── Online indicator LED ──────────────────────── */
+  --led-on:        #2bdc36;   /* toxic green glow */
+  --led-off:       #3c324a;
+  --led-glow:      rgba(43, 220, 54, 0.6);
+
+  /* ── Typography & Geometry ─────────────────────── */
+  --font-main:     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading:  system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:     "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --radius:        0.5rem;
+  --radius-sm:     0.375rem;
+  --transition:    0.15s ease-out;
+
+  --msg-glow:      0 0 14px rgba(255, 106, 0, 0.12);
+  --scanline:      none;
+}
+
+/* ── Atmospheric Ambient Backing ─────────────────── */
+html[data-haven-theme-api="1"] {
+  color-scheme: dark;
+  background: var(--bg-primary);
+  background-image: 
+    radial-gradient(circle at 10% 15%, rgba(255, 106, 0, 0.14) 0%, transparent 42%),
+    radial-gradient(circle at 90% 85%, rgba(43, 220, 54, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 50% 40%, rgba(138, 43, 226, 0.07) 0%, transparent 55%);
+  background-attachment: fixed;
+}
+
+/* ── Application Regions ─────────────────────────── */
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="server-rail"] {
+  background: var(--bg-tertiary);
+  border-inline-end: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 rgba(255, 106, 0, 0.08);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="navigation-sidebar"] {
+  background: var(--bg-secondary);
+  border-inline-end: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 rgba(255, 106, 0, 0.06);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="context-sidebar"] {
+  background: var(--bg-secondary);
+  border-inline-start: 1px solid var(--border);
+  box-shadow: inset 1px 0 0 rgba(255, 106, 0, 0.06);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="main"] {
+  background: var(--bg-primary);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="channel-header"] {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 106, 0, 0.15);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="composer"] {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Halloween Jack-O'-Lantern Server Home Icon ───── */
+html[data-haven-theme-api="1"] .server-icon.home {
+  background: linear-gradient(135deg, #ff6a00 0%, #d44500 100%) !important;
+  color: #0a080e !important;
+  box-shadow: 0 0 16px rgba(255, 106, 0, 0.55), inset 0 0 8px rgba(255, 255, 255, 0.25) !important;
+  border: 1px solid #ff8c1a !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+html[data-haven-theme-api="1"] .server-icon.home:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 24px rgba(255, 106, 0, 0.8), inset 0 0 10px rgba(255, 255, 255, 0.35) !important;
+}
+
+/* ── Toxic Slime Status Indicators ───────────────── */
+html[data-haven-theme-api="1"] .server-status-dot.online,
+html[data-haven-theme-api="1"] .status-dot.online {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--led-glow), 0 0 2px #ffffff;
+  animation: halloween-slime-pulse 2.2s infinite ease-in-out;
+}
+@keyframes halloween-slime-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(43, 220, 54, 0.6); }
+  50% { box-shadow: 0 0 14px rgba(43, 220, 54, 0.95), 0 0 4px #2bdc36; }
+}
+
+/* ── Haunted Channel Row Effects ─────────────────── */
+html[data-haven-theme-api="1"] .channel-item {
+  border-left: 2px solid transparent;
+  transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+html[data-haven-theme-api="1"] .channel-item:hover {
+  background: linear-gradient(90deg, rgba(255, 106, 0, 0.12), transparent);
+  border-left-color: var(--accent);
+  box-shadow: -3px 0 10px rgba(255, 106, 0, 0.22);
+}
+html[data-haven-theme-api="1"] .channel-item.active {
+  background: linear-gradient(90deg, rgba(255, 106, 0, 0.24), rgba(43, 220, 54, 0.05), transparent) !important;
+  border-left-color: var(--accent) !important;
+  box-shadow: -4px 0 14px rgba(255, 106, 0, 0.35);
+}
+
+/* ── Gothic Cards & Modal Windows ────────────────── */
+html[data-haven-theme-api="1"] [data-haven-region="auth-card"],
+html[data-haven-theme-api="1"] .modal-content,
+html[data-haven-theme-api="1"] .channel-action-sheet,
+html[data-haven-theme-api="1"] .theme-popup,
+html[data-haven-theme-api="1"] .home-server-menu,
+html[data-haven-theme-api="1"] .braid-server-dropdown-menu {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 106, 0, 0.28);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 18px rgba(255, 106, 0, 0.16);
+  border-radius: var(--radius);
+}
+
+/* ── Glowing Buttons & Controls ──────────────────── */
+html[data-haven-theme-api="1"] .btn-accent,
+html[data-haven-theme-api="1"] .channel-actions-add-btn:hover {
+  background: linear-gradient(135deg, #ff6a00 0%, #e65c00 100%);
+  color: var(--accent-text) !important;
+  font-weight: 700;
+  box-shadow: 0 0 16px var(--accent-glow);
+  border-color: var(--accent);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+html[data-haven-theme-api="1"] .btn-accent:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px rgba(255, 106, 0, 0.75);
+}
+
+/* ── Inputs & Fields ─────────────────────────────── */
+html[data-haven-theme-api="1"] input[type="text"],
+html[data-haven-theme-api="1"] input[type="password"],
+html[data-haven-theme-api="1"] input[type="email"],
+html[data-haven-theme-api="1"] textarea,
+html[data-haven-theme-api="1"] select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+html[data-haven-theme-api="1"] input:focus,
+html[data-haven-theme-api="1"] textarea:focus,
+html[data-haven-theme-api="1"] select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 14px rgba(255, 106, 0, 0.35);
+}
+
+/* ── Eerie Scrollbars ────────────────────────────── */
+html[data-haven-theme-api="1"] ::-webkit-scrollbar {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+html[data-haven-theme-api="1"] ::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+html[data-haven-theme-api="1"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(255, 106, 0, 0.6);
+}

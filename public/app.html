@@ -991,6 +991,8 @@
     <div id="thread-image-queue-bar" class="image-queue-bar" style="display:none"></div>
     <div class="thread-input-area">
       <div class="pip-input-resizer" aria-hidden="true"></div>
+      <button id="thread-upload-btn" class="pip-input-emoji-btn" data-i18n-title="media.upload_file_title" title="Upload File"><span class="tb-icon tb-icon-emoji" aria-hidden="true">📎</span><span class="tb-icon tb-icon-mono" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span></button>
+      <input type="file" id="thread-file-input" multiple style="display:none">
       <button id="thread-emoji-btn" class="pip-input-emoji-btn" data-i18n-title="dm_runtime.emoji" title="Emoji"><span class="tb-icon tb-icon-emoji" aria-hidden="true">😀</span><span class="tb-icon tb-icon-mono" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg></span></button>
       <textarea id="thread-input" class="thread-input" data-i18n-placeholder="thread_runtime.reply_placeholder" placeholder="Reply in thread..." rows="1"></textarea>
       <button id="thread-send-btn" class="thread-send-btn" data-i18n-title="dm_runtime.send" title="Send">

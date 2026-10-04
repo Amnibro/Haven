@@ -124,6 +124,7 @@ class CompactLayout {
 
   _renderControl() {
     if (!this._control) return;
+    this._control.style.display = this._engaged ? '' : 'none';
     this._control.setAttribute('aria-pressed', this._engaged ? 'true' : 'false');
     const blocked = this._engaged && this._blocked;
     this._control.title = blocked
@@ -317,6 +318,10 @@ html[data-haven-theme-api="1"] :where([data-compact-layout-control][aria-pressed
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-text);
+}
+
+html:not([data-compact-layout="1"]) [data-compact-layout-control] {
+  display: none;
 }
 `;
 

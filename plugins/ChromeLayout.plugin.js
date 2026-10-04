@@ -554,6 +554,15 @@ class ChromeLayout {
         this._setDmDockOpen(false);
       }
     });
+
+    // In ChromeLayout, toggling collapse on the DM header collapses down the DM drawer
+    const dmHeader = document.getElementById('dm-toggle-header');
+    if (dmHeader) {
+      this._listen(dmHeader, 'click', (e) => {
+        if (e.target?.closest?.('#organize-dms-btn')) return;
+        this._setDmDockOpen(false);
+      });
+    }
   }
 
   _toggleDmDock() {
@@ -568,6 +577,16 @@ class ChromeLayout {
     sidebar?.classList.toggle('dms-open', !!open);
     const btn = document.getElementById('dm-dock-btn');
     if (btn) btn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    const dmList = document.getElementById('dm-list');
+    const arrow = document.getElementById('dm-toggle-arrow');
+    if (open) {
+      if (dmList && dmList.style.display === 'none') dmList.style.display = '';
+      if (arrow) arrow.classList.remove('collapsed');
+      try { localStorage.setItem('haven_dm_collapsed', 'false'); } catch (_) {}
+    } else {
+      if (arrow) arrow.classList.add('collapsed');
+      try { localStorage.setItem('haven_dm_collapsed', 'true'); } catch (_) {}
+    }
   }
 
   _syncDmBadge() {
@@ -918,18 +937,8 @@ html[data-chrome-layout="1"] .sidebar-split .channel-section {
   flex: 1 1 100% !important;
 }
 
-/* DM drawer */
+/* DM drawer with smooth collapse */
 html[data-chrome-layout="1"] .sidebar-split .dm-section-pane {
-  display: none;
-  flex: none;
-  min-height: 0;
-  overflow: hidden;
-  flex-direction: column;
-  padding: 0 1rem;
-  border-bottom: none;
-}
-html[data-chrome-layout="1"].dms-open .sidebar-split .dm-section-pane,
-html[data-chrome-layout="1"] .sidebar.dms-open .sidebar-split .dm-section-pane {
   display: flex !important;
   position: absolute;
   left: 0;
@@ -941,6 +950,29 @@ html[data-chrome-layout="1"] .sidebar.dms-open .sidebar-split .dm-section-pane {
   border-top: 1px solid var(--border);
   box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.22);
   padding: 0.35rem 0.65rem 0.5rem;
+  flex: none;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+  border-bottom: none;
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease-out, visibility 0.22s;
+}
+html[data-chrome-layout="1"].dms-open .sidebar-split .dm-section-pane,
+html[data-chrome-layout="1"] .sidebar.dms-open .sidebar-split .dm-section-pane {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+/* Suppress other layout controls from bottom bar */
+html[data-chrome-layout="1"] #braid-return-pill,
+html[data-chrome-layout="1"] [data-compact-layout-control] {
+  display: none !important;
 }
 
 /* Channel row voice controls */

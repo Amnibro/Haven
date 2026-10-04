@@ -137,6 +137,8 @@ class BraidLayout {
       this._permListeners = [];
       document.getElementById('braid-return-pill')?.remove();
       document.getElementById('braid-mod-done')?.remove();
+      document.getElementById('braid-server-menu-badge')?.remove();
+      document.getElementById('braid-server-dropdown-menu')?.remove();
       HavenApi.DOM.removeStyle('BraidPillCSS');
       console.log('[BraidLayout] Stopped');
     }
@@ -168,6 +170,8 @@ class BraidLayout {
         bar.removeAttribute('aria-hidden');
       }
       strip?.remove();
+      document.getElementById('braid-server-menu-badge')?.remove();
+      document.getElementById('braid-server-dropdown-menu')?.remove();
       document.querySelector('.braid-more-wrap')?.remove();
       document.getElementById('braid-more-menu')?.remove();
       document.getElementById('braid-theme-btn')?.remove();
@@ -303,6 +307,98 @@ class BraidLayout {
     });
     bar.dataset.braidFolded = '1';
     bar.setAttribute('aria-hidden', 'true');
+  }
+
+  _setupBraidServerMenu() {
+    const homeBtn = document.getElementById('home-server');
+    if (!homeBtn) return;
+
+    homeBtn.setAttribute('title', 'Server settings & servers (Add server, Settings)');
+    homeBtn.setAttribute('aria-haspopup', 'true');
+    homeBtn.setAttribute('aria-expanded', 'false');
+
+    let badge = homeBtn.querySelector('.braid-server-menu-badge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.id = 'braid-server-menu-badge';
+      badge.className = 'braid-server-menu-badge';
+      badge.title = 'Server settings & servers';
+      badge.innerHTML = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+      homeBtn.appendChild(badge);
+    }
+
+    let menu = document.getElementById('braid-server-dropdown-menu');
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id = 'braid-server-dropdown-menu';
+      menu.className = 'braid-server-dropdown-menu';
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML = `
+        <button type="button" class="braid-server-menu-item" data-action="add-server">
+          <span class="braid-smi-icon">➕</span>
+          <span>Add Server</span>
+        </button>
+        <button type="button" class="braid-server-menu-item" data-action="manage-servers">
+          <span class="braid-smi-icon">⚙️</span>
+          <span>Manage Servers</span>
+        </button>
+        <button type="button" class="braid-server-menu-item" data-action="sync-servers">
+          <span class="braid-smi-icon">🔄</span>
+          <span>Sync Servers</span>
+        </button>
+        <div class="braid-server-menu-divider"></div>
+        <button type="button" class="braid-server-menu-item" data-action="server-settings">
+          <span class="braid-smi-icon">🛠️</span>
+          <span>Server Settings</span>
+        </button>
+        <button type="button" class="braid-server-menu-item" data-action="app-settings">
+          <span class="braid-smi-icon">🔧</span>
+          <span>App Settings</span>
+        </button>
+      `;
+      menu.hidden = true;
+      document.body.appendChild(menu);
+
+      const place = () => {
+        const r = homeBtn.getBoundingClientRect?.() || { left: 8, bottom: 48 };
+        menu.style.left = `${Math.max(8, r.left)}px`;
+        menu.style.top = `${r.bottom + 6}px`;
+      };
+
+      const toggle = (e) => {
+        e?.preventDefault?.();
+        e?.stopPropagation?.();
+        const open = !menu.hidden;
+        menu.hidden = open;
+        homeBtn.setAttribute('aria-expanded', (!open).toString());
+        if (!open) place();
+      };
+
+      this._listen(homeBtn, 'click', toggle, true);
+
+      this._listen(menu, 'click', (e) => {
+        const item = e.target.closest?.('[data-action]');
+        if (!item) return;
+        menu.hidden = true;
+        homeBtn.setAttribute('aria-expanded', 'false');
+        const action = item.dataset?.action;
+        const app = typeof window !== 'undefined' ? window.app : null;
+        if (action === 'add-server') document.getElementById('add-server-btn')?.click();
+        else if (action === 'manage-servers') document.getElementById('manage-servers-btn')?.click();
+        else if (action === 'sync-servers') document.getElementById('sync-servers-btn')?.click();
+        else if (action === 'server-settings') app?._openSettingsModal?.('admin');
+        else if (action === 'app-settings') app?._openSettingsModal?.('user');
+      });
+
+      this._listen(document, 'click', (e) => {
+        if (!menu.hidden && !menu.contains(e.target) && !homeBtn.contains(e.target)) {
+          menu.hidden = true;
+          homeBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      this._listen(window, 'resize', () => { if (!menu.hidden) place(); });
+    }
   }
 
   // ── Voice dock ───────────────────────────────────────────
@@ -592,6 +688,7 @@ class BraidLayout {
   _applyLayout() {
     if (this._suspended) return;
     this._foldServersIntoSidebar();
+    this._setupBraidServerMenu();
     this._foldVoiceDock();
     this._hideEdgeChrome();
     this._quietChips();
@@ -987,6 +1084,20 @@ html[data-braid-layout="1"] .braid-server-strip #server-list{display:flex;align-
 html[data-braid-layout="1"] .braid-server-strip .server-separator{width:1px;height:1.375rem;background:var(--border);border-radius:0;margin:0 .1875rem;flex-shrink:0}
 html[data-braid-layout="1"] .braid-server-strip .server-icon-img{border-radius:inherit}
 html[data-braid-layout="1"] .braid-server-strip .server-icon>img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.home{cursor:pointer;position:relative;transition:transform .14s ease,box-shadow .14s ease}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.home:hover{transform:translateY(-1px);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent,#00ff9d) 35%,transparent)!important}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.home .braid-server-menu-badge{position:absolute;bottom:-3px;right:-3px;width:1.05rem;height:1.05rem;background:var(--bg-tertiary,#10131a);color:var(--accent,#00ff9d);border:1.5px solid var(--border,#2a3140);border-radius:999px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(0,0,0,.45);transition:transform .14s ease,border-color .14s ease,background .14s ease;z-index:4;pointer-events:none}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.home:hover .braid-server-menu-badge{border-color:var(--accent,#00ff9d);background:var(--bg-hover,#1c212b);transform:scale(1.12)}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.home .server-status-dot{bottom:-2px;left:-2px;right:auto}
+.braid-server-dropdown-menu{position:fixed;z-index:200;min-width:13.5rem;background:var(--bg-card,var(--bg-secondary,#161a22));border:1px solid var(--border,#2a3140);border-radius:var(--braid-r,.875rem);box-shadow:0 12px 36px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.05);padding:.4rem;display:flex;flex-direction:column;gap:2px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);animation:braid-menu-pop .14s cubic-bezier(0.16,1,0.3,1)}
+@keyframes braid-menu-pop{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.braid-server-dropdown-menu[hidden]{display:none!important}
+.braid-server-menu-item{display:flex;align-items:center;gap:.65rem;padding:.5rem .75rem;border-radius:calc(var(--braid-r,.875rem) - .25rem);background:transparent;border:0;color:var(--text-primary,#eef1f6);font:500 .875rem var(--font-main,sans-serif);cursor:pointer;text-align:left;width:100%;box-sizing:border-box;transition:background .12s,color .12s}
+.braid-server-menu-item:hover{background:var(--bg-hover,#1c212b);color:var(--accent,#00ff9d)}
+.braid-smi-icon{font-size:1rem;line-height:1}
+.braid-server-menu-divider{height:1px;background:var(--border,#2a3140);margin:.25rem .35rem}
+html:not([data-braid-layout="1"]) .braid-server-dropdown-menu{display:none!important}
+html[data-braid-layout="1"] [data-compact-layout-control]{display:none!important}
 html[data-braid-layout="1"] .braid-server-strip .server-icon.home .server-icon-text,
 html[data-braid-layout="1"] .braid-server-strip .server-icon:hover .server-icon-text{color:var(--bg-primary)}
 html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server:hover .server-icon-text{color:var(--accent)}
@@ -1407,6 +1518,7 @@ BraidLayout._PILL_CSS = `
 #braid-return-pill.braid-return-btn:hover{background:color-mix(in srgb,var(--accent,#00ff9d) 14%,transparent)!important}
 #braid-return-pill.braid-return-btn svg{display:block;margin:auto}
 #braid-return-pill.braid-return-float{position:fixed;left:.875rem;bottom:.875rem;z-index:120;display:inline-flex;align-items:center;justify-content:center;width:2.5rem;height:2.5rem;border-radius:999px;border:1px solid var(--border,#333a46);background:var(--bg-card,var(--bg-secondary,#12151c));color:var(--accent,#00ff9d);cursor:pointer;box-shadow:0 10px 28px -10px rgba(0,0,0,.45)}
+#braid-return-pill{display:none!important}
 html[data-braid-layout="1"] #braid-return-pill{display:none!important}
 body.mod-mode-on #braid-return-pill{display:none!important}
 #braid-mod-done{position:fixed;left:50%;bottom:5.75rem;transform:translateX(-50%);z-index:200;display:inline-flex;align-items:center;gap:.5rem;padding:.6875rem 1.25rem;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent,#00ff9d) 55%,transparent);background:var(--accent,#00ff9d);color:var(--bg-primary,#0b0d12);font-family:inherit;font-size:.8125rem;font-weight:700;letter-spacing:-.01em;line-height:1;cursor:pointer;box-shadow:0 14px 36px -10px rgba(0,0,0,.5);transition:transform .12s,filter .15s}

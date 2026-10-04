@@ -226,6 +226,26 @@ _bindThreadAndDmPanels() {
   const threadSendBtn = document.getElementById('thread-send-btn');
   if (threadSendBtn) threadSendBtn.addEventListener('click', () => this._sendThreadMessage());
 
+  // Thread upload button — paperclip to attach files/images to thread reply
+  const threadUploadBtn = document.getElementById('thread-upload-btn');
+  const threadFileInput = document.getElementById('thread-file-input');
+  if (threadUploadBtn && threadFileInput) {
+    threadUploadBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      threadFileInput.click();
+    });
+    threadFileInput.addEventListener('change', () => {
+      if (threadFileInput.files && threadFileInput.files.length) {
+        if (typeof this._queueThreadFiles === 'function') {
+          this._queueThreadFiles(threadFileInput.files);
+        } else if (typeof this._queueThreadFile === 'function') {
+          for (const f of threadFileInput.files) this._queueThreadFile(f);
+        }
+        threadFileInput.value = '';
+      }
+    });
+  }
+
   // Thread emoji button — positions the picker above the button and targets the thread input
   const threadEmojiBtn = document.getElementById('thread-emoji-btn');
   if (threadEmojiBtn) {

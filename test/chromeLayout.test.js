@@ -278,6 +278,15 @@ function createEnvironment() {
   const threadsBtn = add('threads-toggle-btn', new FakeElement('button', elementsById));
   sidebar.appendChild(threadsBtn);
 
+  const dmPane = add('dm-pane', new FakeElement('div', elementsById));
+  dmPane.classList.add('dm-section-pane');
+  const dmHeader = add('dm-toggle-header', new FakeElement('h5', elementsById));
+  const dmArrow = add('dm-toggle-arrow', new FakeElement('span', elementsById));
+  const dmList = add('dm-list', new FakeElement('div', elementsById));
+  dmHeader.appendChild(dmArrow);
+  dmPane.append(dmHeader, dmList);
+  sidebar.appendChild(dmPane);
+
   const homeServer = add('home-server', new FakeElement('div', elementsById));
   homeServer.classList.add('server-icon');
   appBody.appendChild(homeServer);
@@ -485,4 +494,27 @@ test('ChromeLayout CSS is properly scoped to [data-chrome-layout="1"]', () => {
   assert.match(css, /html\[data-chrome-layout="1"\] \.channel-join-voice/);
   assert.match(css, /html\[data-chrome-layout="1"\] \.home-server-menu/);
   assert.match(css, /html\[data-chrome-layout="1"\] \.sidebar-split-handle/);
+  assert.match(css, /#braid-return-pill/);
+  assert.match(css, /\[data-compact-layout-control\]/);
 });
+
+test('ChromeLayout DM drawer collapses down when toggle header is clicked', () => {
+  withEnv(({ document }) => {
+    const plugin = new ChromeLayout();
+    plugin.start();
+
+    // Open DM dock
+    plugin._setDmDockOpen(true);
+    assert.equal(document.documentElement.classList.contains('dms-open'), true);
+
+    const dmHeader = document.getElementById('dm-toggle-header');
+    assert.ok(dmHeader);
+
+    // Clicking header collapses down the DM drawer
+    dmHeader.dispatchEvent({ type: 'click', target: dmHeader });
+    assert.equal(document.documentElement.classList.contains('dms-open'), false);
+
+    plugin.stop();
+  });
+});
+
