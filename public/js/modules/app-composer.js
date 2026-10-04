@@ -805,6 +805,7 @@ _setSelfDestructUnit(unit) {
   this._selfDestructUnit = unit === 'hours' ? 'hours' : 'minutes';
   document.querySelectorAll('#self-destruct-modal [data-sd-unit]').forEach(b => {
     b.classList.toggle('active', b.dataset.sdUnit === this._selfDestructUnit);
+    b.setAttribute('aria-pressed', String(b.dataset.sdUnit === this._selfDestructUnit));
   });
 },
 
@@ -855,6 +856,8 @@ _askSelfDestruct() {
       modal.style.display = 'none';
       modal.removeEventListener('click', onClick);
       document.removeEventListener('keydown', onKey, true);
+      // Backing out returns to the message, which is still in the box.
+      if (!val) document.getElementById('message-input')?.focus();
       resolve(val);
     };
     const submit = () => {

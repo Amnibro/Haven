@@ -148,10 +148,14 @@ _clearChannelCodeMap() {
 
 // A message refused for being too long used to vanish: the box clears on
 // send. Put the text back so it can be trimmed, unless something new has
-// been typed since or the channel changed (#5691).
+// been typed since or the channel changed (#5691). The same for a
+// self-destructing message the sender may not send: the text comes back
+// so it can go as a normal one, by choice.
 _restoreRefusedDraft(msg) {
   const d = this._lastSendDraft;
-  if (!d || typeof msg !== 'string' || !/^Message too long/.test(msg)) return;
+  const tooLong = typeof msg === 'string' && /^Message too long/.test(msg);
+  const sdRefused = typeof msg === 'string' && /self-destructing messages$/.test(msg);
+  if (!d || (!tooLong && !sdRefused)) return;
   this._lastSendDraft = null;
   const inputId = d.inputId || 'message-input';
   const open = inputId === 'dm-pip-input' ? this._activeDMPip
@@ -162,6 +166,8 @@ _restoreRefusedDraft(msg) {
   if (!input || input.value.trim()) return;
   input.value = d.text;
   input.dispatchEvent(new Event('input', { bubbles: true }));
+  // A too-long self-destructing message keeps its timer on for the resend.
+  if (tooLong && d.selfDestruct && inputId === 'message-input') this._setSelfDestructArmed?.(true);
   input.focus();
 },
 

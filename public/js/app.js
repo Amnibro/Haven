@@ -4,11 +4,11 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.17.13';
+import SocketMethods   from './modules/app-socket.js?v=4.17.21';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.17.13';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.17.17';
-import UIBindMethods   from './modules/app-ui.js?v=4.17.4';
-import ComposerMethods from './modules/app-composer.js?v=4.17.3';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.17.21';
+import UIBindMethods   from './modules/app-ui.js?v=4.17.21';
+import ComposerMethods from './modules/app-composer.js?v=4.17.21';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.19';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.17.14';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.17.2';
@@ -28,11 +28,11 @@ import SoundMethods from './modules/app-sounds.js?v=4.17.5';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.17.5';
 import BotMethods from './modules/app-bots.js?v=4.17.5';
 import ContextMethods  from './modules/app-context.js?v=4.17.19';
-import ChannelMethods  from './modules/app-channels.js?v=4.17.10';
+import ChannelMethods  from './modules/app-channels.js?v=4.17.21';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.17.10';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.17.10';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.17.10';
-import MessageMethods  from './modules/app-messages.js?v=4.17.12';
+import MessageMethods  from './modules/app-messages.js?v=4.17.21';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.17.12';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.17.12';
 import UserMethods     from './modules/app-users.js?v=4.17.17';
@@ -43,7 +43,7 @@ import MusicMethods from './modules/app-music.js?v=4.17.11';
 import UtilityMethods  from './modules/app-utilities.js?v=4.17.19';
 import MessageContentMethods from './modules/app-message-content.js?v=4.17.7';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.17.6';
-import GifPickerMethods from './modules/app-gif-picker.js?v=4.17.6';
+import GifPickerMethods from './modules/app-gif-picker.js?v=4.17.21';
 import ThreadMethods from './modules/app-threads.js?v=4.17.6';
 import AdminMethods    from './modules/app-admin.js?v=4.17.17';
 import BrandingMethods from './modules/app-branding.js?v=4.17.4';

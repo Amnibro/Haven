@@ -33,6 +33,10 @@ async _sendMessage() {
     if (!ms || this.currentChannel !== code) return false;
     destructAt = Date.now() + ms;
     this._setSelfDestructArmed(false);
+    // If the server refuses it, the text comes back with the flame on, so a
+    // resend is not quietly permanent. The clock starts now, not before the
+    // dialog.
+    if (this._lastSendDraft) Object.assign(this._lastSendDraft, { at: Date.now(), selfDestruct: true });
     for (const f of [...(this._imageQueue || []), ...(this._fileQueue || [])]) f._destructAt = destructAt;
   }
 
