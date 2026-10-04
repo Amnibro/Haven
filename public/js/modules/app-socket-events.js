@@ -602,6 +602,8 @@ _listenMessageChanges() {
       if (msgEl) {
         msgEl.classList.add('pinned');
         msgEl.dataset.pinned = '1';
+        // A pin keeps a self-destructing message (the server drops its timer).
+        msgEl.querySelector('.msg-self-destruct')?.remove();
         // Add pin tag to header
         const header = msgEl.querySelector('.message-header');
         if (header && !header.querySelector('.pinned-tag')) {
@@ -705,6 +707,8 @@ _listenMessageChanges() {
       if (msgEl) {
         msgEl.classList.add('archived');
         msgEl.dataset.archived = '1';
+        // Protecting keeps a self-destructing message (the server drops its timer).
+        msgEl.querySelector('.msg-self-destruct')?.remove();
         const header = msgEl.querySelector('.message-header');
         if (header && !header.querySelector('.archived-tag')) {
           header.insertAdjacentHTML('beforeend', `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);

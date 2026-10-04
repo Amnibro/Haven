@@ -1243,6 +1243,24 @@ module.exports = function register(socket, ctx) {
     // Self-destructing messages (src/selfDestruct.js). Channels only: DMs
     // have burn-after-read instead.
     const destructAt = channel.is_dm ? null : selfDestruct.destructAtFromSeconds(data.destructSeconds);
+    // A message that deletes itself is its sender deleting it, so someone
+    // denied delete_own_messages cannot send one. Refused rather than sent
+    // as a normal message, which the sender did not ask for; fails closed.
+    if (destructAt && !socket.user.isAdmin) {
+      try {
+        const chain = getChannelRoleChain(channel.id);
+        const ph = chain.map(() => '?').join(',');
+        const deny = db.prepare(
+          `SELECT allowed FROM user_role_perms WHERE user_id = ? AND permission = 'delete_own_messages' AND (channel_id IS NULL OR channel_id IN (${ph})) ORDER BY allowed ASC LIMIT 1`
+        ).get(socket.user.id, ...chain);
+        if (deny && deny.allowed === 0) {
+          return socket.emit('error-msg', 'You don\'t have permission to send self-destructing messages');
+        }
+      } catch (err) {
+        console.error('send-message: delete_own_messages check failed:', err.message);
+        return socket.emit('error-msg', 'Failed to send message');
+      }
+    }
 
     const trimmed = content.trim();
     const isImage = data.isImage === true;
@@ -2116,7 +2134,7 @@ module.exports = function register(socket, ctx) {
     if (!channel) return;
 
     const msg = db.prepare(
-      'SELECT id FROM messages WHERE id = ? AND channel_id = ?'
+      'SELECT id, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
     ).get(data.messageId, channel.id);
     if (!msg) return socket.emit('error-msg', 'Message not found');
 
@@ -2136,6 +2154,12 @@ module.exports = function register(socket, ctx) {
       db.prepare(
         'INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)'
       ).run(data.messageId, channel.id, socket.user.id);
+      // Pinning keeps a self-destructing message, as it keeps one from
+      // auto-cleanup: the timer is dropped.
+      if (msg.destruct_at) {
+        db.prepare('UPDATE messages SET destruct_at = NULL WHERE id = ?').run(msg.id);
+        selfDestruct.forget(msg.destruct_at);
+      }
     } catch (err) {
       console.error('Pin message error:', err);
       return socket.emit('error-msg', 'Failed to pin message');
@@ -2199,12 +2223,15 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
-    const msg = db.prepare('SELECT id, is_archived FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+    const msg = db.prepare('SELECT id, is_archived, destruct_at FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
     if (!msg) return socket.emit('error-msg', 'Message not found');
     if (msg.is_archived) return socket.emit('error-msg', 'Message is already archived');
 
     try {
-      db.prepare('UPDATE messages SET is_archived = 1 WHERE id = ?').run(data.messageId);
+      // A protected message is kept, self-destruct timer included, the
+      // same as auto-cleanup and self-purge leave it alone.
+      db.prepare('UPDATE messages SET is_archived = 1, destruct_at = NULL WHERE id = ?').run(data.messageId);
+      if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);
     } catch (err) {
       console.error('Archive message error:', err);
       return socket.emit('error-msg', 'Failed to archive message');

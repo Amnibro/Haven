@@ -49,6 +49,8 @@ test.before(() => { test.mock.timers.enable({ apis: ['setTimeout', 'Date'], now:
 test.after(() => {
   selfDestruct.stop();
   test.mock.timers.reset();
+  // Windows will not delete the folder while the database is open.
+  db.close();
   fs.rmSync(DATA, { recursive: true, force: true });
 });
 

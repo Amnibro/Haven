@@ -101,10 +101,14 @@ function start({ db, io, UPLOAD_PATH_RE, isSafeUploadRelPath }) {
   // batch was due (go again now) or a row would not delete (back off).
   const rearm = (removed) => {
     let at = null;
+    let failed = false;
     try { at = Date.parse(next.get()?.at || ''); } catch (err) {
+      // A busy database must not put the timer to sleep with messages
+      // still waiting; look again shortly.
       console.error('[self-destruct] query error:', err.message);
+      failed = true;
     }
-    if (at <= Date.now() && !removed) at = Date.now() + RETRY_MS;
+    if (failed || (at <= Date.now() && !removed)) at = Date.now() + RETRY_MS;
     arm(at);
   };
 
