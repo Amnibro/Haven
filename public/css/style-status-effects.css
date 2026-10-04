@@ -1054,7 +1054,6 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  position: relative;
 }
 #custom-hue-bar {
   width: 100%;
@@ -1072,12 +1071,10 @@
   border-radius: var(--radius-sm);
 }
 
-#custom-theme-editor .toggle-row.theme-base-toggle{
-  position: absolute;
-  left: 4px;
-  bottom: 134px;
-  width: 40%;
-  flex-direction: column;
+/* Light Mode switch, below the color picker in the normal flow so a font
+   size or density change cannot slide it onto the triangle. */
+#custom-theme-editor .toggle-row.theme-base-toggle {
+  margin-top: 0.5rem;
 }
 
 /* ─── RGB Theme Editor ───────────────────────── */

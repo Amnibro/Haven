@@ -34,6 +34,23 @@ function getAccentTextColor(r, g, b) {
   return whiteContrast * 1.1 >= blackContrast ? '#fff' : '#000';
 }
 
+// WCAG contrast between two [r, g, b] colors.
+function _relLuminance(rgb) {
+  const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+}
+function _contrastRatio(a, b) {
+  const la = _relLuminance(a), lb = _relLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+// The brightness of a hue darkened just enough to reach `target` contrast
+// against a background, or as close as it gets.
+function _readableV(h, s, v, bgRgb, target) {
+  let out = v;
+  while (out > 0.2 && _contrastRatio(hsvToRgb(h, s, out), bgRgb) < target) out -= 0.02;
+  return out;
+}
+
 // ── Generate full theme palette from a single HSV accent ─
 // vibrancy: 0-1, controls how much the hue tints backgrounds/text/borders
 // lightBase: false = dark base, true = light base
@@ -43,7 +60,6 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
 
   const vib = Math.max(0, Math.min(1, vibrancy));
   const rgb = hsvToRgb(h, s, v);
-  const accentText = getAccentTextColor(...rgb);
   const bgSat  = lightBase ? 0.01 + vib * 0.05 : 0.05 + vib * 0.30;
   const bdrSat = lightBase ? 0.02 + vib * 0.08 : 0.05 + vib * 0.25;
 
@@ -77,8 +93,10 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
     txtSec = hsvToHex(h, txtS + 0.02, 0.38);
     txtMut = hsvToHex(h, txtS,        0.55);
 
-    border      = hsvToHex(h, bdrSat, 0.72);
-    borderLight = hsvToHex(h, bdrSat, 0.62);
+    // Soft lines like Daylight's; border-light is the lighter one, as in
+    // every other theme.
+    border      = hsvToHex(h, bdrSat, 0.86);
+    borderLight = hsvToHex(h, bdrSat, 0.91);
   } else {
     // Text tinting: at high vibrancy, text leans toward the hue.
     const txtS = vib * 0.12;
@@ -96,11 +114,28 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
     borderLight = hsvToHex(h, bdrSat, 0.21 + vib * 0.06);
   }
 
+  // On a light base the accent, the link and the status colors are darkened
+  // until they stand out from the background (about 3:1, 4.5:1 for links),
+  // or mentions, links and warnings in yellow, green or cyan all but vanish.
+  let aV = v;
+  let linkV = lightBase ? 0.55 : 0.95;
+  let okV = 0.72, badV = 0.94, warnV = 0.94;
+  if (lightBase) {
+    const bg = hsvToRgb(h, bgSat, 0.985);
+    aV = _readableV(h, s, v, bg, 3);
+    linkV = _readableV((h + 180) % 360, 0.5 + vib * 0.2, linkV, bg, 4.5);
+    okV = _readableV((h + 140) % 360, 0.55, okV, bg, 3);
+    badV = _readableV((h + 350) % 360, 0.70, badV, bg, 3);
+    warnV = _readableV((h + 50) % 360, 0.75, warnV, bg, 3);
+  }
+
   return {
-    '--accent':         hsvToHex(h, s, v),
-    '--accent-text':    accentText,
-    '--accent-hover':   hsvToHex(h, Math.max(s - 0.15, 0), Math.min(v + 0.15, 1)),
-    '--accent-dim':     hsvToHex(h, Math.min(s + 0.1, 1), Math.max(v - 0.2, 0)),
+    '--accent':         hsvToHex(h, s, aV),
+    // Black or white button text, whichever reads better, only in light
+    // mode: dark Custom and RGB keep the white text they always had.
+    ...(lightBase ? { '--accent-text': getAccentTextColor(...hsvToRgb(h, s, aV)) } : {}),
+    '--accent-hover':   hsvToHex(h, Math.max(s - 0.15, 0), Math.min(aV + 0.15, 1)),
+    '--accent-dim':     hsvToHex(h, Math.min(s + 0.1, 1), Math.max(aV - 0.2, 0)),
     '--accent-glow':    `rgba(${rgb.join(',')}, ${(0.15 + vib * 0.20).toFixed(2)})`,
     '--bg-primary':     bgPrimary,
     '--bg-secondary':   bgSecondary,
@@ -112,12 +147,12 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
     '--text-primary':   txtPri,
     '--text-secondary': txtSec,
     '--text-muted':     txtMut,
-    '--text-link':      hsvToHex((h + 180) % 360, 0.5 + vib * 0.2, lightBase ? 0.55 : 0.95),
+    '--text-link':      hsvToHex((h + 180) % 360, 0.5 + vib * 0.2, linkV),
     '--border':         border,
     '--border-light':   borderLight,
-    '--success':        hsvToHex((h + 140) % 360, 0.55, 0.72),
-    '--danger':         hsvToHex((h + 350) % 360, 0.70, 0.94),
-    '--warning':        hsvToHex((h + 50) % 360, 0.75, 0.94),
+    '--success':        hsvToHex((h + 140) % 360, 0.55, okV),
+    '--danger':         hsvToHex((h + 350) % 360, 0.70, badV),
+    '--warning':        hsvToHex((h + 50) % 360, 0.75, warnV),
     '--led-on':         hsvToHex((h + 140) % 360, 0.55, 0.72),
     '--led-off':        '#555',
     '--led-glow':       `rgba(${hsvToRgb((h + 140) % 360, 0.55, 0.72).join(',')}, 0.5)`,
@@ -138,6 +173,31 @@ function applyCustomVars(palette) {
   // the next frame, treating them as a single batched invalidation.
   const root = document.documentElement.style;
   for (const [k, v] of Object.entries(palette)) root.setProperty(k, v);
+  // Only light palettes set the button text color; switching back to dark
+  // must not leave the light one behind.
+  if (!('--accent-text' in palette)) root.removeProperty('--accent-text');
+  _cachePalette(palette);
+}
+
+// theme-init.js paints the first frame from the last palette shown, so a
+// light Custom or RGB theme does not flash dark on every load. Written at
+// most twice a second, since RGB changes colors many times a second.
+let _paletteCacheLatest = null;
+let _paletteCacheTimer = null;
+function _cachePalette(palette) {
+  _paletteCacheLatest = palette;
+  if (_paletteCacheTimer) return;
+  _paletteCacheTimer = setTimeout(() => {
+    _paletteCacheTimer = null;
+    try {
+      const theme = localStorage.getItem('haven_theme');
+      if (theme === 'custom' || theme === 'rgb') {
+        localStorage.setItem('haven_palette_cache', JSON.stringify({ theme, vars: _paletteCacheLatest }));
+      }
+    } catch {
+      // Storage unavailable: the next load computes the colors instead.
+    }
+  }, 500);
 }
 function clearCustomVars() {
   if (_themeStyleEl) { _themeStyleEl.textContent = ''; }
@@ -296,12 +356,16 @@ function initRgbEditor() {
   editor._hide = () => { editor.style.display = 'none'; };
 }
 
+// Read once and kept, since the RGB cycle asks many times a second.
+let _colorBase = null;
 function getColorBase() {
+  if (_colorBase) return _colorBase;
   try {
-    return localStorage.getItem('haven_color_base') === 'light' ? 'light' : 'dark';
+    _colorBase = localStorage.getItem('haven_color_base') === 'light' ? 'light' : 'dark';
   } catch {
-    return 'dark';
+    _colorBase = 'dark'; // storage unavailable: the dark base
   }
+  return _colorBase;
 }
 
 function isLightColorBase() {
@@ -310,6 +374,7 @@ function isLightColorBase() {
 
 function setColorBase(base) {
   const value = base === 'light' ? 'light' : 'dark';
+  _colorBase = value;
 
   try {
     localStorage.setItem('haven_color_base', value);

@@ -174,8 +174,25 @@
     if (defaults[t]) fxList = [t];
   }
   if (fxList.indexOf('crt') >= 0) document.documentElement.classList.add('fx-crt');
+  // Custom and RGB: paint the last palette theme.js showed, light or dark,
+  // so the first frame already has the right colors (#5726). Without one
+  // (the first load after updating), custom is worked out below.
+  var _paletteApplied = false;
+  if (t === 'custom' || t === 'rgb') {
+    try {
+      var _cached = JSON.parse(localStorage.getItem('haven_palette_cache') || 'null');
+      if (_cached && _cached.theme === t && _cached.vars && typeof _cached.vars === 'object') {
+        for (var _k in _cached.vars) {
+          if (/^--[a-z-]+$/.test(_k) && typeof _cached.vars[_k] === 'string') {
+            document.documentElement.style.setProperty(_k, _cached.vars[_k]);
+          }
+        }
+        _paletteApplied = true;
+      }
+    } catch (e) { /* unreadable copy: fall back to working the colors out */ }
+  }
   // Apply custom theme variables if custom theme is active
-  if (t === 'custom') {
+  if (t === 'custom' && !_paletteApplied) {
     try {
       var hsv = JSON.parse(localStorage.getItem('haven_custom_hsv'));
       if (hsv && typeof hsv.h === 'number') {
@@ -195,26 +212,6 @@
         el.style.setProperty('--accent-hover', _hex(h,Math.max(s-.15,0),Math.min(v+.15,1)));
         el.style.setProperty('--accent-dim', _hex(h,Math.min(s+.1,1),Math.max(v-.2,0)));
         var rgb=_hsvRgb(h,s,v);
-        var lightBase = false;
-        try {
-          lightBase = localStorage.getItem('haven_color_base') === 'light';
-        } catch {}
-
-        function _accentTextColor(r,g,b) {
-          function linearize(c) {
-            c /= 255;
-            return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-          }
-          const luminance = (0.2126 * linearize(r)) + (0.7152 * linearize(g)) + (0.0722 * linearize(b));
-          // Choose whichever gives the stronger contrast.
-          const whiteContrast = 1.05 / (luminance + 0.05);
-          const blackContrast = (luminance + 0.05) / 0.05;
-
-          // bias towards white 5%
-          return whiteContrast * 1.05 >= blackContrast ? '#fff' : '#000';
-        }
-
-        el.style.setProperty('--accent-text', _accentTextColor(rgb[0],rgb[1],rgb[2]));
         el.style.setProperty('--accent-glow', 'rgba('+rgb.join(',')+',0.25)');
         el.style.setProperty('--bg-primary', _hex(h,bgSat,0.07+vib*0.03));
         el.style.setProperty('--bg-secondary', _hex(h,bgSat*0.85,0.09+vib*0.04));
