@@ -3285,7 +3285,7 @@ socketRuntime = setupSocketHandlers(io, db, {
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
 });
 activityRef.engine = socketRuntime.activity;
-require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, isSafeUploadRelPath });
+require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted });
 
 // ── Ferry: Haven <-> Discord bridge ─────────────────────
 // Started after the socket layer so an inbound Discord message always has a

@@ -1,7 +1,7 @@
 'use strict';
 
 // Self-destructing messages: once destruct_at passes, the message goes and the
-// sender's own files are removed for good, skipping deleted-attachments. One
+// sender's own files go to deleted-attachments, as with any delete. One
 // timer waits for the soonest deadline: it catches up at startup, sleeps when
 // nothing is left, wakes for a new message and moves on when the message it
 // waits for is deleted early. Runs on a fake clock.
@@ -23,7 +23,10 @@ const selfDestruct = require('../src/selfDestruct');
 
 // Same shapes server.js passes in.
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
-const isSafeUploadRelPath = (p) => typeof p === 'string' && /^[A-Za-z0-9_.-]+$/.test(p) && p !== '.' && p !== '..';
+const moveUploadToDeleted = (rel) => {
+  fs.mkdirSync(DELETED_ATTACHMENTS_DIR, { recursive: true });
+  fs.renameSync(path.join(UPLOADS_DIR, rel), path.join(DELETED_ATTACHMENTS_DIR, rel));
+};
 
 const MIN = 60 * 1000;
 const db = initDatabase();
@@ -64,23 +67,25 @@ test('destructAtFromSeconds accepts 1 second to 24 hours only', () => {
 
 test('startup removes what came due while the server was down', () => {
   file('sd-mine.png', author);
+  file('sd-solo.png', author);
   file('sd-theirs.png', other);
   file('sd-later.png', author);
-  // Names someone else's file too, and has been quoted by someone else.
-  const expired = add('/uploads/sd-mine.png /uploads/sd-theirs.png', at(-MIN));
+  // Names someone else's file too, and one of its files has been quoted.
+  const expired = add('/uploads/sd-mine.png /uploads/sd-solo.png /uploads/sd-theirs.png', at(-MIN));
   const quote = add('> /uploads/sd-mine.png', null, other);
   const pending = add('/uploads/sd-later.png', at(60 * MIN));
   db.prepare('INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)').run(expired, other, '🔥');
 
-  selfDestruct.start({ db, io, UPLOAD_PATH_RE, isSafeUploadRelPath });
+  selfDestruct.start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted });
 
   assert.equal(exists(expired), false);
   assert.equal(exists(quote), true);
   assert.equal(exists(pending), true);
   assert.equal(db.prepare('SELECT COUNT(*) AS c FROM reactions WHERE message_id = ?').get(expired).c, 0);
   assert.deepEqual(emitted.pop(), { room: 'channel:abcd1234', event: 'message-deleted', data: { channelCode: 'abcd1234', messageId: expired } });
-  assert.equal(onDisk('sd-mine.png'), false, 'own file removed even though a quote links to it');
-  assert.equal(fs.existsSync(path.join(DELETED_ATTACHMENTS_DIR, 'sd-mine.png')), false, 'not parked in deleted-attachments');
+  assert.equal(onDisk('sd-mine.png'), true, 'a file a quote still links to stays, as with any delete');
+  assert.equal(onDisk('sd-solo.png'), false, 'own file nothing else uses leaves uploads');
+  assert.equal(fs.existsSync(path.join(DELETED_ATTACHMENTS_DIR, 'sd-solo.png')), true, 'and waits in deleted-attachments for the retention window');
   assert.equal(onDisk('sd-theirs.png'), true, "someone else's file untouched");
   assert.equal(onDisk('sd-later.png'), true, 'not due yet');
 

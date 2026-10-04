@@ -3089,7 +3089,7 @@
     },
     "self_destruct": {
       "title": "Self-destructing message",
-      "hint": "This message and all its attachments will automatically delete at the time listed below. Attachments are removed instantly from the server, skipping the usual grace period Haven offers to admins to recover deleted attachments.",
+      "hint": "This message and all its attachments will automatically delete at the time listed below. Like any deleted message, its attachments stay recoverable by an admin for a short while.",
       "amount_label": "How long until it deletes",
       "unit_label": "Unit",
       "minutes": "Minutes",
