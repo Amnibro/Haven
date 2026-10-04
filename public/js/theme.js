@@ -17,48 +17,110 @@ function hsvToRgb(h, s, v) {
 }
 function rgbToHex(r, g, b) { return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join(''); }
 function hsvToHex(h, s, v) { return rgbToHex(...hsvToRgb(h, s, v)); }
+function getAccentTextColor(r, g, b) {
+  // Relative luminance using the WCAG sRGB conversion.
+  function linearize(c) {
+    c /= 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  }
+
+  const luminance = (0.2126 * linearize(r)) + (0.7152 * linearize(g)) + (0.0722 * linearize(b));
+
+  // Choose whichever gives the stronger contrast.
+  const whiteContrast = 1.05 / (luminance + 0.05);
+  const blackContrast = (luminance + 0.05) / 0.05;
+
+  // bias towards white 10%
+  return whiteContrast * 1.1 >= blackContrast ? '#fff' : '#000';
+}
 
 // ── Generate full theme palette from a single HSV accent ─
 // vibrancy: 0-1, controls how much the hue tints backgrounds/text/borders
-function generateCustomPalette(h, s, v, vibrancy) {
+// lightBase: false = dark base, true = light base
+function generateCustomPalette(h, s, v, vibrancy, lightBase) {
   if (vibrancy === undefined) vibrancy = 0.5;
+  if (lightBase === undefined) lightBase = false;
+
   const vib = Math.max(0, Math.min(1, vibrancy));
   const rgb = hsvToRgb(h, s, v);
+  const accentText = getAccentTextColor(...rgb);
+  const bgSat  = lightBase ? 0.01 + vib * 0.05 : 0.05 + vib * 0.30;
+  const bdrSat = lightBase ? 0.02 + vib * 0.08 : 0.05 + vib * 0.25;
 
-  // Background saturation scales with vibrancy (0.05 at 0, 0.35 at 1)
-  const bgSat = 0.05 + vib * 0.30;
-  // Border & hover saturation
-  const bdrSat = 0.05 + vib * 0.25;
-  // Text tinting: at high vibrancy, text leans toward the hue
-  const txtS   = vib * 0.12;
-  const txtPri = hsvToHex(h, txtS, 0.90 + vib * 0.05);
-  const txtSec = hsvToHex(h, txtS + 0.02, 0.62 + vib * 0.05);
-  const txtMut = hsvToHex(h, txtS, 0.38 + vib * 0.04);
+  let bgPrimary;
+  let bgSecondary;
+  let bgTertiary;
+  let bgHover;
+  let bgActive;
+  let bgInput;
+  let bgCard;
+
+  let txtPri;
+  let txtSec;
+  let txtMut;
+
+  let border;
+  let borderLight;
+
+  if (lightBase) {
+    bgPrimary   = hsvToHex(h, bgSat,       0.985);
+    bgSecondary = hsvToHex(h, bgSat * 0.85, 0.965);
+    bgTertiary  = hsvToHex(h, bgSat * 0.7,  0.945);
+    bgHover     = hsvToHex(h, bgSat * 0.7,  0.925);
+    bgActive    = hsvToHex(h, bgSat * 0.7,  0.900);
+    bgInput     = hsvToHex(h, bgSat,       0.975);
+    bgCard      = hsvToHex(h, bgSat * 0.85, 0.975);
+
+    // Dark text for the light base.
+    const txtS = vib * 0.08;
+    txtPri = hsvToHex(h, txtS,        0.18);
+    txtSec = hsvToHex(h, txtS + 0.02, 0.38);
+    txtMut = hsvToHex(h, txtS,        0.55);
+
+    border      = hsvToHex(h, bdrSat, 0.72);
+    borderLight = hsvToHex(h, bdrSat, 0.62);
+  } else {
+    // Text tinting: at high vibrancy, text leans toward the hue.
+    const txtS = vib * 0.12;
+    txtPri = hsvToHex(h, txtS,       0.90 + vib * 0.05);
+    txtSec = hsvToHex(h, txtS + 0.02, 0.62 + vib * 0.05);
+    txtMut = hsvToHex(h, txtS,       0.38 + vib * 0.04);
+    bgPrimary   = hsvToHex(h, bgSat,       0.07 + vib * 0.03);
+    bgSecondary = hsvToHex(h, bgSat * 0.85, 0.09 + vib * 0.04);
+    bgTertiary  = hsvToHex(h, bgSat * 0.7,  0.12 + vib * 0.04);
+    bgHover     = hsvToHex(h, bgSat * 0.7,  0.15 + vib * 0.05);
+    bgActive    = hsvToHex(h, bgSat * 0.7,  0.18 + vib * 0.06);
+    bgInput     = hsvToHex(h, bgSat,       0.05 + vib * 0.03);
+    bgCard      = hsvToHex(h, bgSat * 0.85, 0.08 + vib * 0.04);
+    border      = hsvToHex(h, bdrSat, 0.16 + vib * 0.06);
+    borderLight = hsvToHex(h, bdrSat, 0.21 + vib * 0.06);
+  }
 
   return {
-    '--accent':        hsvToHex(h, s, v),
-    '--accent-hover':  hsvToHex(h, Math.max(s - 0.15, 0), Math.min(v + 0.15, 1)),
-    '--accent-dim':    hsvToHex(h, Math.min(s + 0.1, 1), Math.max(v - 0.2, 0)),
-    '--accent-glow':   `rgba(${rgb.join(',')}, ${(0.15 + vib * 0.20).toFixed(2)})`,
-    '--bg-primary':    hsvToHex(h, bgSat, 0.07 + vib * 0.03),
-    '--bg-secondary':  hsvToHex(h, bgSat * 0.85, 0.09 + vib * 0.04),
-    '--bg-tertiary':   hsvToHex(h, bgSat * 0.7, 0.12 + vib * 0.04),
-    '--bg-hover':      hsvToHex(h, bgSat * 0.7, 0.15 + vib * 0.05),
-    '--bg-active':     hsvToHex(h, bgSat * 0.7, 0.18 + vib * 0.06),
-    '--bg-input':      hsvToHex(h, bgSat, 0.05 + vib * 0.03),
-    '--bg-card':       hsvToHex(h, bgSat * 0.85, 0.08 + vib * 0.04),
-    '--text-primary':  txtPri,
+    '--accent':         hsvToHex(h, s, v),
+    '--accent-text':    accentText,
+    '--accent-hover':   hsvToHex(h, Math.max(s - 0.15, 0), Math.min(v + 0.15, 1)),
+    '--accent-dim':     hsvToHex(h, Math.min(s + 0.1, 1), Math.max(v - 0.2, 0)),
+    '--accent-glow':    `rgba(${rgb.join(',')}, ${(0.15 + vib * 0.20).toFixed(2)})`,
+    '--bg-primary':     bgPrimary,
+    '--bg-secondary':   bgSecondary,
+    '--bg-tertiary':    bgTertiary,
+    '--bg-hover':       bgHover,
+    '--bg-active':      bgActive,
+    '--bg-input':       bgInput,
+    '--bg-card':        bgCard,
+    '--text-primary':   txtPri,
     '--text-secondary': txtSec,
-    '--text-muted':    txtMut,
-    '--text-link':     hsvToHex((h + 180) % 360, 0.5 + vib * 0.2, 0.95),
-    '--border':        hsvToHex(h, bdrSat, 0.16 + vib * 0.06),
-    '--border-light':  hsvToHex(h, bdrSat, 0.21 + vib * 0.06),
-    '--success':       hsvToHex((h + 140) % 360, 0.55, 0.72),
-    '--danger':        hsvToHex((h + 350) % 360, 0.70, 0.94),
-    '--warning':       hsvToHex((h + 50) % 360, 0.75, 0.94),
-    '--led-on':        hsvToHex((h + 140) % 360, 0.55, 0.72),
-    '--led-off':       '#555',
-    '--led-glow':      `rgba(${hsvToRgb((h + 140) % 360, 0.55, 0.72).join(',')}, 0.5)`,
+    '--text-muted':     txtMut,
+    '--text-link':      hsvToHex((h + 180) % 360, 0.5 + vib * 0.2, lightBase ? 0.55 : 0.95),
+    '--border':         border,
+    '--border-light':   borderLight,
+    '--success':        hsvToHex((h + 140) % 360, 0.55, 0.72),
+    '--danger':         hsvToHex((h + 350) % 360, 0.70, 0.94),
+    '--warning':        hsvToHex((h + 50) % 360, 0.75, 0.94),
+    '--led-on':         hsvToHex((h + 140) % 360, 0.55, 0.72),
+    '--led-off':        '#555',
+    '--led-glow':       `rgba(${hsvToRgb((h + 140) % 360, 0.55, 0.72).join(',')}, 0.5)`,
   };
 }
 
@@ -80,7 +142,7 @@ function applyCustomVars(palette) {
 function clearCustomVars() {
   if (_themeStyleEl) { _themeStyleEl.textContent = ''; }
   // Also remove any leftover inline custom properties (legacy path)
-  const keys = ['--accent','--accent-hover','--accent-dim','--accent-glow',
+  const keys = ['--accent','--accent-text','--accent-hover','--accent-dim','--accent-glow',
     '--bg-primary','--bg-secondary','--bg-tertiary','--bg-hover','--bg-active',
     '--bg-input','--bg-card','--text-primary','--text-secondary','--text-muted',
     '--text-link','--border','--border-light','--success','--danger','--warning',
@@ -97,23 +159,34 @@ let _rgbLastTick = 0;
 let _rgbLastHueInt = -1;
 let _rgbPaletteLut = null;
 let _rgbPaletteLutVibrancy = -1;
+let _rgbPaletteLutLightBase = false;
 
 function _rebuildRgbPaletteLut(vibrancy) {
   const vib = Math.max(10, Math.min(100, Math.round(vibrancy)));
+  const lightBase = isLightColorBase();
+
   _rgbPaletteLut = new Array(360);
+
   for (let h = 0; h < 360; h += 1) {
-    _rgbPaletteLut[h] = generateCustomPalette(h, 0.75, 0.95, vib / 100);
+    _rgbPaletteLut[h] = generateCustomPalette(h, 0.75, 0.95, vib / 100, lightBase);
   }
   _rgbPaletteLutVibrancy = vib;
+  _rgbPaletteLutLightBase = lightBase;
 }
 
 function _getRgbPalette(hue, vibrancy) {
   const h = Math.round(((hue % 360) + 360) % 360);
   const vib = Math.max(10, Math.min(100, Math.round(vibrancy)));
-  if (!_rgbPaletteLut || _rgbPaletteLutVibrancy !== vib) {
+  const lightBase = isLightColorBase();
+
+  if (!_rgbPaletteLut || _rgbPaletteLutVibrancy !== vib || _rgbPaletteLutLightBase !== lightBase) {
     _rebuildRgbPaletteLut(vib);
   }
-  return { h, palette: _rgbPaletteLut[h] };
+
+  return {
+    h,
+    palette: _rgbPaletteLut[h]
+  };
 }
 
 function startRgbCycle() {
@@ -221,6 +294,29 @@ function initRgbEditor() {
 
   editor._show = () => { editor.style.display = 'block'; };
   editor._hide = () => { editor.style.display = 'none'; };
+}
+
+function getColorBase() {
+  try {
+    return localStorage.getItem('haven_color_base') === 'light' ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
+function isLightColorBase() {
+  return getColorBase() === 'light';
+}
+
+function setColorBase(base) {
+  const value = base === 'light' ? 'light' : 'dark';
+
+  try {
+    localStorage.setItem('haven_color_base', value);
+  } catch {
+    // Storage unavailable; current page still gets the new base.
+  }
+  return value;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1495,7 +1591,7 @@ function initCustomThemeEditor() {
   function redrawTri()  { drawTriangle(triCtx, triCanvas.width, triCanvas.height, hue, sat, val); }
 
   function apply() {
-    const palette = generateCustomPalette(hue, sat, val, sat);
+    const palette = generateCustomPalette(hue, sat, val, sat, isLightColorBase());
     applyCustomVars(palette);
     localStorage.setItem('haven_custom_hsv', JSON.stringify({ h: hue, s: sat, v: val }));
     const swatch = document.getElementById('custom-theme-swatch');
@@ -1577,7 +1673,7 @@ function initThemeSwitcher(containerId, socket) {
   // If custom was saved, apply vars immediately
   if (saved === 'custom') {
     const hsv = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
-    if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s));
+    if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase()));
   }
   // If rgb was saved, start cycling
   if (saved === 'rgb') {
@@ -1618,7 +1714,7 @@ function initThemeSwitcher(containerId, socket) {
 
       if (theme === 'custom') {
         const hsv = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
-        if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s));
+        if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase()));
         if (customEditor && customEditor._show) customEditor._show();
         if (rgbEditor && rgbEditor._hide) rgbEditor._hide();
       } else if (theme === 'rgb') {
@@ -1638,9 +1734,45 @@ function initThemeSwitcher(containerId, socket) {
     });
   });
 
+  function initColorBaseToggles() {
+    const toggles = document.querySelectorAll('[data-color-base-toggle]');
+    if (!toggles.length) return;
+
+    const sync = () => {
+      const light = isLightColorBase();
+      toggles.forEach(toggle => { toggle.checked = light; });
+    };
+
+    toggles.forEach(toggle => {
+      toggle.addEventListener('change', () => {
+        setColorBase(toggle.checked ? 'light' : 'dark');
+
+        // Keep both Custom and RGB controls synchronized.
+        sync();
+
+        const theme = localStorage.getItem('haven_theme') || 'haven';
+
+        if (theme === 'custom') {
+          const hsv = JSON.parse(
+            localStorage.getItem('haven_custom_hsv') || 'null'
+          );
+
+          if (hsv) {
+            applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase()));
+          }
+        } else if (theme === 'rgb') {
+          if (typeof stopRgbCycle === 'function') stopRgbCycle();
+          if (typeof startRgbCycle === 'function') startRgbCycle();
+        }
+      });
+    });
+    sync();
+  }
+
   // Initialise editors
   initCustomThemeEditor();
   initRgbEditor();
+  initColorBaseToggles();
   initEffectSpeedEditor();
   initSacredIntensityEditor();
   initGlitchFreqEditor();
@@ -1685,7 +1817,7 @@ function applyThemeFromServer(theme, persist = true, syncFallback = false) {
   stopRgbCycle();
   if (theme === 'custom') {
     const hsv = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
-    if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s));
+    if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase()));
     const editor = document.getElementById('custom-theme-editor');
     if (editor && editor._show) editor._show();
   } else if (theme === 'rgb') {
