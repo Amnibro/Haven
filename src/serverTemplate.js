@@ -5,6 +5,7 @@ const path = require('path');
 const { sanitizeText, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
 const { sniffImageType, stripImageBuffer } = require('./imageMetadata');
 const { generateUniqueChannelCode } = require('./channelRotation');
+const { MEMBER_PERMS, getAdminRoleId } = require('./roleDefaults');
 const { normalizeHost } = require('../public/js/automod-rules.js');
 const { BUILTIN_THEMES, isThemeFilename, parseThemeMetadata } = require('./themeMetadata');
 const FORMAT = 'haven-server-template';
@@ -113,15 +114,23 @@ function exportTemplate(db, opts = {}) {
   const top = new Set(all.filter((r) => !r.parent_channel_id && !skip.has(r.name.toLowerCase())).map((r) => r.id));
   const chRows = all.filter((r) => (r.parent_channel_id ? top.has(r.parent_channel_id) && !skip.has(r.name.toLowerCase()) : top.has(r.id)));
   const chMake = refMaker(), chRef = new Map(chRows.map((r) => [r.id, chMake(r.name)])), byCode = new Map(chRows.map((r) => [r.code, r]));
-  const roleRows = db.prepare('SELECT * FROM roles ORDER BY level DESC, id').all();
+  // The Admin role is the one whoever holds admin wears; another server has
+  // its own, so it never travels in a template.
+  const adminRoleId = getAdminRoleId(db);
+  const roleRows = db.prepare('SELECT * FROM roles ORDER BY level DESC, id').all().filter((r) => r.id !== adminRoleId);
   const roleMake = refMaker(), roleRef = new Map(roleRows.map((r) => [r.id, roleMake(r.name)]));
   const perms = db.prepare('SELECT role_id, permission, allowed FROM role_permissions ORDER BY permission').all();
-  const roles = roleRows.map((r) => ({
-    ref: roleRef.get(r.id), name: r.name, level: r.level, scope: r.scope === 'channel' ? 'channel' : 'server', color: r.color || null,
-    autoAssign: !!r.auto_assign, linkChannelAccess: !!r.link_channel_access, icon: r.icon ? addAsset(r.icon) : null, maxUploadMb: r.max_upload_mb || null,
-    permissions: perms.filter((p) => p.role_id === r.id && p.allowed && VALID_ROLE_PERMS.includes(p.permission)).map((p) => p.permission),
-    denied: perms.filter((p) => p.role_id === r.id && !p.allowed && VALID_ROLE_PERMS.includes(p.permission)).map((p) => p.permission),
-  }));
+  const roles = roleRows.map((r) => {
+    const allowed = perms.filter((p) => p.role_id === r.id && p.allowed && VALID_ROLE_PERMS.includes(p.permission)).map((p) => p.permission);
+    const adminOnly = allowed.filter((p) => ADMIN_ONLY_PERMS.includes(p));
+    if (adminOnly.length) warnings.push(`Left out ${adminOnly.join(', ')} from role ${r.name}: templates never hand out admin-only permissions`);
+    return {
+      ref: roleRef.get(r.id), name: r.name, level: r.level, scope: r.scope === 'channel' ? 'channel' : 'server', color: r.color || null,
+      autoAssign: !!r.auto_assign, linkChannelAccess: !!r.link_channel_access, icon: r.icon ? addAsset(r.icon) : null, maxUploadMb: r.max_upload_mb || null,
+      permissions: allowed.filter((p) => !ADMIN_ONLY_PERMS.includes(p)),
+      denied: perms.filter((p) => p.role_id === r.id && !p.allowed && VALID_ROLE_PERMS.includes(p.permission)).map((p) => p.permission),
+    };
+  });
   const parse = (v) => { try { return JSON.parse(v); } catch { return null; } };
   const channels = chRows.map((r) => {
     const o = { ref: chRef.get(r.id), name: r.name };
@@ -236,11 +245,14 @@ function validateTemplate(input) {
     const at = `roles[${i}]`;
     if (!isObj(r)) return c.fail(at, 'expected an object');
     const permsOf = (v, key) => [...new Set(c.list(v, 100, `${at}.${key}`).filter((p) => VALID_ROLE_PERMS.includes(p) || c.fail(`${at}.${key}`, `unknown permission ${String(p).slice(0, 40)}`)))];
+    const allowed = permsOf(r.permissions, 'permissions');
+    const adminOnly = allowed.filter((p) => ADMIN_ONLY_PERMS.includes(p));
+    if (adminOnly.length) warnings.push(`Left out ${adminOnly.join(', ')} from role ${String(r.name).slice(0, 30)}: only the server admin can hand those out`);
     return {
       ref: c.ref(r.ref, `${at}.ref`), name: c.name(r.name, 30, `${at}.name`), level: c.int(r.level, 0, 99, `${at}.level`, 25), scope: c.pick(r.scope, ['server', 'channel'], `${at}.scope`, 'server'),
       color: c.opt(r.color, (v) => (typeof v === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(v) ? v : c.fail(`${at}.color`, 'expected a colour like #3498db'))),
       autoAssign: c.flag(r.autoAssign, `${at}.autoAssign`, false), linkChannelAccess: c.flag(r.linkChannelAccess, `${at}.linkChannelAccess`, false),
-      icon: asset(r.icon, `${at}.icon`), maxUploadMb: c.int(r.maxUploadMb, 1, 102400, `${at}.maxUploadMb`, null), permissions: permsOf(r.permissions, 'permissions'), denied: permsOf(r.denied, 'denied'),
+      icon: asset(r.icon, `${at}.icon`), maxUploadMb: c.int(r.maxUploadMb, 1, 102400, `${at}.maxUploadMb`, null), permissions: allowed.filter((p) => !ADMIN_ONLY_PERMS.includes(p)), denied: permsOf(r.denied, 'denied'),
     };
   }).filter(Boolean);
   out.channels = c.list(input.channels, LIMITS.channels, 'channels').map((ch, i) => {
@@ -376,11 +388,44 @@ function applyTemplate(db, tpl, opts = {}) {
     const insPerm = db.prepare('INSERT OR REPLACE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, ?)');
     const setPerms = (id, role) => { db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(id); if (role.level > 0) { role.permissions.forEach((p) => insPerm.run(id, p, 1)); role.denied.forEach((p) => insPerm.run(id, p, 0)); } };
     let autoRole = db.prepare('SELECT id FROM roles WHERE auto_assign = 1').get()?.id || null;
+    // Roles people get without an admin choosing them (every new member, a
+    // role menu, everyone who joins a channel) may only carry what the stock
+    // Member role has, sit below every level threshold and leave the upload
+    // cap alone, so a template cannot hand power to anyone who clicks.
+    const levels = (raw) => { try { const o = JSON.parse(raw || '{}'); return isObj(o) ? Object.values(o).filter(Number.isInteger) : []; } catch { return []; } };
+    const lowest = Math.min(...levels(db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get()?.value), ...levels(tpl.server.settings.permission_thresholds));
+    const powerful = (level, perms, maxUploadMb) => level >= lowest || !!maxUploadMb || (level > 0 && perms.some((p) => !MEMBER_PERMS.includes(p)));
+    const powerfulRole = (id) => {
+      const row = db.prepare('SELECT level, max_upload_mb FROM roles WHERE id = ?').get(id);
+      return !row || powerful(row.level, db.prepare('SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1').all(id).map((x) => x.permission), row.max_upload_mb);
+    };
+    const handedOut = new Set([
+      ...db.prepare('SELECT id FROM roles WHERE auto_assign = 1').all().map((x) => x.id),
+      ...db.prepare('SELECT default_role_id AS id FROM channels WHERE default_role_id IS NOT NULL').all().map((x) => x.id),
+    ]);
+    for (const row of db.prepare('SELECT data FROM role_menus').all()) {
+      try { (JSON.parse(row.data).roles || []).forEach((e) => handedOut.add(e.roleId)); } catch { /* a malformed menu offers no roles */ }
+    }
+    const adminRole = getAdminRoleId(db);
     for (const role of tpl.roles) {
       const found = roleByName.get(role.name.toLowerCase());
+      if (found && found === adminRole) {
+        roleId.set(role.ref, found);
+        r.existing.roles.push(role.name);
+        if (replace) warn(`${role.name} is this server's Admin role, so it was left as it is`);
+        continue;
+      }
       if (found && !replace) { roleId.set(role.ref, found); r.existing.roles.push(role.name); continue; }
-      const auto = role.autoAssign && (replace || !autoRole || autoRole === found);
-      if (role.autoAssign && !auto) warn(`${role.name} was not made the role new members get, because this server already has one`);
+      const tooMuch = powerful(role.level, role.permissions, role.maxUploadMb);
+      if (found && tooMuch && handedOut.has(found)) {
+        roleId.set(role.ref, found);
+        r.existing.roles.push(role.name);
+        warn(`${role.name} was left as it is: members get it without an admin choosing them, and the template would give it more than the Member role has`);
+        continue;
+      }
+      const auto = role.autoAssign && !tooMuch && (replace || !autoRole || autoRole === found);
+      if (role.autoAssign && tooMuch) warn(`${role.name} was not made the role new members get, because it carries more than the Member role has`);
+      else if (role.autoAssign && !auto) warn(`${role.name} was not made the role new members get, because this server already has one`);
       if (auto) db.prepare('UPDATE roles SET auto_assign = 0 WHERE auto_assign = 1').run();
       const vals = [role.level, role.scope, role.color, auto ? 1 : 0, role.linkChannelAccess ? 1 : 0, url(role.icon), role.maxUploadMb];
       const id = found || db.prepare('INSERT INTO roles (name, level, scope, color, auto_assign, link_channel_access, icon, max_upload_mb) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(role.name, ...vals).lastInsertRowid;
@@ -414,11 +459,12 @@ function applyTemplate(db, tpl, opts = {}) {
       const cols = {
         name: ch.name, category: ch.category, parent_channel_id: parentId, topic: ch.topic, position: replace ? order.get(ch.ref) : ++pos,
         role_gate: ch.roleGate && ch.roleGate.roles.length ? JSON.stringify({ mode: ch.roleGate.mode, roles: ch.roleGate.roles.map((x) => roleId.get(x)) }) : null,
-        default_role_id: ch.defaultRole ? roleId.get(ch.defaultRole) : null, forum_tags: ch.forumTags && ch.forumTags.length ? JSON.stringify(ch.forumTags) : null,
+        default_role_id: ch.defaultRole && !powerfulRole(roleId.get(ch.defaultRole)) ? roleId.get(ch.defaultRole) : null, forum_tags: ch.forumTags && ch.forumTags.length ? JSON.stringify(ch.forumTags) : null,
         forum_layout: ch.forumLayout ? JSON.stringify({ ...ch.forumLayout, at: now }) : null, auto_delete_interval_hours: ch.autoDeleteMode === 'clear' ? ch.autoDeleteHours : null,
         expires_at: ch.autoDeleteMode === 'clear' && ch.autoDeleteHours ? new Date(now + ch.autoDeleteHours * 3600000).toISOString() : null,
       };
       for (const [k, col, kind] of CHANNEL_FIELDS) cols[col] = kind === 'flag' ? (ch[k] ? 1 : 0) : ch[k];
+      if (ch.defaultRole && !cols.default_role_id) warn(`#${ch.name} does not give everyone who joins the ${tpl.roles.find((x) => x.ref === ch.defaultRole).name} role, because it carries more than the Member role has`);
       if (ch.welcome && !replace && hadWelcome) cols.show_welcome = 0, warn(`#${ch.name} was not made the welcome channel, because this server already has one`);
       db.prepare(`UPDATE channels SET ${Object.keys(cols).map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...Object.values(cols), id);
     }
@@ -488,12 +534,15 @@ function applyTemplate(db, tpl, opts = {}) {
       }
       if (tpl.roleMenus.length && !actorId) warn('Role menus were not posted, because no admin account was given to post them as');
       for (const m of actorId ? tpl.roleMenus : []) {
-        const cid = chId.get(m.channel), entries = m.roles.map((x) => ({ roleId: roleId.get(x.role), emoji: x.emoji }));
+        const cid = chId.get(m.channel), entries = m.roles.map((x) => ({ roleId: roleId.get(x.role), emoji: x.emoji, name: tpl.roles.find((y) => y.ref === x.role).name }))
+          .filter((e) => !powerfulRole(e.roleId) || (warn(`${e.name} was left off a role menu, because anyone could pick it and it carries more than the Member role has`), false));
+        if (!entries.length) continue;
+
         const key = JSON.stringify(entries.map((e) => e.roleId).sort());
         const same = db.prepare('SELECT data FROM role_menus WHERE channel_id = ?').all(cid).some((row) => { try { return JSON.stringify((JSON.parse(row.data).roles || []).map((e) => e.roleId).sort()) === key; } catch { return false; } });
         if (same) continue;
         const mid = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(cid, actorId, m.content).lastInsertRowid;
-        db.prepare('INSERT INTO role_menus (message_id, channel_id, created_by, title, data) VALUES (?, ?, ?, ?, ?)').run(mid, cid, actorId, m.title, JSON.stringify({ roles: entries }));
+        db.prepare('INSERT INTO role_menus (message_id, channel_id, created_by, title, data) VALUES (?, ?, ?, ?, ?)').run(mid, cid, actorId, m.title, JSON.stringify({ roles: entries.map((e) => ({ roleId: e.roleId, emoji: e.emoji })) }));
         entries.forEach((e) => db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)').run(mid, actorId, e.emoji));
         r.counts.roleMenus++;
       }

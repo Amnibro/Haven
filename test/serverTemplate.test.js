@@ -192,3 +192,46 @@ test('a template never sets level thresholds for admin-only permissions', () => 
   assert.deepEqual(after, { pin_message: 10, view_all_channels: 90 }, 'the admin\'s own admin-only threshold is kept, none are added');
   db.close();
 });
+test('a template cannot hand out power through roles, role menus or channel default roles', () => {
+  const { template } = exported();
+  assert.ok(!template.roles.some((r) => r.name === 'Admin'), 'the Admin role is never exported');
+  const t = {
+    format: 'haven-server-template', version: 1, meta: { name: 'Takeover' },
+    server: { settings: {} },
+    roles: [
+      { ref: 'admin', name: 'Admin', level: 99, permissions: ['ban_user'] },
+      { ref: 'member', name: 'Member', level: 1, permissions: ['ban_user', 'use_voice'] },
+      { ref: 'boss', name: 'Boss', level: 90, autoAssign: true, permissions: ['manage_server', 'transfer_admin', 'ban_user'] },
+      { ref: 'mod', name: 'Picky', level: 5, permissions: ['kick_user'] },
+      { ref: 'fun', name: 'Fun', level: 5, permissions: ['use_voice'] },
+    ],
+    channels: [{ ref: 'hall', name: 'hall', defaultRole: 'boss' }, { ref: 'side', name: 'side', defaultRole: 'fun' }],
+    roleMenus: [{ channel: 'hall', title: 'Roles', content: 'Pick one', roles: [{ role: 'mod', emoji: '🔨' }, { role: 'fun', emoji: '🎉' }, { role: 'boss', emoji: '👑' }] }],
+  };
+  const v = tpl.validateTemplate(t);
+  assert.ok(v.template, JSON.stringify(v.errors));
+  assert.deepEqual(v.template.roles.find((r) => r.ref === 'boss').permissions, ['ban_user']);
+  assert.ok(v.warnings.some((w) => /manage_server, transfer_admin/.test(w)));
+  const dst = dirs('power');
+  const db = freshDb('power');
+  const admin = db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('a', 'x').lastInsertRowid;
+  const perms = (name) => db.prepare('SELECT rp.permission FROM role_permissions rp JOIN roles r ON r.id = rp.role_id WHERE r.name = ? AND rp.allowed = 1 ORDER BY rp.permission').all(name).map((x) => x.permission);
+  const adminBefore = perms('Admin');
+  const memberBefore = perms('Member');
+  const report = tpl.applyTemplate(db, v.template, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  assert.deepEqual(perms('Admin'), adminBefore, 'the Admin role is left alone');
+  assert.equal(db.prepare("SELECT level FROM roles WHERE name = 'Admin'").get().level, 99);
+  assert.deepEqual(perms('Member'), memberBefore, 'the role every member gets is not given more power');
+  assert.equal(db.prepare("SELECT auto_assign FROM roles WHERE name = 'Member'").get().auto_assign, 1);
+  assert.deepEqual(perms('Boss'), ['ban_user']);
+  assert.equal(db.prepare("SELECT auto_assign FROM roles WHERE name = 'Boss'").get().auto_assign, 0, 'a powerful role is not handed to new members');
+  assert.equal(db.prepare("SELECT default_role_id FROM channels WHERE name = 'hall'").get().default_role_id, null, 'nor to everyone who joins a channel');
+  assert.ok(db.prepare("SELECT default_role_id FROM channels WHERE name = 'side'").get().default_role_id, 'a harmless default role is kept');
+  const menu = JSON.parse(db.prepare('SELECT data FROM role_menus').get().data).roles;
+  const fun = db.prepare("SELECT id FROM roles WHERE name = 'Fun'").get().id;
+  assert.deepEqual(menu, [{ roleId: fun, emoji: '🎉' }], 'only the harmless role is on the menu');
+  for (const pattern of [/Admin role/, /Member was left as it is/, /Boss was not made the role new members get/, /#hall does not give/, /Picky was left off a role menu/]) {
+    assert.ok(report.warnings.some((w) => pattern.test(w)), `${pattern} in ${report.warnings.join(' | ')}`);
+  }
+  db.close();
+});
