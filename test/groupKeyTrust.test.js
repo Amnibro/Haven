@@ -216,3 +216,18 @@ test('rotation refuses to wrap for a member whose key changed', async () => {
   assert.equal(server.epoch, 0, 'nothing was published');
   assert.ok(apps.alice._groupState('g1').changed.has(2));
 });
+
+test('sending again reuses the roster and keys until something changes', async () => {
+  const { apps } = await threeMembers();
+  await apps.alice._groupEnsure('g1');
+  const calls = [];
+  const ask = apps.alice._groupReq;
+  apps.alice._groupReq = (ev, payload) => { calls.push(ev); return ask(ev, payload); };
+  await apps.alice._groupEncrypt('g1', 'one');
+  await apps.alice._groupEncrypt('g1', 'two');
+  assert.deepEqual(calls, [], 'no round trips for a send in an unchanged group');
+  await apps.alice._groupMembershipChanged('g1');
+  calls.length = 0;
+  await apps.alice._groupEncrypt('g1', 'three');
+  assert.ok(calls.includes('get-group-roster'), 'a membership change makes the next send look again');
+});

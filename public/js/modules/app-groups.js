@@ -27,16 +27,26 @@ _setupGroupListeners() {
     this._groups.delete(d.code);
     if (this._leavingGroup === d.code) { this._leavingGroup = null; this._showToast(t('groups.left'), 'info'); }
   });
-  s.on('group-epoch-published', (d) => { const st = this._groups.get(d.code); if (st && !st.keys.has(d.epoch)) this._groupFetchKeys(d.code).catch(err => console.warn('[Groups] could not load the new group key:', err.message)); });
+  s.on('group-epoch-published', (d) => {
+    const st = this._groups.get(d.code);
+    if (!st || st.keys.has(d.epoch)) return;
+    st.ready = false;
+    this._groupFetchKeys(d.code).catch(err => console.warn('[Groups] could not load the new group key:', err.message));
+  });
   s.on('group-rewrap-requested', (d) => this._groupRewrap(d).catch(err => console.warn('[Groups] could not re-share the group key:', err.message)));
   s.on('group-rewrap-fulfilled', (d) => this._groups.get(d.code)?.pendingRewraps.delete(d.userId));
   s.on('group-key-rewrapped', (d) => {
     const st = this._groups.get(d.code);
     if (!st) return;
     st.rewrapAsked = false;
+    st.ready = false;
     this._groupFetchKeys(d.code).then(() => this._groupRerender(d.code), err => console.warn('[Groups] could not load the re-shared key:', err.message));
   });
-  s.on('connect', () => s.emit('get-group-invites'));
+  s.on('connect', () => {
+    s.emit('get-group-invites');
+    // Events may have been missed while disconnected.
+    this._groups.forEach(st => { st.ready = false; });
+  });
   if (s.connected) s.emit('get-group-invites');
 },
 _isGroupDm(code) {
@@ -86,6 +96,7 @@ async _groupFetchKeys(code, { all = false } = {}) {
   if (!r) return st;
   st.epoch = r.data.currentEpoch;
   st.needsRotation = !!r.data.needsRotation;
+  if (st.needsRotation) st.ready = false;
   const roster = st.roster || await this._groupRoster(code);
   for (const k of r.data.keys) {
     if (st.keys.has(k.epoch)) continue;
@@ -141,6 +152,9 @@ _groupChannelId(code) {
 },
 _groupEnsure(code) {
   const st = this._groupState(code);
+  // The roster and keys change only with membership or a new epoch, and
+  // those events clear `ready`, so a send normally costs no round trips.
+  if (st.ready && st.keys.has(st.epoch) && this.e2e?.signingPrivateKey) return Promise.resolve(st);
   if (st.busy) return st.busy;
   st.busy = (async () => {
     if (!this.e2e?.ready) throw new Error('E2E not ready');
@@ -148,6 +162,7 @@ _groupEnsure(code) {
     await this._groupRoster(code);
     await this._groupFetchKeys(code);
     if (st.needsRotation || !st.epoch) await this._groupRotate(code);
+    st.ready = !!(st.roster && st.epoch && st.keys.has(st.epoch) && !st.needsRotation && !st.changed.size);
     return st;
   })().finally(() => { st.busy = null; });
   return st.busy;
@@ -202,6 +217,7 @@ async _groupRotate(code, attempt = 0) {
 async _groupMembershipChanged(code) {
   const st = this._groupState(code);
   st.roster = null;
+  st.ready = false;
   this.socket.emit('get-channels');
   await new Promise(r => setTimeout(r, Math.random() * 1500));
   await this._groupFetchKeys(code);
@@ -412,6 +428,7 @@ _groupReviewKeys(code) {
       st.pendingRewraps.delete(d.userId);
       await this._groupRewrap(d);
     }
+    st.ready = false;
     await this._groupFetchKeys(code, { all: true });
     if (st.needsRotation) await this._groupRotate(code);
     this._groupRerender(code);
