@@ -5,6 +5,7 @@ const path = require('path');
 const { sanitizeText, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
 const { sniffImageType, stripImageBuffer } = require('./imageMetadata');
 const { generateUniqueChannelCode } = require('./channelRotation');
+const diskGuard = require('./diskGuard');
 const { MEMBER_PERMS, getAdminRoleId } = require('./roleDefaults');
 const { normalizeHost } = require('../public/js/automod-rules.js');
 const { BUILTIN_THEMES, isThemeFilename, parseThemeMetadata } = require('./themeMetadata');
@@ -424,7 +425,7 @@ function summarizeTemplate(tpl) {
   };
 }
 function applyTemplate(db, tpl, opts = {}) {
-  const { mode = 'merge', actorId = null, uploadsDir = null, themesDir = null, dryRun = false, posts: withPosts = true, webhooks: withWebhooks = true, joinMembers = true, installThemes = false } = opts;
+  const { mode = 'merge', actorId = null, uploadsDir = null, themesDir = null, dryRun = false, posts: withPosts = true, webhooks: withWebhooks = true, joinMembers = true, installThemes = false, hasRoom = diskGuard.hasHeadroom } = opts;
   const replace = mode === 'replace';
   const r = {
     mode: replace ? 'replace' : 'merge', dryRun,
@@ -432,8 +433,19 @@ function applyTemplate(db, tpl, opts = {}) {
     existing: { roles: [], channels: [], settings: [] }, extra: { roles: [], channels: [] }, counts: { posts: 0, roleMenus: 0, domains: 0, access: 0 }, warnings: [], changedSettings: {},
   };
   const warn = (msg) => { if (!r.warnings.includes(msg)) r.warnings.push(msg); };
+  // Emojis and stickers keep to this server's own size limits, as an upload
+  // would, and only images something in the template uses are copied.
+  const kb = (key, dflt) => parseInt(db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key)?.value, 10) || dflt;
+  const fits = (list, key, dflt, what) => list.filter((x) => tpl.assets[x.asset].buf.length <= kb(key, dflt) * 1024
+    || (warn(`The ${what} ${x.name} was left out: it is larger than this server's ${kb(key, dflt)} KB limit`), false));
+  const emojis = fits(tpl.emojis, 'max_emoji_kb', 256, 'emoji'), stickers = fits(tpl.stickers, 'max_sticker_kb', 1024, 'sticker');
+  const used = new Set([
+    tpl.server.icon, tpl.server.banner, ...tpl.roles.map((x) => x.icon), ...tpl.webhooks.map((x) => x.avatar), ...tpl.posts.map((x) => x.avatar),
+    ...tpl.posts.flatMap((x) => [...x.content.matchAll(ASSET_TOKEN_RE)].map((m) => m[1])), ...emojis.map((x) => x.asset), ...stickers.map((x) => x.asset),
+  ].filter(Boolean));
   const files = [], urls = {}, themes = new Set();
   for (const [name, a] of Object.entries(tpl.assets)) {
+    if (a.kind !== 'theme' && !used.has(name)) continue;
     const dir = a.kind === 'theme' ? themesDir : a.kind === 'sticker' ? uploadsDir && path.join(uploadsDir, 'stickers') : uploadsDir;
     const file = a.kind === 'theme' ? name : `${path.basename(name, path.extname(name))}-${a.sha256.slice(0, 10)}${path.extname(name).toLowerCase()}`;
     urls[name] = { file, url: `/uploads/${a.kind === 'sticker' ? 'stickers/' : ''}${file}` };
@@ -448,6 +460,12 @@ function applyTemplate(db, tpl, opts = {}) {
     else if (!current) files.push({ dest, buf: a.buf, name: file });
   }
   const url = (name) => (name && urls[name] ? urls[name].url : null);
+  // The same disk headroom uploads keep, so an import never eats the space
+  // the database needs.
+  if (files.length && !hasRoom(files.reduce((n, f) => n + f.buf.length, 0))) {
+    if (!dryRun) throw Object.assign(new Error('The server is low on disk space, so the template was not imported. Free some space and try again.'), { code: 'TEMPLATE_DISK_FULL' });
+    warn('The server is low on disk space, so importing this template would be refused');
+  }
   const run = () => {
     const now = Date.now();
     const roleId = new Map(), chId = new Map(), touched = new Set();
@@ -624,9 +642,9 @@ function applyTemplate(db, tpl, opts = {}) {
     const dom = db.prepare(`INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO automod_domains (domain, mode, include_subdomains, note, added_by) VALUES (?, ?, ?, ?, ?)`);
     for (const d of tpl.automodDomains) r.counts.domains += dom.run(d.domain, d.mode, d.includeSubdomains ? 1 : 0, d.note, actorId).changes;
     const emo = db.prepare(`INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)`);
-    for (const e of tpl.emojis) if (emo.run(e.name, urls[e.asset].file, actorId).changes) r.created.emojis.push(e.name);
+    for (const e of emojis) if (emo.run(e.name, urls[e.asset].file, actorId).changes) r.created.emojis.push(e.name);
     const stk = db.prepare(`INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)`);
-    for (const st of tpl.stickers) if (stk.run(st.name, st.pack, urls[st.asset].file, actorId).changes) r.created.stickers.push(st.name);
+    for (const st of stickers) if (stk.run(st.name, st.pack, urls[st.asset].file, actorId).changes) r.created.stickers.push(st.name);
   };
   const written = [];
   try {

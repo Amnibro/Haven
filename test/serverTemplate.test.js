@@ -303,3 +303,27 @@ test('a server with names saved under older rules still exports a file its own i
   db.close();
   copy.close();
 });
+test('template images keep to the emoji and sticker size limits and the disk headroom', () => {
+  const small = png([1, 1, 1]);
+  const big = Buffer.concat([small.subarray(0, small.length - 12), chunk('zzZz', Buffer.alloc(80 * 1024)), small.subarray(small.length - 12)]);
+  const entry = (buf, kind = 'upload') => ({ kind, sha256: require('node:crypto').createHash('sha256').update(buf).digest('hex'), data: buf.toString('base64') });
+  const t = {
+    format: 'haven-server-template', version: 1, meta: { name: 'Images' }, server: { settings: {} },
+    emojis: [{ name: 'small', asset: 'small.png' }, { name: 'huge', asset: 'big.png' }],
+    assets: { 'small.png': entry(small), 'big.png': entry(big), 'unused.png': entry(png([9, 9, 9])) },
+  };
+  const v = tpl.validateTemplate(t);
+  assert.ok(v.template, JSON.stringify(v.errors));
+  const dst = dirs('images');
+  const db = freshDb('images');
+  const admin = db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('a', 'x').lastInsertRowid;
+  db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('max_emoji_kb', '64')").run();
+  assert.throws(() => tpl.applyTemplate(db, v.template, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes, hasRoom: () => false }), { code: 'TEMPLATE_DISK_FULL' });
+  assert.deepEqual(fs.readdirSync(dst.uploads), ['stickers'], 'nothing is written when the disk is low');
+  assert.equal(db.prepare('SELECT count(*) AS n FROM custom_emojis').get().n, 0);
+  const report = tpl.applyTemplate(db, v.template, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  assert.deepEqual(report.created.emojis, ['small']);
+  assert.ok(report.warnings.some((w) => /huge was left out/.test(w)));
+  assert.deepEqual(fs.readdirSync(dst.uploads).filter((f) => f !== 'stickers').map((f) => f.replace(/-[0-9a-f]{10}/, '')), ['small.png'], 'only images the template uses are copied');
+  db.close();
+});

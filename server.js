@@ -3154,7 +3154,7 @@ app.get('/api/admin/template/export', (req, res) => {
     res.status(500).json({ error: 'Template export failed' });
   }
 });
-app.post('/api/admin/template/upload', uploadLimiter, (req, res) => {
+app.post('/api/admin/template/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
   const user = templateAdmin(req, res);
   if (!user) return;
   templateUpload(req, res, (err) => {
@@ -3193,6 +3193,7 @@ app.post('/api/admin/template/apply', express.json({ limit: '4kb' }), (req, res)
   if (!entry) return;
   let report;
   try { report = runTemplate(entry, user, req.body, false); } catch (err) {
+    if (err.code === 'TEMPLATE_DISK_FULL') return res.status(507).json({ error: err.message });
     console.error('Template apply failed:', err.message);
     return res.status(500).json({ error: 'Applying the template failed; nothing was changed' });
   }
