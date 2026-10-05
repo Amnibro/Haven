@@ -41,6 +41,9 @@
       "server_hint": "Enter the address of the Haven server you already have an account on",
       "connect": "Connect",
       "imported_from": "Imported from your home server",
+      "username_label": "Username on this server",
+      "username_hint": "Taken from your home server. If it is already in use here, pick another. 3-20 characters, letters/numbers/underscores.",
+      "username_unavailable": "That username can't be used on this server. Pick a different one above and try again.",
       "password_label": "Set a password for this server",
       "password_hint": "Required for encryption. Minimum 8 characters.",
       "confirm_label": "Confirm Password",
@@ -52,7 +55,7 @@
       "timeout": "SSO approval timed out — try connecting again",
       "failed": "SSO failed — please try again",
       "connect_first": "Please connect to your home server first",
-      "invalid_username": "SSO username is invalid. Please use standard registration."
+      "invalid_username": "Usernames are 3-20 characters: letters, numbers and underscores."
     },
     "oidc": {
       "submit": "Sign in with SSO",

@@ -699,6 +699,19 @@
     const ssoRegisterBtn  = document.getElementById('sso-register-btn');
     const ssoBackBtn      = document.getElementById('sso-back-btn');
     const ssoServerInput  = document.getElementById('sso-server-url');
+    const ssoUsernameInput = document.getElementById('sso-username');
+
+    // Haven usernames are letters, numbers and underscores. A legacy home
+    // server may send a display-name-like value, so fold it into that shape.
+    const normalizeSsoUsername = (value) => {
+      if (typeof value !== 'string') return '';
+      return value
+        .trim()
+        .replace(/[^a-zA-Z0-9_]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 20);
+    };
 
     const stopSsoPolling = () => {
       if (ssoPollTimer) {
@@ -737,6 +750,11 @@
         ssoPreviewAvatar.textContent = (previewName || '?')[0].toUpperCase();
       }
       ssoPreviewUsername.textContent = previewName || '—';
+      // The imported name may already belong to someone here (#5734), so it
+      // is only a suggestion the person can change.
+      let suggested = normalizeSsoUsername(profileUsername);
+      if (suggested.length < 3) suggested = normalizeSsoUsername(ssoProfileData.displayName);
+      ssoUsernameInput.value = suggested;
 
       ssoStepServer.style.display = 'none';
       ssoStepRegister.style.display = '';
@@ -773,6 +791,7 @@
       ssoStepRegister.style.display = 'none';
       ssoPreviewAvatar.innerHTML = '?';
       ssoPreviewUsername.textContent = '—';
+      ssoUsernameInput.value = '';
       document.getElementById('sso-password').value = '';
       document.getElementById('sso-confirm').value = '';
       hideError();
@@ -859,22 +878,9 @@
       if (password.length < 8) return showError(t('auth.errors.password_too_short'));
       if (password !== confirm) return showError(t('auth.errors.passwords_no_match'));
 
-      // Prefer canonical username from SSO payload. If a legacy server sends
-      // display-name-like values, normalize into a valid Haven username.
-      const normalizeUsername = (value) => {
-        if (typeof value !== 'string') return '';
-        return value
-          .trim()
-          .replace(/[^a-zA-Z0-9_]/g, '_')
-          .replace(/_+/g, '_')
-          .replace(/^_+|_+$/g, '')
-          .slice(0, 20);
-      };
-      let registerUsername = normalizeUsername(ssoProfileData.username);
-      if (registerUsername.length < 3) {
-        registerUsername = normalizeUsername(ssoProfileData.displayName);
-      }
-      if (registerUsername.length < 3) {
+      const registerUsername = ssoUsernameInput.value.trim();
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(registerUsername)) {
+        ssoUsernameInput.focus();
         return showError(t('auth.sso.invalid_username'));
       }
 
@@ -906,7 +912,15 @@
         });
 
         const data = await res.json();
-        if (!res.ok) { _resetCaptcha('sso'); return showError(data.error || t('auth.errors.registration_failed')); }
+        if (!res.ok) {
+          _resetCaptcha('sso');
+          if (data.code === 'username_unavailable') {
+            ssoUsernameInput.focus();
+            ssoUsernameInput.select();
+            return showError(t('auth.sso.username_unavailable'));
+          }
+          return showError(data.error || t('auth.errors.registration_failed'));
+        }
 
         // Derive E2E wrapping key from password
         const e2eWrap = await deriveE2EWrappingKey(password);
