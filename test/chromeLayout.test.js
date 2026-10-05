@@ -634,3 +634,34 @@ test('ChromeLayout shows the core DM badge on the dock button and puts it back',
     assert.equal(document.getElementById('dm-unread-badge'), badge);
   });
 });
+
+test('ChromeLayout channel actions open sections through Haven\'s toggles without inline styles', () => {
+  withEnv(({ document, elementsById }) => {
+    const make = (id) => {
+      const el = new FakeElement('div', elementsById);
+      el.id = id;
+      document.body.appendChild(el);
+      return el;
+    };
+    const joinBody = make('join-section-body');
+    joinBody.classList.add('collapsed');
+    const joinToggle = make('join-section-toggle');
+    let toggled = 0;
+    joinToggle.click = () => { toggled++; joinBody.classList.remove('collapsed'); };
+    const createBody = make('create-section-body');
+    const createToggle = make('create-section-toggle');
+    createToggle.click = () => { toggled += 10; };
+    const adminControls = make('admin-controls');
+
+    const plugin = new ChromeLayout();
+    plugin.start();
+    plugin._handleChannelAction('join', true);
+    plugin._handleChannelAction('join', true);
+    plugin._handleChannelAction('create', true);
+    assert.equal(toggled, 1, 'only the collapsed Join section is toggled, once');
+    for (const el of [joinBody, createBody, adminControls]) {
+      assert.equal(el.style.display, undefined, `${el.id} keeps its inline display`);
+    }
+    plugin.stop();
+  });
+});

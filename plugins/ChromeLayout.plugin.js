@@ -436,57 +436,41 @@ class ChromeLayout {
     if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
+  // Opens a collapsed Join or Create section through Haven's own header
+  // toggle, so the layout leaves no inline styles behind and Haven remembers
+  // the section as open the same way it does for a click.
+  _expandSection(name) {
+    const body = document.getElementById(`${name}-section-body`);
+    if (body?.classList?.contains('collapsed')) {
+      document.getElementById(`${name}-section-toggle`)?.click?.();
+    }
+  }
+
   _handleChannelAction(action, canCreate) {
     const app = typeof window !== 'undefined' ? window.app : null;
     if (action === 'join') {
-      const joinSection = document.querySelector?.('.sidebar-section[data-mod-id="join"]')
-        || document.querySelector?.('[data-haven-region="join-channel"]');
-      const body = document.getElementById('join-section-body');
-      if (body) {
-        body.classList.remove('collapsed');
-        body.style.display = '';
-      }
-      document.getElementById('join-section-arrow')?.classList.remove('collapsed');
+      this._expandSection('join');
       document.getElementById('channel-code-input')?.focus();
-    } else if (action === 'create') {
-      const adminControls = document.getElementById('admin-controls');
-      if (adminControls) adminControls.style.display = '';
-      const body = document.getElementById('create-section-body');
-      if (body) {
-        body.classList.remove('collapsed');
-        body.style.display = '';
-      }
-      const tmp = document.getElementById('new-channel-temporary');
-      if (tmp) {
-        tmp.checked = false;
-        tmp.dispatchEvent?.(new Event('change'));
-      }
-      document.getElementById('create-section-arrow')?.classList.remove('collapsed');
-      document.getElementById('new-channel-name')?.focus();
-    } else if (action === 'temp') {
-      if (!canCreate && app?._showPromptModal) {
-        app._showPromptModal('Temporary Channel', 'Enter a name for the auto-expiring channel:').then((name) => {
-          if (name?.trim() && app.socket) {
-            app.socket.emit('create-temp-channel', { name: name.trim() });
-          }
-        });
-      } else {
-        const adminControls = document.getElementById('admin-controls');
-        if (adminControls) adminControls.style.display = '';
-        const body = document.getElementById('create-section-body');
-        if (body) {
-          body.classList.remove('collapsed');
-          body.style.display = '';
-        }
-        const tmp = document.getElementById('new-channel-temporary');
-        if (tmp) {
-          tmp.checked = true;
-          tmp.dispatchEvent?.(new Event('change'));
-        }
-        document.getElementById('create-section-arrow')?.classList.remove('collapsed');
-        document.getElementById('new-channel-name')?.focus();
-      }
+      return;
     }
+    if (action === 'temp' && !canCreate) {
+      // Without create_channel Haven hides the create form, so ask for a name.
+      app?._showPromptModal?.('Temporary Channel', 'Enter a name for the auto-expiring channel:').then((name) => {
+        if (name?.trim() && app.socket) {
+          app.socket.emit('create-temp-channel', { name: name.trim() });
+        }
+      });
+      return;
+    }
+    if (action !== 'create' && action !== 'temp') return;
+    // Haven itself shows the create form to everyone who may create channels.
+    this._expandSection('create');
+    const tmp = document.getElementById('new-channel-temporary');
+    if (tmp) {
+      tmp.checked = action === 'temp';
+      tmp.dispatchEvent?.(new Event('change'));
+    }
+    document.getElementById('new-channel-name')?.focus();
   }
 
   // 2. Footer Dock: People & Direct Messages
