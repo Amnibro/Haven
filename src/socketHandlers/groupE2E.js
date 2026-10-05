@@ -272,7 +272,6 @@ module.exports = function register(socket, ctx) {
     io.to(`channel:${ch.code}`).emit('group-dm-updated', payload);
   });
   function leaveGroup(ch, userId, attachments) {
-    const authors = db.prepare('SELECT DISTINCT user_id FROM messages WHERE channel_id = ? AND user_id IS NOT NULL').all(ch.id).map((r) => r.user_id);
     db.transaction(() => {
       db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(ch.id, userId);
       db.prepare('DELETE FROM dm_group_invites WHERE channel_id = ? AND user_id = ?').run(ch.id, userId);
@@ -282,7 +281,10 @@ module.exports = function register(socket, ctx) {
     const left = memberIds(ch.id);
     if (!left.length) {
       for (const t of ['dm_group_keys', 'dm_group_epochs', 'dm_group_invites', 'dm_group_rewrap_requests']) db.prepare(`DELETE FROM ${t} WHERE channel_id = ?`).run(ch.id);
-      ctx.purgeDmChannel(ch, attachments, [...authors, userId]);
+      // Only the last member's own uploads are released. Earlier members'
+      // files may still be linked from encrypted messages elsewhere, which the
+      // server cannot read to check.
+      ctx.purgeDmChannel(ch, attachments, [userId]);
       clearChannelRuntimeState(ctx.state, ch.code);
     } else {
       const user = db.prepare('SELECT COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(userId);
