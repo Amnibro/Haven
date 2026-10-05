@@ -476,7 +476,7 @@ class HavenE2E {
       socket.once('public-key-published', () => {
         clearTimeout(t);
         resolve({ ok: true, conflict: false });
-        this.initSigning(socket).then((ok) => ok && this.onSigningReady && this.onSigningReady()).catch(() => {});
+        this.initSigning(socket).catch(err => console.warn('[E2E] Signing key setup failed:', err.message));
       });
       socket.once('public-key-conflict', (data) => {
         clearTimeout(t);
@@ -511,18 +511,42 @@ class HavenE2E {
     d.fill(0);
     return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new TextEncoder().encode('haven-signing-backup-v1'), info: new TextEncoder().encode('aes-gcm-key') }, ikm, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   }
-  _request(socket, emitEvent, payload, resultEvent, ms = 5000) {
+  /**
+   * Emit and wait for the first of `resultEvents`. Resolves { event, data },
+   * or null on timeout. A request with a payload carries a random `rid` the
+   * server echoes back, so a reply meant for another request is never taken
+   * for this one's.
+   */
+  _request(socket, emitEvent, payload, resultEvents, ms = 5000) {
+    const events = [].concat(resultEvents);
+    const rid = payload ? this._toB64(crypto.getRandomValues(new Uint8Array(9))) : null;
     return new Promise(resolve => {
-      const t = setTimeout(() => { socket.off(resultEvent, h); resolve(null); }, ms);
-      const h = (d) => { clearTimeout(t); socket.off(resultEvent, h); resolve(d); };
-      socket.on(resultEvent, h);
-      socket.emit(emitEvent, payload);
+      const handlers = events.map(ev => [ev, (d) => {
+        if (rid && (!d || d.rid !== rid)) return;
+        done({ event: ev, data: d });
+      }]);
+      const done = (r) => { clearTimeout(t); handlers.forEach(([ev, h]) => socket.off(ev, h)); resolve(r); };
+      const t = setTimeout(() => done(null), ms);
+      handlers.forEach(([ev, h]) => socket.on(ev, h));
+      socket.emit(emitEvent, rid ? { ...payload, rid } : payload);
     });
   }
-  async initSigning(socket, { force = false } = {}) {
+  /**
+   * Load this account's signing key from its backup, or make one. Shared by
+   * every caller while it runs: two overlapping runs could each make a key,
+   * leaving the backup holding one while the server pinned the other.
+   */
+  initSigning(socket, { force = false } = {}) {
+    if (this._signingPair && !force) return Promise.resolve(true);
+    if (!this._signingInit) {
+      this._signingInit = this._initSigningOnce(socket, force).finally(() => { this._signingInit = null; });
+    }
+    return this._signingInit;
+  }
+  async _initSigningOnce(socket, force, retried = false) {
     if (!this._ready || !this._keyPair || !socket || typeof HavenGroupCrypto === 'undefined') return false;
-    if (this._signingPair && !force) return true;
-    const probe = await this._request(socket, 'get-encrypted-key', undefined, 'encrypted-key-result');
+    const reply = await this._request(socket, 'get-encrypted-key', undefined, 'encrypted-key-result');
+    const probe = reply && reply.data;
     if (!probe) return false;
     const wrapKey = await this._signingWrapKey();
     const pinned = probe.signingKey || null;
@@ -535,26 +559,34 @@ class HavenE2E {
         const privateKey = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
         const publicKey = await crypto.subtle.importKey('jwk', { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']);
         pair = { privateKey, publicKey };
-      } catch { pair = null; }
+      } catch (err) {
+        // Sealed to an encryption key this account no longer has (a key reset).
+        console.warn('[E2E] Signing key backup could not be opened, making a new signing key:', err.message);
+        pair = null;
+      }
     }
     let publicJwk = pair ? await HavenGroupCrypto.exportPublicJwk(pair.publicKey) : null;
     const matchesPin = !!(pinned && publicJwk && pinned.x === publicJwk.x && pinned.y === publicJwk.y);
+    let backup;
     if (!pair || (pinned && !matchesPin)) {
       const fresh = await HavenGroupCrypto.generateSigningKeyPair();
       const privateJwk = await crypto.subtle.exportKey('jwk', fresh.privateKey);
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrapKey, new TextEncoder().encode(JSON.stringify(privateJwk)));
-      const stored = await this._request(socket, 'store-signing-backup', { backup: JSON.stringify({ v: 1, iv: this._toB64(iv), ct: this._toB64(new Uint8Array(ct)) }) }, 'signing-backup-stored');
-      if (!stored) return false;
+      backup = JSON.stringify({ v: 1, iv: this._toB64(iv), ct: this._toB64(new Uint8Array(ct)) });
       pair = fresh;
       publicJwk = await HavenGroupCrypto.exportPublicJwk(fresh.publicKey);
     }
     if (!matchesPin) {
-      const res = await Promise.race([
-        this._request(socket, 'publish-signing-key', { jwk: publicJwk, force: !!pinned }, 'signing-key-published'),
-        new Promise(r => socket.once('signing-key-conflict', () => r(false))),
-      ]);
-      if (res === false) return false;
+      // The key and its backup are stored in one step, so the server can never
+      // pin one key while the backup holds another.
+      const res = await this._request(socket, 'publish-signing-key', { jwk: publicJwk, backup, force: !!pinned }, ['signing-key-published', 'signing-key-conflict']);
+      if (!res) return false;
+      if (res.event === 'signing-key-conflict') {
+        // Another tab or device got there first. Its key and backup are on the
+        // server now, so load those instead of fighting over it.
+        return retried ? false : this._initSigningOnce(socket, false, true);
+      }
     }
     this._signingPair = pair;
     this._signingPublicJwk = publicJwk;

@@ -103,6 +103,27 @@ test('group DM rules', async (t) => {
     assert.strictEqual(event, 'signing-key-conflict', 'a changed signing key must raise a conflict, not replace silently');
   });
 
+  await t.test('a signing key and its backup are stored in one step, and replies name their request', async () => {
+    const erin = await register('erin');
+    const E = await connect(erin.token);
+    const ok = next(E, ['signing-key-conflict', 'signing-key-published']);
+    E.emit('publish-signing-key', { jwk: jwk('e1'), backup: 'backup-1', rid: 'r1' });
+    const first = await ok;
+    assert.strictEqual(first.event, 'signing-key-published');
+    assert.strictEqual(first.data.rid, 'r1');
+    const lost = next(E, ['signing-key-conflict', 'signing-key-published']);
+    E.emit('publish-signing-key', { jwk: jwk('e2'), backup: 'backup-2', rid: 'r2' });
+    const second = await lost;
+    assert.strictEqual(second.event, 'signing-key-conflict');
+    assert.strictEqual(second.data.rid, 'r2');
+    const got = next(E, ['encrypted-key-result']);
+    E.emit('get-encrypted-key');
+    const { data } = await got;
+    assert.strictEqual(data.signingBackup, 'backup-1', 'a losing publish must not replace the backup');
+    assert.strictEqual(data.signingKey.x, 'e1');
+    E.close();
+  });
+
   let code;
   await t.test('a group DM invites rather than silently joining people', async () => {
     const opened = next(A, ['group-dm-opened', 'error-msg']);

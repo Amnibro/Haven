@@ -78,17 +78,29 @@ module.exports = function register(socket, ctx) {
     if (!jwk || jwk.kty !== 'EC' || jwk.crv !== 'P-256' || !jwk.x || !jwk.y) {
       return socket.emit('error-msg', 'Invalid signing key format');
     }
+    // Echoed back so a client can tell its own reply from another request's.
+    const rid = typeof data.rid === 'string' ? data.rid.slice(0, 64) : undefined;
+    // The private key's backup travels with the public key and is stored in
+    // the same write, so the two can never disagree.
+    const backup = data.backup === undefined ? null : data.backup;
+    if (backup !== null && (typeof backup !== 'string' || !backup || backup.length > 4096)) {
+      return socket.emit('error-msg', 'Invalid signing key backup');
+    }
     const publicJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
     const current = db.prepare('SELECT signing_key FROM users WHERE id = ?').get(socket.user.id);
     if (current && current.signing_key && !data.force) {
       const existing = JSON.parse(current.signing_key);
       if (existing.x !== publicJwk.x || existing.y !== publicJwk.y) {
         console.warn(`[E2E] User ${socket.user.id} tried to overwrite signing key — blocked`);
-        return socket.emit('signing-key-conflict', { existing });
+        return socket.emit('signing-key-conflict', { existing, rid });
       }
     }
-    db.prepare('UPDATE users SET signing_key = ? WHERE id = ?').run(JSON.stringify(publicJwk), socket.user.id);
-    socket.emit('signing-key-published');
+    if (backup) {
+      db.prepare('UPDATE users SET signing_key = ?, signing_backup = ? WHERE id = ?').run(JSON.stringify(publicJwk), backup, socket.user.id);
+    } else {
+      db.prepare('UPDATE users SET signing_key = ? WHERE id = ?').run(JSON.stringify(publicJwk), socket.user.id);
+    }
+    socket.emit('signing-key-published', { rid });
   });
 
   socket.on('get-signing-key', (data) => {
