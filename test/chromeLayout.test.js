@@ -513,9 +513,29 @@ test('ChromeLayout DM drawer collapses down when toggle header is clicked', () =
     const dmHeader = document.getElementById('dm-toggle-header');
     assert.ok(dmHeader);
 
-    // Clicking header collapses down the DM drawer
-    dmHeader.dispatchEvent({ type: 'click', target: dmHeader });
+    // Clicking header collapses down the DM drawer. The layout catches the
+    // click on the way down so Haven's own collapse handler never runs.
+    let stopped = false;
+    document.dispatchEvent({ type: 'click', target: dmHeader, stopPropagation() { stopped = true; } });
     assert.equal(document.documentElement.classList.contains('dms-open'), false);
+    assert.equal(stopped, true);
+
+    // Opening and closing the drawer leaves Haven's DM list state alone.
+    const dmList = document.getElementById('dm-list');
+    const arrow = document.getElementById('dm-toggle-arrow');
+    dmList.style.display = 'none';
+    arrow.classList.add('collapsed');
+    plugin._setDmDockOpen(true);
+    plugin._setDmDockOpen(false);
+    assert.equal(dmList.style.display, 'none');
+    assert.equal(arrow.classList.contains('collapsed'), true);
+
+    // Buttons in the header (Organize DMs) still reach Haven.
+    stopped = false;
+    const organize = document.getElementById('organize-dms-btn');
+    organize.closest = () => organize;
+    document.dispatchEvent({ type: 'click', target: organize, stopPropagation() { stopped = true; } });
+    assert.equal(stopped, false);
 
     plugin.stop();
   });

@@ -182,7 +182,12 @@ class ChromeLayout {
       domApi?.removeStyle('ChromeLayout');
 
       if (persist) {
-        try { this._saveLayoutOn('0'); } catch {}
+        try {
+          this._saveLayoutOn('0');
+        } catch (err) {
+          // The layout is already off on screen; only the saved choice is lost.
+          console.warn('[ChromeLayout] could not save the layout choice', err);
+        }
       }
 
       const layoutApi = typeof HavenApi !== 'undefined' ? HavenApi.Layout : window.HavenApi?.Layout;
@@ -557,14 +562,15 @@ class ChromeLayout {
       }
     });
 
-    // In ChromeLayout, toggling collapse on the DM header collapses down the DM drawer
-    const dmHeader = document.getElementById('dm-toggle-header');
-    if (dmHeader) {
-      this._listen(dmHeader, 'click', (e) => {
-        if (e.target?.closest?.('#organize-dms-btn')) return;
-        this._setDmDockOpen(false);
-      });
-    }
+    // In the drawer, clicking the DM header closes the drawer. It is caught
+    // on the way down so Haven's own handler does not also collapse the DM
+    // list and save that, which would leave the list collapsed in Original.
+    this._listen(document, 'click', (e) => {
+      const dmHeader = document.getElementById('dm-toggle-header');
+      if (!dmHeader?.contains(e.target) || e.target?.closest?.('button')) return;
+      e.stopPropagation();
+      this._setDmDockOpen(false);
+    }, true);
   }
 
   _toggleDmDock() {
@@ -579,16 +585,6 @@ class ChromeLayout {
     sidebar?.classList.toggle('dms-open', !!open);
     const btn = document.getElementById('dm-dock-btn');
     if (btn) btn.setAttribute('aria-pressed', open ? 'true' : 'false');
-    const dmList = document.getElementById('dm-list');
-    const arrow = document.getElementById('dm-toggle-arrow');
-    if (open) {
-      if (dmList && dmList.style.display === 'none') dmList.style.display = '';
-      if (arrow) arrow.classList.remove('collapsed');
-      try { localStorage.setItem('haven_dm_collapsed', 'false'); } catch (_) {}
-    } else {
-      if (arrow) arrow.classList.add('collapsed');
-      try { localStorage.setItem('haven_dm_collapsed', 'true'); } catch (_) {}
-    }
   }
 
   // Haven keeps its DM unread badge up to date by id, and that badge sits in
@@ -991,6 +987,14 @@ html[data-chrome-layout="1"] .sidebar.dms-open .sidebar-split .dm-section-pane {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
+}
+/* The drawer always shows the DM list, even if it was collapsed in Original,
+   without changing that saved choice */
+html[data-chrome-layout="1"] .sidebar-split #dm-list {
+  display: block !important;
+}
+html[data-chrome-layout="1"] .sidebar-split #dm-toggle-arrow.collapsed {
+  transform: none;
 }
 
 /* Suppress other layout controls from bottom bar */
