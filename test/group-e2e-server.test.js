@@ -57,6 +57,12 @@ function next(sock, events, ms = 4000) {
 // blobs, not the crypto, which test/e2e-group.test.js covers.
 const fakeKey = (id) => JSON.stringify({ v: 1, iv: 'AAAAAAAAAAAAAAAA', ct: `wrapped-for-${id}` });
 const jwk = (x) => ({ kty: 'EC', crv: 'P-256', x, y: `y${x}` });
+// Wrapped keys plus the publisher's signed statement naming the same members.
+const epochFor = (users) => ({
+  keys: users.map((u) => ({ recipientId: u.user.id, wrappedKey: fakeKey(u.user.id) })),
+  sig: 'c2lnbmVk',
+  roster: users.map((u) => ({ id: u.user.id, ecdhJwk: jwk(`e${u.user.id}`), signJwk: jwk(`s${u.user.id}`) })),
+});
 
 test.before(async () => {
   fs.mkdirSync(DATA, { recursive: true });
@@ -179,9 +185,19 @@ test('group DM rules', async (t) => {
     assert.strictEqual(event, 'error-msg');
   });
 
+  await t.test('an epoch without a signed statement for the same members is REJECTED', async () => {
+    const unsigned = next(A, ['group-epoch-published', 'error-msg', 'group-epoch-conflict']);
+    const { keys } = epochFor([alice, bob, carol]);
+    A.emit('publish-group-epoch', { code, epoch: 1, keys });
+    assert.strictEqual((await unsigned).event, 'error-msg');
+    const short = next(A, ['group-epoch-published', 'error-msg', 'group-epoch-conflict']);
+    A.emit('publish-group-epoch', { code, epoch: 1, ...epochFor([alice, bob, carol]), roster: epochFor([alice, bob]).roster });
+    assert.strictEqual((await short).event, 'error-msg', 'the statement must name exactly the members the key goes to');
+  });
+
   await t.test('epoch 1 publishes when it covers every member', async () => {
     const ok = next(A, ['group-epoch-published', 'error-msg', 'group-epoch-conflict']);
-    A.emit('publish-group-epoch', { code, epoch: 1, keys: [alice, bob, carol].map((u) => ({ recipientId: u.user.id, wrappedKey: fakeKey(u.user.id) })) });
+    A.emit('publish-group-epoch', { code, epoch: 1, ...epochFor([alice, bob, carol]) });
     const { event, data } = await ok;
     assert.strictEqual(event, 'group-epoch-published', `expected publish, got ${event}`);
     assert.strictEqual(data.epoch, 1);
@@ -191,7 +207,7 @@ test('group DM rules', async (t) => {
     // The attack this rule exists to stop: Carol is silently cut out while the
     // UI still lists her as a participant.
     const r = next(A, ['group-epoch-published', 'error-msg', 'group-epoch-conflict']);
-    A.emit('publish-group-epoch', { code, epoch: 2, keys: [alice, bob].map((u) => ({ recipientId: u.user.id, wrappedKey: fakeKey(u.user.id) })) });
+    A.emit('publish-group-epoch', { code, epoch: 2, ...epochFor([alice, bob]) });
     const { event, data } = await r;
     assert.strictEqual(event, 'error-msg', `omitting a member must be rejected, got ${event}`);
     assert.match(String(data), /exactly one key per current member/i);
@@ -199,21 +215,21 @@ test('group DM rules', async (t) => {
 
   await t.test('an epoch naming a non-member is REJECTED', async () => {
     const r = next(A, ['group-epoch-published', 'error-msg', 'group-epoch-conflict']);
-    A.emit('publish-group-epoch', { code, epoch: 2, keys: [alice, bob, carol, dave].map((u) => ({ recipientId: u.user.id, wrappedKey: fakeKey(u.user.id) })) });
+    A.emit('publish-group-epoch', { code, epoch: 2, ...epochFor([alice, bob, carol, dave]) });
     const { event } = await r;
     assert.strictEqual(event, 'error-msg');
   });
 
   await t.test('a non-member cannot publish an epoch', async () => {
     const r = next(D, ['group-epoch-published', 'error-msg', 'group-epoch-conflict']);
-    D.emit('publish-group-epoch', { code, epoch: 2, keys: [alice, bob, carol].map((u) => ({ recipientId: u.user.id, wrappedKey: fakeKey(u.user.id) })) });
+    D.emit('publish-group-epoch', { code, epoch: 2, ...epochFor([alice, bob, carol]) });
     const { event } = await r;
     assert.strictEqual(event, 'error-msg');
   });
 
   await t.test('epochs must be strictly sequential', async () => {
     const r = next(A, ['group-epoch-published', 'error-msg', 'group-epoch-conflict']);
-    A.emit('publish-group-epoch', { code, epoch: 7, keys: [alice, bob, carol].map((u) => ({ recipientId: u.user.id, wrappedKey: fakeKey(u.user.id) })) });
+    A.emit('publish-group-epoch', { code, epoch: 7, ...epochFor([alice, bob, carol]) });
     const { event, data } = await r;
     assert.strictEqual(event, 'group-epoch-conflict', 'a skipped epoch must conflict');
     assert.strictEqual(data.currentEpoch, 1);
@@ -226,6 +242,9 @@ test('group DM rules', async (t) => {
     assert.ok(data, 'bob got a key list');
     assert.strictEqual(data.keys.length, 1);
     assert.match(data.keys[0].wrappedKey, new RegExp(`wrapped-for-${bob.user.id}`));
+    assert.strictEqual(data.keys[0].publishedBy, alice.user.id, 'the statement comes with the key');
+    assert.strictEqual(data.keys[0].sig, 'c2lnbmVk');
+    assert.deepStrictEqual(data.keys[0].roster.map((m) => m.id).sort(), [alice, bob, carol].map((u) => u.user.id).sort());
     // The decisive check: nothing addressed to anyone else came back.
     const others = [alice.user.id, carol.user.id].map((id) => `wrapped-for-${id}`);
     for (const o of others) assert.ok(!JSON.stringify(data.keys).includes(o), `must not leak ${o}`);
@@ -353,10 +372,10 @@ test('group DM rules', async (t) => {
     const Database = require('better-sqlite3');
     const db = new Database(path.join(DATA, 'haven.db'), { readonly: true });
     const id = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-    const left = ['messages', 'channel_members', 'dm_group_keys', 'dm_group_invites'].map((tb) => db.prepare(`SELECT COUNT(*) AS n FROM ${tb} m WHERE m.channel_id IN (SELECT id FROM channels WHERE code = ?)`).get(code).n);
+    const left = ['messages', 'channel_members', 'dm_group_keys', 'dm_group_epochs', 'dm_group_invites'].map((tb) => db.prepare(`SELECT COUNT(*) AS n FROM ${tb} m WHERE m.channel_id IN (SELECT id FROM channels WHERE code = ?)`).get(code).n);
     db.close();
     assert.strictEqual(id, undefined);
-    assert.deepStrictEqual(left, [0, 0, 0, 0]);
+    assert.deepStrictEqual(left, [0, 0, 0, 0, 0]);
   });
   await t.test('the signing key backup round-trips and is size-capped', async () => {
     const stored = next(B, ['signing-backup-stored', 'error-msg']);

@@ -251,7 +251,7 @@ module.exports = function register(socket, ctx) {
       return db.prepare(`SELECT id, COALESCE(display_name, username) AS username, public_key, signing_key FROM users WHERE id IN (${ph})`).all(...ids)
         .map((u) => ({ id: u.id, username: u.username, publicKey: u.public_key ? JSON.parse(u.public_key) : null, signingKey: u.signing_key ? JSON.parse(u.signing_key) : null }));
     };
-    socket.emit('group-roster', { code: ch.code, name: ch.name, epoch: ch.key_epoch, members: keysOf(memberIds(ch.id)), pending: keysOf(pendingInvitees(ch.id)) });
+    socket.emit('group-roster', { code: ch.code, id: ch.id, name: ch.name, epoch: ch.key_epoch, members: keysOf(memberIds(ch.id)), pending: keysOf(pendingInvitees(ch.id)) });
   });
   socket.on('invite-group-dm', (data) => {
     const ch = groupOf(data && data.code);
@@ -281,7 +281,7 @@ module.exports = function register(socket, ctx) {
     for (const s of socketsOf([userId])) { s.leave(`channel:${ch.code}`); s.emit('channel-deleted', { code: ch.code }); s.emit('group-dm-left', { code: ch.code }); }
     const left = memberIds(ch.id);
     if (!left.length) {
-      for (const t of ['dm_group_keys', 'dm_group_invites', 'dm_group_rewrap_requests']) db.prepare(`DELETE FROM ${t} WHERE channel_id = ?`).run(ch.id);
+      for (const t of ['dm_group_keys', 'dm_group_epochs', 'dm_group_invites', 'dm_group_rewrap_requests']) db.prepare(`DELETE FROM ${t} WHERE channel_id = ?`).run(ch.id);
       ctx.purgeDmChannel(ch, attachments, [...authors, userId]);
       clearChannelRuntimeState(ctx.state, ch.code);
     } else {
@@ -326,6 +326,19 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Malformed wrapped key');
     }
 
+    // The publisher's signed statement: this key, for this group and epoch,
+    // for exactly these members and keys. Members check it before using the
+    // key; the server only keeps it and makes sure it names the same people.
+    const jwkOk = (j) => j && typeof j.x === 'string' && typeof j.y === 'string' && j.x.length <= 100 && j.y.length <= 100;
+    const roster = Array.isArray(data.roster) ? data.roster : null;
+    if (typeof data.sig !== 'string' || !data.sig || data.sig.length > 512 || !roster
+      || roster.some((m) => !m || !isInt(m.id) || !jwkOk(m.ecdhJwk) || !jwkOk(m.signJwk))
+      || !sameIds([...new Set(roster.map((m) => m.id))].sort((a, b) => a - b), expected) || roster.length !== expected.length) {
+      return socket.emit('error-msg', 'Epoch must be signed for exactly the current members');
+    }
+    const pick = (j) => ({ kty: 'EC', crv: 'P-256', x: j.x, y: j.y });
+    const storedRoster = JSON.stringify(roster.map((m) => ({ id: m.id, ecdhJwk: pick(m.ecdhJwk), signJwk: pick(m.signJwk) })));
+
     try {
       db.transaction(() => {
         const ins = db.prepare(`
@@ -333,6 +346,8 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?, ?, ?, ?)
         `);
         for (const k of keys) ins.run(ch.id, epoch, k.recipientId, k.wrappedKey, socket.user.id);
+        db.prepare('INSERT INTO dm_group_epochs (channel_id, epoch, published_by, sig, roster) VALUES (?, ?, ?, ?, ?)')
+          .run(ch.id, epoch, socket.user.id, data.sig, storedRoster);
         db.prepare('UPDATE channels SET key_epoch = ? WHERE id = ?').run(epoch, ch.id);
       })();
     } catch (e) {
@@ -353,13 +368,18 @@ module.exports = function register(socket, ctx) {
     if (!isMember(ch.id, socket.user.id)) return socket.emit('error-msg', 'Not a member of this channel');
     const sinceEpoch = isInt(data.sinceEpoch) ? data.sinceEpoch : 0;
     const rows = db.prepare(`
-      SELECT epoch, wrapped_key AS wrappedKey, wrapped_by AS wrappedBy
-      FROM dm_group_keys
-      WHERE channel_id = ? AND recipient_id = ? AND epoch > ?
-      ORDER BY epoch ASC
-    `).all(ch.id, socket.user.id, sinceEpoch);
+      SELECT k.epoch, k.wrapped_key AS wrappedKey, k.wrapped_by AS wrappedBy,
+             e.published_by AS publishedBy, e.sig, e.roster
+      FROM dm_group_keys k
+      LEFT JOIN dm_group_epochs e ON e.channel_id = k.channel_id AND e.epoch = k.epoch
+      WHERE k.channel_id = ? AND k.recipient_id = ? AND k.epoch > ?
+      ORDER BY k.epoch ASC
+    `).all(ch.id, socket.user.id, sinceEpoch).map((r) => ({ ...r, roster: r.roster ? JSON.parse(r.roster) : null }));
     const covered = db.prepare('SELECT recipient_id FROM dm_group_keys WHERE channel_id = ? AND epoch = ? ORDER BY recipient_id').all(ch.id, ch.key_epoch).map((r) => r.recipient_id);
-    const needsRotation = ch.key_epoch === 0 || !sameIds(covered, memberIds(ch.id));
+    // An epoch from before signed statements existed is replaced too, since
+    // members no longer accept an unsigned key.
+    const signed = !!db.prepare('SELECT 1 FROM dm_group_epochs WHERE channel_id = ? AND epoch = ?').get(ch.id, ch.key_epoch);
+    const needsRotation = ch.key_epoch === 0 || !signed || !sameIds(covered, memberIds(ch.id));
     socket.emit('group-keys', { code: ch.code, currentEpoch: ch.key_epoch, keys: rows, needsRotation });
   });
 
@@ -427,5 +447,7 @@ module.exports = function register(socket, ctx) {
     for (const [, s] of io.of('/').sockets) {
       if (s.user && s.user.id === recipientId) s.emit('group-key-rewrapped', { code: ch.code, epoch });
     }
+    // The rest stop waiting to answer the same request.
+    socket.to(`channel:${ch.code}`).emit('group-rewrap-fulfilled', { code: ch.code, userId: recipientId, epoch });
   });
 };

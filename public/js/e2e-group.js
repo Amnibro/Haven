@@ -34,6 +34,8 @@
 
   const SIG_CONTEXT = 'havenmsg:v1';
   const ROSTER_CONTEXT = 'havenroster:v1';
+  const EPOCH_CONTEXT = 'havenepoch:v1';
+  const EPOCH_COMMIT_CONTEXT = 'havenepochkey:v1';
   const WRAP_INFO = 'haven-group-key-wrap';
 
   /* ── encoding ─────────────────────────────────────── */
@@ -195,6 +197,53 @@
     return b64(new Uint8Array(bytes));
   }
 
+  /* ── epoch statements ─────────────────────────────── */
+
+  /**
+   * A commitment to an epoch key: SHA-256 over the raw key, so a signature can
+   * name the exact key without revealing it.
+   */
+  async function epochKeyCommit(epochKey) {
+    const raw = new Uint8Array(await subtle.exportKey('raw', epochKey));
+    const ctx = enc.encode(EPOCH_COMMIT_CONTEXT);
+    const buf = new Uint8Array(ctx.length + raw.length);
+    buf.set(ctx, 0);
+    buf.set(raw, ctx.length);
+    raw.fill(0);
+    const digest = new Uint8Array(await subtle.digest('SHA-256', buf));
+    buf.fill(0);
+    return b64(digest);
+  }
+
+  /**
+   * What the member who publishes an epoch signs: this key, for this group and
+   * epoch, wrapped for exactly the members (and keys) in `roster`, which is a
+   * rosterDigest. Without it a wrapped key proves only who wrapped it, not
+   * which group or epoch it was meant for.
+   */
+  function epochInput({ channelId, epoch, publisherId, keyCommit, roster }) {
+    const parts = [EPOCH_CONTEXT, String(channelId), String(epoch), String(publisherId), keyCommit || '', roster || ''];
+    return enc.encode(parts.map((p) => `${p.length}:${p}`).join('|'));
+  }
+
+  const signEpoch = async (signingPrivateKey, fields) =>
+    b64(new Uint8Array(await subtle.sign(
+      { name: 'ECDSA', hash: 'SHA-256' }, signingPrivateKey, epochInput(fields)
+    )));
+
+  async function verifyEpoch(signingPublicJwk, sig, fields) {
+    try {
+      return await subtle.verify(
+        { name: 'ECDSA', hash: 'SHA-256' },
+        await importVerifyKey(signingPublicJwk),
+        unb64(sig), epochInput(fields)
+      );
+    } catch {
+      // A malformed key or signature is simply not a valid signature.
+      return false;
+    }
+  }
+
   /**
    * Walk a channel's messages and report transcript breaks. Concurrent sends
    * legitimately share a `prev`, so a fork is not a fault — only a `prev`
@@ -216,6 +265,7 @@
     sign, verify, signingInput,
     encryptGroupMessage, decryptGroupMessage, envelopeHash,
     rosterDigest, verifyChain,
+    epochKeyCommit, signEpoch, verifyEpoch,
     _b64: b64, _unb64: unb64,
   };
 });

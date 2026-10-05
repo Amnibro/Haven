@@ -1475,7 +1475,7 @@ _e2eSupported() {
  */
 _dmSendGate(code) {
   const ch = this.channels?.find(c => c.code === code);
-  if (ch?.is_dm && ch.is_group) return this._groupEnsure(code).then(() => ({ partner: this._getE2EPartnerFor(code) }), () => { this._showToast(t('toasts.encryption_failed_not_sent'), 'error'); return null; });
+  if (ch?.is_dm && ch.is_group) return this._groupSendGate(code);
   if (!ch || !ch.is_dm || !ch.dm_target) return Promise.resolve({ partner: null });
   // One question per conversation at a time, so a batch of files asks once.
   if (this._dmGateAsking.has(code)) return this._dmGateAsking.get(code);

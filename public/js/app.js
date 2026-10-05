@@ -55,7 +55,7 @@ import DiscordImportMethods from './modules/app-discord-import.js?v=4.17.4';
 import RoleMethods from './modules/app-roles.js?v=4.17.23';
 import RoleAssignMethods from './modules/app-role-assign.js?v=4.17.23';
 import ModerationMethods from './modules/app-moderation.js?v=4.17.4';
-import PlatformMethods from './modules/app-platform.js?v=4.18.8';
+import PlatformMethods from './modules/app-platform.js?v=4.18.10';
 import SearchMethods   from './modules/app-search.js?v=4.10.1';
 import FerryMethods    from './modules/app-ferry.js?v=4.17.0';
 import ForumMethods    from './modules/app-forum.js?v=4.17.1';
@@ -63,7 +63,7 @@ import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.17.23';
 import CallMethods from './modules/app-calls.js?v=4.17.1';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
-import GroupMethods from './modules/app-groups.js?v=4.18.9';
+import GroupMethods from './modules/app-groups.js?v=4.18.10';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 
 class HavenApp {

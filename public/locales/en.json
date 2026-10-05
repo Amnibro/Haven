@@ -623,7 +623,12 @@
     "key_changed": "{{name}}'s encryption key changed. Verify it before the group key is shared again.",
     "no_key": "🔒 Sent before you joined, or waiting for a group member to share the key",
     "cannot_verify": "⚠️ This message could not be verified and was not shown",
-    "already_exists": "You already have a group with these people: {{name}}"
+    "already_exists": "You already have a group with these people: {{name}}",
+    "keys_changed_title": "Encryption keys changed in this group",
+    "keys_changed_body": "{{names}} changed their encryption keys. This happens when someone resets their keys, but it can also mean someone is trying to read the group or post as them. Check with them some other way (in person, or on a call) before trusting the new keys. Until you do, the group key is not shared with the new keys and messages signed with them stay hidden.",
+    "trust_keys": "Trust the new keys",
+    "signer_changed": "⚠️ {{name}}'s keys changed. This message is hidden until you trust the new keys.",
+    "someone": "Someone"
   },
   "modmode": {
     "enabled": "Mod Mode ON — drag sections or panel handles to rearrange",

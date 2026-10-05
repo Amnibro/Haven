@@ -1180,6 +1180,14 @@ function initDatabase() {
       created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (channel_id, epoch, requester_id)
     );
+    CREATE TABLE IF NOT EXISTS dm_group_epochs (
+      channel_id   INTEGER NOT NULL,
+      epoch        INTEGER NOT NULL,
+      published_by INTEGER NOT NULL,
+      sig          TEXT    NOT NULL,
+      roster       TEXT    NOT NULL,
+      PRIMARY KEY (channel_id, epoch)
+    );
   `);
 
   db.exec(`

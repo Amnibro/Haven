@@ -28,6 +28,13 @@ _setupGroupListeners() {
   });
   s.on('group-epoch-published', (d) => { const st = this._groups.get(d.code); if (st && !st.keys.has(d.epoch)) this._groupFetchKeys(d.code).catch(() => {}); });
   s.on('group-rewrap-requested', (d) => this._groupRewrap(d).catch(() => {}));
+  s.on('group-rewrap-fulfilled', (d) => this._groups.get(d.code)?.pendingRewraps.delete(d.userId));
+  s.on('group-key-rewrapped', (d) => {
+    const st = this._groups.get(d.code);
+    if (!st) return;
+    st.rewrapAsked = false;
+    this._groupFetchKeys(d.code).then(() => this._groupRerender(d.code), err => console.warn('[Groups] could not load the re-shared key:', err.message));
+  });
   s.on('connect', () => s.emit('get-group-invites'));
   if (s.connected) s.emit('get-group-invites');
 },
@@ -41,7 +48,7 @@ _isGroupEnvelope(content) {
 },
 _groupState(code) {
   if (!this._groups) this._groups = new Map();
-  if (!this._groups.has(code)) this._groups.set(code, { keys: new Map(), epoch: 0, roster: null, needsRotation: false, lastHash: null, lastId: 0, busy: null });
+  if (!this._groups.has(code)) this._groups.set(code, { keys: new Map(), epoch: 0, roster: null, needsRotation: false, lastHash: null, lastId: 0, busy: null, changed: new Set(), pendingRewraps: new Map(), reviewing: null });
   return this._groups.get(code);
 },
 _groupReq(emitEvent, payload, results, ms = 8000) {
@@ -71,26 +78,65 @@ async _groupPublicKey(userId, roster) {
   const m = roster?.members?.find(x => x.id === userId);
   return m?.publicKey || this._dmPublicKeys?.[userId] || await this.e2e.requestPartnerKey(this.socket, userId);
 },
-async _groupFetchKeys(code) {
+async _groupFetchKeys(code, { all = false } = {}) {
   const st = this._groupState(code);
-  const since = st.keys.size ? Math.max(...st.keys.keys()) : 0;
+  const since = st.keys.size && !all ? Math.max(...st.keys.keys()) : 0;
   const r = await this._groupReq('get-group-keys', { code, sinceEpoch: since }, { 'group-keys': d => d.code === code });
   if (!r) return st;
   st.epoch = r.data.currentEpoch;
   st.needsRotation = !!r.data.needsRotation;
   const roster = st.roster || await this._groupRoster(code);
   for (const k of r.data.keys) {
+    if (st.keys.has(k.epoch)) continue;
     try {
-      const jwk = await this._groupPublicKey(k.wrappedBy, roster);
-      if (!jwk) continue;
-      st.keys.set(k.epoch, await HavenGroupCrypto.unwrapEpochKey(k.wrappedKey, await this.e2e.pairKey(k.wrappedBy, jwk)));
-    } catch { }
+      const key = await this._groupOpenEpochKey(code, k, roster);
+      if (key) st.keys.set(k.epoch, key);
+    } catch (err) {
+      // Usually sealed to a key the wrapper has since replaced.
+      console.warn(`[Groups] could not open the key for epoch ${k.epoch}:`, err.message);
+    }
   }
   if (st.epoch && !st.keys.has(st.epoch) && !st.needsRotation && !st.rewrapAsked) {
     st.rewrapAsked = true;
     this.socket.emit('request-group-rewrap', { code });
   }
   return st;
+},
+/**
+ * Open one wrapped epoch key, and accept it only when both hold:
+ *   1. whoever wrapped it has the encryption key this device pinned for them,
+ *      so the server cannot wrap a key of its own under a key it swapped in;
+ *   2. the member who published the epoch signed it, for this group, this
+ *      epoch and a member list that includes us, with a signing key this
+ *      device has accepted for them.
+ */
+async _groupOpenEpochKey(code, k, roster) {
+  const me = this.user.id;
+  const wrapperJwk = await this._groupPublicKey(k.wrappedBy, roster);
+  if (!wrapperJwk) return null;
+  if (k.wrappedBy !== me && this._e2ePinCheck(k.wrappedBy, wrapperJwk) === 'changed') {
+    this._groupNoteChange(code, k.wrappedBy);
+    return null;
+  }
+  const epochKey = await HavenGroupCrypto.unwrapEpochKey(k.wrappedKey, await this.e2e.pairKey(k.wrappedBy, wrapperJwk));
+  const roll = Array.isArray(k.roster) ? k.roster : [];
+  if (!k.sig || !roll.some(m => m.id === me) || !roll.some(m => m.id === k.publishedBy)) {
+    console.warn(`[Groups] refused the key for epoch ${k.epoch}: it has no signed statement that includes us`);
+    return null;
+  }
+  const fields = {
+    channelId: this._groupChannelId(code), epoch: k.epoch, publisherId: k.publishedBy,
+    keyCommit: await HavenGroupCrypto.epochKeyCommit(epochKey),
+    roster: await HavenGroupCrypto.rosterDigest(roll),
+  };
+  const verdict = await this._groupVerifyBy(k.publishedBy, jwk => HavenGroupCrypto.verifyEpoch(jwk, k.sig, fields));
+  if (verdict === 'ok') return epochKey;
+  if (verdict === 'changed') this._groupNoteChange(code, k.publishedBy);
+  else console.warn(`[Groups] refused the key for epoch ${k.epoch}: its signature did not verify`);
+  return null;
+},
+_groupChannelId(code) {
+  return this.channels?.find(c => c.code === code)?.id ?? this._groups?.get(code)?.roster?.id;
 },
 _groupEnsure(code) {
   const st = this._groupState(code);
@@ -110,20 +156,31 @@ async _groupRotate(code, attempt = 0) {
   const st = this._groupState(code);
   const roster = await this._groupRoster(code);
   if (!roster || !roster.members.some(m => m.id === this.user.id)) return false;
-  const pins = this._e2ePins?.() || {};
+  if (!this.e2e.signingPrivateKey && !(await this.e2e.initSigning(this.socket))) return false;
+  const pick = (j) => ({ kty: 'EC', crv: 'P-256', x: j.x, y: j.y });
   const epochKey = await HavenGroupCrypto.generateEpochKey();
   const keys = [];
+  const snapshot = [];
   for (const m of roster.members) {
+    const mine = m.id === this.user.id;
     const jwk = await this._groupPublicKey(m.id, roster);
-    if (!jwk) return false;
-    if (m.id !== this.user.id && pins[m.id] && pins[m.id] !== this._e2ePinFingerprint(jwk)) {
-      this._showToast(t('groups.key_changed', { name: this._getNickname(m.id, m.username) }), 'warning');
+    const signJwk = mine ? this.e2e.signingPublicJwk : m.signingKey;
+    if (!jwk || !signJwk) return false;
+    // Never wrap the group key for a key this device has not accepted.
+    if (!mine && this._e2ePinCheck(m.id, jwk) === 'changed') {
+      this._groupNoteChange(code, m.id);
       return false;
     }
     keys.push({ recipientId: m.id, wrappedKey: await HavenGroupCrypto.wrapEpochKey(epochKey, await this.e2e.pairKey(m.id, jwk)) });
+    snapshot.push({ id: m.id, ecdhJwk: pick(jwk), signJwk: pick(signJwk) });
   }
   const epoch = roster.epoch + 1;
-  const r = await this._groupReq('publish-group-epoch', { code, epoch, keys }, {
+  const sig = await HavenGroupCrypto.signEpoch(this.e2e.signingPrivateKey, {
+    channelId: this._groupChannelId(code), epoch, publisherId: this.user.id,
+    keyCommit: await HavenGroupCrypto.epochKeyCommit(epochKey),
+    roster: await HavenGroupCrypto.rosterDigest(snapshot),
+  });
+  const r = await this._groupReq('publish-group-epoch', { code, epoch, keys, sig, roster: snapshot }, {
     'group-epoch-published': d => d.code === code && d.epoch === epoch,
     'group-epoch-conflict': d => d.code === code,
     'error-msg': null,
@@ -158,6 +215,14 @@ async _groupRewrap(d) {
   const r = await this._groupReq('get-public-key', { userId: d.userId }, { 'public-key-result': x => x.userId === d.userId });
   const jwk = r?.data?.jwk;
   if (!jwk) return;
+  // The request reaches us through the server, which could forge one and
+  // answer with a key of its own. The group key only goes to the key this
+  // device has pinned for that person; a changed one waits for the user.
+  if (this._e2ePinCheck(d.userId, jwk) === 'changed') {
+    st.pendingRewraps.set(d.userId, d);
+    this._groupNoteChange(d.code, d.userId);
+    return;
+  }
   const wrappedKey = await HavenGroupCrypto.wrapEpochKey(key, await this.e2e.pairKey(d.userId, jwk));
   this.socket.emit('rewrap-group-key', { code: d.code, recipientId: d.userId, epoch: d.epoch, wrappedKey, recipientPublicKey: JSON.stringify(jwk) });
 },
@@ -185,6 +250,61 @@ async _groupSignerKeys(userId) {
   this._signerKeys.set(userId, keys);
   return keys;
 },
+/**
+ * Run `check(jwk)` over a user's recorded signing keys. 'ok' when a key this
+ * device has accepted for them passes; 'changed' when only a key it has not
+ * accepted yet passes (they reset their keys, or someone is posing as them);
+ * 'bad' when none does.
+ */
+async _groupVerifyBy(userId, check) {
+  const run = async () => {
+    const { accepted, unaccepted } = this._groupPartitionSigners(userId, await this._groupSignerKeys(userId));
+    for (const jwk of accepted) if (await check(jwk)) return 'ok';
+    for (const jwk of unaccepted) if (await check(jwk)) return 'changed';
+    return 'bad';
+  };
+  let verdict = await run();
+  // They may have changed keys since we last asked. Ask again, but not for
+  // every message in a page of history.
+  const asked = this._signerAskedAt?.get(userId) || 0;
+  if (verdict === 'bad' && Date.now() - asked > 30000) {
+    if (!this._signerAskedAt) this._signerAskedAt = new Map();
+    this._signerAskedAt.set(userId, Date.now());
+    this._signerKeys?.delete(userId);
+    verdict = await run();
+  }
+  return verdict;
+},
+// Signing keys this device has accepted, per user, kept like the encryption
+// key pins (_e2ePins). The first keys seen for someone are accepted as they
+// are; a key added later waits until the user trusts it.
+_sigPinStore() {
+  return `haven_e2e_signpins_${this.user?.id}`;
+},
+_sigPins() {
+  const store = this._sigPinStore();
+  if (this._sigPinCache?.store === store) return this._sigPinCache.pins;
+  let pins = {};
+  try { pins = JSON.parse(localStorage.getItem(store) || '{}') || {}; } catch (err) { console.warn('[Groups] saved signing key pins unreadable, starting over:', err.message); }
+  this._sigPinCache = { store, pins };
+  return pins;
+},
+_sigPinAdd(userId, keys) {
+  const pins = this._sigPins();
+  pins[userId] = [...new Set([...(pins[userId] || []), ...keys.map(k => `${k.x}.${k.y}`)])];
+  try { localStorage.setItem(this._sigPinStore(), JSON.stringify(pins)); } catch { /* no storage: the pins last for this session only */ }
+},
+_groupPartitionSigners(userId, keys) {
+  const pinned = this._sigPins()[userId];
+  if (!pinned || !pinned.length) {
+    if (keys.length) this._sigPinAdd(userId, keys);
+    return { accepted: keys, unaccepted: [] };
+  }
+  const ok = new Set(pinned);
+  const own = userId === this.user?.id && this.e2e?.signingPublicJwk;
+  if (own) ok.add(`${own.x}.${own.y}`);
+  return { accepted: keys.filter(k => ok.has(`${k.x}.${k.y}`)), unaccepted: keys.filter(k => !ok.has(`${k.x}.${k.y}`)) };
+},
 async _groupDecrypt(code, content, senderId, msgId = 0) {
   const st = this._groupState(code);
   let env;
@@ -192,38 +312,29 @@ async _groupDecrypt(code, content, senderId, msgId = 0) {
   if (!st.keys.has(env.e)) await this._groupFetchKeys(code);
   const key = st.keys.get(env.e);
   if (!key) return { ok: false, reason: 'no-key' };
-  const ch = this.channels.find(c => c.code === code);
-  const attempt = async () => {
-    const signers = await this._groupSignerKeys(senderId);
-    if (!signers.length) return { ok: false, reason: 'no-signer' };
-    // Fail closed: a message that verifies under none of its author's
-    // recorded keys stays hidden.
-    let res = { ok: false, reason: 'bad-signature' };
-    for (const signer of signers) {
-      res = await HavenGroupCrypto.decryptGroupMessage(env, { epochKey: key, channelId: ch?.id, senderId, signingPublicJwk: signer });
-      if (res.reason !== 'bad-signature') break;
-    }
-    return res;
-  };
-  let r = await attempt();
-  // The author may have changed keys since we last asked. Ask again, but not
-  // for every message in a page of history.
-  const asked = this._signerAskedAt?.get(senderId) || 0;
-  if (!r.ok && (r.reason === 'bad-signature' || r.reason === 'no-signer') && Date.now() - asked > 30000) {
-    if (!this._signerAskedAt) this._signerAskedAt = new Map();
-    this._signerAskedAt.set(senderId, Date.now());
-    this._signerKeys?.delete(senderId);
-    r = await attempt();
-  }
+  const channelId = this._groupChannelId(code);
+  let opened = null;
+  // Fail closed: a message that verifies under none of its author's
+  // accepted keys stays hidden.
+  const verdict = await this._groupVerifyBy(senderId, async (jwk) => {
+    const res = await HavenGroupCrypto.decryptGroupMessage(env, { epochKey: key, channelId, senderId, signingPublicJwk: jwk });
+    if (res.ok || res.reason === 'wrong-epoch-key') { opened = res; return true; }
+    return false;
+  });
+  let r = { ok: false, plaintext: null, reason: 'bad-signature' };
+  if (verdict === 'ok') r = opened;
+  else if (verdict === 'changed') { r = { ok: false, plaintext: null, reason: 'signer-changed' }; this._groupNoteChange(code, senderId); }
   if (r.ok && msgId >= st.lastId) { st.lastId = msgId; st.lastHash = await HavenGroupCrypto.envelopeHash(content); }
   return r;
 },
 async _decryptGroupMessages(messages, ch) {
-  const fail = (r) => t(r.reason === 'no-key' ? 'groups.no_key' : 'groups.cannot_verify');
+  const fail = (r, id) => (r.reason === 'no-key' ? t('groups.no_key')
+    : r.reason === 'signer-changed' ? t('groups.signer_changed', { name: this._groupMemberName(ch.code, id) })
+    : t('groups.cannot_verify'));
   for (const msg of messages) {
     if (this._isGroupEnvelope(msg.content)) {
       const r = await this._groupDecrypt(ch.code, msg.content, msg.user_id, msg.id || 0);
-      msg.content = r.ok ? r.plaintext : fail(r);
+      msg.content = r.ok ? r.plaintext : fail(r, msg.user_id);
       msg._e2e = r.ok;
       msg._e2eVerified = r.ok;
     } else if (msg.user_id && typeof msg.content === 'string' && msg.content) {
@@ -234,7 +345,7 @@ async _decryptGroupMessages(messages, ch) {
     this._rememberDmAttachments?.(msg);
     if (msg.replyContext && this._isGroupEnvelope(msg.replyContext.content)) {
       const r = await this._groupDecrypt(ch.code, msg.replyContext.content, msg.replyContext.user_id);
-      msg.replyContext.content = r.ok ? r.plaintext : fail(r);
+      msg.replyContext.content = r.ok ? r.plaintext : fail(r, msg.replyContext.user_id);
     }
   }
 },
@@ -259,6 +370,90 @@ async _groupDecryptBytes(code, data) {
   const key = st.keys.get(epoch);
   if (!key) throw new Error('No key for this attachment');
   return crypto.subtle.decrypt({ name: 'AES-GCM', iv: data.slice(5, 17) }, key, data.slice(17));
+},
+_groupMemberName(code, userId) {
+  const m = this._groups?.get(code)?.roster?.members?.find(x => x.id === userId)
+    || this.channels?.find(c => c.code === code)?.group_members?.find(x => x.id === userId);
+  return this._getNickname(userId, m?.username || t('groups.someone'));
+},
+/** Someone's keys no longer match what this device accepted for them. */
+_groupNoteChange(code, userId) {
+  const st = this._groupState(code);
+  if (st.changed.has(userId)) return;
+  st.changed.add(userId);
+  this._showToast(t('groups.key_changed', { name: this._groupMemberName(code, userId) }), 'warning');
+  if (this.currentChannel === code || this._activeDMPip === code) {
+    this._groupReviewKeys(code).catch(err => console.warn('[Groups] key review failed:', err.message));
+  }
+},
+/**
+ * Ask whether to trust the new keys of everyone whose keys changed, the way a
+ * 1:1 DM asks before sending to a changed key. Until then the group key is
+ * not shared with their new key and messages signed with it stay hidden.
+ */
+_groupReviewKeys(code) {
+  const st = this._groupState(code);
+  if (!st.changed.size) return Promise.resolve(true);
+  if (st.reviewing) return st.reviewing;
+  st.reviewing = (async () => {
+    const ids = [...st.changed];
+    const names = ids.map(id => this._groupMemberName(code, id)).join(', ');
+    const choice = await this._askChoice(t('groups.keys_changed_title'), t('groups.keys_changed_body', { names }), [
+      { id: 'cancel', label: t('modals.common.cancel') },
+      { id: 'trust', label: t('groups.trust_keys'), danger: true },
+    ]);
+    if (choice !== 'trust') return false;
+    for (const id of ids) {
+      await this._groupTrustKeys(id);
+      st.changed.delete(id);
+    }
+    for (const d of [...st.pendingRewraps.values()]) {
+      st.pendingRewraps.delete(d.userId);
+      await this._groupRewrap(d);
+    }
+    await this._groupFetchKeys(code, { all: true });
+    if (st.needsRotation) await this._groupRotate(code);
+    this._groupRerender(code);
+    return true;
+  })().finally(() => { st.reviewing = null; });
+  return st.reviewing;
+},
+/** Accept a person's current encryption key and every signing key on record. */
+async _groupTrustKeys(userId) {
+  const jwk = await this.e2e.requestPartnerKey(this.socket, userId);
+  if (jwk) this._e2ePinSet(userId, jwk);
+  this._signerKeys?.delete(userId);
+  const keys = await this._groupSignerKeys(userId);
+  if (keys.length) this._sigPinAdd(userId, keys);
+},
+/** The group version of the DM send gate: { partner }, or null when not sent. */
+async _groupSendGate(code) {
+  const failed = (err) => {
+    console.warn('[Groups] encryption not ready:', err.message);
+    this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+    return null;
+  };
+  try { await this._groupEnsure(code); } catch (err) { return failed(err); }
+  if (this._groupState(code).changed.size) {
+    if (!(await this._groupReviewKeys(code))) return null;
+    try { await this._groupEnsure(code); } catch (err) { return failed(err); }
+  }
+  return { partner: this._getE2EPartnerFor(code) };
+},
+/** Load the group's messages again, wherever it is open. */
+_groupRerender(code) {
+  if (this.currentChannel === code) {
+    this._oldestMsgId = null;
+    this._noMoreHistory = false;
+    this._loadingHistory = false;
+    this._historyBefore = null;
+    this._newestMsgId = null;
+    this._noMoreFuture = true;
+    this._loadingFuture = false;
+    this._historyAfter = null;
+    this.socket.emit('get-messages', { code });
+  }
+  if (this._activeDMPip === code) this._openDMPiP?.(code);
 },
 _e2eEncryptText(partner, text) {
   return partner.group ? this._groupEncrypt(partner.code, text) : this.e2e.encrypt(text, partner.userId, partner.publicKeyJwk);
