@@ -29,10 +29,19 @@ test.before(async () => {
   const port = await freePort();
   base = `http://127.0.0.1:${port}`;
   server = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin', FORCE_HTTP: 'true' }, stdio: 'ignore' });
-  for (let i = 0; i < 80; i++) { try { if ((await fetch(`${base}/api/health`)).ok) return; } catch {} await new Promise((r) => setTimeout(r, 250)); }
+  for (let i = 0; i < 80; i++) { try { if ((await fetch(`${base}/api/health`)).ok) return; } catch { /* not listening yet, try again */ } await new Promise((r) => setTimeout(r, 250)); }
   throw new Error('server did not start');
 });
-test.after(() => { server?.kill(); fs.rmSync(DATA, { recursive: true, force: true }); });
+// Windows keeps the database locked until the server process has really
+// exited, so wait for it before removing the data folder.
+test.after(async () => {
+  if (server && server.exitCode === null) {
+    const exited = new Promise((r) => server.once('exit', r));
+    server.kill();
+    await Promise.race([exited, new Promise((r) => setTimeout(r, 5000))]);
+  }
+  fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+});
 test('server templates over HTTP: admin only, preview, apply, live update', async () => {
   const admin = await register('admin');
   const member = await register('member');
