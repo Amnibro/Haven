@@ -675,7 +675,8 @@ class ChromeLayout {
     if (!channelRows?.length) return;
 
     channelRows.forEach((row) => {
-      const code = row.dataset?.channelCode;
+      // Core tags each channel row with data-code.
+      const code = row.dataset?.code;
       if (!code) return;
       const ch = app?.channels?.find?.(c => c.code === code);
       if (ch?.is_dm || ch?.voice_enabled === 0 || !canUseVoice) return;

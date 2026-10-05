@@ -265,7 +265,7 @@ function createEnvironment() {
 
   const row = new FakeElement('div', elementsById);
   row.classList.add('channel-item');
-  row.dataset.channelCode = 'general';
+  row.dataset.code = 'general';
   const moreBtn = new FakeElement('button', elementsById);
   moreBtn.classList.add('channel-more-btn');
   row.appendChild(moreBtn);
