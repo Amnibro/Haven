@@ -69,7 +69,7 @@ test.before(async () => {
   server = spawn(process.execPath, ['server.js'], {
     cwd: path.join(__dirname, '..'),
     // Plain HTTP on purpose: without FORCE_HTTP a certless Haven now makes its own certificate.
-    env: { ...process.env, PORT: String(PORT), HAVEN_DATA_DIR: DATA, FORCE_HTTP: 'true' },
+    env: { ...process.env, PORT: String(PORT), HAVEN_DATA_DIR: DATA, FORCE_HTTP: 'true', ADMIN_USERNAME: 'admin' },
     stdio: 'ignore',
   });
   for (let i = 0; i < 60; i++) {
@@ -376,6 +376,25 @@ test('group DM rules', async (t) => {
     db.close();
     assert.strictEqual(id, undefined);
     assert.deepStrictEqual(left, [0, 0, 0, 0, 0]);
+  });
+  await t.test('an admin who is not in a group can delete it, and its key rows go with it', async () => {
+    const admin = await register('admin');
+    const Z = await connect(admin.token);
+    const opened = next(B, ['group-dm-opened', 'error-msg']);
+    B.emit('start-group-dm', { userIds: [carol.user.id, dave.user.id] });
+    const { data } = await opened;
+    const published = next(B, ['group-epoch-published', 'error-msg']);
+    B.emit('publish-group-epoch', { code: data.code, epoch: 1, ...epochFor([bob]) });
+    assert.strictEqual((await published).event, 'group-epoch-published');
+    const gone = next(B, ['channel-deleted']);
+    Z.emit('delete-dm', { code: data.code });
+    assert.strictEqual((await gone).data.code, data.code);
+    const Database = require('better-sqlite3');
+    const db = new Database(path.join(DATA, 'haven.db'), { readonly: true });
+    const left = ['dm_group_keys', 'dm_group_epochs', 'dm_group_invites', 'dm_group_rewrap_requests'].map((tb) => db.prepare(`SELECT COUNT(*) AS n FROM ${tb} WHERE channel_id = ?`).get(data.id).n);
+    db.close();
+    assert.deepStrictEqual(left, [0, 0, 0, 0]);
+    Z.close();
   });
   await t.test('the signing key backup round-trips and is size-capped', async () => {
     const stored = next(B, ['signing-backup-stored', 'error-msg']);

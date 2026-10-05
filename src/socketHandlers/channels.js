@@ -1883,6 +1883,10 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
       db.prepare('DELETE FROM messages WHERE channel_id = ?').run(chId);
       db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(chId);
+      // A group DM's keys and invites go with it, whoever deletes it.
+      for (const table of ['dm_group_keys', 'dm_group_epochs', 'dm_group_invites', 'dm_group_rewrap_requests']) {
+        db.prepare(`DELETE FROM ${table} WHERE channel_id = ?`).run(chId);
+      }
       db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
     });
     deleteAll(channel.id);

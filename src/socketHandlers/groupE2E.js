@@ -280,7 +280,6 @@ module.exports = function register(socket, ctx) {
     for (const s of socketsOf([userId])) { s.leave(`channel:${ch.code}`); s.emit('channel-deleted', { code: ch.code }); s.emit('group-dm-left', { code: ch.code }); }
     const left = memberIds(ch.id);
     if (!left.length) {
-      for (const t of ['dm_group_keys', 'dm_group_epochs', 'dm_group_invites', 'dm_group_rewrap_requests']) db.prepare(`DELETE FROM ${t} WHERE channel_id = ?`).run(ch.id);
       // Only the last member's own uploads are released. Earlier members'
       // files may still be linked from encrypted messages elsewhere, which the
       // server cannot read to check.
