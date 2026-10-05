@@ -2022,8 +2022,7 @@ function injectPublishedThemeBar(container, themes, onPick) {
       const sep = document.createElement('span');
       sep.className = 'theme-bar-sep';
       sep.dataset.customTheme = '1';
-      sep.title = 'Seasonal';
-      sep.style.cssText = 'display:inline-flex;align-items:center;opacity:0.4;font-size:0.65rem;padding:0 2px;user-select:none;color:var(--text-muted);';
+      sep.title = typeof t === 'function' ? t('app.theme.seasonal') : 'Seasonal';
       sep.textContent = '•';
       el.appendChild(sep);
     }

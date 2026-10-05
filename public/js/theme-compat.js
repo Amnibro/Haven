@@ -132,7 +132,9 @@
     markResetPending(session);
   }
 
-  const isSeasonalTheme = theme => /^(seasonal|holiday)$/i.test(String(theme?.section || theme?.category || '')) || /christmas|halloween|thanksgiving/i.test(String(theme?.file || ''));
+  // A theme opts into the Seasonal group with `@section Seasonal` (or
+  // `@category Holiday`) in its header.
+  const isSeasonalTheme = theme => /^(seasonal|holiday)$/i.test(String(theme?.section || theme?.category || ''));
   function urlWithoutSafeMode(locationLike) {
     try {
       const url = new URL(locationLike?.href || globalThis.location.href);

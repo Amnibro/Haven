@@ -1430,7 +1430,7 @@ async _renderAdminThemeList() {
       if (seasonal.length > 0) {
         const sep = document.createElement('option');
         sep.disabled = true;
-        sep.textContent = `── ${t('app.theme.seasonal') || 'Seasonal'} ──`;
+        sep.textContent = `── ${t('app.theme.seasonal')} ──`;
         sep.setAttribute('data-custom-theme', '1');
         dtSelect.appendChild(sep);
         for (const theme of seasonal) {
