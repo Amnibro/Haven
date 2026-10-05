@@ -1804,9 +1804,11 @@ module.exports = function register(socket, ctx) {
     if (!target) return socket.emit('error-msg', 'User not found');
     // For self-DM, the channel has only one channel_members row, so both EXISTS
     // clauses below collapse to the same check — which still matches correctly.
+    // A group DM that shrank to two (or one) members is still a group, not
+    // this pair's 1:1 conversation.
     const existingDm = db.prepare(`
       SELECT c.id, c.code, c.name FROM channels c
-      WHERE c.is_dm = 1
+      WHERE c.is_dm = 1 AND COALESCE(c.is_group, 0) = 0
       AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id = c.id AND user_id = ?)
       AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id = c.id AND user_id = ?)
       AND (SELECT COUNT(*) FROM channel_members WHERE channel_id = c.id) = ${isSelfDm ? 1 : 2}

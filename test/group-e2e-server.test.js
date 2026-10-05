@@ -301,6 +301,13 @@ test('group DM rules', async (t) => {
     A.emit('get-group-roster', { code });
     assert.deepStrictEqual((await r).data.members.map((m) => m.id).sort(), [alice, bob].map((u) => u.user.id).sort());
   });
+  await t.test('a group that shrinks to two is not reused as their 1:1 DM', async () => {
+    const opened = next(A, ['dm-opened', 'error-msg']);
+    A.emit('start-dm', { targetUserId: bob.user.id });
+    const { event, data } = await opened;
+    assert.strictEqual(event, 'dm-opened');
+    assert.notStrictEqual(data.code, code, 'the 1:1 DM must be its own channel, not the group');
+  });
   await t.test('the last member out deletes the group', async () => {
     B.emit('leave-group-dm', { code });
     await wait(300);
