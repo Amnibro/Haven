@@ -632,6 +632,10 @@ _closeDMPiP() {
   try { localStorage.removeItem('haven_active_dm_pip'); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   const panel = document.getElementById('dm-pip-panel');
   if (panel) panel.style.display = 'none';
+  // Closed means stopped: a video or embed left in the hidden panel kept
+  // playing (#5729), as in threads (#5690). Opening fetches and redraws it.
+  const msgs = document.getElementById('dm-pip-messages');
+  if (msgs) msgs.innerHTML = '';
 },
 
 _applyDMPiPGeometry(panel) {
@@ -833,7 +837,7 @@ _sendDMPiPMessage() {
   // E2E-encrypt for the PiP's DM channel (not the active currentChannel).
   (async () => {
     const ch = this.channels.find(c => c.code === code);
-    const isDm = ch && ch.is_dm && ch.dm_target;
+    const isDm = ch && ch.is_dm && (ch.dm_target || ch.is_group);
     // Not sent after all: the text and the reply go back in the box.
     const putBack = () => {
       if (this._activeDMPip !== code || input.value.trim()) return;
@@ -910,7 +914,7 @@ _sendDMPiPMessage() {
     if (content) {
       if (partner) {
         try {
-          const encrypted = await this.e2e.encrypt(content, partner.userId, partner.publicKeyJwk);
+          const encrypted = await this._e2eEncryptText(partner, content);
           payload.content = encrypted;
           payload.encrypted = true;
         } catch (err) {

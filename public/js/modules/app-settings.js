@@ -32,6 +32,10 @@ _bindSettings() {
       if (window.havenDesktop.platform === 'linux' && typeof window.havenDesktop.prefs?.setLinuxVaapiBypass === 'function') {
         document.getElementById('pref-linux-vaapi-row')?.style.removeProperty('display');
       }
+      // Same, for X11 mode (#5721).
+      if (window.havenDesktop.platform === 'linux' && typeof window.havenDesktop.prefs?.setLinuxForceX11 === 'function') {
+        document.getElementById('pref-linux-x11-row')?.style.removeProperty('display');
+      }
     }
     // Eagerly fetch data that requires async calls so sections don't
     // sit on "Loading..." indefinitely if the user never clicks the nav item.

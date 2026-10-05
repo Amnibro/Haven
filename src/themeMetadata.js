@@ -85,6 +85,8 @@ function parseThemeMetadata(content) {
     author: 'author',
     version: 'version',
     icon: 'icon',
+    category: 'category',
+    section: 'section',
   };
 
   for (const [property, tag] of Object.entries(fields)) {

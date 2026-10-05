@@ -436,11 +436,11 @@ _listenMessageChanges() {
       if (!msgEls.length) return;
       // E2E: decrypt once if needed (same content for both copies)
       let displayContent = data.content;
-      if (HavenE2E.isEncrypted(data.content)) {
+      if (HavenE2E.isEncrypted(data.content) || this._isGroupEnvelope?.(data.content) || this._isGroupDm?.(data.channelCode)) {
         const partner = this._getE2EPartnerFor(data.channelCode);
         if (partner) {
           try {
-            const plain = await this.e2e.decrypt(data.content, partner.userId, partner.publicKeyJwk);
+            const plain = await this._e2eDecryptText(partner, data.content, data.userId);
             if (plain !== null) displayContent = plain;
             else displayContent = t('header.messages.decrypt_failed');
           } catch { displayContent = t('header.messages.decrypt_failed'); }
@@ -823,7 +823,13 @@ _listenAdminAndPrefs() {
 
   // ── Server settings ────────────────────────────────
   this.socket.on('server-settings', (settings, envInfo) => {
+    // The channel list can land first (it is asked for first, and on a slow
+    // start it usually wins), drawn without this setting; redraw it once the
+    // real value is known (#5723).
+    const hideBadges = (s) => !!s && s.hide_disabled_channel_badges === 'true';
+    const redrawChannels = hideBadges(this.serverSettings) !== hideBadges(settings);
     this.serverSettings = settings;
+    if (redrawChannels) this._renderChannels?.();
     // Idle detection starts during app initialization, before this async
     // settings payload arrives. Re-plan its initial timer with server values.
     this._refreshIdleTimeout?.();
@@ -882,6 +888,7 @@ _listenAdminAndPrefs() {
   // ── User preferences (persistent theme etc.) ───────
   this.socket.on('preferences', (prefs) => {
     this._userPrefs = prefs || {};
+    this._prefsReceived = true;
     // The top-bar Android banner waits for this record before it shows (#5594).
     this._syncAndroidBanner?.();
     // Effects come back from the server like the theme does; restore them

@@ -41,6 +41,9 @@
       "server_hint": "Enter the address of the Haven server you already have an account on",
       "connect": "Connect",
       "imported_from": "Imported from your home server",
+      "username_label": "Username on this server",
+      "username_hint": "Taken from your home server. If it is already in use here, pick another. 3-20 characters, letters/numbers/underscores.",
+      "username_unavailable": "That username can't be used on this server. Pick a different one above and try again.",
       "password_label": "Set a password for this server",
       "password_hint": "Required for encryption. Minimum 8 characters.",
       "confirm_label": "Confirm Password",
@@ -52,7 +55,7 @@
       "timeout": "SSO approval timed out — try connecting again",
       "failed": "SSO failed — please try again",
       "connect_first": "Please connect to your home server first",
-      "invalid_username": "SSO username is invalid. Please use standard registration."
+      "invalid_username": "Usernames are 3-20 characters: letters, numbers and underscores."
     },
     "oidc": {
       "submit": "Sign in with SSO",
@@ -217,6 +220,7 @@
     },
     "theme": {
       "title": "Theme",
+      "seasonal": "Seasonal",
       "layout": "Layout",
       "effect_overlay": "Effect Overlay",
       "layout_original": "Original",
@@ -444,7 +448,8 @@
     "burn_pending_tooltip": "Self-destructs {{seconds}}s after the recipient views it",
     "burn_reveal_hint": "({{seconds}}s after viewing)",
     "new_messages": "NEW MESSAGES",
-    "self_destructing": "Self-destructing {{time}}"
+    "self_destructing": "Self-destructing {{time}}",
+    "self_destruct_no_reply": "Self-destructing messages can't be replied to or quoted"
   },
   "utils": {
     "today_at": "Today at {{time}}",
@@ -598,6 +603,27 @@
     "notify_body": "{{name}} is calling you",
     "start": "📞 Call",
     "join": "📞 Join call"
+  },
+  "groups": {
+    "new_group": "New group DM",
+    "add_people": "Add people",
+    "leave": "Leave group",
+    "name_placeholder": "Group name (optional)",
+    "search_people": "Search people",
+    "e2e_hint": "Group DMs are end-to-end encrypted. Everyone needs a Haven app that supports them, and each person is invited and joins when they accept.",
+    "invite": "Invite",
+    "create": "Create group",
+    "nobody": "Nobody to add. People you share a channel or DM with show up here.",
+    "invited": "{{name}} invited you to {{group}}",
+    "accept": "Join",
+    "decline": "Decline",
+    "default_name": "Group DM",
+    "left": "You left the group",
+    "leave_confirm": "Leave {{group}}? You won't be able to read new messages unless someone invites you again.",
+    "key_changed": "{{name}}'s encryption key changed. Verify it before the group key is shared again.",
+    "no_key": "🔒 Sent before you joined, or waiting for a group member to share the key",
+    "cannot_verify": "⚠️ This message could not be verified and was not shown",
+    "already_exists": "You already have a group with these people: {{name}}"
   },
   "modmode": {
     "enabled": "Mod Mode ON — drag sections or panel handles to rearrange",
@@ -1901,6 +1927,8 @@
       "unlimit_frame_rate": "Remove Chromium frame-rate cap (Nvidia G-Sync fix)",
       "unlimit_frame_rate_hint": "Pairs with the GPU vsync toggle above. Removes Chromium's internal frame-rate limit, which on some Nvidia G-Sync setups gets stuck at a very low value and never recovers. Only useful if the vsync toggle alone didn't help. Can increase CPU/GPU usage. Requires restart to take effect.",
       "linux_vaapi": "Hardware video encoding on Linux (VA-API)",
+      "linux_x11": "Run in X11 mode on Linux",
+      "linux_x11_hint": "Linux only. Runs Haven Desktop through X11 (XWayland) instead of native Wayland. Try it if the window flickers, which some Nvidia cards do on Wayland. In this mode screen sharing may only list some windows. Requires restart to take effect.",
       "linux_vaapi_hint": "Linux only. Lets Haven Desktop use your graphics card's VA-API video encoder for screen sharing even where Chromium's driver blocklist would not, including on Nvidia cards. It can lower CPU use while you share, but some drivers give black or broken video, so it is off by default. Requires restart to take effect."
     },
     "admin": {
@@ -2334,6 +2362,7 @@
       "cleanup_max_uploads": "Max Uploads Size (MB)",
       "cleanup_run_btn": "Run Cleanup Now",
       "deleted_retention": "Keep deleted files for (days)",
+      "keep_self_destructed": "Keep self-destructed attachments",
       "uploads_title": "Uploads & Limits",
       "max_upload": "Max Upload Size (MB)",
       "max_attachments": "Max Attachments per Message",
@@ -2403,6 +2432,7 @@
       "cleanup_size_hint": "Trim oldest messages when DB exceeds N MB (0 = off)",
       "cleanup_uploads_hint": "When the uploads folder passes N MB, remove the oldest messages with files until it is back under (0 = off). Avatars, emoji and stickers count toward it but are never removed.",
       "deleted_retention_hint": "Attachments from deleted messages and channels are held this long, then removed for good. This runs whether or not auto-cleanup is enabled (default 7).",
+      "keep_self_destructed_hint": "On: when a self-destructing message expires, its files are held as long as other deleted files (set above), so a moderator can still recover something abusive. Off: they are deleted for good. Keep it on for community servers; small servers where everyone trusts each other may prefer off.",
       "max_upload_hint": "Maximum file size users can upload in MB (default 25). No hard cap — limited by available disk space.",
       "max_attachments_hint": "How many files someone can queue on one message by dropping, pasting or picking them (1 to 50, default 10). Each one still has to fit the size limit above.",
       "max_tags_per_attachment": "Max Tags per Attachment",
@@ -3823,7 +3853,8 @@
       "color_updated": "Color profile updated. Restart Haven Desktop to apply.",
       "vsync_updated": "GPU vsync setting updated. Restart Haven Desktop to apply.",
       "frame_cap_updated": "Frame-rate cap setting updated. Restart Haven Desktop to apply.",
-      "vaapi_updated": "VA-API setting updated. Restart Haven Desktop to apply."
+      "vaapi_updated": "VA-API setting updated. Restart Haven Desktop to apply.",
+      "x11_updated": "X11 mode updated. Restart Haven Desktop to apply."
     },
     "shortcuts": {
       "record": "Record",

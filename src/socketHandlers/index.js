@@ -464,7 +464,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     let channels;
     if (seesAll) {
       channels = db.prepare(`
-        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
+        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
                c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
@@ -472,7 +472,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout
         FROM channels c WHERE c.is_dm = 0
         UNION
-        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
+        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
                c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
@@ -489,7 +489,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       channels.forEach(ch => { if (!ch.is_dm) insertMember.run(ch.id, userId, autoJoin); });
     } else {
       channels = db.prepare(`
-        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
+        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
                c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
@@ -534,7 +534,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
             for (const row of targetRows) insertMember.run(row.id, userId);
             channels = db.prepare(`
-              SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
+              SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
                      c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                      c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                      c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
@@ -636,7 +636,17 @@ function setupSocketHandlers(io, db, opts = {}) {
             JOIN channel_members cm ON u.id = cm.user_id
             WHERE cm.channel_id = ? AND u.id != ?
           `).get(ch.id, userId);
-          if (otherUser) {
+          if (ch.is_group) {
+            ch.dm_target = otherUser || null;
+            ch.group_members = db.prepare(`
+              SELECT u.id, COALESCE(u.display_name, u.username) as username, u.avatar, u.avatar_shape AS avatarShape
+              FROM users u JOIN channel_members cm ON u.id = cm.user_id WHERE cm.channel_id = ? ORDER BY u.id
+            `).all(ch.id);
+            ch.group_pending = db.prepare(`
+              SELECT u.id, COALESCE(u.display_name, u.username) as username
+              FROM users u JOIN dm_group_invites i ON u.id = i.user_id WHERE i.channel_id = ? ORDER BY u.id
+            `).all(ch.id);
+          } else if (otherUser) {
             ch.dm_target = otherUser;
           } else {
             // Self-DM: only one channel_members row, no "other" user. Use self as the partner.

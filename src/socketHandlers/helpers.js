@@ -261,11 +261,15 @@ function stripRoleMentions(content, roleNames) {
 // could name someone else's avatar, emoji or attachment in a message of their
 // own, delete it, and have that file purged for good. Call it after the
 // message rows are gone, so they do not count as a reference.
-function releasableUploads(db, relPaths, ownerIds) {
+// With `ignoreMessagesAfter` (a message id), only messages older than that
+// one keep a file: a link pasted after a self destructing message cannot keep
+// its file alive, but a file the sender had already shared in the open stays.
+function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null } = {}) {
   const owners = new Set((ownerIds || []).filter(id => Number.isInteger(id)));
   if (!owners.size) return [];
   const ownership = db.prepare('SELECT user_id, scope FROM upload_ownership WHERE rel_path = ?');
-  const inMessages = db.prepare('SELECT 1 FROM messages WHERE instr(content, ?) > 0 LIMIT 1');
+  const before = Number.isInteger(ignoreMessagesAfter) ? ignoreMessagesAfter : Number.MAX_SAFE_INTEGER;
+  const inMessages = db.prepare('SELECT 1 FROM messages WHERE instr(content, ?) > 0 AND id < ? LIMIT 1');
   const inProfiles = db.prepare(`
     SELECT 1 WHERE
          EXISTS(SELECT 1 FROM users WHERE instr(COALESCE(avatar, ''), @p) > 0 OR instr(COALESCE(border, ''), @p) > 0)
@@ -284,7 +288,7 @@ function releasableUploads(db, relPaths, ownerIds) {
     if (!own || !owners.has(own.user_id) || (own.scope !== 'channel' && own.scope !== 'dm')) continue;
     const ref = '/uploads/' + relPath;
     try {
-      if (inMessages.get(ref)) continue;
+      if (inMessages.get(ref, before)) continue;
       if (inProfiles.get({ p: ref, f: relPath })) continue;
     } catch { continue; }
     out.push(relPath);

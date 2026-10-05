@@ -4,18 +4,18 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.17.21';
+import SocketMethods   from './modules/app-socket.js?v=4.18.4';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.17.13';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.17.21';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.18.4';
 import UIBindMethods   from './modules/app-ui.js?v=4.17.21';
 import ComposerMethods from './modules/app-composer.js?v=4.17.21';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.19';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.17.14';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.17.2';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.17.2';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.17.6';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.18.2';
 import PeopleMethods from './modules/app-people.js?v=4.17.2';
-import SettingsMethods from './modules/app-settings.js?v=4.17.15';
+import SettingsMethods from './modules/app-settings.js?v=4.18.5';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.20';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.17.2';
@@ -42,11 +42,11 @@ import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.17.13';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.17.14';
 import MusicMethods from './modules/app-music.js?v=4.17.11';
 import UtilityMethods  from './modules/app-utilities.js?v=4.17.19';
-import MessageContentMethods from './modules/app-message-content.js?v=4.17.7';
+import MessageContentMethods from './modules/app-message-content.js?v=4.18.3';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.17.6';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.17.21';
 import ThreadMethods from './modules/app-threads.js?v=4.17.6';
-import AdminMethods    from './modules/app-admin.js?v=4.17.17';
+import AdminMethods    from './modules/app-admin.js?v=4.18.3';
 import BrandingMethods from './modules/app-branding.js?v=4.17.4';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.17.6';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.17.4';
@@ -55,7 +55,7 @@ import DiscordImportMethods from './modules/app-discord-import.js?v=4.17.4';
 import RoleMethods from './modules/app-roles.js?v=4.17.23';
 import RoleAssignMethods from './modules/app-role-assign.js?v=4.17.23';
 import ModerationMethods from './modules/app-moderation.js?v=4.17.4';
-import PlatformMethods from './modules/app-platform.js?v=4.17.15';
+import PlatformMethods from './modules/app-platform.js?v=4.18.5';
 import SearchMethods   from './modules/app-search.js?v=4.10.1';
 import FerryMethods    from './modules/app-ferry.js?v=4.17.0';
 import ForumMethods    from './modules/app-forum.js?v=4.17.1';
@@ -63,7 +63,8 @@ import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.17.23';
 import CallMethods from './modules/app-calls.js?v=4.17.1';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
-import TemplateMethods from './modules/app-templates.js?v=4.14.0';
+import GroupMethods from './modules/app-groups.js?v=4.14.0';
+import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 
 class HavenApp {
   constructor() {
@@ -555,6 +556,7 @@ Object.assign(HavenApp.prototype,
   PermMatrixMethods,
   CallMethods,
   ScalingMethods,
+  GroupMethods,
   TemplateMethods,
 );
 

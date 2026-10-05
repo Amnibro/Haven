@@ -785,6 +785,14 @@ _renderReplyBanner(replyCtx) {
   `;
 },
 
+// A self destructing message takes no replies or quotes. Pinning or
+// protecting it drops the timer line, and with it this block.
+_refuseSelfDestructing(msgEl) {
+  if (!msgEl?.querySelector?.('.msg-self-destruct')) return false;
+  this._showToast?.(t('messages.self_destruct_no_reply'), 'info');
+  return true;
+},
+
 _setReply(msgEl, msgId) {
   // In a forum a reply to a topic belongs in the topic's thread: that is what
   // bumps it, and it keeps the answer under the question instead of posting
@@ -795,6 +803,9 @@ _setReply(msgEl, msgId) {
     this._openThread(msgId);
     return;
   }
+  // Opening a forum topic's thread (above) stays allowed, as from the
+  // Threads button; a reply in the channel itself does not.
+  if (this._refuseSelfDestructing(msgEl)) return;
   // Get message info — works for both full messages and compact messages
   let author = msgEl.querySelector('.message-author')?.textContent;
   if (!author) {
@@ -826,6 +837,7 @@ _clearReply() {
 },
 
 _quoteMessage(msgEl) {
+  if (this._refuseSelfDestructing(msgEl)) return;
   // Get the raw text content of the message
   const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.message-content')?.textContent || '';
   // Get the author name
@@ -960,7 +972,7 @@ _startEditMessage(msgEl, msgId) {
     const partner = pipContext ? this._getE2EPartnerFor(pipContext) : this._getE2EPartner();
     if (partner) {
       try {
-        newContent = await this.e2e.encrypt(newContent, partner.userId, partner.publicKeyJwk);
+        newContent = await this._e2eEncryptText(partner, newContent);
       } catch (err) {
         console.warn('[E2E] Failed to encrypt edited message:', err);
       }

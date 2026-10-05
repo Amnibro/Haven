@@ -157,6 +157,11 @@
             <small style="color:var(--text-muted);font-size:11px" data-i18n="auth.sso.imported_from">Imported from your home server</small>
           </div>
           <div class="form-group">
+            <label for="sso-username" data-i18n="auth.sso.username_label">Username on this server</label>
+            <input type="text" id="sso-username" autocomplete="username" maxlength="20" required>
+            <small data-i18n="auth.sso.username_hint">Taken from your home server. If it is already in use here, pick another. 3-20 characters, letters/numbers/underscores.</small>
+          </div>
+          <div class="form-group">
             <label for="sso-password" data-i18n="auth.sso.password_label">Set a password for this server</label>
             <input type="password" id="sso-password" autocomplete="new-password" minlength="8" required>
             <small data-i18n="auth.sso.password_hint">Required for encryption. Minimum 8 characters.</small>

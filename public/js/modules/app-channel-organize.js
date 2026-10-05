@@ -713,7 +713,7 @@ _renderDmOrganizeList() {
   const allTags = [...new Set(displayList.map(c => assignments[c.code]).filter(Boolean))].sort();
   const hasTags = allTags.length > 0;
 
-  const getDmName = (ch) => ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
+  const getDmName = (ch) => ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
 
   const sortGroup = (arr, mode) => {
     if (mode === 'alpha') {
@@ -751,7 +751,7 @@ _renderDmOrganizeList() {
       const sel = ch.code === this._dmOrganizeSelected ? ' selected' : '';
       const tagBadge = assignments[ch.code] ? `<span class="organize-tag-badge">${this._escapeHtml(assignments[ch.code])}</span>` : '';
       html += `<div class="organize-item${sel}" data-code="${ch.code}">
-        <span class="organize-item-name">@ ${this._escapeHtml(name)}</span>
+        <span class="organize-item-name">${ch.is_group ? '👥' : '@'} ${this._escapeHtml(name)}</span>
         ${tagBadge}
       </div>`;
     }

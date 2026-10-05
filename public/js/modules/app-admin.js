@@ -413,6 +413,8 @@ _applyServerSettings() {
     if (cleanupUploads) cleanupUploads.value = this.serverSettings.cleanup_max_uploads_mb || '0';
     const deletedRet = document.getElementById('deleted-retention-days');
     if (deletedRet) deletedRet.value = this.serverSettings.deleted_retention_days || '7';
+    const keepSd = document.getElementById('keep-self-destructed');
+    if (keepSd) keepSd.checked = this.serverSettings.keep_self_destructed_attachments !== 'false';
     const maxUpload = document.getElementById('max-upload-mb');
     if (maxUpload) {
       maxUpload.value = this.serverSettings.max_upload_mb || '25';
@@ -892,6 +894,7 @@ _snapshotAdminSettings() {
     cleanup_max_size_mb: this.serverSettings.cleanup_max_size_mb || '0',
     cleanup_max_uploads_mb: this.serverSettings.cleanup_max_uploads_mb || '0',
     deleted_retention_days: this.serverSettings.deleted_retention_days || '7',
+    keep_self_destructed_attachments: this.serverSettings.keep_self_destructed_attachments || 'true',
     whitelist_enabled: this.serverSettings.whitelist_enabled || 'false',
     max_upload_mb: this.serverSettings.max_upload_mb || '25',
     max_attachments: this.serverSettings.max_attachments || '10',
@@ -1036,6 +1039,12 @@ _saveAdminSettings() {
   const deletedRet = String(Math.max(1, Math.min(3650, parseInt(document.getElementById('deleted-retention-days')?.value) || 7)));
   if (deletedRet !== (snap.deleted_retention_days || '7')) {
     this.socket.emit('update-server-setting', { key: 'deleted_retention_days', value: deletedRet });
+    changed = true;
+  }
+
+  const keepSd = document.getElementById('keep-self-destructed')?.checked ? 'true' : 'false';
+  if (keepSd !== snap.keep_self_destructed_attachments) {
+    this.socket.emit('update-server-setting', { key: 'keep_self_destructed_attachments', value: keepSd });
     changed = true;
   }
 
@@ -1298,6 +1307,8 @@ _cancelAdminSettings() {
     if (cu) cu.value = snap.cleanup_max_uploads_mb;
     const dr = document.getElementById('deleted-retention-days');
     if (dr) dr.value = snap.deleted_retention_days;
+    const ks = document.getElementById('keep-self-destructed');
+    if (ks) ks.checked = snap.keep_self_destructed_attachments !== 'false';
     const wl = document.getElementById('whitelist-enabled');
     if (wl) wl.checked = snap.whitelist_enabled === 'true';
     const mu = document.getElementById('max-upload-mb');
@@ -1400,17 +1411,36 @@ async _renderAdminThemeList() {
     dtSelect.querySelectorAll('option[data-custom-theme]').forEach(o => o.remove());
     const published = themes.filter(theme => theme.published && theme.compatible !== false);
     if (published.length > 0) {
-      const sep = document.createElement('option');
-      sep.disabled = true;
-      sep.textContent = `── ${t('settings.admin.custom_themes')} ──`;
-      sep.setAttribute('data-custom-theme', '1');
-      dtSelect.appendChild(sep);
-      for (const theme of published) {
-        const opt = document.createElement('option');
-        opt.value = `file:${theme.file}`;
-        opt.textContent = theme.name || theme.file;
-        opt.setAttribute('data-custom-theme', '1');
-        dtSelect.appendChild(opt);
+      const seasonal = published.filter(t => window.HavenThemeCompat?.isSeasonalTheme?.(t)), standard = published.filter(t => !seasonal.includes(t));
+
+      if (standard.length > 0) {
+        const sep = document.createElement('option');
+        sep.disabled = true;
+        sep.textContent = `── ${t('settings.admin.custom_themes')} ──`;
+        sep.setAttribute('data-custom-theme', '1');
+        dtSelect.appendChild(sep);
+        for (const theme of standard) {
+          const opt = document.createElement('option');
+          opt.value = `file:${theme.file}`;
+          opt.textContent = theme.name || theme.file;
+          opt.setAttribute('data-custom-theme', '1');
+          dtSelect.appendChild(opt);
+        }
+      }
+
+      if (seasonal.length > 0) {
+        const sep = document.createElement('option');
+        sep.disabled = true;
+        sep.textContent = `── ${t('app.theme.seasonal')} ──`;
+        sep.setAttribute('data-custom-theme', '1');
+        dtSelect.appendChild(sep);
+        for (const theme of seasonal) {
+          const opt = document.createElement('option');
+          opt.value = `file:${theme.file}`;
+          opt.textContent = `${theme.icon ? theme.icon + ' ' : ''}${theme.name || theme.file}`;
+          opt.setAttribute('data-custom-theme', '1');
+          dtSelect.appendChild(opt);
+        }
       }
     }
     const currentDefault = this.serverSettings.default_theme || '';

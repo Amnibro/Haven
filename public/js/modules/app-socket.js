@@ -184,6 +184,7 @@ _setupSocketListeners() {
 _listenSession() {
   this._setupFerrySocket();
   this._setupCallListeners?.();
+  this._setupGroupListeners?.();
   // Authoritative user info pushed by server on every connect
   this.socket.on('session-info', (data) => {
     this.user = { ...this.user, ...data };
@@ -339,6 +340,13 @@ _listenSession() {
     this.voice?.deferChannelGone?.(6000);
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
+    // Your own theme, effects and other synced settings. Startup asks once;
+    // when that first connection drops before the answer arrives (a server
+    // still starting after a reboot), the app ran on defaults until a reload
+    // (#5723). Asked again only while it is still missing, so a normal
+    // reconnect does not reapply the theme under you.
+    if (!this._prefsReceived && this._prefsAskedOnce) this.socket.emit('get-preferences');
+    this._prefsAskedOnce = true;
     // Role names for @Role mentions: rendering and the @ picker. (#5579)
     this._refreshMentionableRoles?.();
 
