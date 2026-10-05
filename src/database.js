@@ -3,6 +3,7 @@ const path = require('path');
 const { DB_PATH } = require('./paths');
 const { ensureSearchIndex } = require('./searchIndex');
 const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('./roleDefaults');
+const { migrateGroupDmTrust } = require('./groupDmSchema');
 
 let db;
 
@@ -1124,20 +1125,6 @@ function initDatabase() {
   // what gives messages a sender the recipient can verify, rather than one the
   // server asserts. See docs/group-dm-e2e-plan.md.
   addColumn('users', 'signing_key', "TEXT DEFAULT NULL");
-  // Every signing key an account has published, never removed, so messages
-  // signed before a key reset still verify afterwards. (#5733)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS user_signing_keys (
-      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      fp         TEXT    NOT NULL,
-      jwk        TEXT    NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (user_id, fp)
-    );
-    INSERT OR IGNORE INTO user_signing_keys (user_id, fp, jwk)
-      SELECT id, json_extract(signing_key, '$.x') || '.' || json_extract(signing_key, '$.y'), signing_key
-      FROM users WHERE signing_key IS NOT NULL;
-  `);
 
   // ── Migration: group DM epoch keys ──────────────────────
   addColumn('channels', 'key_epoch', "INTEGER DEFAULT 0");
@@ -1172,15 +1159,8 @@ function initDatabase() {
       created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (channel_id, epoch, requester_id)
     );
-    CREATE TABLE IF NOT EXISTS dm_group_epochs (
-      channel_id   INTEGER NOT NULL,
-      epoch        INTEGER NOT NULL,
-      published_by INTEGER NOT NULL,
-      sig          TEXT    NOT NULL,
-      roster       TEXT    NOT NULL,
-      PRIMARY KEY (channel_id, epoch)
-    );
   `);
+  migrateGroupDmTrust(db);
 
   db.exec(`
     UPDATE channels SET is_group = 1
