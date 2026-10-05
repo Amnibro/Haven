@@ -8,6 +8,7 @@ const path = require('path');
 const { DATA_DIR, DB_PATH, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('../deletedAttachments');
 const { trimUploadsToLimit } = require('../uploadsTrim');
+const { findOrphanDms } = require('../orphanDms');
 const { verifyToken } = require('../auth');
 const { getDdnsStatus, triggerDdnsNow } = require('../ddns');
 
@@ -156,18 +157,10 @@ module.exports = function registerMaintenance(deps) {
       // so the row vanishes when the user does, but the DM channel itself
       // is left lingering with stale messages forever; this is the
       // "orphaned conversation" issue called out in #5282. Runs regardless
-      // of cleanup_enabled so the data isn't retained indefinitely.
-      // A group DM is orphaned only once nobody is left: one member waiting
-      // on invites, or the last one still in it, is not an orphan.
+      // of cleanup_enabled so the data isn't retained indefinitely. Which
+      // DMs count as orphaned is decided in src/orphanDms.js.
       try {
-        const orphanRows = db.prepare(`
-        SELECT c.id, c.code, COUNT(cm.user_id) as member_count
-        FROM channels c
-        LEFT JOIN channel_members cm ON cm.channel_id = c.id
-        WHERE c.is_dm = 1
-        GROUP BY c.id
-        HAVING member_count < (CASE WHEN COALESCE(c.is_group, 0) = 1 THEN 1 ELSE 2 END)
-      `).all();
+        const orphanRows = findOrphanDms(db);
         let orphansDeleted = 0;
         for (const ch of orphanRows) {
           try {
