@@ -20,6 +20,8 @@ const ASSET_TOKEN_RE = /\{\{asset:([^{}]{1,80})\}\}/g;
 const UPLOAD_REF_RE = /\/uploads\/([A-Za-z0-9][A-Za-z0-9_.-]{0,120})(?![A-Za-z0-9_./-])/g;
 const IMAGE_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' };
 const WEBHOOK_EVENTS = ['message', 'reaction-added', 'member-joined'];
+const FORUM_VIEWS = ['list', 'gallery', 'feed'];
+const FORUM_SHAPES = ['square', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'];
 const CHANNEL_FIELDS = [
   ['private', 'is_private', 'flag', null, false], ['forum', 'is_forum', 'flag', null, false], ['readOnly', 'read_only', 'flag', null, false],
   ['text', 'text_enabled', 'flag', null, true], ['voice', 'voice_enabled', 'flag', null, true], ['media', 'media_enabled', 'flag', null, true],
@@ -84,9 +86,29 @@ function refMaker() {
 function exportTemplate(db, opts = {}) {
   const { uploadsDir = null, themesDir = null, posts = 'pinned', postAuthors = null, excludeChannels = [], assets: withAssets = true, meta = {}, havenVersion = null } = opts;
   const warnings = [], assets = {};
-  const put = (base, ext, entry) => {
+  // The file has to pass this server's own import, so names and values saved
+  // under older rules are tidied here instead of making it unusable.
+  const fit = (s, max) => { let out = ''; for (const ch of String(s ?? '').trim()) { if (out.length + ch.length > max) break; out += ch; } return out.trim(); };
+  const tidy = (v, max, fallback = '') => fit(String(v ?? '').replace(/[<>\u0000-\u001f\u007f]/g, ''), max) || fallback;
+  const uniqueIn = (used, name, max) => {
+    let out = name;
+    for (let n = 2; used.has(out.toLowerCase()); n++) out = `${fit(name, max - String(n).length - 1)}-${n}`;
+    used.add(out.toLowerCase());
+    return out;
+  };
+  const cap = (list, max, what) => {
+    if (list.length > max) warnings.push(`Left out ${list.length - max} ${what}: a template holds at most ${max}`);
+    return list.slice(0, max);
+  };
+  let assetBytes = 0;
+  const room = (size, what) => {
+    if (assetBytes + size <= LIMITS.assets && Object.keys(assets).length < LIMITS.assetCount) return (assetBytes += size), true;
+    return warnings.push(`Left out ${what}: a template holds at most ${LIMITS.assetCount} files and 8 MB of them`), false;
+  };
+  const put = (base, ext, entry, size) => {
     let name = `${base}${ext}`;
     for (let n = 2; assets[name] && assets[name].sha256 !== entry.sha256; n++) name = `${base}-${n}${ext}`;
+    if (!assets[name] && !room(size, name)) return null;
     assets[name] = entry;
     return name;
   };
@@ -100,7 +122,7 @@ function exportTemplate(db, opts = {}) {
     const type = sniffImageType(buf);
     if (!type || buf.length > LIMITS.asset) return warnings.push(`Left out ${url}: not a PNG, JPEG, GIF or WebP image under 2 MB`), null;
     const base = path.basename(m[2], path.extname(m[2])).replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-_]+/, '').slice(0, 48) || 'asset';
-    return put(base, IMAGE_EXT[type], { kind, type, sha256: sha256(buf), data: buf.toString('base64') });
+    return put(base, IMAGE_EXT[type], { kind, type, sha256: sha256(buf), data: buf.toString('base64') }, buf.length);
   };
   const rows = new Map(db.prepare('SELECT key, value FROM server_settings').all().map((r) => [r.key, r.value]));
   const settings = {};
@@ -112,12 +134,21 @@ function exportTemplate(db, opts = {}) {
   const skip = new Set(excludeChannels.map((n) => String(n).toLowerCase()));
   const all = db.prepare('SELECT * FROM channels ORDER BY position, id').all().filter((r) => !r.is_dm && !r.is_group && !r.is_temp_voice && !(r.expires_at && r.auto_delete_mode !== 'clear'));
   const top = new Set(all.filter((r) => !r.parent_channel_id && !skip.has(r.name.toLowerCase())).map((r) => r.id));
-  const chRows = all.filter((r) => (r.parent_channel_id ? top.has(r.parent_channel_id) && !skip.has(r.name.toLowerCase()) : top.has(r.id)));
+  const listed = all.filter((r) => (r.parent_channel_id ? top.has(r.parent_channel_id) && !skip.has(r.name.toLowerCase()) : top.has(r.id)));
+  const kept = new Set(cap(listed, LIMITS.channels, 'channels').map((r) => r.id));
+  const chRows = listed.filter((r) => kept.has(r.id) && (!r.parent_channel_id || kept.has(r.parent_channel_id)));
   const chMake = refMaker(), chRef = new Map(chRows.map((r) => [r.id, chMake(r.name)])), byCode = new Map(chRows.map((r) => [r.code, r]));
+  const chName = new Map(), siblings = new Map();
+  for (const r of chRows) {
+    const at = r.parent_channel_id || 0;
+    if (!siblings.has(at)) siblings.set(at, new Set());
+    chName.set(r.id, uniqueIn(siblings.get(at), fit([...String(r.name)].filter((ch) => CHANNEL_NAME_RE.test(ch)).join(''), 50) || 'channel', 50));
+  }
   // The Admin role is the one whoever holds admin wears; another server has
   // its own, so it never travels in a template.
   const adminRoleId = getAdminRoleId(db);
-  const roleRows = db.prepare('SELECT * FROM roles ORDER BY level DESC, id').all().filter((r) => r.id !== adminRoleId);
+  const roleRows = cap(db.prepare('SELECT * FROM roles ORDER BY level DESC, id').all().filter((r) => r.id !== adminRoleId), LIMITS.roles, 'roles');
+  const roleNames = new Set();
   const roleMake = refMaker(), roleRef = new Map(roleRows.map((r) => [r.id, roleMake(r.name)]));
   const perms = db.prepare('SELECT role_id, permission, allowed FROM role_permissions ORDER BY permission').all();
   const roles = roleRows.map((r) => {
@@ -125,18 +156,20 @@ function exportTemplate(db, opts = {}) {
     const adminOnly = allowed.filter((p) => ADMIN_ONLY_PERMS.includes(p));
     if (adminOnly.length) warnings.push(`Left out ${adminOnly.join(', ')} from role ${r.name}: templates never hand out admin-only permissions`);
     return {
-      ref: roleRef.get(r.id), name: r.name, level: r.level, scope: r.scope === 'channel' ? 'channel' : 'server', color: r.color || null,
-      autoAssign: !!r.auto_assign, linkChannelAccess: !!r.link_channel_access, icon: r.icon ? addAsset(r.icon) : null, maxUploadMb: r.max_upload_mb || null,
+      ref: roleRef.get(r.id), name: uniqueIn(roleNames, tidy(r.name, 30, 'Role'), 30), level: Math.min(99, Math.max(0, Math.round(Number(r.level) || 0))),
+      scope: r.scope === 'channel' ? 'channel' : 'server', color: typeof r.color === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(r.color) ? r.color : null,
+      autoAssign: !!r.auto_assign, linkChannelAccess: !!r.link_channel_access, icon: r.icon ? addAsset(r.icon) : null,
+      maxUploadMb: Number.isInteger(r.max_upload_mb) && r.max_upload_mb >= 1 && r.max_upload_mb <= 102400 ? r.max_upload_mb : null,
       permissions: allowed.filter((p) => !ADMIN_ONLY_PERMS.includes(p)),
       denied: perms.filter((p) => p.role_id === r.id && !p.allowed && VALID_ROLE_PERMS.includes(p.permission)).map((p) => p.permission),
     };
   });
   const parse = (v) => { try { return JSON.parse(v); } catch { return null; } };
   const channels = chRows.map((r) => {
-    const o = { ref: chRef.get(r.id), name: r.name };
-    if (r.category) o.category = r.category;
+    const o = { ref: chRef.get(r.id), name: chName.get(r.id) };
+    if (tidy(r.category, 30)) o.category = tidy(r.category, 30);
     if (r.parent_channel_id) o.parent = chRef.get(r.parent_channel_id);
-    if (r.topic) o.topic = r.topic;
+    if (fit(r.topic, 256)) o.topic = fit(r.topic, 256);
     for (const [k, col, kind, arg, dflt] of CHANNEL_FIELDS) {
       const raw = r[col] ?? dflt;
       const v = kind === 'flag' ? !!raw : kind === 'range' ? Math.min(arg[1], Math.max(arg[0], Number(raw) || 0)) : arg.includes(raw) ? raw : dflt;
@@ -144,36 +177,60 @@ function exportTemplate(db, opts = {}) {
     }
     const gate = parse(r.role_gate);
     const gateRoles = gate && Array.isArray(gate.roles) ? gate.roles.map((id) => roleRef.get(Number(id))).filter(Boolean) : [];
-    if (gateRoles.length) o.roleGate = { mode: gate.mode === 'all' ? 'all' : 'any', roles: gateRoles };
+    if (gateRoles.length) o.roleGate = { mode: gate.mode === 'all' ? 'all' : 'any', roles: gateRoles.slice(0, 50) };
     if (r.default_role_id && roleRef.has(r.default_role_id)) o.defaultRole = roleRef.get(r.default_role_id);
     const afk = r.afk_sub_code && byCode.get(r.afk_sub_code);
     if (afk && afk.parent_channel_id === r.id) o.afkChannel = chRef.get(afk.id);
     const tags = parse(r.forum_tags);
-    if (Array.isArray(tags) && tags.length) o.forumTags = tags.filter((t) => t && label(t.name, 30)).slice(0, 40).map((t) => (t.emoji ? { name: t.name, emoji: t.emoji } : { name: t.name }));
+    const tagEmoji = (e) => typeof e === 'string' && e.length <= 16 && LABEL_RE.test(e);
+    if (Array.isArray(tags) && tags.length) o.forumTags = tags.filter((t) => t && label(t.name, 30)).slice(0, 40).map((t) => (tagEmoji(t.emoji) ? { name: t.name.trim(), emoji: t.emoji } : { name: t.name.trim() }));
     const layout = parse(r.forum_layout);
-    if (isObj(layout)) o.forumLayout = { view: layout.view, tile: layout.tile, shape: layout.shape, locked: !!layout.locked };
-    if (r.auto_delete_mode === 'clear' && r.auto_delete_interval_hours) o.autoDeleteHours = r.auto_delete_interval_hours;
+    if (isObj(layout)) {
+      const tile = typeof layout.tile === 'number' && layout.tile >= 7 && layout.tile <= 28 ? layout.tile : 11;
+      o.forumLayout = { view: FORUM_VIEWS.includes(layout.view) ? layout.view : 'list', tile, shape: FORUM_SHAPES.includes(layout.shape) ? layout.shape : 'square', locked: !!layout.locked };
+    }
+    if (r.auto_delete_mode === 'clear' && r.auto_delete_interval_hours) o.autoDeleteHours = Math.min(720, Math.max(1, Math.round(Number(r.auto_delete_interval_hours) || 1)));
     return o;
   });
-  const roleChannelAccess = db.prepare('SELECT * FROM role_channel_access').all().filter((a) => roleRef.has(a.role_id) && chRef.has(a.channel_id))
-    .map((a) => ({ role: roleRef.get(a.role_id), channel: chRef.get(a.channel_id), grantOnPromote: !!a.grant_on_promote, revokeOnDemote: !!a.revoke_on_demote }));
+  const roleChannelAccess = cap(db.prepare('SELECT * FROM role_channel_access').all().filter((a) => roleRef.has(a.role_id) && chRef.has(a.channel_id))
+    .map((a) => ({ role: roleRef.get(a.role_id), channel: chRef.get(a.channel_id), grantOnPromote: !!a.grant_on_promote, revokeOnDemote: !!a.revoke_on_demote })), LIMITS.access, 'role channel access rows');
   // A menu's text is not exported: an import always posts the standard text
   // the menu's roles make.
   const menuEmoji = (e) => typeof e === 'string' && e.length <= 8 && ROLE_MENU_EMOJI_RE.test(e);
-  const roleMenus = db.prepare('SELECT rm.channel_id, rm.title, rm.data FROM role_menus rm JOIN messages m ON m.id = rm.message_id ORDER BY rm.message_id').all()
-    .filter((m) => chRef.has(m.channel_id)).map((m) => ({ channel: chRef.get(m.channel_id), title: m.title || '', roles: ((parse(m.data) || {}).roles || []).filter((x) => x && roleRef.has(x.roleId) && menuEmoji(x.emoji)).map((x) => ({ role: roleRef.get(x.roleId), emoji: x.emoji })) }))
-    .filter((m) => m.roles.length);
-  const webhooks = db.prepare('SELECT channel_id, name, avatar_url, subscribed_events, can_moderate, can_use_voice FROM webhooks ORDER BY id').all().filter((w) => chRef.has(w.channel_id))
-    .map((w) => ({ channel: chRef.get(w.channel_id), name: w.name, avatar: w.avatar_url ? addAsset(w.avatar_url) : null, events: w.subscribed_events || '*', canModerate: !!w.can_moderate, canUseVoice: !!w.can_use_voice }));
+  const menuRoles = (list) => {
+    const seen = new Set();
+    return (Array.isArray(list) ? list : []).filter((x) => x && roleRef.has(x.roleId) && menuEmoji(x.emoji) && !seen.has(`r:${x.roleId}`) && !seen.has(`e:${x.emoji}`) && seen.add(`r:${x.roleId}`).add(`e:${x.emoji}`))
+      .slice(0, 20).map((x) => ({ role: roleRef.get(x.roleId), emoji: x.emoji }));
+  };
+  const roleMenus = cap(db.prepare('SELECT rm.channel_id, rm.title, rm.data FROM role_menus rm JOIN messages m ON m.id = rm.message_id ORDER BY rm.message_id').all()
+    .filter((m) => chRef.has(m.channel_id)).map((m) => ({ channel: chRef.get(m.channel_id), title: fit(m.title, 120), roles: menuRoles((parse(m.data) || {}).roles) }))
+    .filter((m) => m.roles.length), LIMITS.menus, 'role menus');
+  const hookEvents = (v) => {
+    const list = String(v || '*').split(',').map((e) => e.trim()).filter((e) => WEBHOOK_EVENTS.includes(e));
+    return String(v || '*').trim() === '*' || !list.length ? '*' : [...new Set(list)].join(',');
+  };
+  const webhooks = cap(db.prepare('SELECT channel_id, name, avatar_url, subscribed_events, can_moderate, can_use_voice FROM webhooks ORDER BY id').all().filter((w) => chRef.has(w.channel_id)), LIMITS.webhooks, 'webhooks')
+    .map((w) => ({ channel: chRef.get(w.channel_id), name: tidy(w.name, 32, 'Webhook'), avatar: w.avatar_url ? addAsset(w.avatar_url) : null, events: hookEvents(w.subscribed_events), canModerate: !!w.can_moderate, canUseVoice: !!w.can_use_voice }));
   const authors = Array.isArray(postAuthors) && postAuthors.length ? new Set(postAuthors) : null;
   const postRows = posts === 'none' ? [] : db.prepare('SELECT m.channel_id, m.content, m.webhook_username, m.webhook_avatar FROM pinned_messages p JOIN messages m ON m.id = p.message_id WHERE m.is_webhook = 1 AND m.thread_id IS NULL ORDER BY m.id').all()
     .filter((m) => chRef.has(m.channel_id) && (!authors || authors.has(m.webhook_username)));
-  const postList = postRows.filter((m) => (m.content || '').length <= LIMITS.post || (warnings.push(`Left out a post in #${chRows.find((c) => c.id === m.channel_id).name}: longer than ${LIMITS.post} characters`), false))
-    .map((m) => ({ channel: chRef.get(m.channel_id), author: m.webhook_username || 'Server', avatar: m.webhook_avatar ? addAsset(m.webhook_avatar) : null, pinned: true, content: sanitizeText(m.content).trim().replace(UPLOAD_REF_RE, (whole, file) => { const a = addAsset(`/uploads/${file}`); return a ? `{{asset:${a}}}` : whole; }) }));
-  const automodDomains = db.prepare('SELECT domain, mode, include_subdomains, note FROM automod_domains ORDER BY domain').all().map((d) => ({ domain: d.domain, mode: d.mode === 'deny' ? 'deny' : 'allow', includeSubdomains: d.include_subdomains !== 0, note: d.note || '' }));
-  const emojis = db.prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all().map((e) => ({ name: e.name, asset: addAsset(`/uploads/${e.filename}`) })).filter((e) => e.asset);
-  const stickers = db.prepare("SELECT name, pack_name, filename FROM stickers WHERE NOT (uploaded_by IS NULL AND filename LIKE 'starter-%') ORDER BY pack_name, name").all()
-    .map((s) => ({ name: s.name, pack: s.pack_name || 'General', asset: addAsset(`/uploads/stickers/${s.filename}`, 'sticker') })).filter((s) => s.asset);
+  const postText = (m) => {
+    // Text that only looks like an asset reference is dropped, so the import
+    // does not go looking for a file that is not there.
+    const text = sanitizeText(m.content || '').trim().replace(ASSET_TOKEN_RE, '');
+    return text.replace(UPLOAD_REF_RE, (whole, file) => { const a = addAsset(`/uploads/${file}`); return a ? `{{asset:${a}}}` : whole; }).trim();
+  };
+  const postList = cap(postRows, LIMITS.posts, 'posts')
+    .map((m) => ({ channel: chRef.get(m.channel_id), author: tidy(m.webhook_username, 32, 'Server'), avatar: m.webhook_avatar ? addAsset(m.webhook_avatar) : null, pinned: true, content: postText(m) }))
+    .filter((p) => (p.content && p.content.length <= LIMITS.post) || (warnings.push(`Left out a post in #${chRows.find((c) => chRef.get(c.id) === p.channel).name}: ${p.content ? `longer than ${LIMITS.post} characters` : 'nothing left once cleaned up'}`), false));
+  const automodDomains = cap(db.prepare('SELECT domain, mode, include_subdomains, note FROM automod_domains ORDER BY domain').all(), LIMITS.domains, 'link rules')
+    .map((d) => ({ domain: typeof d.domain === 'string' && d.domain.length <= 253 ? normalizeHost(d.domain.trim()) : '', mode: d.mode === 'deny' ? 'deny' : 'allow', includeSubdomains: d.include_subdomains !== 0, note: fit(d.note, 200) }))
+    .filter((d) => (d.domain.includes('.') && /^[a-z0-9.-]+$/.test(d.domain)) || (warnings.push(`Left out the link rule for ${d.domain || 'an empty domain'}: it is not a plain domain name`), false));
+  const libraryName = (v, max) => String(v || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '').slice(0, max);
+  const emojis = cap(db.prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all().filter((e) => libraryName(e.name, 30)), LIMITS.emojis, 'custom emojis')
+    .map((e) => ({ name: libraryName(e.name, 30), asset: addAsset(`/uploads/${e.filename}`) })).filter((e) => e.asset);
+  const stickers = cap(db.prepare("SELECT name, pack_name, filename FROM stickers WHERE NOT (uploaded_by IS NULL AND filename LIKE 'starter-%') ORDER BY pack_name, name").all().filter((s) => libraryName(s.name, 40)), LIMITS.stickers, 'stickers')
+    .map((s) => ({ name: libraryName(s.name, 40), pack: tidy(s.pack_name, 40, 'General'), asset: addAsset(`/uploads/stickers/${s.filename}`, 'sticker') })).filter((s) => s.asset);
   const ids = (list) => (Array.isArray(list) ? list.map((id) => chRef.get(Number(id))).filter(Boolean) : null);
   const creator = rows.get('channel_creator_role');
   const server = {
@@ -188,12 +245,13 @@ function exportTemplate(db, opts = {}) {
     if (!withAssets || !themesDir) break;
     let buf;
     try { buf = fs.readFileSync(path.join(themesDir, file)); } catch { warnings.push(`Left out theme ${file}: not installed`); continue; }
-    if (buf.length > LIMITS.theme || !parseThemeMetadata(buf.toString('utf8')).compatible) { warnings.push(`Left out theme ${file}: too large or not compatible`); continue; }
+    if (buf.length > LIMITS.theme || buf.includes(0) || !parseThemeMetadata(buf.toString('utf8')).compatible) { warnings.push(`Left out theme ${file}: too large or not compatible`); continue; }
+    if (!room(buf.length, `theme ${file}`)) continue;
     assets[file] = { kind: 'theme', type: 'text/css', sha256: sha256(buf), data: buf.toString('base64') };
   }
   const template = {
     format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), havenVersion,
-    meta: { name: meta.name || settings.server_name || 'Haven server', description: meta.description || '', author: meta.author || '' },
+    meta: { name: fit(meta.name || settings.server_name || 'Haven server', 60), description: fit(meta.description, 500), author: fit(meta.author, 60) },
     server, roles, channels, roleChannelAccess, roleMenus, webhooks, posts: postList, automodDomains, emojis, stickers, assets,
   };
   return { template, warnings };
@@ -274,7 +332,7 @@ function validateTemplate(input) {
           .filter((t) => t && !seen.has(t.name.toLowerCase()) && seen.add(t.name.toLowerCase()));
       }),
       forumLayout: c.opt(ch.forumLayout, (l) => (isObj(l) ? {
-        view: c.pick(l.view, ['list', 'gallery', 'feed'], `${at}.forumLayout.view`, 'list'), shape: c.pick(l.shape, ['square', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'], `${at}.forumLayout.shape`, 'square'),
+        view: c.pick(l.view, FORUM_VIEWS, `${at}.forumLayout.view`, 'list'), shape: c.pick(l.shape, FORUM_SHAPES, `${at}.forumLayout.shape`, 'square'),
         tile: l.tile === undefined ? 11 : typeof l.tile === 'number' && l.tile >= 7 && l.tile <= 28 ? Math.round(l.tile * 2) / 2 : (c.fail(`${at}.forumLayout.tile`, 'expected 7-28'), 11), locked: c.flag(l.locked, `${at}.forumLayout.locked`, false),
       } : c.fail(`${at}.forumLayout`, 'expected an object'))),
     };

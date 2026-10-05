@@ -25,7 +25,7 @@ const run = (sql, ...args) => source.prepare(sql).run(...args);
 const seed = () => {
   const admin = run('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)', 'owner', `$2a$${SECRET}hash`).lastInsertRowid;
   const bob = run('INSERT INTO users (username, password_hash) VALUES (?, ?)', 'bob', `$2a$${SECRET}hash2`).lastInsertRowid;
-  try { run('UPDATE users SET email = ? WHERE id = ?', `bob@${SECRET}.example`, bob); } catch {}
+  try { run('UPDATE users SET email = ? WHERE id = ?', `bob@${SECRET}.example`, bob); } catch { /* no email column in this schema */ }
   const set = (k, v) => run('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)', k, v);
   set('server_name', 'Test Town'); set('server_title', 'Test Town hangout'); set('welcome_message', 'Hi {user}, read #rules');
   set('channel_sort_mode', 'manual'); set('channel_cat_order', JSON.stringify(['Start', 'Talk', 'Staff'])); set('channel_cat_sort', 'manual');
@@ -61,13 +61,13 @@ const seed = () => {
   run('INSERT INTO invite_codes (code, label, created_by) VALUES (?, ?, ?)', `${SECRET}inv`, 'friends', admin);
   run('INSERT OR REPLACE INTO automod_domains (domain, mode, include_subdomains, note, added_by) VALUES (?, ?, ?, ?, ?)', 'example.org', 'deny', 0, 'spam', admin);
   run('INSERT INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)', 'wave', 'hero.png', admin);
-  try { run('INSERT INTO user_ips (user_id, ip) VALUES (?, ?)', bob, '203.0.113.77'); } catch {}
+  try { run('INSERT INTO user_ips (user_id, ip) VALUES (?, ?)', bob, '203.0.113.77'); } catch { /* no user_ips table in this schema */ }
   return { admin };
 };
 const seeded = seed();
 const exported = () => tpl.exportTemplate(source, { uploadsDir: src.uploads, themesDir: src.themes, excludeChannels: ['secret-plans'], havenVersion: 'test' });
 const strip = (t) => { const o = JSON.parse(JSON.stringify(t)); delete o.exportedAt; const names = Object.fromEntries(Object.entries(o.assets).map(([n, a]) => [n, a.sha256])); const fix = (v) => names[v] || v; o.server.icon = fix(o.server.icon); o.roles = o.roles.map((r) => ({ ...r, icon: fix(r.icon) })); o.webhooks = o.webhooks.map((w) => ({ ...w, avatar: fix(w.avatar) })); o.posts = o.posts.map((p) => ({ ...p, avatar: fix(p.avatar), content: p.content.replace(/\{\{asset:([^}]+)\}\}/g, (_, n) => fix(n)) })); o.emojis = o.emojis.map((e) => ({ ...e, asset: fix(e.asset) })); o.assets = Object.values(names).sort(); return o; };
-test.after(() => { try { source.close(); } catch {} fs.rmSync(ROOT, { recursive: true, force: true }); });
+test.after(() => { try { source.close(); } catch { /* already closed */ } fs.rmSync(ROOT, { recursive: true, force: true }); });
 test('export keeps the layout and leaves out people, messages and secrets', () => {
   const { template } = exported();
   const json = JSON.stringify(template);
@@ -257,4 +257,49 @@ test('role menus are posted with the standard text, never text from the file', (
   bad((m) => { m.roles[0].emoji = '🎉🎉🎉🎉🎉'; }, /needs a role and an emoji/);
   bad((m) => { m.roles[1].emoji = '🎉'; }, /twice/);
   bad((m) => { m.roles[1].role = 'fun'; }, /twice/);
+});
+test('a server with names saved under older rules still exports a file its own import accepts', () => {
+  const from = dirs('legacy');
+  const db = freshDb('legacy');
+  const q = (sql, ...args) => db.prepare(sql).run(...args);
+  const admin = q('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)', 'a', 'x').lastInsertRowid;
+  let code = 0;
+  const ch = (name, extra = {}) => { const id = q('INSERT INTO channels (name, code, created_by) VALUES (?, ?, ?)', name, `ab${String(++code).padStart(6, '0')}`, admin).lastInsertRowid; for (const [k, v] of Object.entries(extra)) q(`UPDATE channels SET ${k} = ? WHERE id = ?`, v, id); return id; };
+  const news = ch('news: updates / misc', { category: 'Old <Stuff>', topic: 't'.repeat(300) });
+  ch('x'.repeat(60));
+  ch('General');
+  ch('general');
+  ch('ideas', { is_forum: 1, forum_layout: JSON.stringify({ view: 'weird', tile: 100, shape: 'round' }), forum_tags: JSON.stringify([{ name: 'Big', emoji: 'not an emoji at all, far too long' }]) });
+  const boss = q('INSERT INTO roles (name, level, scope, color) VALUES (?, ?, ?, ?)', '<b>Boss</b>', 40, 'server', 'red').lastInsertRowid;
+  q('INSERT INTO roles (name, level, scope) VALUES (?, ?, ?)', 'bBoss/b', 30, 'server');
+  q('INSERT INTO webhooks (channel_id, name, token, created_by, subscribed_events) VALUES (?, ?, ?, ?, ?)', news, 'A <very> long webhook name that is way over the limit', 'f'.repeat(64), admin, 'message,bogus');
+  const post = (author, content) => { const mid = q('INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username) VALUES (?, NULL, ?, 1, ?)', news, content, author).lastInsertRowid; q('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)', mid, news, admin); };
+  post('<Server Bot> with a name far longer than thirty-two characters', 'Read this {{asset:missing.png}} first');
+  post('Bot', '<script></script>');
+  const menu = q('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)', news, admin, 'menu').lastInsertRowid;
+  q('INSERT INTO role_menus (message_id, channel_id, created_by, title, data) VALUES (?, ?, ?, ?, ?)', menu, news, admin, 'Roles', JSON.stringify({ roles: [{ roleId: boss, emoji: '🎉' }, { roleId: boss, emoji: '🎈' }] }));
+  q("INSERT OR REPLACE INTO automod_domains (domain, mode, include_subdomains, note, added_by) VALUES ('not a domain', 'deny', 1, '', ?)", admin);
+  fs.writeFileSync(path.join(from.uploads, 'party.png'), png([1, 2, 3]));
+  q('INSERT INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)', 'Party Time!', 'party.png', admin);
+  const first = tpl.exportTemplate(db, { uploadsDir: from.uploads, themesDir: from.themes });
+  const v = tpl.validateTemplate(JSON.parse(JSON.stringify(first.template)));
+  assert.ok(v.template, (v.errors || []).join('\n'));
+  const names = first.template.channels.map((c) => c.name);
+  assert.ok(names.includes('news updates  misc'));
+  assert.ok(names.includes('x'.repeat(50)));
+  assert.ok(names.includes('General') && names.includes('general-2'));
+  assert.deepEqual(first.template.webhooks[0], { channel: 'news-updates-misc', name: 'A very long webhook name that is', avatar: null, events: 'message', canModerate: false, canUseVoice: false });
+  assert.deepEqual(first.template.posts.map((p) => [p.author, p.content]), [['Server Bot with a name far longe', 'Read this  first']]);
+  assert.deepEqual(first.template.roleMenus[0].roles, [{ role: first.template.roles.find((r) => r.name === 'bBoss/b').ref, emoji: '🎉' }]);
+  assert.deepEqual(first.template.emojis.map((e) => e.name), ['partytime']);
+  assert.ok(first.warnings.some((w) => /not a domain/.test(w)));
+  const to = dirs('legacy-copy');
+  const copy = freshDb('legacy-copy');
+  const copyAdmin = copy.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('a', 'x').lastInsertRowid;
+  tpl.applyTemplate(copy, v.template, { mode: 'replace', actorId: copyAdmin, uploadsDir: to.uploads, themesDir: to.themes });
+  const again = tpl.validateTemplate(JSON.parse(JSON.stringify(tpl.exportTemplate(copy, { uploadsDir: to.uploads, themesDir: to.themes }).template)));
+  assert.ok(again.template, (again.errors || []).join('\n'));
+  assert.deepEqual(again.template.channels.map((c) => c.name), v.template.channels.map((c) => c.name));
+  db.close();
+  copy.close();
 });
