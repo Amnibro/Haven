@@ -517,7 +517,7 @@ function applyTemplate(db, tpl, opts = {}) {
       const id = found || db.prepare('INSERT INTO roles (name, level, scope, color, auto_assign, link_channel_access, icon, max_upload_mb) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(role.name, ...vals).lastInsertRowid;
       if (found) db.prepare('UPDATE roles SET name = ?, level = ?, scope = ?, color = ?, auto_assign = ?, link_channel_access = ?, icon = ?, max_upload_mb = ? WHERE id = ?').run(role.name, ...vals, found);
       setPerms(id, role);
-      r.rolePermissions[role.name] = { level: role.level, permissions: role.level > 0 ? role.permissions : [], denied: role.level > 0 ? role.denied : [] };
+      r.rolePermissions[role.name] = { id, level: role.level, permissions: role.level > 0 ? role.permissions : [], denied: role.level > 0 ? role.denied : [] };
       roleId.set(role.ref, id);
       (found ? r.updated : r.created).roles.push(role.name);
       if (auto) autoRole = id;

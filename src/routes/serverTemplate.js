@@ -89,6 +89,9 @@ module.exports = function registerServerTemplate(deps) {
       require('../automod').invalidate();
       runtime.syncRoleGateMemberships();
       runtime.broadcastChannelLists();
+      // Holders of a role the template created or changed get their new
+      // permissions now, as when a role is edited in Settings.
+      runtime.refreshRoleHolders(Object.values(report.rolePermissions).map((x) => x.id));
       late.io.except('bot-sockets').emit('roles-updated');
       // Each changed setting goes out live and sets off, and is logged, just
       // as if it had been saved on the settings screen.
@@ -111,8 +114,8 @@ module.exports = function registerServerTemplate(deps) {
         },
       });
       // One entry per role the template created or changed, with what it may do.
-      for (const [name, role] of Object.entries(report.rolePermissions)) {
-        runtime.logAudit({ actor: user, action: report.created.roles.includes(name) ? 'role_create' : 'role_update', target_type: 'role', target_name: name, details: { ...role, via: 'server template' } });
+      for (const [name, { id, ...role }] of Object.entries(report.rolePermissions)) {
+        runtime.logAudit({ actor: user, action: report.created.roles.includes(name) ? 'role_create' : 'role_update', target_type: 'role', target_id: id, target_name: name, details: { ...role, via: 'server template' } });
       }
     } catch (err) { console.error('Template follow-up failed:', err.message); }
     res.json(report);

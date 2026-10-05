@@ -67,7 +67,7 @@ const seed = () => {
 const seeded = seed();
 const exported = () => tpl.exportTemplate(source, { uploadsDir: src.uploads, themesDir: src.themes, excludeChannels: ['secret-plans'], havenVersion: 'test' });
 const strip = (t) => { const o = JSON.parse(JSON.stringify(t)); delete o.exportedAt; const names = Object.fromEntries(Object.entries(o.assets).map(([n, a]) => [n, a.sha256])); const fix = (v) => names[v] || v; o.server.icon = fix(o.server.icon); o.roles = o.roles.map((r) => ({ ...r, icon: fix(r.icon) })); o.webhooks = o.webhooks.map((w) => ({ ...w, avatar: fix(w.avatar) })); o.posts = o.posts.map((p) => ({ ...p, avatar: fix(p.avatar), content: p.content.replace(/\{\{asset:([^}]+)\}\}/g, (_, n) => fix(n)) })); o.emojis = o.emojis.map((e) => ({ ...e, asset: fix(e.asset) })); o.assets = Object.values(names).sort(); return o; };
-test.after(() => { try { source.close(); } catch { /* already closed */ } fs.rmSync(ROOT, { recursive: true, force: true }); });
+test.after(() => { try { source.close(); } catch { /* already closed */ } fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); });
 test('export keeps the layout and leaves out people, messages and secrets', () => {
   const { template } = exported();
   const json = JSON.stringify(template);

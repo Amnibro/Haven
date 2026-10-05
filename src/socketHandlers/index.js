@@ -55,6 +55,7 @@ const registerModeration = require('./moderation');
 const registerRoles      = require('./roles');
 const registerAdmin      = require('./admin');
 const { createSettingEffects } = require('./settingEffects');
+const createRoleRefresh  = require('./roleRefresh');
 const registerFerry      = require('./ferry');
 const registerGroupE2E   = require('./groupE2E');
 const registerTags       = require('./tags');
@@ -180,6 +181,8 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // What a saved server setting sets off: live updates and follow-ups.
   const settingEffects = createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onReferrerPolicyChange, logAudit });
+  // Live pushes to people whose roles or role permissions changed.
+  const roleRefresh = createRoleRefresh({ io, db, state, userHasPermission, getUserEffectiveLevel, getUserPermissions, getUserGlobalPermissions, getUserRoles, emitOnlineUsers, getEnrichedChannels });
 
   // ── Voice relay (Large Server Setup) ─────────────────────
   // Off unless the admin turns it on. When its worker process goes away, the
@@ -2666,7 +2669,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Idle-online oversight (flag accounts sitting connected + green + silent)
       getIdleOnlineUsers,
       onReferrerPolicyChange,
-      settingEffects,
+      settingEffects, roleRefresh,
       // Per-member upload storage totals (#5521)
       getUploadUsage, botAudioManager,
       // Ban-filtered channel roster used by @mention autocomplete
@@ -2821,7 +2824,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit };
+  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit, refreshRoleHolders: roleRefresh.refreshRoleHolders };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext };

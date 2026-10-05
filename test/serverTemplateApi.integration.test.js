@@ -8,7 +8,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { io } = require('socket.io-client');
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-template-api-'));
-let server, base;
+let server, base, sock;
 const freePort = () => new Promise((resolve, reject) => { const s = net.createServer(); s.once('error', reject); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); }); });
 const json = async (res) => ({ status: res.status, body: await res.json().catch(() => null) });
 const post = (p, token, body) => fetch(base + p, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) }).then(json);
@@ -35,6 +35,8 @@ test.before(async () => {
 // Windows keeps the database locked until the server process has really
 // exited, so wait for it before removing the data folder.
 test.after(async () => {
+  // A failed assertion leaves the socket open, which would keep the run alive.
+  sock?.close();
   if (server && server.exitCode === null) {
     const exited = new Promise((r) => server.once('exit', r));
     server.kill();
@@ -69,7 +71,7 @@ test('server templates over HTTP: admin only, preview, apply, live update', asyn
   assert.equal(plan.status, 200);
   assert.deepEqual(plan.body.created.channels, ['lobby', 'reading-now', 'hosts']);
   assert.equal(plan.body.dryRun, true);
-  const sock = io(base, { auth: { token: member.token }, transports: ['websocket'], forceNew: true });
+  sock = io(base, { auth: { token: member.token }, transports: ['websocket'], forceNew: true });
   await new Promise((r, j) => { sock.on('connect', r); sock.on('connect_error', j); });
   const listed = new Promise((r) => sock.on('channels-list', (list) => { if (list.some((c) => c.name === 'lobby')) r(list); }));
   const renamed = new Promise((r) => sock.on('server-setting-changed', (s) => { if (s.key === 'server_name_effective' && s.value === 'Book Club') r(true); }));
@@ -90,6 +92,14 @@ test('server templates over HTTP: admin only, preview, apply, live update', asyn
   assert.ok(audit.some((a) => a.action === 'server_setting_update' && a.target_name === 'server_name'), 'each changed setting is logged');
   const host = audit.find((a) => a.action === 'role_create' && a.target_name === 'Host');
   assert.deepEqual(JSON.parse(host.details).permissions, ['pin_message', 'set_channel_topic'], 'the new role is logged with its permissions');
+  // Replacing a role a member holds pushes them their new permissions at once.
+  const trimmed = new Promise((r) => sock.on('roles-updated', (d) => { if (d && Array.isArray(d.permissions) && !d.permissions.includes('upload_files')) r(d.permissions); }));
+  const up2 = await upload(admin.token, { format: 'haven-server-template', version: 1, meta: { name: 'Quiet' }, roles: [{ ref: 'member', name: 'Member', level: 1, permissions: ['use_voice', 'view_history'] }] });
+  assert.equal(up2.status, 200, JSON.stringify(up2.body));
+  const applied2 = await post('/api/admin/template/apply', admin.token, { id: up2.body.id, mode: 'replace' });
+  assert.deepEqual(applied2.body.updated.roles, ['Member'], JSON.stringify(applied2.body));
+  const pushed = await Promise.race([trimmed, new Promise((r) => setTimeout(() => r(null), 5000))]);
+  assert.ok(pushed && pushed.includes('use_voice'), 'the member gets their new permissions without reconnecting');
   sock.close();
   assert.equal((await post('/api/admin/template/apply', admin.token, { id: up.body.id })).status, 404, 'an upload is used once');
 });
