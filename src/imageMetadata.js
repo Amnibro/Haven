@@ -1,16 +1,21 @@
 'use strict';
 
-// Strip location and camera metadata from uploaded photos.
+// Strip location and camera metadata from images, and tell image types apart
+// by their first bytes.
 //
-// Phones write GPS coordinates, device serials and timestamps into EXIF/XMP,
-// and every member who can see an attachment can download the original bytes.
+// Phones write GPS coordinates, device serials and timestamps into EXIF/XMP.
+// Server templates (src/serverTemplate.js) strip every image they export or
+// import, so a shared template never carries them. Ordinary uploads are NOT
+// stripped: nothing on the upload routes calls this yet.
+//
 // We have no image library, so this walks the container format and drops the
 // metadata blocks without re-encoding: pixels, ICC colour profiles and
 // animation are untouched. The one EXIF field that changes how a photo looks,
 // orientation, is kept by writing back a minimal EXIF block holding only it.
+// GIF comment blocks are not stripped.
 //
 // Anything we don't recognise, or can't parse cleanly, is left exactly as it
-// was — a failed strip must never break an upload.
+// was, since a failed strip must never break the file.
 
 const fs = require('fs');
 
