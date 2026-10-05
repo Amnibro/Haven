@@ -2,7 +2,7 @@
 
 const bcrypt = require('bcryptjs');
 const OTPAuth = require('otpauth');
-const { isString, isInt, VALID_ROLE_PERMS } = require('./helpers');
+const { isString, isInt, VALID_ROLE_PERMS, ROLE_MENU_EMOJI_RE, roleMenuContent } = require('./helpers');
 const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('../roleDefaults');
 
 module.exports = function register(socket, ctx) {
@@ -214,7 +214,7 @@ module.exports = function register(socket, ctx) {
   }
 
   function roleMenuEntries(raw) {
-    const emojiOk = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]{1,8}$/u;
+    const emojiOk = ROLE_MENU_EMOJI_RE;
     const wanted = Array.isArray(raw) ? raw.slice(0, 20) : [];
     const myLevel = socket.user.isAdmin ? 100 : getUserEffectiveLevel(socket.user.id);
     const seen = new Set();
@@ -231,9 +231,6 @@ module.exports = function register(socket, ctx) {
     }
     if (!entries.length) return { error: 'Pick at least one role with an emoji' };
     return { entries };
-  }
-  function roleMenuContent(title, entries) {
-    return [title ? `🎭 ${title}` : '🎭 Pick your roles', ...entries.map(e => `${e.emoji}  ${e.name}`)].join('\n');
   }
   function canManageRoleMenus() {
     return socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_roles') || userHasPermission(socket.user.id, 'promote_user');

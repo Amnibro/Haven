@@ -323,9 +323,15 @@ function validEscalation(raw) {
   } catch { return false; }
 }
 const CHANNEL_NAME_RE = /^[\w\s\-!?.,'&+\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u;
+// A role menu (self-assign roles): the emoji each role is picked with, and
+// the message text the menu is posted with.
+const ROLE_MENU_EMOJI_RE = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]{1,8}$/u;
+function roleMenuContent(title, entries) {
+  return [title ? `🎭 ${title}` : '🎭 Pick your roles', ...entries.map(e => `${e.emoji}  ${e.name}`)].join('\n');
+}
 module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
-  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE,
- normalizeWordGroups, validEscalation, filterIdleOnline,
+  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent,
+  normalizeWordGroups, validEscalation, filterIdleOnline,
   replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads,
 };
