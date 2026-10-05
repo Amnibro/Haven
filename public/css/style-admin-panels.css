@@ -1,4 +1,4 @@
-/* Haven core styles, part 15 of 16: the audit log, channel roles, server icon and banner, Discord import and role assignment. Loaded in order by style.css; the order matters. */
+﻿/* Haven core styles, part 15 of 16: the audit log, channel roles, server icon and banner, Discord import and role assignment. Loaded in order by style.css; the order matters. */
 /* ── Audit Log ────────────────────────────────────────── */
 .audit-log-toolbar {
   display: flex;
