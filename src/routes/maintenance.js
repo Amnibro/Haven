@@ -157,6 +157,8 @@ module.exports = function registerMaintenance(deps) {
       // is left lingering with stale messages forever; this is the
       // "orphaned conversation" issue called out in #5282. Runs regardless
       // of cleanup_enabled so the data isn't retained indefinitely.
+      // A group DM is orphaned only once nobody is left: one member waiting
+      // on invites, or the last one still in it, is not an orphan.
       try {
         const orphanRows = db.prepare(`
         SELECT c.id, c.code, COUNT(cm.user_id) as member_count
@@ -164,7 +166,7 @@ module.exports = function registerMaintenance(deps) {
         LEFT JOIN channel_members cm ON cm.channel_id = c.id
         WHERE c.is_dm = 1
         GROUP BY c.id
-        HAVING member_count < 2
+        HAVING member_count < (CASE WHEN COALESCE(c.is_group, 0) = 1 THEN 1 ELSE 2 END)
       `).all();
         let orphansDeleted = 0;
         for (const ch of orphanRows) {
@@ -192,6 +194,9 @@ module.exports = function registerMaintenance(deps) {
             // Delete the channel — cascades to messages + read_positions +
             // channel_members + reactions etc. via the existing FKs.
             db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+            for (const table of ['dm_group_keys', 'dm_group_epochs', 'dm_group_invites', 'dm_group_rewrap_requests']) {
+              db.prepare(`DELETE FROM ${table} WHERE channel_id = ?`).run(ch.id);
+            }
             orphansDeleted++;
           } catch (e) {
             console.error('[orphan-DM] failed to clean', ch.code, e.message);
