@@ -220,6 +220,7 @@
     },
     "theme": {
       "title": "Theme",
+      "seasonal": "Seasonal",
       "layout": "Layout",
       "effect_overlay": "Effect Overlay",
       "layout_original": "Original",

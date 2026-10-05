@@ -132,6 +132,7 @@
     markResetPending(session);
   }
 
+  const isSeasonalTheme = theme => /^(seasonal|holiday)$/i.test(String(theme?.section || theme?.category || '')) || /christmas|halloween|thanksgiving/i.test(String(theme?.file || ''));
   function urlWithoutSafeMode(locationLike) {
     try {
       const url = new URL(locationLike?.href || globalThis.location.href);
@@ -156,5 +157,6 @@
     clearResetPending,
     resetLocalCustomizations,
     urlWithoutSafeMode,
+    isSeasonalTheme,
   };
 });

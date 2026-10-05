@@ -1991,9 +1991,11 @@ function injectPublishedThemeBar(container, themes, onPick) {
   window.HavenThemeCompat?.cacheThemes?.(themes);
   const published = themes.filter(t => t && t.published && _isFileThemeCompatible(t));
 
-  el.querySelectorAll('.theme-btn[data-custom-theme]').forEach(b => b.remove());
+  el.querySelectorAll('.theme-btn[data-custom-theme], .theme-bar-sep[data-custom-theme]').forEach(b => b.remove());
 
-  for (const theme of published) {
+  const seasonalThemes = published.filter(t => window.HavenThemeCompat?.isSeasonalTheme?.(t)), standardThemes = published.filter(t => !seasonalThemes.includes(t));
+
+  function addBtn(theme) {
     const btn = document.createElement('button');
     btn.className = 'theme-btn';
     btn.dataset.theme = `file:${theme.file}`;
@@ -2009,6 +2011,25 @@ function injectPublishedThemeBar(container, themes, onPick) {
       if (applied && typeof onPick === 'function') onPick(theme);
     });
     el.appendChild(btn);
+  }
+
+  for (const theme of standardThemes) {
+    addBtn(theme);
+  }
+
+  if (seasonalThemes.length > 0) {
+    if (el.classList.contains('auth-theme-bar')) {
+      const sep = document.createElement('span');
+      sep.className = 'theme-bar-sep';
+      sep.dataset.customTheme = '1';
+      sep.title = 'Seasonal';
+      sep.style.cssText = 'display:inline-flex;align-items:center;opacity:0.4;font-size:0.65rem;padding:0 2px;user-select:none;color:var(--text-muted);';
+      sep.textContent = '•';
+      el.appendChild(sep);
+    }
+    for (const theme of seasonalThemes) {
+      addBtn(theme);
+    }
   }
 
   const saved = (() => { try { return localStorage.getItem('haven_theme') || ''; } catch { return ''; } })();
