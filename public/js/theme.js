@@ -1981,14 +1981,6 @@ function applyPublishedThemeBase(file, persist = true, meta = null) {
   return linkEl;
 }
 
-function _isSeasonalTheme(theme) {
-  if (!theme) return false;
-  const s = String(theme.section || theme.category || '').toLowerCase();
-  if (s === 'seasonal' || s === 'holiday') return true;
-  const f = String(theme.file || '').toLowerCase();
-  return f.includes('christmas') || f.includes('halloween') || f.includes('thanksgiving');
-}
-
 // Draw a button for every published theme into an existing theme bar.
 // `onPick` lets the caller add its own behaviour (the app page tells the
 // server about the choice; the login page has no socket to tell).
@@ -2001,8 +1993,7 @@ function injectPublishedThemeBar(container, themes, onPick) {
 
   el.querySelectorAll('.theme-btn[data-custom-theme], .theme-bar-sep[data-custom-theme]').forEach(b => b.remove());
 
-  const standardThemes = published.filter(t => !_isSeasonalTheme(t));
-  const seasonalThemes = published.filter(t => _isSeasonalTheme(t));
+  const seasonalThemes = published.filter(t => window.HavenThemeCompat?.isSeasonalTheme?.(t)), standardThemes = published.filter(t => !seasonalThemes.includes(t));
 
   function addBtn(theme) {
     const btn = document.createElement('button');

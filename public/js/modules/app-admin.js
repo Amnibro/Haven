@@ -1399,14 +1399,7 @@ async _renderAdminThemeList() {
     dtSelect.querySelectorAll('option[data-custom-theme]').forEach(o => o.remove());
     const published = themes.filter(theme => theme.published && theme.compatible !== false);
     if (published.length > 0) {
-      const isSeasonal = t => {
-        const s = String(t.section || t.category || '').toLowerCase();
-        if (s === 'seasonal' || s === 'holiday') return true;
-        const f = String(t.file || '').toLowerCase();
-        return f.includes('christmas') || f.includes('halloween') || f.includes('thanksgiving');
-      };
-      const standard = published.filter(t => !isSeasonal(t));
-      const seasonal = published.filter(t => isSeasonal(t));
+      const seasonal = published.filter(t => window.HavenThemeCompat?.isSeasonalTheme?.(t)), standard = published.filter(t => !seasonal.includes(t));
 
       if (standard.length > 0) {
         const sep = document.createElement('option');

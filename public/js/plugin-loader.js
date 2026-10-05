@@ -781,14 +781,6 @@ window.HavenPluginLoader = (function () {
     }
   }
 
-  function isSeasonalTheme(theme) {
-    if (!theme) return false;
-    const s = String(theme.section || theme.category || '').toLowerCase();
-    if (s === 'seasonal' || s === 'holiday') return true;
-    const f = String(theme.file || '').toLowerCase();
-    return f.includes('christmas') || f.includes('halloween') || f.includes('thanksgiving');
-  }
-
   /**
    * Inject published .theme.css files as selectable buttons into #theme-selector.
    * Organizes standard custom themes into #theme-selector and seasonal themes
@@ -808,8 +800,7 @@ window.HavenPluginLoader = (function () {
       seasonalSelector.querySelectorAll('.theme-btn[data-custom-theme]').forEach(b => b.remove());
     }
 
-    const standardThemes = published.filter(t => !isSeasonalTheme(t));
-    const seasonalThemes = published.filter(t => isSeasonalTheme(t));
+    const seasonalThemes = published.filter(t => ThemeCompat?.isSeasonalTheme?.(t)), standardThemes = published.filter(t => !seasonalThemes.includes(t));
 
     function createThemeBtn(theme, targetContainer) {
       const btn = document.createElement('button');

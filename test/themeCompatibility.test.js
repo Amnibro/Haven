@@ -364,6 +364,10 @@ test('theme metadata parser reads optional section and category fields', () => {
   assert.equal(meta.section, 'Seasonal');
   assert.equal(meta.category, 'Holiday');
 });
+test('seasonal themes are grouped by section, category, or a holiday file name', () => {
+  for (const theme of [{ section: 'Seasonal' }, { category: 'holiday' }, { file: 'my-halloween.theme.css' }]) assert.equal(ThemeCompat.isSeasonalTheme(theme), true);
+  for (const theme of [{ section: 'Featured' }, { file: 'braid.theme.css' }, null]) assert.equal(ThemeCompat.isSeasonalTheme(theme), false);
+});
 
 test('theme metadata marks a --bg-primary file as a palette', () => {
   const meta = parseThemeMetadata(`/**
