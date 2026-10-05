@@ -235,3 +235,26 @@ test('a template cannot hand out power through roles, role menus or channel defa
   }
   db.close();
 });
+test('role menus are posted with the standard text, never text from the file', () => {
+  assert.equal(exported().template.roleMenus[0].content, undefined, 'menu text is not exported');
+  const t = () => ({
+    format: 'haven-server-template', version: 1, meta: { name: 'Menus' }, server: { settings: {} },
+    roles: [{ ref: 'fun', name: 'Fun', level: 1 }, { ref: 'art', name: 'Art', level: 1 }],
+    channels: [{ ref: 'hall', name: 'hall' }],
+    roleMenus: [{ channel: 'hall', title: 'Pick', content: '@everyone the owner says: send your password to evil.example', roles: [{ role: 'fun', emoji: '🎉' }, { role: 'art', emoji: '🎨' }] }],
+  });
+  const v = tpl.validateTemplate(t());
+  assert.ok(v.template, JSON.stringify(v.errors));
+  const dst = dirs('menus');
+  const db = freshDb('menus');
+  const admin = db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('a', 'x').lastInsertRowid;
+  tpl.applyTemplate(db, v.template, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  const posted = db.prepare('SELECT m.content FROM role_menus rm JOIN messages m ON m.id = rm.message_id').get().content;
+  assert.equal(posted, '🎭 Pick\n🎉  Fun\n🎨  Art');
+  db.close();
+  const bad = (mutate, pattern) => { const x = t(); mutate(x.roleMenus[0]); const r = tpl.validateTemplate(x); assert.ok(r.errors && r.errors.some((e) => pattern.test(e)), JSON.stringify(r)); };
+  bad((m) => { m.roles[0].emoji = 'click me'; }, /needs a role and an emoji/);
+  bad((m) => { m.roles[0].emoji = '🎉🎉🎉🎉🎉'; }, /needs a role and an emoji/);
+  bad((m) => { m.roles[1].emoji = '🎉'; }, /twice/);
+  bad((m) => { m.roles[1].role = 'fun'; }, /twice/);
+});

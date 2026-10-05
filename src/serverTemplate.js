@@ -2,7 +2,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { sanitizeText, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
+const { sanitizeText, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
 const { sniffImageType, stripImageBuffer } = require('./imageMetadata');
 const { generateUniqueChannelCode } = require('./channelRotation');
 const { MEMBER_PERMS, getAdminRoleId } = require('./roleDefaults');
@@ -157,8 +157,11 @@ function exportTemplate(db, opts = {}) {
   });
   const roleChannelAccess = db.prepare('SELECT * FROM role_channel_access').all().filter((a) => roleRef.has(a.role_id) && chRef.has(a.channel_id))
     .map((a) => ({ role: roleRef.get(a.role_id), channel: chRef.get(a.channel_id), grantOnPromote: !!a.grant_on_promote, revokeOnDemote: !!a.revoke_on_demote }));
-  const roleMenus = db.prepare('SELECT rm.channel_id, rm.title, rm.data, m.content FROM role_menus rm JOIN messages m ON m.id = rm.message_id ORDER BY rm.message_id').all()
-    .filter((m) => chRef.has(m.channel_id)).map((m) => ({ channel: chRef.get(m.channel_id), title: m.title || '', content: sanitizeText(m.content || '').trim(), roles: ((parse(m.data) || {}).roles || []).filter((x) => x && roleRef.has(x.roleId) && x.emoji).map((x) => ({ role: roleRef.get(x.roleId), emoji: x.emoji })) }))
+  // A menu's text is not exported: an import always posts the standard text
+  // the menu's roles make.
+  const menuEmoji = (e) => typeof e === 'string' && e.length <= 8 && ROLE_MENU_EMOJI_RE.test(e);
+  const roleMenus = db.prepare('SELECT rm.channel_id, rm.title, rm.data FROM role_menus rm JOIN messages m ON m.id = rm.message_id ORDER BY rm.message_id').all()
+    .filter((m) => chRef.has(m.channel_id)).map((m) => ({ channel: chRef.get(m.channel_id), title: m.title || '', roles: ((parse(m.data) || {}).roles || []).filter((x) => x && roleRef.has(x.roleId) && menuEmoji(x.emoji)).map((x) => ({ role: roleRef.get(x.roleId), emoji: x.emoji })) }))
     .filter((m) => m.roles.length);
   const webhooks = db.prepare('SELECT channel_id, name, avatar_url, subscribed_events, can_moderate, can_use_voice FROM webhooks ORDER BY id').all().filter((w) => chRef.has(w.channel_id))
     .map((w) => ({ channel: chRef.get(w.channel_id), name: w.name, avatar: w.avatar_url ? addAsset(w.avatar_url) : null, events: w.subscribed_events || '*', canModerate: !!w.can_moderate, canUseVoice: !!w.can_use_voice }));
@@ -303,10 +306,17 @@ function validateTemplate(input) {
   out.roleMenus = c.list(input.roleMenus, LIMITS.menus, 'roleMenus').map((m, i) => {
     const at = `roleMenus[${i}]`;
     if (!isObj(m)) return c.fail(at, 'expected an object');
-    const roles = c.list(m.roles, 20, `${at}.roles`).map((x) => (isObj(x) && typeof x.emoji === 'string' && x.emoji.trim() && x.emoji.length <= 16 && LABEL_RE.test(x.emoji) ? { role: roleRef(x.role, `${at}.roles`), emoji: x.emoji.trim() } : c.fail(`${at}.roles`, 'each entry needs a role and an emoji')));
-    const content = c.text(m.content, 4000, `${at}.content`);
-    if (!roles.length || !content) c.fail(at, 'needs text and at least one role');
-    return { channel: chRef(m.channel, `${at}.channel`), title: c.text(m.title, 120, `${at}.title`), content, roles };
+    // The same rules as posting a menu by hand. Any text in the file is
+    // ignored: the menu is posted with the standard text its roles make.
+    const seen = new Set();
+    const roles = c.list(m.roles, 20, `${at}.roles`).map((x) => {
+      if (!isObj(x) || typeof x.emoji !== 'string' || x.emoji.length > 8 || !ROLE_MENU_EMOJI_RE.test(x.emoji)) return c.fail(`${at}.roles`, 'each entry needs a role and an emoji');
+      if (seen.has(`r:${x.role}`) || seen.has(`e:${x.emoji}`)) return c.fail(`${at}.roles`, 'a role or an emoji is on the menu twice');
+      seen.add(`r:${x.role}`).add(`e:${x.emoji}`);
+      return { role: roleRef(x.role, `${at}.roles`), emoji: x.emoji };
+    });
+    if (!roles.length) c.fail(at, 'needs at least one role');
+    return { channel: chRef(m.channel, `${at}.channel`), title: c.text(m.title, 120, `${at}.title`), roles };
   }).filter(Boolean);
   out.webhooks = c.list(input.webhooks, LIMITS.webhooks, 'webhooks').map((w, i) => {
     const at = `webhooks[${i}]`;
@@ -534,14 +544,13 @@ function applyTemplate(db, tpl, opts = {}) {
       }
       if (tpl.roleMenus.length && !actorId) warn('Role menus were not posted, because no admin account was given to post them as');
       for (const m of actorId ? tpl.roleMenus : []) {
-        const cid = chId.get(m.channel), entries = m.roles.map((x) => ({ roleId: roleId.get(x.role), emoji: x.emoji, name: tpl.roles.find((y) => y.ref === x.role).name }))
+        const cid = chId.get(m.channel), entries = m.roles.map((x) => ({ roleId: roleId.get(x.role), emoji: x.emoji, name: db.prepare('SELECT name FROM roles WHERE id = ?').get(roleId.get(x.role)).name }))
           .filter((e) => !powerfulRole(e.roleId) || (warn(`${e.name} was left off a role menu, because anyone could pick it and it carries more than the Member role has`), false));
         if (!entries.length) continue;
-
         const key = JSON.stringify(entries.map((e) => e.roleId).sort());
         const same = db.prepare('SELECT data FROM role_menus WHERE channel_id = ?').all(cid).some((row) => { try { return JSON.stringify((JSON.parse(row.data).roles || []).map((e) => e.roleId).sort()) === key; } catch { return false; } });
         if (same) continue;
-        const mid = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(cid, actorId, m.content).lastInsertRowid;
+        const mid = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(cid, actorId, roleMenuContent(m.title, entries)).lastInsertRowid;
         db.prepare('INSERT INTO role_menus (message_id, channel_id, created_by, title, data) VALUES (?, ?, ?, ?, ?)').run(mid, cid, actorId, m.title, JSON.stringify({ roles: entries.map((e) => ({ roleId: e.roleId, emoji: e.emoji })) }));
         entries.forEach((e) => db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)').run(mid, actorId, e.emoji));
         r.counts.roleMenus++;
