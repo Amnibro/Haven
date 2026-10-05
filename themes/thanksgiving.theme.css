@@ -1,0 +1,196 @@
+/**
+ * @name Thanksgiving
+ * @description Warm autumnal harvest with rich roasted walnut surfaces, falling autumn leaves, harvest garland, and an animated strutting turkey watermark.
+ * @author Amnibro
+ * @version 1.3
+ * @icon 🦃
+ * @section Seasonal
+ * @haven-theme-api 1
+ */
+
+:root {
+  --bg-primary:    #120b06;
+  --bg-secondary:  #1c120a;
+  --bg-tertiary:   #170e08;
+  --bg-hover:      #2c1c10;
+  --bg-active:     #3d2716;
+  --bg-input:      #0c0704;
+  --bg-card:       #20150d;
+
+  --accent:        #e36414;
+  --accent-hover:  #fb8b24;
+  --accent-glow:   rgba(227, 100, 20, 0.5);
+  --accent-text:   #ffffff;
+
+  --text-primary:  #faf0e6;
+  --text-secondary:#d4bead;
+  --text-muted:    #947b67;
+  --text-link:     #f4a261;
+
+  --border:        #382415;
+  --border-light:  #523621;
+  --harvest-stripe: repeating-linear-gradient(135deg, #e36414 0, #e36414 12px, #f4a261 12px, #f4a261 20px, #7a3e1d 20px, #7a3e1d 30px, #e76f51 30px, #e76f51 38px);
+
+  --success:       #70a038;
+  --success-text:  #0a1305;
+  --danger:        #9e2a2b;
+  --danger-text:   #ffffff;
+  --warning:       #e36414;
+  --warning-text:  #ffffff;
+
+  --led-on:        #70a038;
+  --led-off:       #423225;
+  --led-glow:      rgba(112, 160, 56, 0.5);
+
+  --font-main:     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading:  system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:     "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --radius:        0.5rem;
+  --radius-sm:     0.375rem;
+  --transition:    0.15s ease-out;
+  --msg-glow:      0 0 12px rgba(227, 100, 20, 0.12);
+  --scanline:      none;
+}
+
+html, body {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+.server-bar, #server-bar {
+  background: var(--bg-tertiary) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+.sidebar, #sidebar {
+  background: var(--bg-secondary) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+/* ── Main Chat Area (Falling Leaves & Strutting Turkey) */
+.main, #app-body, .center-panel {
+  background: var(--bg-primary) !important;
+  position: relative !important;
+}
+
+.message-area, #message-area, .messages, #messages {
+  background: transparent !important;
+  position: relative !important;
+}
+
+/* VISIBLE FALLING AUTUMN LEAVES */
+.main::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  opacity: 0.45 !important;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20260%20260%22%20width%3D%22260%22%20height%3D%22260%22%3E%0A%20%20%3C!--%20Scarlet%20Maple%20Leaf%20--%3E%0A%20%20%3Cg%20transform%3D%22translate(42%2C%2038)%20rotate(25)%20scale(0.68)%22%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%2C-40%20L6%2C-22%20L20%2C-30%20L16%2C-14%20L34%2C-12%20L22%2C-2%20L38%2C12%20L22%2C12%20L24%2C26%20L10%2C18%20L12%2C34%20L0%2C22%20L-12%2C34%20L-10%2C18%20L-24%2C26%20L-22%2C12%20L-38%2C12%20L-22%2C-2%20L-34%2C-12%20L-16%2C-14%20L-20%2C-30%20L-6%2C-22%20Z%22%20fill%3D%22%23c1121f%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%2C-35%20L0%2C30%20M0%2C5%20L18%2C-6%20M0%2C12%20L20%2C18%20M0%2C5%20L-18%2C-6%20M0%2C12%20L-20%2C18%22%20stroke%3D%22%23ffb703%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%20%20%3C!--%20Amber%20Gold%20Oak%20Leaf%20--%3E%0A%20%20%3Cg%20transform%3D%22translate(185%2C%2075)%20rotate(-35)%20scale(0.65)%22%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%2C-42%20C12%2C-36%2014%2C-26%2022%2C-24%20C28%2C-22%2028%2C-14%2024%2C-8%20C30%2C-4%2030%2C6%2022%2C12%20C28%2C18%2024%2C28%2016%2C32%20C10%2C34%206%2C40%200%2C44%20C-6%2C40%20-10%2C34%20-16%2C32%20C-24%2C28%20-28%2C18%20-22%2C12%20C-30%2C6%20-30%2C-4%20-24%2C-8%20C-28%2C-14%20-28%2C-22%20-22%2C-24%20C-14%2C-26%20-12%2C-36%200%2C-42%20Z%22%20fill%3D%22%23f4a261%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%2C-38%20L0%2C40%20M0%2C-18%20L14%2C-12%20M0%2C-4%20L16%2C2%20M0%2C12%20L14%2C18%20M0%2C-18%20L-14%2C-12%20M0%2C-4%20L-16%2C2%20M0%2C12%20L-14%2C18%22%20stroke%3D%22%237a3e1d%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%20%20%3C!--%20Warm%20Goldenrod%20Birch%20Leaf%20--%3E%0A%20%20%3Cg%20transform%3D%22translate(95%2C%20185)%20rotate(48)%20scale(0.6)%22%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%2C-36%20Q26%2C-10%2024%2C18%20Q16%2C32%200%2C38%20Q-16%2C32%20-24%2C18%20Q-26%2C-10%200%2C-36%20Z%22%20fill%3D%22%23fcbf49%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%2C-32%20L0%2C34%20M0%2C-14%20L14%2C-8%20M0%2C2%20L14%2C8%20M0%2C18%20L10%2C22%20M0%2C-14%20L-14%2C-8%20M0%2C2%20L-14%2C8%20M0%2C18%20L-10%2C22%22%20stroke%3D%22%23d48b04%22%20stroke-width%3D%221.2%22%20stroke-linecap%3D%22round%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%20%20%3C!--%20Burnt%20Orange%20Maple%20Leaf%20--%3E%0A%20%20%3Cg%20transform%3D%22translate(205%2C%20205)%20rotate(-18)%20scale(0.56)%22%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%2C-40%20L6%2C-22%20L20%2C-30%20L16%2C-14%20L34%2C-12%20L22%2C-2%20L38%2C12%20L22%2C12%20L24%2C26%20L10%2C18%20L12%2C34%20L0%2C22%20L-12%2C34%20L-10%2C18%20L-24%2C26%20L-22%2C12%20L-38%2C12%20L-22%2C-2%20L-34%2C-12%20L-16%2C-14%20L-20%2C-30%20L-6%2C-22%20Z%22%20fill%3D%22%23e76f51%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%2C-35%20L0%2C30%20M0%2C5%20L18%2C-6%20M0%2C12%20L20%2C18%20M0%2C5%20L-18%2C-6%20M0%2C12%20L-20%2C18%22%20stroke%3D%22%23ffe3a8%22%20stroke-width%3D%221.2%22%20stroke-linecap%3D%22round%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%3C%2Fsvg%3E") !important;
+  background-size: 260px 260px !important;
+  animation: autumn-leaves-drift 16s linear infinite !important;
+}
+
+@keyframes autumn-leaves-drift {
+  0% { background-position: 0px 0px; }
+  100% { background-position: 60px 520px; }
+}
+
+/* STRUTTING THANKSGIVING TURKEY WATERMARK */
+.main::after {
+  content: "" !important;
+  position: absolute !important;
+  bottom: 12px !important;
+  right: 24px !important;
+  width: 220px !important;
+  height: 220px !important;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20200%22%20width%3D%22200%22%20height%3D%22200%22%3E%0A%20%20%3C!--%20Big%20Fan%20of%20Feathers%20--%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%2295%22%20rx%3D%2218%22%20ry%3D%2272%22%20fill%3D%22%238B2500%22%20transform%3D%22rotate(-65%20100%2095)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%2295%22%20rx%3D%2218%22%20ry%3D%2272%22%20fill%3D%22%23B22222%22%20transform%3D%22rotate(-45%20100%2095)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%2295%22%20rx%3D%2218%22%20ry%3D%2272%22%20fill%3D%22%23D2691E%22%20transform%3D%22rotate(-25%20100%2095)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%2295%22%20rx%3D%2218%22%20ry%3D%2272%22%20fill%3D%22%23FF8C00%22%20transform%3D%22rotate(0%20100%2095)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%2295%22%20rx%3D%2218%22%20ry%3D%2272%22%20fill%3D%22%23D2691E%22%20transform%3D%22rotate(25%20100%2095)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%2295%22%20rx%3D%2218%22%20ry%3D%2272%22%20fill%3D%22%23B22222%22%20transform%3D%22rotate(45%20100%2095)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%2295%22%20rx%3D%2218%22%20ry%3D%2272%22%20fill%3D%22%238B2500%22%20transform%3D%22rotate(65%20100%2095)%22%2F%3E%0A%20%20%3C!--%20Turkey%20Body%20--%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%22135%22%20rx%3D%2244%22%20ry%3D%2238%22%20fill%3D%22%234A2511%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%22102%22%20rx%3D%2222%22%20ry%3D%2228%22%20fill%3D%22%235C2E17%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%2276%22%20rx%3D%2215%22%20ry%3D%2218%22%20fill%3D%22%236B3419%22%2F%3E%0A%20%20%3C!--%20Beak%20%26%20Wattle%20--%3E%0A%20%20%3Cpolygon%20points%3D%22100%2C75%20120%2C81%20100%2C87%22%20fill%3D%22%23FFB703%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M106%2C81%20Q118%2C94%20110%2C105%20Q103%2C98%20105%2C83%20Z%22%20fill%3D%22%23D90429%22%2F%3E%0A%20%20%3C!--%20Eye%20--%3E%0A%20%20%3Ccircle%20cx%3D%2294%22%20cy%3D%2271%22%20r%3D%223.5%22%20fill%3D%22%23FFE8D6%22%2F%3E%3Ccircle%20cx%3D%2293%22%20cy%3D%2271%22%20r%3D%221.8%22%20fill%3D%22%23000%22%2F%3E%0A%20%20%3C!--%20Pilgrim%20Hat%20--%3E%0A%20%20%3Crect%20x%3D%2283%22%20y%3D%2252%22%20width%3D%2234%22%20height%3D%227%22%20rx%3D%222%22%20fill%3D%22%231f1f1f%22%2F%3E%0A%20%20%3Crect%20x%3D%2289%22%20y%3D%2230%22%20width%3D%2222%22%20height%3D%2223%22%20rx%3D%221%22%20fill%3D%22%231f1f1f%22%2F%3E%0A%20%20%3Crect%20x%3D%2289%22%20y%3D%2247%22%20width%3D%2222%22%20height%3D%225%22%20fill%3D%22%23FFB703%22%2F%3E%0A%20%20%3Crect%20x%3D%2298%22%20y%3D%2246%22%20width%3D%225%22%20height%3D%227%22%20fill%3D%22%23DAA520%22%2F%3E%0A%20%20%3C!--%20Legs%20--%3E%0A%20%20%3Cpath%20d%3D%22M85%2C170%20L85%2C190%20M85%2C190%20L75%2C195%20M85%2C190%20L85%2C196%20M85%2C190%20L95%2C195%22%20stroke%3D%22%23FFB703%22%20stroke-width%3D%223.5%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M115%2C170%20L115%2C190%20M115%2C190%20L105%2C195%20M115%2C190%20L115%2C196%20M115%2C190%20L125%2C195%22%20stroke%3D%22%23FFB703%22%20stroke-width%3D%223.5%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%2F%3E%0A%3C%2Fsvg%3E") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  opacity: 0.45 !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  animation: turkey-waddle 3.2s infinite ease-in-out !important;
+}
+
+@keyframes turkey-waddle {
+  0%, 100% { transform: translateY(0) rotate(0deg); filter: drop-shadow(0 0 12px rgba(227, 100, 20, 0.7)); }
+  25% { transform: translateY(-6px) rotate(2deg); filter: drop-shadow(0 0 18px rgba(247, 127, 0, 0.9)); }
+  75% { transform: translateY(-3px) rotate(-2deg); filter: drop-shadow(0 0 15px rgba(227, 100, 20, 0.7)); }
+}
+
+.message, .message-row, .chat-message {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/* ── Harvest Header Garland ──────────────────────── */
+.channel-header, #channel-header {
+  background: var(--bg-secondary) !important;
+  border-bottom: 2px solid #e36414 !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5), 0 1px 8px rgba(227, 100, 20, 0.4) !important;
+  position: relative !important;
+  overflow: visible !important;
+  z-index: 25 !important;
+}
+
+.channel-header::after, #channel-header::after {
+  content: "" !important;
+  position: absolute !important;
+  top: 100% !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 28px !important;
+  pointer-events: none !important;
+  z-index: 100 !important;
+  background-repeat: repeat-x !important;
+  background-size: 160px 28px !important;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20160%2028%22%20width%3D%22160%22%20height%3D%2228%22%3E%0A%20%20%3Cpath%20d%3D%22M0%2C4%20Q40%2C14%2080%2C4%20Q120%2C14%20160%2C4%22%20fill%3D%22none%22%20stroke%3D%22%237a3e1d%22%20stroke-width%3D%222%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M38%2C10%20C46%2C12%2048%2C22%2038%2C26%20C28%2C22%2030%2C12%2038%2C10%20Z%22%20fill%3D%22%23d9381e%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2278%22%20cy%3D%2214%22%20r%3D%227%22%20fill%3D%22%23f77f00%22%2F%3E%3Crect%20x%3D%2276%22%20y%3D%225%22%20width%3D%224%22%20height%3D%224%22%20fill%3D%22%23523214%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M118%2C10%20C126%2C12%20128%2C22%20118%2C26%20C108%2C22%20110%2C12%20118%2C10%20Z%22%20fill%3D%22%23fcbf49%22%2F%3E%0A%3C%2Fsvg%3E") !important;
+  filter: drop-shadow(0 2px 6px rgba(227, 100, 20, 0.6)) !important;
+}
+
+/* ── Harvest Striped Borders ─────────────────────── */
+.message-input-area, #message-input-area, .thread-input-area {
+  background: var(--bg-secondary) !important;
+  border-top: 3px solid transparent !important;
+  border-image: var(--harvest-stripe) 3 !important;
+  box-shadow: 0 -4px 18px rgba(227, 100, 20, 0.35) !important;
+  position: relative !important;
+  z-index: 20 !important;
+}
+
+.modal-content, .auth-card, .theme-popup, .channel-action-sheet, .home-server-menu {
+  background: var(--bg-card) !important;
+  border: 3px solid transparent !important;
+  border-image: var(--harvest-stripe) 3 !important;
+  box-shadow: 0 16px 44px rgba(0,0,0,0.8), 0 0 20px rgba(227, 100, 20, 0.3) !important;
+  border-radius: var(--radius) !important;
+}
+
+.channel-item.active {
+  background: linear-gradient(90deg, rgba(227, 100, 20, 0.25), rgba(112, 160, 56, 0.1), transparent) !important;
+  border-left: 3px solid transparent !important;
+  border-image: var(--harvest-stripe) 3 !important;
+}
+
+.server-icon.home {
+  background: radial-gradient(circle at 35% 30%, #f4a261 0%, #e36414 60%, #7a3e1d 100%) !important;
+  border: 2px solid #ffb703 !important;
+  box-shadow: 0 0 18px rgba(227, 100, 20, 0.8), inset 0 0 8px #ffb703 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition: 0s;
+  }
+  .app-layout::before,
+  .app-layout::after,
+  .chat-view::before,
+  .chat-view::after,
+  #messages-container::before,
+  #messages-container::after {
+    animation: none !important;
+  }
+}
+

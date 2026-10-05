@@ -738,6 +738,10 @@ Haven also ships optional extras that are **installed but switched off by defaul
 | `themes/braid-light.theme.css` | Braid Light |
 | `themes/amni-scient.theme.css` | Amni-Scient, gold on ink with the Archivo typeface |
 | `themes/amni-scient-light.theme.css` | Amni-Scient Light |
+| `themes/glassy-neon.theme.css` | Glassy Neon, cyberpunk glassmorphism with Tron neon floor grid and laser glow |
+| `themes/christmas.theme.css` | Christmas, festive pine with glowing string lights, falling snow, and candy cane borders |
+| `themes/halloween.theme.css` | Halloween, eerie gothic midnight with ghostly mist, flying witch moon, and oozy slime borders |
+| `themes/thanksgiving.theme.css` | Thanksgiving, warm harvest with falling autumn leaves, waddling turkey, and striped borders |
 | `plugins/CompactLayout.plugin.js` | Reversible desktop layout that pairs with Compact or any other theme |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
 | `plugins/MessageTimestamps.plugin.js` | Adds timestamps to messages |

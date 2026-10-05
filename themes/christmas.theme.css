@@ -1,0 +1,219 @@
+/**
+ * @name Christmas
+ * @description Festive holiday atmosphere with deep evergreen pine, animated glowing string lights, candy-cane striped borders, and a background Christmas tree with falling snow.
+ * @author Amnibro
+ * @version 1.3
+ * @icon 🎄
+ * @section Seasonal
+ * @haven-theme-api 1
+ */
+
+:root {
+  --bg-primary:    #0b1612;
+  --bg-secondary:  #11221b;
+  --bg-tertiary:   #0d1a15;
+  --bg-hover:      #1a3329;
+  --bg-active:     #234437;
+  --bg-input:      #07100d;
+  --bg-card:       #14271f;
+
+  --accent:        #d62235;
+  --accent-hover:  #e63946;
+  --accent-glow:   rgba(214, 34, 53, 0.45);
+  --accent-text:   #ffffff;
+
+  --text-primary:  #f8fafc;
+  --text-secondary:#c6d7cf;
+  --text-muted:    #829e92;
+  --text-link:     #ffc857;
+
+  --border:        #233f33;
+  --border-light:  #325746;
+  --candy-cane:    repeating-linear-gradient(135deg, #d62235 0, #d62235 12px, #ffffff 12px, #ffffff 20px, #15803d 20px, #15803d 32px, #ffffff 32px, #ffffff 40px);
+
+  --success:       #2dc653;
+  --success-text:  #08170e;
+  --danger:        #d90429;
+  --danger-text:   #ffffff;
+  --warning:       #ffb703;
+  --warning-text:  #1b1202;
+
+  --led-on:        #2dc653;
+  --led-off:       #40554b;
+  --led-glow:      rgba(45, 198, 83, 0.45);
+
+  --font-main:     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading:  system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:     "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --radius:        0.5rem;
+  --radius-sm:     0.375rem;
+  --transition:    0.15s ease-out;
+  --msg-glow:      0 0 12px rgba(255, 200, 87, 0.1);
+  --scanline:      none;
+}
+
+html, body {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ── Layout & Chrome ─────────────────────────────── */
+.server-bar, #server-bar {
+  background: var(--bg-tertiary) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+.sidebar, #sidebar {
+  background: var(--bg-secondary) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+.context-sidebar, #members-panel {
+  background: var(--bg-secondary) !important;
+  border-left: 1px solid var(--border) !important;
+}
+
+/* ── Main Chat Area with Falling Snow & Tree ─────── */
+.main, #app-body, .center-panel {
+  background: var(--bg-primary) !important;
+  position: relative !important;
+}
+
+.message-area, #message-area, .messages, #messages {
+  background: transparent !important;
+  position: relative !important;
+}
+
+/* REAL VISIBLE FALLING SNOW */
+.main::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  opacity: 0.9 !important;
+  background-image:
+    radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(255,255,255,0)),
+    radial-gradient(3px 3px at 80px 120px, #ffffff, rgba(255,255,255,0)),
+    radial-gradient(1.5px 1.5px at 150px 70px, #ffffff, rgba(255,255,255,0)),
+    radial-gradient(4px 4px at 220px 190px, #ffffff, rgba(255,255,255,0)),
+    radial-gradient(2px 2px at 300px 90px, #ffffff, rgba(255,255,255,0)),
+    radial-gradient(3.5px 3.5px at 390px 220px, #ffffff, rgba(255,255,255,0)),
+    radial-gradient(1.5px 1.5px at 470px 140px, #ffffff, rgba(255,255,255,0)),
+    radial-gradient(3px 3px at 540px 40px, #ffffff, rgba(255,255,255,0)),
+    radial-gradient(2px 2px at 620px 180px, #ffffff, rgba(255,255,255,0)) !important;
+  background-size: 550px 550px !important;
+  animation: christmas-falling-snow 14s linear infinite !important;
+}
+
+@keyframes christmas-falling-snow {
+  0% { background-position: 0px 0px; }
+  100% { background-position: 50px 550px; }
+}
+
+/* BIG BEAUTIFUL CHRISTMAS TREE WATERMARK */
+.main::after {
+  content: "" !important;
+  position: absolute !important;
+  bottom: 12px !important;
+  right: 24px !important;
+  width: 290px !important;
+  height: 380px !important;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20300%20400%22%20width%3D%22300%22%20height%3D%22400%22%3E%0A%20%20%3C!--%20Trunk%20--%3E%0A%20%20%3Crect%20x%3D%22135%22%20y%3D%22340%22%20width%3D%2230%22%20height%3D%2245%22%20rx%3D%223%22%20fill%3D%22%234a2e18%22%2F%3E%0A%20%20%3C!--%20Tier%204%20(bottom)%20--%3E%0A%20%20%3Cpolygon%20points%3D%22150%2C225%2035%2C350%20265%2C350%22%20fill%3D%22%230d381e%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M35%2C350%20Q80%2C338%20125%2C350%20Q150%2C334%20175%2C350%20Q220%2C338%20265%2C350%20L258%2C338%20Q188%2C324%20150%2C322%20Q105%2C324%2042%2C338%20Z%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.85%22%2F%3E%0A%20%20%3C!--%20Tier%203%20--%3E%0A%20%20%3Cpolygon%20points%3D%22150%2C150%2065%2C248%20235%2C248%22%20fill%3D%22%23114725%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M65%2C248%20Q108%2C236%20150%2C248%20Q192%2C236%20235%2C248%20L228%2C238%20Q175%2C226%20150%2C224%20Q118%2C226%2072%2C238%20Z%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.88%22%2F%3E%0A%20%20%3C!--%20Tier%202%20--%3E%0A%20%20%3Cpolygon%20points%3D%22150%2C85%2085%2C170%20215%2C170%22%20fill%3D%22%2316592e%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M85%2C170%20Q118%2C158%20150%2C170%20Q182%2C158%20215%2C170%20L209%2C162%20L150%2C148%20L91%2C162%20Z%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.92%22%2F%3E%0A%20%20%3C!--%20Tier%201%20(top)%20--%3E%0A%20%20%3Cpolygon%20points%3D%22150%2C28%20108%2C98%20192%2C98%22%20fill%3D%22%231b6e38%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M108%2C98%20Q129%2C88%20150%2C98%20Q171%2C88%20192%2C98%20L187%2C92%20L150%2C82%20L113%2C92%20Z%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.95%22%2F%3E%0A%20%20%3C!--%20Bauble%20Ornaments%20(Glowing%20Red%2C%20Gold%2C%20Cyan%2C%20Magenta)%20--%3E%0A%20%20%3Ccircle%20cx%3D%2295%22%20cy%3D%22305%22%20r%3D%229%22%20fill%3D%22%23ff1744%22%2F%3E%3Ccircle%20cx%3D%2292%22%20cy%3D%22302%22%20r%3D%222.5%22%20fill%3D%22%23fff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22205%22%20cy%3D%22285%22%20r%3D%229%22%20fill%3D%22%23ff1744%22%2F%3E%3Ccircle%20cx%3D%22202%22%20cy%3D%22282%22%20r%3D%222.5%22%20fill%3D%22%23fff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22140%22%20cy%3D%22205%22%20r%3D%228%22%20fill%3D%22%23ff1744%22%2F%3E%3Ccircle%20cx%3D%22137%22%20cy%3D%22202%22%20r%3D%222%22%20fill%3D%22%23fff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22155%22%20cy%3D%22300%22%20r%3D%229%22%20fill%3D%22%23ffea00%22%2F%3E%3Ccircle%20cx%3D%22152%22%20cy%3D%22297%22%20r%3D%222.5%22%20fill%3D%22%23fff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22115%22%20cy%3D%22215%22%20r%3D%228%22%20fill%3D%22%23ffea00%22%2F%3E%3Ccircle%20cx%3D%22112%22%20cy%3D%22212%22%20r%3D%222%22%20fill%3D%22%23fff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22170%22%20cy%3D%22135%22%20r%3D%227%22%20fill%3D%22%23ffea00%22%2F%3E%3Ccircle%20cx%3D%22168%22%20cy%3D%22133%22%20r%3D%221.8%22%20fill%3D%22%23fff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22185%22%20cy%3D%22225%22%20r%3D%228%22%20fill%3D%22%2300e5ff%22%2F%3E%3Ccircle%20cx%3D%22182%22%20cy%3D%22222%22%20r%3D%222%22%20fill%3D%22%23fff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22130%22%20cy%3D%22145%22%20r%3D%227%22%20fill%3D%22%2300e5ff%22%2F%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%22143%22%20r%3D%221.8%22%20fill%3D%22%23fff%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22150%22%20cy%3D%2270%22%20r%3D%226%22%20fill%3D%22%23e040fb%22%2F%3E%3Ccircle%20cx%3D%22148%22%20cy%3D%2268%22%20r%3D%221.5%22%20fill%3D%22%23fff%22%2F%3E%0A%20%20%3C!--%20Star%20of%20Bethlehem%20--%3E%0A%20%20%3Cpolygon%20points%3D%22150%2C3%20157%2C22%20176%2C22%20161%2C34%20167%2C52%20150%2C41%20133%2C52%20139%2C34%20124%2C22%20143%2C22%22%20fill%3D%22%23ffd700%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22150%22%20cy%3D%2228%22%20r%3D%224.5%22%20fill%3D%22%23ffffff%22%2F%3E%0A%3C%2Fsvg%3E") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center bottom !important;
+  opacity: 0.38 !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  animation: christmas-star-glow 2.8s infinite alternate ease-in-out !important;
+}
+
+@keyframes christmas-star-glow {
+  0% { filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.7)); opacity: 0.35; }
+  100% { filter: drop-shadow(0 0 22px rgba(255, 230, 80, 1)) drop-shadow(0 0 6px #fff); opacity: 0.45; }
+}
+
+/* Messages stay above snow and tree */
+.message, .message-row, .chat-message {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/* ── Glowing Twinkling String Lights along Header ── */
+.channel-header, #channel-header {
+  background: var(--bg-secondary) !important;
+  border-bottom: 1px solid var(--border) !important;
+  position: relative !important;
+  overflow: visible !important;
+  z-index: 25 !important;
+}
+
+.channel-header::after, #channel-header::after {
+  content: "" !important;
+  position: absolute !important;
+  top: 100% !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 32px !important;
+  pointer-events: none !important;
+  z-index: 100 !important;
+  background-repeat: repeat-x !important;
+  background-size: 160px 32px !important;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20160%2032%22%20width%3D%22160%22%20height%3D%2232%22%3E%0A%20%20%3Cpath%20d%3D%22M0%2C4%20Q40%2C16%2080%2C4%20Q120%2C16%20160%2C4%22%20fill%3D%22none%22%20stroke%3D%22%2314361c%22%20stroke-width%3D%222.5%22%2F%3E%0A%20%20%3C!--%20Bulb%201%3A%20Ruby%20Red%20--%3E%0A%20%20%3Crect%20x%3D%2223%22%20y%3D%226%22%20width%3D%226%22%20height%3D%224%22%20rx%3D%221.5%22%20fill%3D%22%231b4725%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M26%2C10%20C19%2C12%2018%2C21%2026%2C28%20C34%2C21%2033%2C12%2026%2C10%20Z%22%20fill%3D%22%23ff1744%22%20filter%3D%22drop-shadow(0%200%206px%20%23ff1744)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%2223.5%22%20cy%3D%2215%22%20rx%3D%221.8%22%20ry%3D%223.5%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.85%22%2F%3E%0A%20%20%3C!--%20Bulb%202%3A%20Golden%20Star%20--%3E%0A%20%20%3Crect%20x%3D%2263%22%20y%3D%229%22%20width%3D%226%22%20height%3D%224%22%20rx%3D%221.5%22%20fill%3D%22%231b4725%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M66%2C13%20C59%2C15%2058%2C24%2066%2C31%20C74%2C24%2073%2C15%2066%2C13%20Z%22%20fill%3D%22%23ffea00%22%20filter%3D%22drop-shadow(0%200%206px%20%23ffea00)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%2263.5%22%20cy%3D%2218%22%20rx%3D%221.8%22%20ry%3D%223.5%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.85%22%2F%3E%0A%20%20%3C!--%20Bulb%203%3A%20Emerald%20Pine%20--%3E%0A%20%20%3Crect%20x%3D%22103%22%20y%3D%226%22%20width%3D%226%22%20height%3D%224%22%20rx%3D%221.5%22%20fill%3D%22%231b4725%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M106%2C10%20C99%2C12%2098%2C21%20106%2C28%20C114%2C21%20113%2C12%20106%2C10%20Z%22%20fill%3D%22%2300e676%22%20filter%3D%22drop-shadow(0%200%206px%20%2300e676)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22103.5%22%20cy%3D%2215%22%20rx%3D%221.8%22%20ry%3D%223.5%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.85%22%2F%3E%0A%20%20%3C!--%20Bulb%204%3A%20Sapphire%20Ice%20--%3E%0A%20%20%3Crect%20x%3D%22143%22%20y%3D%229%22%20width%3D%226%22%20height%3D%224%22%20rx%3D%221.5%22%20fill%3D%22%231b4725%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M146%2C13%20C139%2C15%20138%2C24%20146%2C31%20C154%2C24%20153%2C15%20146%2C13%20Z%22%20fill%3D%22%2300e5ff%22%20filter%3D%22drop-shadow(0%200%206px%20%2300e5ff)%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22143.5%22%20cy%3D%2218%22%20rx%3D%221.8%22%20ry%3D%223.5%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.85%22%2F%3E%0A%3C%2Fsvg%3E") !important;
+  animation: christmas-lights-twinkle 2.2s infinite alternate ease-in-out !important;
+}
+
+@keyframes christmas-lights-twinkle {
+  0% { filter: drop-shadow(0 2px 6px rgba(255, 23, 68, 0.9)) brightness(1); }
+  50% { filter: drop-shadow(0 3px 10px rgba(255, 234, 0, 0.95)) brightness(1.3); }
+  100% { filter: drop-shadow(0 3px 10px rgba(0, 230, 118, 0.9)) brightness(1.15); }
+}
+
+/* ── Candy Cane Striped Borders ──────────────────── */
+.message-input-area, #message-input-area, .thread-input-area {
+  background: var(--bg-secondary) !important;
+  border-top: 4px solid transparent !important;
+  border-image: var(--candy-cane) 4 !important;
+  box-shadow: 0 -4px 18px rgba(214, 34, 53, 0.35) !important;
+  position: relative !important;
+  z-index: 20 !important;
+}
+
+.modal-content, .auth-card, .theme-popup, .channel-action-sheet, .home-server-menu {
+  background: var(--bg-card) !important;
+  border: 3px solid transparent !important;
+  border-image: var(--candy-cane) 3 !important;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.8), 0 0 25px rgba(214, 34, 53, 0.3) !important;
+  border-radius: var(--radius) !important;
+}
+
+.channel-item.active {
+  background: linear-gradient(90deg, rgba(214, 34, 53, 0.25), rgba(45, 198, 83, 0.1), transparent) !important;
+  border-left: 4px solid transparent !important;
+  border-image: var(--candy-cane) 4 !important;
+}
+
+.server-icon.home {
+  background: radial-gradient(circle at 35% 30%, #ff4d5e 0%, #d62235 55%, #8a0c1a 100%) !important;
+  border: 2px solid #ffd700 !important;
+  box-shadow: 0 0 16px rgba(214, 34, 53, 0.8), inset 0 0 8px #ffd700 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition: 0s;
+  }
+  .app-layout::before,
+  .app-layout::after,
+  .chat-view::before,
+  .chat-view::after,
+  #messages-container::before,
+  #messages-container::after,
+  .christmas-garland-bar,
+  .christmas-lights-svg {
+    animation: none !important;
+  }
+}
+

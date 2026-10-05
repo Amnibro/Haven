@@ -1,0 +1,246 @@
+/**
+ * @name Halloween
+ * @description Eerie haunted gothic midnight with drifting ghostly mist, flying witch moon watermark, black cat with glowing eyes, carved flickering jack-o'-lanterns, and oozy green goo borders.
+ * @author Amnibro
+ * @version 1.3
+ * @icon 🎃
+ * @section Seasonal
+ * @haven-theme-api 1
+ */
+
+:root {
+  --bg-primary:    #0a080e;
+  --bg-secondary:  #120e19;
+  --bg-tertiary:   #0e0b14;
+  --bg-hover:      #20172e;
+  --bg-active:     #2e2042;
+  --bg-input:      #060408;
+  --bg-card:       #16111f;
+
+  --accent:        #ff6a00;
+  --accent-hover:  #ff8324;
+  --accent-glow:   rgba(255, 106, 0, 0.55);
+  --accent-text:   #08040b;
+
+  --text-primary:  #f4eff8;
+  --text-secondary:#bbb3cb;
+  --text-muted:    #7b718f;
+  --text-link:     #ff8c1a;
+
+  --border:        #291f37;
+  --border-light:  #3e2e54;
+  --goo-color:     #2bdc36;
+
+  --success:       #2bdc36;
+  --success-text:  #041205;
+  --danger:        #eb0f3b;
+  --danger-text:   #ffffff;
+  --warning:       #ff6a00;
+  --warning-text:  #08040b;
+
+  --led-on:        #2bdc36;
+  --led-off:       #3c324a;
+  --led-glow:      rgba(43, 220, 54, 0.65);
+
+  --font-main:     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading:  system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:     "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --radius:        0.5rem;
+  --radius-sm:     0.375rem;
+  --transition:    0.15s ease-out;
+  --msg-glow:      0 0 14px rgba(255, 106, 0, 0.16);
+  --scanline:      none;
+}
+
+html, body {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+.server-bar, #server-bar {
+  background: var(--bg-tertiary) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+.sidebar, #sidebar {
+  background: var(--bg-secondary) !important;
+  border-right: 1px solid var(--border) !important;
+  position: relative !important;
+}
+
+/* Creepy Black Cat perched on sidebar corner */
+.sidebar::after, #sidebar::after {
+  content: "" !important;
+  position: absolute !important;
+  bottom: 10px !important;
+  right: 8px !important;
+  width: 58px !important;
+  height: 68px !important;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20120%22%20width%3D%22100%22%20height%3D%22120%22%3E%0A%20%20%3Cpath%20d%3D%22M30%2C120%20C18%2C95%2024%2C65%2044%2C55%20C38%2C40%2044%2C28%2055%2C28%20C66%2C28%2072%2C40%2066%2C55%20C86%2C65%2092%2C95%2080%2C120%20Z%22%20fill%3D%22%23090610%22%2F%3E%0A%20%20%3Cpolygon%20points%3D%2244%2C36%2038%2C12%2055%2C24%22%20fill%3D%22%23090610%22%2F%3E%0A%20%20%3Cpolygon%20points%3D%2258%2C24%2074%2C12%2068%2C36%22%20fill%3D%22%23090610%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M30%2C115%20C10%2C110%204%2C78%2015%2C64%20C20%2C58%2026%2C64%2020%2C74%20C14%2C84%2018%2C105%2032%2C110%20Z%22%20fill%3D%22%23090610%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%2248%22%20cy%3D%2242%22%20rx%3D%224%22%20ry%3D%225.5%22%20fill%3D%22%232bdc36%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2248%22%20cy%3D%2242%22%20rx%3D%221.2%22%20ry%3D%224%22%20fill%3D%22%23000%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%2262%22%20cy%3D%2242%22%20rx%3D%224%22%20ry%3D%225.5%22%20fill%3D%22%232bdc36%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2262%22%20cy%3D%2242%22%20rx%3D%221.2%22%20ry%3D%224%22%20fill%3D%22%23000%22%2F%3E%0A%3C%2Fsvg%3E") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  pointer-events: none !important;
+  z-index: 25 !important;
+  opacity: 0.85 !important;
+  animation: cat-eye-blink 5s infinite ease-in-out !important;
+}
+
+@keyframes cat-eye-blink {
+  0%, 92%, 100% { opacity: 0.85; filter: drop-shadow(0 0 8px rgba(43, 220, 54, 0.9)); }
+  95% { opacity: 0.35; filter: none; }
+}
+
+/* ── Main Chat Area (Ghostly Mist & Witch Moon) ──── */
+.main, #app-body, .center-panel {
+  background: var(--bg-primary) !important;
+  position: relative !important;
+}
+
+.message-area, #message-area, .messages, #messages {
+  background: transparent !important;
+  position: relative !important;
+}
+
+/* VISIBLE SWIRLING GHOSTLY MIST / SMOKE */
+.main::before, #message-area::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  opacity: 0.55 !important;
+  background-image:
+    radial-gradient(ellipse 65% 45% at 20% 70%, rgba(147, 51, 234, 0.38) 0%, transparent 70%),
+    radial-gradient(ellipse 55% 40% at 80% 30%, rgba(43, 220, 54, 0.3) 0%, transparent 65%),
+    radial-gradient(circle at 50% 85%, rgba(255, 106, 0, 0.25) 0%, transparent 60%) !important;
+  background-size: 200% 200% !important;
+  filter: blur(20px) !important;
+  animation: spooky-smoke-drift 12s ease-in-out infinite alternate !important;
+}
+
+@keyframes spooky-smoke-drift {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 60% 45%; }
+  100% { background-position: 100% 100%; }
+}
+
+/* FLYING WITCH ACROSS HARVEST FULL MOON */
+.main::after {
+  content: "" !important;
+  position: absolute !important;
+  top: 18px !important;
+  right: 28px !important;
+  width: 240px !important;
+  height: 200px !important;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20240%20200%22%20width%3D%22240%22%20height%3D%22200%22%3E%0A%20%20%3Ccircle%20cx%3D%22140%22%20cy%3D%22100%22%20r%3D%2280%22%20fill%3D%22%23ff8c00%22%20opacity%3D%220.4%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22140%22%20cy%3D%22100%22%20r%3D%2270%22%20fill%3D%22%23ffa726%22%20opacity%3D%220.3%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22140%22%20cy%3D%22100%22%20r%3D%2258%22%20fill%3D%22%23ffca28%22%20opacity%3D%220.25%22%2F%3E%0A%20%20%3C!--%20Broomstick%20--%3E%0A%20%20%3Cpath%20d%3D%22M45%2C134%20L185%2C88%20M185%2C88%20L212%2C80%20M190%2C83%20L218%2C93%20M190%2C88%20L212%2C98%22%20stroke%3D%22%23120b1c%22%20stroke-width%3D%224%22%20stroke-linecap%3D%22round%22%2F%3E%0A%20%20%3C!--%20Witch%20Body%20--%3E%0A%20%20%3Cpath%20d%3D%22M95%2C110%20Q100%2C78%20116%2C74%20Q122%2C64%20112%2C54%20L132%2C44%20L119%2C72%20Q136%2C78%20131%2C102%20Q133%2C116%20122%2C120%20Q106%2C122%2095%2C110%20Z%22%20fill%3D%22%23120b1c%22%2F%3E%0A%20%20%3Cpolygon%20points%3D%22106%2C58%20130%2C10%20140%2C54%22%20fill%3D%22%23120b1c%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22122%22%20cy%3D%2256%22%20rx%3D%2224%22%20ry%3D%226%22%20fill%3D%22%23120b1c%22%20transform%3D%22rotate(-12%20122%2056)%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M102%2C88%20Q70%2C98%2060%2C114%20Q86%2C108%20102%2C118%20Z%22%20fill%3D%22%23120b1c%22%2F%3E%0A%3C%2Fsvg%3E") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  opacity: 0.45 !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  animation: witch-soar 4s infinite ease-in-out alternate !important;
+}
+
+@keyframes witch-soar {
+  0% { transform: translateY(0) rotate(-2deg); filter: drop-shadow(0 0 16px rgba(255, 140, 0, 0.7)); }
+  100% { transform: translateY(-10px) rotate(3deg); filter: drop-shadow(0 0 28px rgba(255, 180, 50, 0.95)); }
+}
+
+/* Flickering Jack-o'-Lantern in chat bottom-right corner */
+.message-area::after, #message-area::after {
+  content: "" !important;
+  position: absolute !important;
+  bottom: 12px !important;
+  right: 24px !important;
+  width: 140px !important;
+  height: 125px !important;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20180%22%20width%3D%22200%22%20height%3D%22180%22%3E%0A%20%20%3Cpath%20d%3D%22M100%2C22%20Q94%2C3%20112%2C4%20Q116%2C4%20107%2C24%20Z%22%20fill%3D%22%232d5718%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%22105%22%20rx%3D%2290%22%20ry%3D%2270%22%20fill%3D%22%23d94b00%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%22105%22%20rx%3D%2270%22%20ry%3D%2270%22%20fill%3D%22%23eb5c00%22%2F%3E%0A%20%20%3Cellipse%20cx%3D%22100%22%20cy%3D%22105%22%20rx%3D%2244%22%20ry%3D%2270%22%20fill%3D%22%23ff6e00%22%2F%3E%0A%20%20%3C!--%20Glowing%20Eyes%20--%3E%0A%20%20%3Cpolygon%20points%3D%2262%2C85%2086%2C85%2074%2C68%22%20fill%3D%22%23ffe600%22%2F%3E%0A%20%20%3Cpolygon%20points%3D%22114%2C85%20138%2C85%20126%2C68%22%20fill%3D%22%23ffe600%22%2F%3E%0A%20%20%3C!--%20Glowing%20Nose%20--%3E%0A%20%20%3Cpolygon%20points%3D%22100%2C90%20107%2C103%2093%2C103%22%20fill%3D%22%23ffe600%22%2F%3E%0A%20%20%3C!--%20Jagged%20Grinning%20Mouth%20--%3E%0A%20%20%3Cpath%20d%3D%22M46%2C118%20Q100%2C172%20154%2C118%20Q142%2C128%20134%2C120%20Q127%2C136%20118%2C122%20Q110%2C138%20100%2C124%20Q90%2C138%2082%2C122%20Q73%2C136%2066%2C120%20Q58%2C128%2046%2C118%20Z%22%20fill%3D%22%23ffe600%22%2F%3E%0A%3C%2Fsvg%3E") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  opacity: 0.42 !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  animation: candle-flicker 2.4s infinite !important;
+}
+
+@keyframes candle-flicker {
+  0%, 100% { filter: drop-shadow(0 0 12px #ff6a00) drop-shadow(0 0 24px #ff9500); opacity: 0.42; }
+  20% { filter: drop-shadow(0 0 6px #ff4500); opacity: 0.32; }
+  45% { filter: drop-shadow(0 0 22px #ffaa00) drop-shadow(0 0 35px #ffcc00); opacity: 0.55; }
+  75% { filter: drop-shadow(0 0 16px #ff8800); opacity: 0.45; }
+}
+
+.message, .message-row, .chat-message {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/* ── OOZY DRIPPING GREEN GOO CHANNEL HEADER ──────── */
+.channel-header, #channel-header {
+  background: var(--bg-secondary) !important;
+  border-bottom: 3px solid #2bdc36 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(43, 220, 54, 0.5) !important;
+  position: relative !important;
+  overflow: visible !important;
+  z-index: 25 !important;
+}
+
+/* Dripping Toxic Slime Hanging Down into Chat */
+.channel-header::after, #channel-header::after {
+  content: "" !important;
+  position: absolute !important;
+  top: 100% !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 36px !important;
+  pointer-events: none !important;
+  z-index: 100 !important;
+  background-repeat: repeat-x !important;
+  background-size: 160px 36px !important;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20160%2036%22%20width%3D%22160%22%20height%3D%2236%22%3E%0A%20%20%3C!--%20Slime%20Base%20Wave%20--%3E%0A%20%20%3Cpath%20d%3D%22M0%2C0%20L160%2C0%20L160%2C6%20C154%2C6%20150%2C18%20144%2C18%20C138%2C18%20136%2C8%20130%2C8%20C124%2C8%20120%2C30%20114%2C30%20C108%2C30%20106%2C10%20100%2C10%20C94%2C10%2090%2C22%2084%2C22%20C78%2C22%2076%2C6%2068%2C6%20C60%2C6%2056%2C34%2048%2C34%20C40%2C34%2038%2C9%2032%2C9%20C26%2C9%2024%2C20%2018%2C20%20C12%2C20%208%2C6%200%2C6%20Z%22%20fill%3D%22%232bdc36%22%2F%3E%0A%20%20%3C!--%20Toxic%20Sheen%20Highlights%20--%3E%0A%20%20%3Cpath%20d%3D%22M1%2C2%20L159%2C2%20C135%2C3%20124%2C6%20120%2C12%20C115%2C5%2088%2C4%2082%2C3%20C66%2C4%2062%2C8%2058%2C16%20C54%2C5%2034%2C4%2028%2C9%20C22%2C4%209%2C3%201%2C2%20Z%22%20fill%3D%22%23a6ff00%22%20opacity%3D%220.75%22%2F%3E%0A%20%20%3C!--%20Falling%20Goo%20Droplets%20--%3E%0A%20%20%3Ccircle%20cx%3D%2248%22%20cy%3D%2234%22%20r%3D%222.2%22%20fill%3D%22%232bdc36%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22114%22%20cy%3D%2230%22%20r%3D%222%22%20fill%3D%22%232bdc36%22%2F%3E%0A%3C%2Fsvg%3E") !important;
+  animation: slime-ooze-pulse 2.5s infinite alternate ease-in-out !important;
+}
+
+@keyframes slime-ooze-pulse {
+  0% { filter: drop-shadow(0 3px 6px rgba(43, 220, 54, 0.8)) drop-shadow(0 0 12px #2bdc36); transform: scaleY(1); }
+  100% { filter: drop-shadow(0 5px 14px rgba(74, 255, 34, 1)) drop-shadow(0 0 20px #a6ff00); transform: scaleY(1.08); }
+}
+
+/* ── OOZY SLIME COMPOSER & CARDS ─────────────────── */
+.message-input-area, #message-input-area, .thread-input-area {
+  background: var(--bg-secondary) !important;
+  border-top: 3px solid #2bdc36 !important;
+  box-shadow: 0 -4px 22px rgba(43, 220, 54, 0.45), inset 0 2px 6px rgba(166, 255, 0, 0.6) !important;
+  position: relative !important;
+  z-index: 20 !important;
+}
+
+.modal-content, .auth-card, .theme-popup, .channel-action-sheet, .home-server-menu {
+  background: var(--bg-card) !important;
+  border: 3px solid #2bdc36 !important;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.85), 0 0 30px rgba(43, 220, 54, 0.45), inset 0 0 15px rgba(43, 220, 54, 0.15) !important;
+  border-radius: var(--radius) !important;
+}
+
+.server-icon.home {
+  background: radial-gradient(circle at 35% 30%, #ff8c1a 0%, #ff6a00 55%, #b34200 100%) !important;
+  border: 2px solid #ffaa00 !important;
+  box-shadow: 0 0 20px rgba(255, 106, 0, 0.9), inset 0 0 8px #ffe600 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition: 0s;
+  }
+  .app-layout::before,
+  .app-layout::after,
+  .chat-view::before,
+  .chat-view::after,
+  #messages-container::before,
+  #messages-container::after,
+  .app-layout::before {
+    animation: none !important;
+  }
+}
+

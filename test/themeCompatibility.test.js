@@ -352,6 +352,19 @@ test('theme metadata parser preserves existing fields and exposes compatibility'
   });
 });
 
+test('theme metadata parser reads optional section and category fields', () => {
+  const meta = parseThemeMetadata(`/**
+   * @name Christmas
+   * @section Seasonal
+   * @category Holiday
+   * @haven-theme-api 1
+   */
+  :root { --accent: red; }`);
+
+  assert.equal(meta.section, 'Seasonal');
+  assert.equal(meta.category, 'Holiday');
+});
+
 test('theme metadata marks a --bg-primary file as a palette', () => {
   const meta = parseThemeMetadata(`/**
    * @name Braid

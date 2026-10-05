@@ -781,9 +781,18 @@ window.HavenPluginLoader = (function () {
     }
   }
 
+  function isSeasonalTheme(theme) {
+    if (!theme) return false;
+    const s = String(theme.section || theme.category || '').toLowerCase();
+    if (s === 'seasonal' || s === 'holiday') return true;
+    const f = String(theme.file || '').toLowerCase();
+    return f.includes('christmas') || f.includes('halloween') || f.includes('thanksgiving');
+  }
+
   /**
    * Inject published .theme.css files as selectable buttons into #theme-selector.
-   * These behave just like built-in themes but apply an external CSS file.
+   * Organizes standard custom themes into #theme-selector and seasonal themes
+   * into a dedicated #seasonal-theme-selector section.
    */
   function injectPublishedThemeButtons(themeRes) {
     const selector = document.getElementById('theme-selector');
@@ -793,7 +802,16 @@ window.HavenPluginLoader = (function () {
     // Remove any previously injected custom-theme buttons (in case of re-init)
     selector.querySelectorAll('.theme-btn[data-custom-theme]').forEach(b => b.remove());
 
-    for (const theme of published) {
+    let seasonalSection = document.getElementById('seasonal-themes-section');
+    let seasonalSelector = document.getElementById('seasonal-theme-selector');
+    if (seasonalSelector) {
+      seasonalSelector.querySelectorAll('.theme-btn[data-custom-theme]').forEach(b => b.remove());
+    }
+
+    const standardThemes = published.filter(t => !isSeasonalTheme(t));
+    const seasonalThemes = published.filter(t => isSeasonalTheme(t));
+
+    function createThemeBtn(theme, targetContainer) {
       const btn = document.createElement('button');
       btn.className = 'theme-btn';
       btn.dataset.theme = `file:${theme.file}`;
@@ -814,9 +832,39 @@ window.HavenPluginLoader = (function () {
         }
       });
 
-      selector.appendChild(btn);
+      targetContainer.appendChild(btn);
+      return btn;
     }
 
+    // Inject standard custom themes (e.g. Glassy Neon, Amni-Scient, Braid)
+    for (const theme of standardThemes) {
+      createThemeBtn(theme, selector);
+    }
+
+    // Inject seasonal themes into dedicated seasonal section
+    if (seasonalThemes.length > 0) {
+      if (!seasonalSection) {
+        seasonalSection = document.createElement('div');
+        seasonalSection.id = 'seasonal-themes-section';
+        seasonalSection.className = 'seasonal-themes-section';
+        const titleText = (typeof t === 'function' ? t('app.theme.seasonal') : '') || 'Seasonal';
+        seasonalSection.innerHTML = `
+          <div class="theme-popup-title" style="margin-top: 8px;" data-i18n="app.theme.seasonal">${titleText}</div>
+          <div class="theme-selector" id="seasonal-theme-selector"></div>
+        `;
+        selector.parentNode.insertBefore(seasonalSection, selector.nextSibling);
+        seasonalSelector = seasonalSection.querySelector('#seasonal-theme-selector');
+      }
+      seasonalSection.style.display = '';
+      if (!seasonalSelector) {
+        seasonalSelector = seasonalSection.querySelector('#seasonal-theme-selector') || seasonalSection;
+      }
+      for (const theme of seasonalThemes) {
+        createThemeBtn(theme, seasonalSelector);
+      }
+    } else if (seasonalSection) {
+      seasonalSection.style.display = 'none';
+    }
   }
 
   /**

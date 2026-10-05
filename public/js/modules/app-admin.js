@@ -1399,17 +1399,43 @@ async _renderAdminThemeList() {
     dtSelect.querySelectorAll('option[data-custom-theme]').forEach(o => o.remove());
     const published = themes.filter(theme => theme.published && theme.compatible !== false);
     if (published.length > 0) {
-      const sep = document.createElement('option');
-      sep.disabled = true;
-      sep.textContent = `── ${t('settings.admin.custom_themes')} ──`;
-      sep.setAttribute('data-custom-theme', '1');
-      dtSelect.appendChild(sep);
-      for (const theme of published) {
-        const opt = document.createElement('option');
-        opt.value = `file:${theme.file}`;
-        opt.textContent = theme.name || theme.file;
-        opt.setAttribute('data-custom-theme', '1');
-        dtSelect.appendChild(opt);
+      const isSeasonal = t => {
+        const s = String(t.section || t.category || '').toLowerCase();
+        if (s === 'seasonal' || s === 'holiday') return true;
+        const f = String(t.file || '').toLowerCase();
+        return f.includes('christmas') || f.includes('halloween') || f.includes('thanksgiving');
+      };
+      const standard = published.filter(t => !isSeasonal(t));
+      const seasonal = published.filter(t => isSeasonal(t));
+
+      if (standard.length > 0) {
+        const sep = document.createElement('option');
+        sep.disabled = true;
+        sep.textContent = `── ${t('settings.admin.custom_themes')} ──`;
+        sep.setAttribute('data-custom-theme', '1');
+        dtSelect.appendChild(sep);
+        for (const theme of standard) {
+          const opt = document.createElement('option');
+          opt.value = `file:${theme.file}`;
+          opt.textContent = theme.name || theme.file;
+          opt.setAttribute('data-custom-theme', '1');
+          dtSelect.appendChild(opt);
+        }
+      }
+
+      if (seasonal.length > 0) {
+        const sep = document.createElement('option');
+        sep.disabled = true;
+        sep.textContent = `── ${t('app.theme.seasonal') || 'Seasonal'} ──`;
+        sep.setAttribute('data-custom-theme', '1');
+        dtSelect.appendChild(sep);
+        for (const theme of seasonal) {
+          const opt = document.createElement('option');
+          opt.value = `file:${theme.file}`;
+          opt.textContent = `${theme.icon ? theme.icon + ' ' : ''}${theme.name || theme.file}`;
+          opt.setAttribute('data-custom-theme', '1');
+          dtSelect.appendChild(opt);
+        }
       }
     }
     const currentDefault = this.serverSettings.default_theme || '';
