@@ -283,7 +283,10 @@ function createEnvironment() {
   const dmHeader = add('dm-toggle-header', new FakeElement('h5', elementsById));
   const dmArrow = add('dm-toggle-arrow', new FakeElement('span', elementsById));
   const dmList = add('dm-list', new FakeElement('div', elementsById));
-  dmHeader.appendChild(dmArrow);
+  const dmBadge = add('dm-unread-badge', new FakeElement('span', elementsById));
+  dmBadge.classList.add('dm-unread-count');
+  const organizeDms = add('organize-dms-btn', new FakeElement('button', elementsById));
+  dmHeader.append(dmArrow, dmBadge, organizeDms);
   dmPane.append(dmHeader, dmList);
   sidebar.appendChild(dmPane);
 
@@ -590,5 +593,23 @@ test('ChromeLayout home menu opens Settings through Haven\'s Settings button and
 
     assert.doesNotMatch(ChromeLayout.CSS, /sidebar-settings-panel/);
     plugin.stop();
+  });
+});
+
+test('ChromeLayout shows the core DM badge on the dock button and puts it back', () => {
+  withEnv(({ document }) => {
+    const header = document.getElementById('dm-toggle-header');
+    const badge = document.getElementById('dm-unread-badge');
+    const plugin = new ChromeLayout();
+    plugin.start();
+
+    const dmBtn = document.getElementById('dm-dock-btn');
+    assert.equal(badge.parentNode, dmBtn, 'the real badge moves onto the dock button');
+    assert.equal(document.querySelectorAll('#dm-unread-badge').length, 1);
+
+    plugin.stop();
+    assert.equal(badge.parentNode, header);
+    assert.equal(header.children.indexOf(badge), 1, 'badge returns to its original slot');
+    assert.equal(document.getElementById('dm-unread-badge'), badge);
   });
 });

@@ -280,7 +280,6 @@ class ChromeLayout {
     this._setupHomeServerMenu();
     this._setupChannelVoiceButtons();
     this._setupThreadMentionsBadge();
-    this._syncDmBadge();
   }
 
   _restoreChrome() {
@@ -298,6 +297,9 @@ class ChromeLayout {
       }
       this._modifiedClasses.clear();
     }
+
+    // Put Haven's DM badge back before the dock button holding it goes away
+    this._returnDmBadge();
 
     // Remove injected elements
     if (this._injectedElements) {
@@ -510,13 +512,13 @@ class ChromeLayout {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M21 15a3.2 3.2 0 0 1-3.2 3.2H8.4L4 21.5V6.2A3.2 3.2 0 0 1 7.2 3h10.6A3.2 3.2 0 0 1 21 6.2Z"/>
         </svg>
-        <span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span>
       `);
       dmBtn.type = 'button';
       dmBtn.title = 'Direct messages';
       dmBtn.setAttribute('aria-pressed', 'false');
       bottomBar.insertBefore(dmBtn, peopleBtn.nextSibling);
     }
+    this._adoptDmBadge(dmBtn);
 
     // Toggle People panel
     this._listen(peopleBtn, 'click', (e) => {
@@ -589,21 +591,26 @@ class ChromeLayout {
     }
   }
 
-  _syncDmBadge() {
-    if (typeof document === 'undefined') return;
-    const app = typeof window !== 'undefined' ? window.app : null;
-    const dmChannels = (app?.channels || []).filter(c => c.is_dm);
-    const total = dmChannels.reduce((sum, ch) => sum + (app?.unreadCounts?.[ch.code] || 0), 0);
+  // Haven keeps its DM unread badge up to date by id, and that badge sits in
+  // the DM header, which is hidden while the drawer is closed. Moving the one
+  // real badge onto the dock button (and back on disengage) keeps it live
+  // without a second element carrying the same id.
+  _adoptDmBadge(dmBtn) {
     const badge = document.getElementById('dm-unread-badge');
-    if (badge) {
-      if (total > 0) {
-        badge.textContent = total > 99 ? '99+' : total;
-        badge.style.display = 'inline-flex';
-      } else {
-        badge.textContent = '';
-        badge.style.display = 'none';
-      }
+    if (!badge || !dmBtn || badge.parentNode === dmBtn) return;
+    if (!this._dmBadgeHome) {
+      this._dmBadgeHome = { parent: badge.parentNode, next: badge.nextSibling };
     }
+    dmBtn.appendChild(badge);
+  }
+
+  _returnDmBadge() {
+    const home = this._dmBadgeHome;
+    this._dmBadgeHome = null;
+    const badge = typeof document !== 'undefined' ? document.getElementById('dm-unread-badge') : null;
+    if (!home?.parent || !badge) return;
+    const next = home.next?.parentNode === home.parent ? home.next : null;
+    home.parent.insertBefore(badge, next);
   }
 
   // 3. Home Server Menu
@@ -762,7 +769,6 @@ class ChromeLayout {
         scheduled = false;
         if (!this._engaged || this._suspended) return;
         this._setupChannelVoiceButtons();
-        this._syncDmBadge();
       });
     });
     const target = document.getElementById('channel-list') || document.body;
@@ -923,7 +929,8 @@ html[data-chrome-layout="1"] .sidebar.dms-open #dm-dock-btn {
 }
 
 /* DM unread badge */
-html[data-chrome-layout="1"] #dm-unread-badge {
+html[data-chrome-layout="1"] #dm-dock-btn #dm-unread-badge {
+  display: inline-flex;
   position: absolute;
   top: -0.35rem;
   right: -0.35rem;
