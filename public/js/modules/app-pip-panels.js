@@ -632,6 +632,10 @@ _closeDMPiP() {
   try { localStorage.removeItem('haven_active_dm_pip'); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   const panel = document.getElementById('dm-pip-panel');
   if (panel) panel.style.display = 'none';
+  // Closed means stopped: a video or embed left in the hidden panel kept
+  // playing (#5729), as in threads (#5690). Opening fetches and redraws it.
+  const msgs = document.getElementById('dm-pip-messages');
+  if (msgs) msgs.innerHTML = '';
 },
 
 _applyDMPiPGeometry(panel) {
