@@ -67,13 +67,6 @@ class ChromeLayout {
         else if (!this._engaged) this._engage(false);
       });
 
-      // Layout effect listener
-      this._listenPerm(document, 'haven:layout-effect', (event) => {
-        if (typeof event.detail?.chrome !== 'boolean') return;
-        if (event.detail.chrome) this._engage();
-        else this._disengage();
-      });
-
       const layoutOn = this._getSavedLayoutOn() !== '0';
       if (layoutOn && !this._suspended) {
         this._engage(false);
@@ -509,20 +502,21 @@ class ChromeLayout {
     }
     this._adoptDmBadge(dmBtn);
 
-    // Toggle People panel
+    // Toggle the People panel with Haven's own panel toggle, which also
+    // remembers the choice, and keep the dock button's pressed state in step
+    // however the panel is toggled.
+    const panelToggle = document.getElementById('sidebar-toggle-btn');
+    const syncPeoplePressed = () => {
+      const right = document.getElementById('right-sidebar');
+      const open = Boolean(right && !right.classList.contains('collapsed'));
+      peopleBtn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    };
+    syncPeoplePressed();
+    this._listen(panelToggle, 'click', syncPeoplePressed);
     this._listen(peopleBtn, 'click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const app = typeof window !== 'undefined' ? window.app : null;
-      if (app?._togglePeoplePanel) {
-        app._togglePeoplePanel();
-      } else {
-        const right = document.getElementById('right-sidebar');
-        if (right) {
-          const closed = right.classList.toggle('collapsed');
-          peopleBtn.setAttribute('aria-pressed', (!closed).toString());
-        }
-      }
+      panelToggle?.click?.();
     });
 
     // Toggle DM pane drawer

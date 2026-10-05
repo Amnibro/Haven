@@ -665,3 +665,43 @@ test('ChromeLayout channel actions open sections through Haven\'s toggles withou
     plugin.stop();
   });
 });
+
+test('ChromeLayout People dock button uses Haven\'s panel toggle', () => {
+  withEnv(({ document, elementsById }) => {
+    const right = new FakeElement('aside', elementsById);
+    right.id = 'right-sidebar';
+    const toggle = new FakeElement('button', elementsById);
+    toggle.id = 'sidebar-toggle-btn';
+    document.body.append(right, toggle);
+    let coreToggles = 0;
+    toggle.click = () => {
+      // Haven's own handler runs first, then the layout's listener syncs.
+      coreToggles++;
+      right.classList.toggle('collapsed');
+      toggle.dispatchEvent({ type: 'click' });
+    };
+
+    const plugin = new ChromeLayout();
+    plugin.start();
+    const peopleBtn = document.getElementById('people-dock-btn');
+    assert.equal(peopleBtn.getAttribute('aria-pressed'), 'true');
+
+    peopleBtn.dispatchEvent({ type: 'click', preventDefault() {}, stopPropagation() {} });
+    assert.equal(coreToggles, 1);
+    assert.equal(right.classList.contains('collapsed'), true);
+    assert.equal(peopleBtn.getAttribute('aria-pressed'), 'false');
+
+    // Toggled from Haven's own button: the dock follows.
+    toggle.click();
+    assert.equal(peopleBtn.getAttribute('aria-pressed'), 'true');
+
+    plugin.stop();
+    assert.equal(toggle.listeners.get('click')?.size || 0, 0, 'listener removed on stop');
+  });
+});
+
+test('ChromeLayout does not listen for the retired haven:layout-effect event', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'plugins/ChromeLayout.plugin.js'), 'utf8');
+  assert.doesNotMatch(source, /haven:layout-effect/);
+  assert.doesNotMatch(source, /_togglePeoplePanel|_openSettingsModal/);
+});
