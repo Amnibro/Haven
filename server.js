@@ -1,4 +1,4 @@
-// ── Resolve data directory BEFORE loading .env ────────────
+﻿// ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('./src/paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
 const { trimUploadsToLimit } = require('./src/uploadsTrim');
@@ -89,7 +89,7 @@ const { Server } = require('socket.io');
 const crypto = require('crypto');
 const helmet = require('helmet');
 const multer = require('multer');
-const { stripImageMetadata, sniffImageType } = require('./src/imageMetadata');
+const { sniffImageType } = require('./src/imageMetadata');
 const diskGuard = require('./src/diskGuard');
 
 // (#5505) Refuse uploads that would eat into the reserved disk headroom, so a
