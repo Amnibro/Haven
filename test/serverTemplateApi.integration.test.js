@@ -72,6 +72,7 @@ test('server templates over HTTP: admin only, preview, apply, live update', asyn
   const sock = io(base, { auth: { token: member.token }, transports: ['websocket'], forceNew: true });
   await new Promise((r, j) => { sock.on('connect', r); sock.on('connect_error', j); });
   const listed = new Promise((r) => sock.on('channels-list', (list) => { if (list.some((c) => c.name === 'lobby')) r(list); }));
+  const renamed = new Promise((r) => sock.on('server-setting-changed', (s) => { if (s.key === 'server_name_effective' && s.value === 'Book Club') r(true); }));
   const applied = await post('/api/admin/template/apply', admin.token, { id: up.body.id, mode: 'replace' });
   assert.equal(applied.status, 200, JSON.stringify(applied.body));
   assert.equal(applied.body.dryRun, false);
@@ -79,6 +80,16 @@ test('server templates over HTTP: admin only, preview, apply, live update', asyn
   const list = await Promise.race([listed, new Promise((r) => setTimeout(() => r(null), 5000))]);
   assert.ok(list, 'members get the new channel list without reloading');
   assert.ok(!list.some((c) => c.name === 'hosts'), 'the role-gated channel stays hidden from a member without the role');
+  assert.ok(await Promise.race([renamed, new Promise((r) => setTimeout(() => r(false), 5000))]), 'members see the new server name without reloading');
+  const Database = require('better-sqlite3');
+  const db = new Database(path.join(DATA, 'haven.db'), { readonly: true });
+  const audit = db.prepare("SELECT action, target_name, details FROM audit_log WHERE action IN ('server_template_apply', 'server_setting_update', 'role_create') ORDER BY id").all();
+  db.close();
+  const summary = audit.find((a) => a.action === 'server_template_apply');
+  assert.ok(summary && JSON.parse(summary.details).created.channels.includes('lobby'), 'the audit entry says what was created');
+  assert.ok(audit.some((a) => a.action === 'server_setting_update' && a.target_name === 'server_name'), 'each changed setting is logged');
+  const host = audit.find((a) => a.action === 'role_create' && a.target_name === 'Host');
+  assert.deepEqual(JSON.parse(host.details).permissions, ['pin_message', 'set_channel_topic'], 'the new role is logged with its permissions');
   sock.close();
   assert.equal((await post('/api/admin/template/apply', admin.token, { id: up.body.id })).status, 404, 'an upload is used once');
 });

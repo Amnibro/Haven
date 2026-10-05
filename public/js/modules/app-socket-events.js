@@ -865,7 +865,6 @@ _listenAdminAndPrefs() {
     if (data.key === 'channel_templates') this._renderChannelTemplates();
     if (data.key === 'hide_disabled_channel_badges') this._renderChannels?.();
   });
-  this.socket.on('server-settings-stale', () => this.socket.emit('get-server-settings'));
 
   // ── Webhooks list ──────────────────────────────────
   this.socket.on('webhooks-list', (data) => {

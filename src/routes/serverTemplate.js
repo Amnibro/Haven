@@ -84,15 +84,36 @@ module.exports = function registerServerTemplate(deps) {
     }
     pendingTemplates.delete(req.body.id);
     try {
+      const runtime = late.socketRuntime;
+      const effects = runtime.settingEffects;
       require('../automod').invalidate();
-      late.socketRuntime?.syncRoleGateMemberships?.();
-      late.socketRuntime?.broadcastChannelLists?.();
+      runtime.syncRoleGateMemberships();
+      runtime.broadcastChannelLists();
       late.io.except('bot-sockets').emit('roles-updated');
-      if (Object.keys(report.changedSettings).length) late.io.except('bot-sockets').emit('server-settings-stale');
+      // Each changed setting goes out live and sets off, and is logged, just
+      // as if it had been saved on the settings screen.
+      for (const [key, value] of Object.entries(report.changedSettings)) {
+        effects.emitSettingChanged(key, value);
+        effects.afterSettingSaved(key, value);
+        effects.auditSettingChange(user, key, value);
+      }
+      if (report.counts.domains) effects.broadcastLinkPolicy();
       if (report.created.emojis.length) late.io.emit('library-updated', { kind: 'emojis' });
       if (report.created.stickers.length) late.io.emit('library-updated', { kind: 'stickers' });
-      require('../database').getDb().prepare('INSERT INTO audit_log (actor_id, actor_username, action, target_type, target_name, details) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(user.id, user.username, 'server_template_apply', 'server', entry.template.meta.name || '', JSON.stringify({ mode: report.mode, created: { roles: report.created.roles.length, channels: report.created.channels.length }, updated: { roles: report.updated.roles.length, channels: report.updated.channels.length, settings: report.updated.settings } }));
+      const names = (list) => (list.length > 15 ? [...list.slice(0, 15), `and ${list.length - 15} more`] : list);
+      runtime.logAudit({
+        actor: user, action: 'server_template_apply', target_type: 'server', target_name: entry.template.meta.name || '',
+        details: {
+          mode: report.mode,
+          created: { roles: names(report.created.roles), channels: names(report.created.channels), webhooks: report.created.webhooks.length, emojis: report.created.emojis.length, stickers: report.created.stickers.length },
+          updated: { roles: names(report.updated.roles), channels: names(report.updated.channels) },
+          settings: report.updated.settings.length, posts: report.counts.posts, roleMenus: report.counts.roleMenus, linkRules: report.counts.domains,
+        },
+      });
+      // One entry per role the template created or changed, with what it may do.
+      for (const [name, role] of Object.entries(report.rolePermissions)) {
+        runtime.logAudit({ actor: user, action: report.created.roles.includes(name) ? 'role_create' : 'role_update', target_type: 'role', target_name: name, details: { ...role, via: 'server template' } });
+      }
     } catch (err) { console.error('Template follow-up failed:', err.message); }
     res.json(report);
   });

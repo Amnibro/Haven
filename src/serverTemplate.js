@@ -430,7 +430,7 @@ function applyTemplate(db, tpl, opts = {}) {
   const r = {
     mode: replace ? 'replace' : 'merge', dryRun,
     created: { roles: [], channels: [], webhooks: [], emojis: [], stickers: [], files: [], themes: [] }, updated: { roles: [], channels: [], settings: [] },
-    existing: { roles: [], channels: [], settings: [] }, extra: { roles: [], channels: [] }, counts: { posts: 0, roleMenus: 0, domains: 0, access: 0 }, warnings: [], changedSettings: {},
+    existing: { roles: [], channels: [], settings: [] }, extra: { roles: [], channels: [] }, counts: { posts: 0, roleMenus: 0, domains: 0, access: 0 }, warnings: [], changedSettings: {}, rolePermissions: {},
   };
   const warn = (msg) => { if (!r.warnings.includes(msg)) r.warnings.push(msg); };
   // Emojis and stickers keep to this server's own size limits, as an upload
@@ -517,6 +517,7 @@ function applyTemplate(db, tpl, opts = {}) {
       const id = found || db.prepare('INSERT INTO roles (name, level, scope, color, auto_assign, link_channel_access, icon, max_upload_mb) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(role.name, ...vals).lastInsertRowid;
       if (found) db.prepare('UPDATE roles SET name = ?, level = ?, scope = ?, color = ?, auto_assign = ?, link_channel_access = ?, icon = ?, max_upload_mb = ? WHERE id = ?').run(role.name, ...vals, found);
       setPerms(id, role);
+      r.rolePermissions[role.name] = { level: role.level, permissions: role.level > 0 ? role.permissions : [], denied: role.level > 0 ? role.denied : [] };
       roleId.set(role.ref, id);
       (found ? r.updated : r.created).roles.push(role.name);
       if (auto) autoRole = id;
