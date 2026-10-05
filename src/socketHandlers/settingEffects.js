@@ -19,7 +19,7 @@ const ADMIN_ONLY_SETTINGS = new Set([
   'voice_relay_mode', 'voice_relay_port', 'voice_relay_workers', 'voice_relay_address',
 ]);
 
-function createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onReferrerPolicyChange }) {
+function createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onReferrerPolicyChange, logAudit }) {
   const emitSettingChanged = (key, value) => {
     if (NEVER_SENT_SETTINGS.has(key)) return;
     const target = ADMIN_ONLY_SETTINGS.has(key) ? io.to('admins') : io.except('bot-sockets');
@@ -67,7 +67,22 @@ function createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onRe
     if (key === 'referrer_policy') onReferrerPolicyChange(value);
   }
 
-  return { emitSettingChanged, broadcastLinkPolicy, afterSettingSaved };
+  function auditSettingChange(actor, key, value) {
+    // Audit: log the setting change. Skip per-user UI prefs that the
+    // organize modal syncs constantly to avoid log spam.
+    const _quietKeys = new Set(['channel_cat_order', 'channel_cat_sort', 'channel_tag_sorts', 'channel_sort_mode']);
+    if (!_quietKeys.has(key) && typeof logAudit === 'function') {
+      const _short = (v) => typeof v === 'string' && v.length > 120 ? v.slice(0, 117) + '...' : v;
+      const _secret = NEVER_SENT_SETTINGS.has(key) || ADMIN_ONLY_SETTINGS.has(key);
+      logAudit({
+        actor, action: 'server_setting_update',
+        target_type: 'setting', target_name: key,
+        details: { key, value: _secret ? (value ? '(hidden)' : '') : _short(value) }
+      });
+    }
+  }
+
+  return { emitSettingChanged, broadcastLinkPolicy, afterSettingSaved, auditSettingChange };
 }
 
 module.exports = { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS, createSettingEffects };

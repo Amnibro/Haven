@@ -48,8 +48,8 @@ module.exports = function register(socket, ctx) {
 
   // ── Server settings ─────────────────────────────────────
   // Made once in index.js; a handler set up on its own (tests) makes its own.
-  const { emitSettingChanged, broadcastLinkPolicy: _broadcastLinkPolicy, afterSettingSaved } = ctx.settingEffects
-    || createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onReferrerPolicyChange });
+  const { emitSettingChanged, broadcastLinkPolicy: _broadcastLinkPolicy, afterSettingSaved, auditSettingChange } = ctx.settingEffects
+    || createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onReferrerPolicyChange, logAudit });
 
   socket.on('get-server-settings', () => {
     const rows = db.prepare('SELECT key, value FROM server_settings').all();
@@ -465,18 +465,7 @@ module.exports = function register(socket, ctx) {
 
     afterSettingSaved(key, value);
 
-    // Audit: log the setting change. Skip per-user UI prefs that the
-    // organize modal syncs constantly to avoid log spam.
-    const _quietKeys = new Set(['channel_cat_order', 'channel_cat_sort', 'channel_tag_sorts', 'channel_sort_mode']);
-    if (!_quietKeys.has(key) && typeof logAudit === 'function') {
-      const _short = (v) => typeof v === 'string' && v.length > 120 ? v.slice(0, 117) + '...' : v;
-      const _secret = NEVER_SENT_SETTINGS.has(key) || ADMIN_ONLY_SETTINGS.has(key);
-      logAudit({
-        actor: socket.user, action: 'server_setting_update',
-        target_type: 'setting', target_name: key,
-        details: { key, value: _secret ? (value ? '(hidden)' : '') : _short(value) }
-      });
-    }
+    auditSettingChange(socket.user, key, value);
 
     // Relay settings take effect straight away: start, stop or restart it.
     // Calls already running keep going until they empty (see voiceRelay).

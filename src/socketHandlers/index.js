@@ -179,7 +179,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   };
 
   // What a saved server setting sets off: live updates and follow-ups.
-  const settingEffects = createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onReferrerPolicyChange });
+  const settingEffects = createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onReferrerPolicyChange, logAudit });
 
   // ── Voice relay (Large Server Setup) ─────────────────────
   // Off unless the admin turns it on. When its worker process goes away, the
