@@ -176,3 +176,19 @@ test('imports are checked strictly', () => {
   assert.ok(ok.warnings.some((w) => /turn_password/.test(w)));
   assert.equal(ok.template.channels[0].topic, 'Hello');
 });
+test('a template never sets level thresholds for admin-only permissions', () => {
+  const t = JSON.parse(JSON.stringify(exported().template));
+  t.server.settings.permission_thresholds = JSON.stringify({ transfer_admin: 1, manage_server: 1, manage_roles: 1, pin_message: 10 });
+  const v = tpl.validateTemplate(t);
+  assert.ok(v.template, JSON.stringify(v.errors));
+  assert.deepEqual(JSON.parse(v.template.server.settings.permission_thresholds), { pin_message: 10 });
+  assert.ok(v.warnings.some((w) => /transfer_admin/.test(w)), 'the admin is told what was left out');
+  const dst = dirs('thresholds');
+  const db = freshDb('thresholds');
+  const admin = db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('a', 'x').lastInsertRowid;
+  db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('permission_thresholds', ?)").run(JSON.stringify({ create_channel: 50, view_all_channels: 90 }));
+  tpl.applyTemplate(db, v.template, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  const after = JSON.parse(db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get().value);
+  assert.deepEqual(after, { pin_message: 10, view_all_channels: 90 }, 'the admin\'s own admin-only threshold is kept, none are added');
+  db.close();
+});

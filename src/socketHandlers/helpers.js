@@ -190,6 +190,10 @@ const VALID_ROLE_PERMS = [
   'promote_user', 'transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'read_only_override',
   'view_audit_log', 'manage_display_names'
 ];
+// Permissions only the server admin may hand out: the socket handlers keep
+// them out of reach of non-admins, and server templates never import them.
+// Mirrors ADMIN_ONLY_PERMS in public/js/modules/perm-catalog.js.
+const ADMIN_ONLY_PERMS = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
 
 // ── Idle-online decision (pure, so it can be unit-tested) ──
 // Given each online user's timing and live status, return those that have been
@@ -321,6 +325,7 @@ function validEscalation(raw) {
 const CHANNEL_NAME_RE = /^[\w\s\-!?.,'&+\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u;
 module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
-  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, CHANNEL_NAME_RE, normalizeWordGroups, validEscalation, filterIdleOnline,
+  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE,
+ normalizeWordGroups, validEscalation, filterIdleOnline,
   replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads,
 };

@@ -2,7 +2,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { sanitizeText, VALID_ROLE_PERMS, CHANNEL_NAME_RE, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
+const { sanitizeText, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
 const { sniffImageType, stripImageBuffer } = require('./imageMetadata');
 const { generateUniqueChannelCode } = require('./channelRotation');
 const { normalizeHost } = require('../public/js/automod-rules.js');
@@ -36,6 +36,13 @@ const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 const label = (v, max) => typeof v === 'string' && v.trim().length >= 1 && v.trim().length <= max && LABEL_RE.test(v.trim());
 const jsonOf = (fn) => (v) => { try { const o = JSON.parse(v); return fn(o) ? JSON.stringify(o) : null; } catch { return null; } };
+const adminOnlyKeys = (o) => Object.keys(o).filter((k) => ADMIN_ONLY_PERMS.includes(k));
+// A threshold hands its permission to everyone at or above a level, so a
+// template never carries one for a permission only the admin may hand out.
+const thresholdsOf = (v) => {
+  const s = jsonOf((o) => isObj(o) && Object.entries(o).every(([k, n]) => VALID_ROLE_PERMS.includes(k) && Number.isInteger(n) && n >= 1 && n <= 100))(v);
+  return s && JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(s)).filter(([k]) => !ADMIN_ONLY_PERMS.includes(k))));
+};
 const B = { t: 'bool' }, N = (lo, hi) => ({ t: 'int', lo, hi }), E = (...v) => ({ t: 'enum', v }), T = (max) => ({ t: 'text', max }), F = (fn) => ({ t: 'fn', fn });
 const SETTINGS = {
   server_name: T(32), server_title: T(40), welcome_message: T(500), custom_tos: T(50000), default_locale: E('', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'zh', 'pt'),
@@ -45,7 +52,7 @@ const SETTINGS = {
   role_icon_sidebar: B, role_icon_chat: B, role_icon_after_name: B, channel_sort_mode: E(...SORT_MODES), channel_cat_sort: E('az', 'za', 'manual'),
   channel_cat_order: F(jsonOf((o) => Array.isArray(o) && o.length <= LIMITS.categories && o.every((c) => label(c, 40)))),
   channel_tag_sorts: F(jsonOf((o) => isObj(o) && Object.keys(o).length <= LIMITS.categories && Object.entries(o).every(([k, v]) => label(k, 40) && SORT_MODES.includes(v)))),
-  permission_thresholds: F(jsonOf((o) => isObj(o) && Object.entries(o).every(([k, v]) => VALID_ROLE_PERMS.includes(k) && Number.isInteger(v) && v >= 1 && v <= 100))),
+  permission_thresholds: F(thresholdsOf),
   channel_templates: F(jsonOf((o) => Array.isArray(o) && o.length <= 20 && o.every((x) => isObj(x) && label(x.name, 30) && isObj(x.fields) && Object.entries(x.fields).every(([k, v]) => typeof v === TEMPLATE_FIELDS[k] && (typeof v !== 'string' || (v.length <= 256 && LABEL_RE.test(v || ' '))) && (typeof v !== 'number' || (Number.isInteger(v) && v >= 0 && v <= 3600)))))),
   automod_enabled: B, automod_link_mode: E('off', 'allowlist', 'blocklist'), automod_link_exempt_level: N(0, 100), automod_link_min_account_hours: N(0, 8760),
   automod_scan_edits: B, automod_scan_profile: B, automod_scan_dms: B, automod_block_ip_urls: B, automod_block_punycode: B, automod_block_obfuscated: B,
@@ -317,6 +324,8 @@ function validateTemplate(input) {
     if (!SETTINGS[key]) { warnings.push(`Ignored setting ${key.slice(0, 60)}: templates cannot change it`); continue; }
     const v = checkSetting(key, value);
     v === null ? c.fail(`server.settings.${key}`, 'is not a valid value') : (settings[key] = v);
+    const dropped = key === 'permission_thresholds' && v !== null ? adminOnlyKeys(JSON.parse(value)) : [];
+    if (dropped.length) warnings.push(`Left out the level thresholds for ${dropped.join(', ')}: only the server admin can hand those out`);
   }
   const refs = (v, at) => c.opt(v, (x) => c.list(x, LIMITS.channels, at).map((r) => chRef(r, at)).filter(Boolean));
   out.server = {
@@ -450,7 +459,15 @@ function applyTemplate(db, tpl, opts = {}) {
       try { published = JSON.parse(cur.get('published_themes') || '[]'); } catch { published = []; }
       if (Array.isArray(published) && !published.includes(dflt)) set('published_themes', JSON.stringify([...published, dflt]), true);
     }
+    if (s.permission_thresholds) {
+      // Thresholds the admin set for admin-only permissions stay as they are.
+      let mine = {};
+      try { mine = JSON.parse(cur.get('permission_thresholds') || '{}'); } catch { mine = {}; }
+      const keep = isObj(mine) ? Object.fromEntries(adminOnlyKeys(mine).map((k) => [k, mine[k]])) : {};
+      s.permission_thresholds = JSON.stringify({ ...JSON.parse(s.permission_thresholds), ...keep });
+    }
     for (const [key, value] of Object.entries(s)) set(key, value);
+
     set('server_icon', url(tpl.server.icon));
     set('server_banner', url(tpl.server.banner));
     if (tpl.server.defaultJoinChannels) set('default_join_channels', JSON.stringify(tpl.server.defaultJoinChannels.map((x) => chId.get(x))));
