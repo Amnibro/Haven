@@ -548,3 +548,23 @@ test('ChromeLayout only rewrites a channel voice button when its state changes',
     plugin.stop();
   });
 });
+
+test('ChromeLayout row voice button joins voice in that row\'s channel', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  withEnv(({ document, app }) => {
+    const calls = [];
+    app.currentChannel = 'other';
+    app.switchChannel = (code) => { calls.push(['switch', code]); app.currentChannel = code; };
+    app._joinVoice = (...args) => { calls.push(['join', app.currentChannel, args.length]); };
+
+    const plugin = new ChromeLayout();
+    plugin.start();
+
+    const btn = document.querySelector('.channel-item').querySelector('.channel-join-voice');
+    btn.dispatchEvent({ type: 'click', preventDefault() {}, stopPropagation() {} });
+    t.mock.timers.tick(300);
+
+    assert.deepEqual(calls, [['switch', 'general'], ['join', 'general', 0]]);
+    plugin.stop();
+  });
+});

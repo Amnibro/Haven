@@ -697,12 +697,11 @@ class ChromeLayout {
           if (app?.voice?.inVoice && app.voice.currentChannel === code) {
             if (app._leaveVoice) app._leaveVoice();
             else if (app.voice.leaveVoice) app.voice.leaveVoice();
-          } else {
-            if (app?._joinVoice) app._joinVoice(code);
-            else if (app?.switchChannel) {
-              app.switchChannel(code);
-              app._joinVoice?.();
-            }
+          } else if (app?.switchChannel && app._joinVoice) {
+            // Core's _joinVoice joins the channel being viewed, so open this
+            // row's channel first, the same way double-clicking a row does.
+            app.switchChannel(code);
+            setTimeout(() => app._joinVoice(), 300);
           }
         });
 
