@@ -686,11 +686,9 @@ class ChromeLayout {
       if (!btn) {
         btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = `channel-join-voice${inThisVoice ? ' is-live is-leave' : ''}`;
+        btn.className = 'channel-join-voice';
         btn.dataset.joinVoice = code;
-        btn.innerHTML = inThisVoice ? ChromeLayout._LEAVE_SVG : '🎤';
-        btn.title = inThisVoice ? 'Disconnect Voice' : 'Join Voice';
-        btn.setAttribute('aria-label', btn.title);
+        this._renderVoiceButton(btn, inThisVoice);
 
         btn.addEventListener('click', (e) => {
           e.preventDefault();
@@ -711,13 +709,23 @@ class ChromeLayout {
         if (moreBtn) row.insertBefore(btn, moreBtn);
         else row.appendChild(btn);
       } else {
-        btn.classList.toggle('is-live', inThisVoice);
-        btn.classList.toggle('is-leave', inThisVoice);
-        btn.innerHTML = inThisVoice ? ChromeLayout._LEAVE_SVG : '🎤';
-        btn.title = inThisVoice ? 'Disconnect Voice' : 'Join Voice';
-        btn.setAttribute('aria-label', btn.title);
+        this._renderVoiceButton(btn, inThisVoice);
       }
     });
+  }
+
+  // Writes the button only when its state flips. Rewriting innerHTML on every
+  // pass is itself a mutation inside #channel-list, which retriggered the
+  // observer and redrew the buttons on every animation frame.
+  _renderVoiceButton(btn, inThisVoice) {
+    const state = inThisVoice ? 'leave' : 'join';
+    if (btn.dataset.voiceState === state) return;
+    btn.dataset.voiceState = state;
+    btn.classList.toggle('is-live', inThisVoice);
+    btn.classList.toggle('is-leave', inThisVoice);
+    btn.innerHTML = inThisVoice ? ChromeLayout._LEAVE_SVG : '🎤';
+    btn.title = inThisVoice ? 'Disconnect Voice' : 'Join Voice';
+    btn.setAttribute('aria-label', btn.title);
   }
 
   // 5. Thread Mentions Badge

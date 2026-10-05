@@ -518,3 +518,33 @@ test('ChromeLayout DM drawer collapses down when toggle header is clicked', () =
   });
 });
 
+test('ChromeLayout only rewrites a channel voice button when its state changes', () => {
+  withEnv(({ document, app }) => {
+    const plugin = new ChromeLayout();
+    plugin.start();
+
+    const btn = document.querySelector('.channel-item').querySelector('.channel-join-voice');
+    assert.ok(btn);
+    let html = btn.innerHTML;
+    let writes = 0;
+    Object.defineProperty(btn, 'innerHTML', {
+      get() { return html; },
+      set(value) { writes++; html = value; }
+    });
+
+    // Idle passes (what the observer runs) must not touch the button, or the
+    // write retriggers the observer every frame.
+    plugin._setupChannelVoiceButtons();
+    plugin._setupChannelVoiceButtons();
+    assert.equal(writes, 0);
+
+    app.voice.inVoice = true;
+    app.voice.currentChannel = 'general';
+    plugin._setupChannelVoiceButtons();
+    plugin._setupChannelVoiceButtons();
+    assert.equal(writes, 1);
+    assert.ok(btn.classList.contains('is-leave'));
+
+    plugin.stop();
+  });
+});
