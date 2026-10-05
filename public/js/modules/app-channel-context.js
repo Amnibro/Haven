@@ -507,50 +507,7 @@ _initDmContextMenu() {
     this._closeDmCtxMenu();
     const ok = await this._showConfirmModal('⚠️ ' + t('channels.dm_delete_confirm'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') });
     if (!ok) return;
-    // Gather all attachment URLs from the (decrypted) cached messages
-    // for this DM so the server can move E2E ciphertext-hidden uploads
-    // to deleted-attachments. (#5299)
-    const attachments = [];
-    const _scanMsgsForAttachments = (msgs) => {
-      const re = /\/uploads\/((?!deleted-attachments)[\w\-.]+)/g;
-      for (const msg of msgs) {
-        if (!msg || typeof msg.content !== 'string') continue;
-        let m;
-        while ((m = re.exec(msg.content)) !== null) attachments.push('/uploads/' + m[1]);
-      }
-    };
-    // Paginate through ALL messages in the DM so we don't miss E2E
-    // attachment URLs in older messages that haven't been rendered yet. (#5299)
-    try {
-      const channel = this.channels?.find(c => c.code === code);
-      if (channel?.is_dm && channel.dm_target) {
-        await this._fetchDMPartnerKey(channel);
-      }
-      const PAGE_LIMIT = 100;
-      let before = null;
-      for (;;) {
-        const page = await new Promise((resolve) => {
-          const timer = setTimeout(() => {
-            this.socket.off('message-history', onHistory);
-            resolve([]);
-          }, 5000);
-          const onHistory = (data) => {
-            if (!data || data.channelCode !== code) return;
-            this.socket.off('message-history', onHistory);
-            clearTimeout(timer);
-            resolve(Array.isArray(data.messages) ? data.messages : []);
-          };
-          this.socket.on('message-history', onHistory);
-          this.socket.emit('get-messages', { code, before, limit: PAGE_LIMIT });
-        });
-        if (page.length === 0) break;
-        try { await this._decryptMessages(page, code); } catch (err) { console.warn('[DM] could not decrypt a page while collecting attachments to delete', err); }
-        _scanMsgsForAttachments(page);
-        if (page.length < PAGE_LIMIT) break;
-        // Messages arrive in DESC order; last item is the oldest — use it as cursor.
-        before = page[page.length - 1].id;
-      }
-    } catch { /* best-effort — server still cleans up plaintext messages */ }
+    const attachments = await this._collectDmAttachments(code);
     this.socket.emit('delete-dm', { code, attachments });
   });
 
@@ -560,6 +517,58 @@ _initDmContextMenu() {
       this._closeDmCtxMenu();
     }
   });
+},
+
+/**
+ * Every attachment URL in a DM, decrypted, for the server to move aside when
+ * the DM is deleted, or when the last member leaves a group DM.
+ */
+async _collectDmAttachments(code) {
+  // Gather all attachment URLs from the (decrypted) cached messages
+  // for this DM so the server can move E2E ciphertext-hidden uploads
+  // to deleted-attachments. (#5299)
+  const attachments = [];
+  const _scanMsgsForAttachments = (msgs) => {
+    const re = /\/uploads\/((?!deleted-attachments)[\w\-.]+)/g;
+    for (const msg of msgs) {
+      if (!msg || typeof msg.content !== 'string') continue;
+      let m;
+      while ((m = re.exec(msg.content)) !== null) attachments.push('/uploads/' + m[1]);
+    }
+  };
+  // Paginate through ALL messages in the DM so we don't miss E2E
+  // attachment URLs in older messages that haven't been rendered yet. (#5299)
+  try {
+    const channel = this.channels?.find(c => c.code === code);
+    if (channel?.is_dm && channel.dm_target) {
+      await this._fetchDMPartnerKey(channel);
+    }
+    const PAGE_LIMIT = 100;
+    let before = null;
+    for (;;) {
+      const page = await new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          this.socket.off('message-history', onHistory);
+          resolve([]);
+        }, 5000);
+        const onHistory = (data) => {
+          if (!data || data.channelCode !== code) return;
+          this.socket.off('message-history', onHistory);
+          clearTimeout(timer);
+          resolve(Array.isArray(data.messages) ? data.messages : []);
+        };
+        this.socket.on('message-history', onHistory);
+        this.socket.emit('get-messages', { code, before, limit: PAGE_LIMIT });
+      });
+      if (page.length === 0) break;
+      try { await this._decryptMessages(page, code); } catch (err) { console.warn('[DM] could not decrypt a page while collecting attachments to delete', err); }
+      _scanMsgsForAttachments(page);
+      if (page.length < PAGE_LIMIT) break;
+      // Messages arrive in DESC order; the last item is the oldest, so it is the cursor.
+      before = page[page.length - 1].id;
+    }
+  } catch { /* best-effort: the server still cleans up plaintext messages */ }
+  return attachments;
 },
 
 _openDmCtxMenu(code, anchorEl, mouseEvent) {

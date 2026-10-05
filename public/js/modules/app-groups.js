@@ -12,22 +12,23 @@ _setupGroupListeners() {
     this._groups.delete(d.code);
     s.emit('get-channels');
     await new Promise(r => setTimeout(r, 400));
-    this._groupEnsure(d.code).catch(() => {});
+    this._groupEnsure(d.code).catch(err => console.warn('[Groups] could not set up encryption for the new group:', err.message));
     if (this._pendingGroupOpen === d.code || this._pendingGroupOpen === true) {
       if (d.existing) this._showToast(t('groups.already_exists', { name: d.name || t('groups.default_name') }), 'info');
       this._pendingGroupOpen = null;
       this.switchChannel(d.code);
     }
   });
-  s.on('group-dm-member-joined', (d) => this._groupMembershipChanged(d.code));
-  s.on('group-dm-member-left', (d) => this._groupMembershipChanged(d.code));
+  const changed = (d) => this._groupMembershipChanged(d.code).catch(err => console.warn('[Groups] could not update keys after a membership change:', err.message));
+  s.on('group-dm-member-joined', changed);
+  s.on('group-dm-member-left', changed);
   s.on('group-dm-updated', () => s.emit('get-channels'));
   s.on('group-dm-left', (d) => {
     this._groups.delete(d.code);
     if (this._leavingGroup === d.code) { this._leavingGroup = null; this._showToast(t('groups.left'), 'info'); }
   });
-  s.on('group-epoch-published', (d) => { const st = this._groups.get(d.code); if (st && !st.keys.has(d.epoch)) this._groupFetchKeys(d.code).catch(() => {}); });
-  s.on('group-rewrap-requested', (d) => this._groupRewrap(d).catch(() => {}));
+  s.on('group-epoch-published', (d) => { const st = this._groups.get(d.code); if (st && !st.keys.has(d.epoch)) this._groupFetchKeys(d.code).catch(err => console.warn('[Groups] could not load the new group key:', err.message)); });
+  s.on('group-rewrap-requested', (d) => this._groupRewrap(d).catch(err => console.warn('[Groups] could not re-share the group key:', err.message)));
   s.on('group-rewrap-fulfilled', (d) => this._groups.get(d.code)?.pendingRewraps.delete(d.userId));
   s.on('group-key-rewrapped', (d) => {
     const st = this._groups.get(d.code);
@@ -550,53 +551,6 @@ _showGroupInvite(d) {
   card.querySelector('.gi-accept').addEventListener('click', () => { this._pendingGroupOpen = d.code; this.socket.emit('accept-group-dm', { code: d.code }); card.remove(); });
   card.querySelector('.gi-decline').addEventListener('click', () => { this.socket.emit('decline-group-dm', { code: d.code }); card.remove(); });
   stack.appendChild(card);
-},
-async _collectDmAttachments(code) {
-  // Gather all attachment URLs from the (decrypted) cached messages
-  // for this DM so the server can move E2E ciphertext-hidden uploads
-  // to deleted-attachments. (#5299)
-  const attachments = [];
-  const _scanMsgsForAttachments = (msgs) => {
-    const re = /\/uploads\/((?!deleted-attachments)[\w\-.]+)/g;
-    for (const msg of msgs) {
-      if (!msg || typeof msg.content !== 'string') continue;
-      let m;
-      while ((m = re.exec(msg.content)) !== null) attachments.push('/uploads/' + m[1]);
-    }
-  };
-  // Paginate through ALL messages in the DM so we don't miss E2E
-  // attachment URLs in older messages that haven't been rendered yet. (#5299)
-  try {
-    const channel = this.channels?.find(c => c.code === code);
-    if (channel?.is_dm && channel.dm_target) {
-      await this._fetchDMPartnerKey(channel);
-    }
-    const PAGE_LIMIT = 100;
-    let before = null;
-    for (;;) {
-      const page = await new Promise((resolve) => {
-        const timer = setTimeout(() => {
-          this.socket.off('message-history', onHistory);
-          resolve([]);
-        }, 5000);
-        const onHistory = (data) => {
-          if (!data || data.channelCode !== code) return;
-          this.socket.off('message-history', onHistory);
-          clearTimeout(timer);
-          resolve(Array.isArray(data.messages) ? data.messages : []);
-        };
-        this.socket.on('message-history', onHistory);
-        this.socket.emit('get-messages', { code, before, limit: PAGE_LIMIT });
-      });
-      if (page.length === 0) break;
-      try { await this._decryptMessages(page, code); } catch {}
-      _scanMsgsForAttachments(page);
-      if (page.length < PAGE_LIMIT) break;
-      // Messages arrive in DESC order; last item is the oldest — use it as cursor.
-      before = page[page.length - 1].id;
-    }
-  } catch { /* best-effort — server still cleans up plaintext messages */ }
-  return attachments;
 },
 _leaveGroup(code) {
   const ch = this.channels.find(c => c.code === code);
