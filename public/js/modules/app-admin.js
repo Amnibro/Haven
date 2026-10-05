@@ -744,6 +744,7 @@ _syncSettingsNav() {
     'section-guests':       [],
     'section-cleanup':      ['manage_server'],
     'section-backup':       ['manage_server'],
+    'section-template':     [],
     'section-uploads':      ['manage_server'],
     'section-tags-admin':   ['manage_tags'],
     'section-connectivity': [],

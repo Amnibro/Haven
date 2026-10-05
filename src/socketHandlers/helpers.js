@@ -296,8 +296,31 @@ function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null 
   return out;
 }
 
+function normalizeWordGroups(raw) {
+  let groups;
+  try { groups = JSON.parse(raw); } catch { return null; }
+  if (!Array.isArray(groups) || groups.length > 50) return null;
+  const clean = [];
+  for (const g of groups) {
+    if (!g || typeof g !== 'object') return null;
+    const name = String(g.name || '').trim().slice(0, 40);
+    const strikes = Math.min(100, Math.max(1, parseInt(g.strikes, 10) || 1));
+    const words = [...new Set((Array.isArray(g.words) ? g.words : []).map(w => String(w || '').trim().replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean))].slice(0, 300);
+    if (words.length) clean.push({ name: name || `group ${clean.length + 1}`, strikes, words });
+  }
+  return JSON.stringify(clean);
+}
+function validEscalation(raw) {
+  try {
+    const c = JSON.parse(raw);
+    const num = (v, lo, hi) => Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi;
+    return !!c && num(c.windowHours, 1, 8760) && num(c.muteMinutes, 1, 43200) && ['warnAt', 'muteAt', 'banAt'].every(k => num(c[k], 0, 1000))
+      && !(c.muteAt && c.warnAt && Number(c.muteAt) < Number(c.warnAt)) && !(c.banAt && c.muteAt && Number(c.banAt) < Number(c.muteAt));
+  } catch { return false; }
+}
+const CHANNEL_NAME_RE = /^[\w\s\-!?.,'&+\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u;
 module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
-  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline,
+  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, CHANNEL_NAME_RE, normalizeWordGroups, validEscalation, filterIdleOnline,
   replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads,
 };

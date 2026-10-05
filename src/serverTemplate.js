@@ -1,0 +1,510 @@
+'use strict';
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const { sanitizeText, VALID_ROLE_PERMS, CHANNEL_NAME_RE, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
+const { sniffImageType, stripImageBuffer } = require('./imageMetadata');
+const { generateUniqueChannelCode } = require('./channelRotation');
+const { normalizeHost } = require('../public/js/automod-rules.js');
+const { BUILTIN_THEMES, isThemeFilename, parseThemeMetadata } = require('./themeMetadata');
+const FORMAT = 'haven-server-template';
+const VERSION = 1;
+const LIMITS = { bytes: 12 * 1024 * 1024, asset: 2 * 1024 * 1024, theme: 512 * 1024, assets: 8 * 1024 * 1024, assetCount: 200, channels: 500, roles: 100, posts: 500, post: 16000, webhooks: 200, domains: 2000, menus: 50, access: 5000, emojis: 500, stickers: 500, categories: 200 };
+const SORT_MODES = ['manual', 'alpha', 'created', 'oldest', 'dynamic'];
+const ROLLBACK = Symbol('rollback');
+const REF_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
+const LABEL_RE = /^[^<>\u0000-\u001f\u007f]+$/;
+const ASSET_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.(png|jpe?g|gif|webp)$/;
+const ASSET_TOKEN_RE = /\{\{asset:([^{}]{1,80})\}\}/g;
+const UPLOAD_REF_RE = /\/uploads\/([A-Za-z0-9][A-Za-z0-9_.-]{0,120})(?![A-Za-z0-9_./-])/g;
+const IMAGE_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' };
+const WEBHOOK_EVENTS = ['message', 'reaction-added', 'member-joined'];
+const CHANNEL_FIELDS = [
+  ['private', 'is_private', 'flag', null, false], ['forum', 'is_forum', 'flag', null, false], ['readOnly', 'read_only', 'flag', null, false],
+  ['text', 'text_enabled', 'flag', null, true], ['voice', 'voice_enabled', 'flag', null, true], ['media', 'media_enabled', 'flag', null, true],
+  ['streams', 'streams_enabled', 'flag', null, true], ['music', 'music_enabled', 'flag', null, true], ['soundboard', 'soundboard_enabled', 'flag', null, true],
+  ['reactions', 'reactions_enabled', 'flag', null, true], ['nsfw', 'is_nsfw', 'flag', null, false], ['sortAlphabetical', 'sort_alphabetical', 'flag', null, false],
+  ['cleanupExempt', 'cleanup_exempt', 'flag', null, false], ['welcome', 'show_welcome', 'flag', null, false],
+  ['slowMode', 'slow_mode_interval', 'range', [0, 3600], 0], ['voiceUserLimit', 'voice_user_limit', 'range', [0, 99], 0],
+  ['afkMinutes', 'afk_timeout_minutes', 'range', [0, 1440], 0], ['codeRotationInterval', 'code_rotation_interval', 'range', [1, 10000], 60],
+  ['notifications', 'notification_type', 'enum', ['default', 'announcement'], 'default'], ['voiceBitrate', 'voice_bitrate', 'enum', [0, 32, 64, 96, 128, 256, 512], 0],
+  ['codeVisibility', 'code_visibility', 'enum', ['public', 'private'], 'public'], ['codeMode', 'code_mode', 'enum', ['static', 'dynamic'], 'static'],
+  ['codeRotationType', 'code_rotation_type', 'enum', ['time', 'joins'], 'time'], ['autoDeleteMode', 'auto_delete_mode', 'enum', ['delete', 'clear'], 'delete'],
+];
+const TEMPLATE_FIELDS = { isPrivate: 'boolean', isForum: 'boolean', readOnly: 'boolean', announcement: 'boolean', mediaEnabled: 'boolean', voiceEnabled: 'boolean', addAllMembers: 'boolean', temporary: 'boolean', slowMode: 'number', duration: 'number', topic: 'string' };
+const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+const label = (v, max) => typeof v === 'string' && v.trim().length >= 1 && v.trim().length <= max && LABEL_RE.test(v.trim());
+const jsonOf = (fn) => (v) => { try { const o = JSON.parse(v); return fn(o) ? JSON.stringify(o) : null; } catch { return null; } };
+const B = { t: 'bool' }, N = (lo, hi) => ({ t: 'int', lo, hi }), E = (...v) => ({ t: 'enum', v }), T = (max) => ({ t: 'text', max }), F = (fn) => ({ t: 'fn', fn });
+const SETTINGS = {
+  server_name: T(32), server_title: T(40), welcome_message: T(500), custom_tos: T(50000), default_locale: E('', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'zh', 'pt'),
+  member_visibility: E('all', 'online', 'none'), allow_self_purge: B, hide_disabled_channel_badges: B, guests_enabled: B, guests_allow_voice: B,
+  max_upload_mb: N(1, 102400), max_attachments: N(1, 50), max_poll_options: N(2, 25), max_message_chars: N(200, 100000), max_tags_per_attachment: N(1, 10),
+  max_tag_len: N(1, 50), max_sound_kb: N(256, 10240), max_emoji_kb: N(64, 1024), max_sticker_kb: N(256, 10240),
+  role_icon_sidebar: B, role_icon_chat: B, role_icon_after_name: B, channel_sort_mode: E(...SORT_MODES), channel_cat_sort: E('az', 'za', 'manual'),
+  channel_cat_order: F(jsonOf((o) => Array.isArray(o) && o.length <= LIMITS.categories && o.every((c) => label(c, 40)))),
+  channel_tag_sorts: F(jsonOf((o) => isObj(o) && Object.keys(o).length <= LIMITS.categories && Object.entries(o).every(([k, v]) => label(k, 40) && SORT_MODES.includes(v)))),
+  permission_thresholds: F(jsonOf((o) => isObj(o) && Object.entries(o).every(([k, v]) => VALID_ROLE_PERMS.includes(k) && Number.isInteger(v) && v >= 1 && v <= 100))),
+  channel_templates: F(jsonOf((o) => Array.isArray(o) && o.length <= 20 && o.every((x) => isObj(x) && label(x.name, 30) && isObj(x.fields) && Object.entries(x.fields).every(([k, v]) => typeof v === TEMPLATE_FIELDS[k] && (typeof v !== 'string' || (v.length <= 256 && LABEL_RE.test(v || ' '))) && (typeof v !== 'number' || (Number.isInteger(v) && v >= 0 && v <= 3600)))))),
+  automod_enabled: B, automod_link_mode: E('off', 'allowlist', 'blocklist'), automod_link_exempt_level: N(0, 100), automod_link_min_account_hours: N(0, 8760),
+  automod_scan_edits: B, automod_scan_profile: B, automod_scan_dms: B, automod_block_ip_urls: B, automod_block_punycode: B, automod_block_obfuscated: B,
+  automod_preview_allowlist_only: B, automod_ban_ip: B, automod_escalation: F((v) => (validEscalation(v) ? v : null)), automod_words: F(normalizeWordGroups),
+  default_theme: F((v) => (BUILTIN_THEMES.includes(v) || (v.startsWith('file:') && isThemeFilename(v.slice(5))) ? v : null)),
+  published_themes: F(jsonOf((o) => Array.isArray(o) && o.length <= 500 && o.every(isThemeFilename) && new Set(o).size === o.length)),
+};
+function checkSetting(key, raw) {
+  const s = SETTINGS[key];
+  if (!s || typeof raw !== 'string') return null;
+  const v = raw.trim();
+  return s.t === 'bool' ? (['true', 'false'].includes(v) ? v : null)
+    : s.t === 'int' ? (/^\d{1,9}$/.test(v) && +v >= s.lo && +v <= s.hi ? String(+v) : null)
+      : s.t === 'enum' ? (s.v.includes(v) ? v : null)
+        : s.t === 'text' ? (v.length <= s.max ? sanitizeText(v) : null)
+          : s.fn(v);
+}
+function refMaker() {
+  const used = new Set();
+  return (name) => {
+    const base = String(name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'item';
+    let ref = base;
+    for (let n = 2; used.has(ref); n++) ref = `${base}-${n}`;
+    used.add(ref);
+    return ref;
+  };
+}
+function exportTemplate(db, opts = {}) {
+  const { uploadsDir = null, themesDir = null, posts = 'pinned', postAuthors = null, excludeChannels = [], assets: withAssets = true, meta = {}, havenVersion = null } = opts;
+  const warnings = [], assets = {};
+  const put = (base, ext, entry) => {
+    let name = `${base}${ext}`;
+    for (let n = 2; assets[name] && assets[name].sha256 !== entry.sha256; n++) name = `${base}-${n}${ext}`;
+    assets[name] = entry;
+    return name;
+  };
+  const addAsset = (url, kind = 'upload') => {
+    if (!url) return null;
+    if (!withAssets || !uploadsDir) return warnings.push(`Left out ${url}: assets are off`), null;
+    const m = /^\/uploads\/(stickers\/)?([A-Za-z0-9][A-Za-z0-9_.-]{0,120})$/.exec(String(url).trim());
+    if (!m) return warnings.push(`Left out ${url}: only files at the top of the uploads folder can go in a template`), null;
+    let buf;
+    try { buf = stripImageBuffer(fs.readFileSync(path.join(uploadsDir, m[1] || '', m[2]))); } catch { return warnings.push(`Left out ${url}: file not found`), null; }
+    const type = sniffImageType(buf);
+    if (!type || buf.length > LIMITS.asset) return warnings.push(`Left out ${url}: not a PNG, JPEG, GIF or WebP image under 2 MB`), null;
+    const base = path.basename(m[2], path.extname(m[2])).replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-_]+/, '').slice(0, 48) || 'asset';
+    return put(base, IMAGE_EXT[type], { kind, type, sha256: sha256(buf), data: buf.toString('base64') });
+  };
+  const rows = new Map(db.prepare('SELECT key, value FROM server_settings').all().map((r) => [r.key, r.value]));
+  const settings = {};
+  for (const key of Object.keys(SETTINGS)) {
+    if (!rows.has(key)) continue;
+    const v = checkSetting(key, rows.get(key));
+    v === null ? warnings.push(`Left out setting ${key}: its stored value is not valid`) : (settings[key] = v);
+  }
+  const skip = new Set(excludeChannels.map((n) => String(n).toLowerCase()));
+  const all = db.prepare('SELECT * FROM channels ORDER BY position, id').all().filter((r) => !r.is_dm && !r.is_group && !r.is_temp_voice && !(r.expires_at && r.auto_delete_mode !== 'clear'));
+  const top = new Set(all.filter((r) => !r.parent_channel_id && !skip.has(r.name.toLowerCase())).map((r) => r.id));
+  const chRows = all.filter((r) => (r.parent_channel_id ? top.has(r.parent_channel_id) && !skip.has(r.name.toLowerCase()) : top.has(r.id)));
+  const chMake = refMaker(), chRef = new Map(chRows.map((r) => [r.id, chMake(r.name)])), byCode = new Map(chRows.map((r) => [r.code, r]));
+  const roleRows = db.prepare('SELECT * FROM roles ORDER BY level DESC, id').all();
+  const roleMake = refMaker(), roleRef = new Map(roleRows.map((r) => [r.id, roleMake(r.name)]));
+  const perms = db.prepare('SELECT role_id, permission, allowed FROM role_permissions ORDER BY permission').all();
+  const roles = roleRows.map((r) => ({
+    ref: roleRef.get(r.id), name: r.name, level: r.level, scope: r.scope === 'channel' ? 'channel' : 'server', color: r.color || null,
+    autoAssign: !!r.auto_assign, linkChannelAccess: !!r.link_channel_access, icon: r.icon ? addAsset(r.icon) : null, maxUploadMb: r.max_upload_mb || null,
+    permissions: perms.filter((p) => p.role_id === r.id && p.allowed && VALID_ROLE_PERMS.includes(p.permission)).map((p) => p.permission),
+    denied: perms.filter((p) => p.role_id === r.id && !p.allowed && VALID_ROLE_PERMS.includes(p.permission)).map((p) => p.permission),
+  }));
+  const parse = (v) => { try { return JSON.parse(v); } catch { return null; } };
+  const channels = chRows.map((r) => {
+    const o = { ref: chRef.get(r.id), name: r.name };
+    if (r.category) o.category = r.category;
+    if (r.parent_channel_id) o.parent = chRef.get(r.parent_channel_id);
+    if (r.topic) o.topic = r.topic;
+    for (const [k, col, kind, arg, dflt] of CHANNEL_FIELDS) {
+      const raw = r[col] ?? dflt;
+      const v = kind === 'flag' ? !!raw : kind === 'range' ? Math.min(arg[1], Math.max(arg[0], Number(raw) || 0)) : arg.includes(raw) ? raw : dflt;
+      if (v !== dflt) o[k] = v;
+    }
+    const gate = parse(r.role_gate);
+    const gateRoles = gate && Array.isArray(gate.roles) ? gate.roles.map((id) => roleRef.get(Number(id))).filter(Boolean) : [];
+    if (gateRoles.length) o.roleGate = { mode: gate.mode === 'all' ? 'all' : 'any', roles: gateRoles };
+    if (r.default_role_id && roleRef.has(r.default_role_id)) o.defaultRole = roleRef.get(r.default_role_id);
+    const afk = r.afk_sub_code && byCode.get(r.afk_sub_code);
+    if (afk && afk.parent_channel_id === r.id) o.afkChannel = chRef.get(afk.id);
+    const tags = parse(r.forum_tags);
+    if (Array.isArray(tags) && tags.length) o.forumTags = tags.filter((t) => t && label(t.name, 30)).slice(0, 40).map((t) => (t.emoji ? { name: t.name, emoji: t.emoji } : { name: t.name }));
+    const layout = parse(r.forum_layout);
+    if (isObj(layout)) o.forumLayout = { view: layout.view, tile: layout.tile, shape: layout.shape, locked: !!layout.locked };
+    if (r.auto_delete_mode === 'clear' && r.auto_delete_interval_hours) o.autoDeleteHours = r.auto_delete_interval_hours;
+    return o;
+  });
+  const roleChannelAccess = db.prepare('SELECT * FROM role_channel_access').all().filter((a) => roleRef.has(a.role_id) && chRef.has(a.channel_id))
+    .map((a) => ({ role: roleRef.get(a.role_id), channel: chRef.get(a.channel_id), grantOnPromote: !!a.grant_on_promote, revokeOnDemote: !!a.revoke_on_demote }));
+  const roleMenus = db.prepare('SELECT rm.channel_id, rm.title, rm.data, m.content FROM role_menus rm JOIN messages m ON m.id = rm.message_id ORDER BY rm.message_id').all()
+    .filter((m) => chRef.has(m.channel_id)).map((m) => ({ channel: chRef.get(m.channel_id), title: m.title || '', content: sanitizeText(m.content || '').trim(), roles: ((parse(m.data) || {}).roles || []).filter((x) => x && roleRef.has(x.roleId) && x.emoji).map((x) => ({ role: roleRef.get(x.roleId), emoji: x.emoji })) }))
+    .filter((m) => m.roles.length);
+  const webhooks = db.prepare('SELECT channel_id, name, avatar_url, subscribed_events, can_moderate, can_use_voice FROM webhooks ORDER BY id').all().filter((w) => chRef.has(w.channel_id))
+    .map((w) => ({ channel: chRef.get(w.channel_id), name: w.name, avatar: w.avatar_url ? addAsset(w.avatar_url) : null, events: w.subscribed_events || '*', canModerate: !!w.can_moderate, canUseVoice: !!w.can_use_voice }));
+  const authors = Array.isArray(postAuthors) && postAuthors.length ? new Set(postAuthors) : null;
+  const postRows = posts === 'none' ? [] : db.prepare('SELECT m.channel_id, m.content, m.webhook_username, m.webhook_avatar FROM pinned_messages p JOIN messages m ON m.id = p.message_id WHERE m.is_webhook = 1 AND m.thread_id IS NULL ORDER BY m.id').all()
+    .filter((m) => chRef.has(m.channel_id) && (!authors || authors.has(m.webhook_username)));
+  const postList = postRows.filter((m) => (m.content || '').length <= LIMITS.post || (warnings.push(`Left out a post in #${chRows.find((c) => c.id === m.channel_id).name}: longer than ${LIMITS.post} characters`), false))
+    .map((m) => ({ channel: chRef.get(m.channel_id), author: m.webhook_username || 'Server', avatar: m.webhook_avatar ? addAsset(m.webhook_avatar) : null, pinned: true, content: sanitizeText(m.content).trim().replace(UPLOAD_REF_RE, (whole, file) => { const a = addAsset(`/uploads/${file}`); return a ? `{{asset:${a}}}` : whole; }) }));
+  const automodDomains = db.prepare('SELECT domain, mode, include_subdomains, note FROM automod_domains ORDER BY domain').all().map((d) => ({ domain: d.domain, mode: d.mode === 'deny' ? 'deny' : 'allow', includeSubdomains: d.include_subdomains !== 0, note: d.note || '' }));
+  const emojis = db.prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all().map((e) => ({ name: e.name, asset: addAsset(`/uploads/${e.filename}`) })).filter((e) => e.asset);
+  const stickers = db.prepare("SELECT name, pack_name, filename FROM stickers WHERE NOT (uploaded_by IS NULL AND filename LIKE 'starter-%') ORDER BY pack_name, name").all()
+    .map((s) => ({ name: s.name, pack: s.pack_name || 'General', asset: addAsset(`/uploads/stickers/${s.filename}`, 'sticker') })).filter((s) => s.asset);
+  const ids = (list) => (Array.isArray(list) ? list.map((id) => chRef.get(Number(id))).filter(Boolean) : null);
+  const creator = rows.get('channel_creator_role');
+  const server = {
+    settings, icon: rows.get('server_icon') ? addAsset(rows.get('server_icon')) : null, banner: rows.get('server_banner') ? addAsset(rows.get('server_banner')) : null,
+    defaultJoinChannels: rows.get('default_join_channels') ? ids(parse(rows.get('default_join_channels'))) : null,
+    guestChannels: rows.has('guest_channels') ? ids(String(rows.get('guest_channels')).split(',').filter(Boolean)) : null,
+    automodLogChannel: rows.get('automod_log_channel') && byCode.has(rows.get('automod_log_channel')) ? chRef.get(byCode.get(rows.get('automod_log_channel')).id) : null,
+    channelCreatorRole: /^\d+$/.test(creator || '') ? roleRef.get(Number(creator)) || null : ['default', 'none'].includes(creator) ? creator : null,
+  };
+  const themeNames = [...new Set([...(settings.default_theme || '').startsWith('file:') ? [settings.default_theme.slice(5)] : [], ...(settings.published_themes ? JSON.parse(settings.published_themes) : [])])];
+  for (const file of themeNames) {
+    if (!withAssets || !themesDir) break;
+    let buf;
+    try { buf = fs.readFileSync(path.join(themesDir, file)); } catch { warnings.push(`Left out theme ${file}: not installed`); continue; }
+    if (buf.length > LIMITS.theme || !parseThemeMetadata(buf.toString('utf8')).compatible) { warnings.push(`Left out theme ${file}: too large or not compatible`); continue; }
+    assets[file] = { kind: 'theme', type: 'text/css', sha256: sha256(buf), data: buf.toString('base64') };
+  }
+  const template = {
+    format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), havenVersion,
+    meta: { name: meta.name || settings.server_name || 'Haven server', description: meta.description || '', author: meta.author || '' },
+    server, roles, channels, roleChannelAccess, roleMenus, webhooks, posts: postList, automodDomains, emojis, stickers, assets,
+  };
+  return { template, warnings };
+}
+function checker() {
+  const errors = [];
+  const fail = (at, msg) => { if (errors.length < 100) errors.push(`${at}: ${msg}`); return null; };
+  const list = (v, max, at) => (v === undefined || v === null ? [] : Array.isArray(v) && v.length <= max ? v : (fail(at, `expected a list of at most ${max}`), []));
+  const text = (v, max, at, dflt = '') => (v === undefined || v === null ? dflt : typeof v === 'string' && v.length <= max ? sanitizeText(v).trim() : (fail(at, `expected text up to ${max} characters`), dflt));
+  const name = (v, max, at) => (label(v, max) ? v.trim() : fail(at, `expected a name of 1-${max} characters without < or >`));
+  const flag = (v, at, dflt) => (v === undefined || v === null ? dflt : typeof v === 'boolean' ? v : (fail(at, 'expected true or false'), dflt));
+  const int = (v, lo, hi, at, dflt) => (v === undefined || v === null ? dflt : Number.isInteger(v) && v >= lo && v <= hi ? v : (fail(at, `expected a whole number from ${lo} to ${hi}`), dflt));
+  const pick = (v, opts, at, dflt) => (v === undefined || v === null ? dflt : opts.includes(v) ? v : (fail(at, `expected one of ${opts.join(', ')}`), dflt));
+  const ref = (v, at) => (typeof v === 'string' && REF_RE.test(v) ? v : fail(at, 'expected a reference id (a-z, 0-9, _ and -)'));
+  const opt = (v, fn) => (v === undefined || v === null ? null : fn(v));
+  return { errors, fail, list, text, name, flag, int, pick, ref, opt };
+}
+function validateTemplate(input) {
+  const c = checker(), warnings = [];
+  if (!isObj(input)) return { errors: ['This is not a Haven server template'] };
+  if (input.format !== FORMAT) return { errors: ['This is not a Haven server template'] };
+  if (!Number.isInteger(input.version) || input.version < 1) return { errors: ['The template has no valid version'] };
+  if (input.version > VERSION) return { errors: [`This template was made by a newer Haven (template version ${input.version}); update Haven to import it`] };
+  const assets = {};
+  let total = 0;
+  const rawAssets = isObj(input.assets) ? input.assets : (input.assets === undefined ? {} : (c.fail('assets', 'expected an object'), {}));
+  if (Object.keys(rawAssets).length > LIMITS.assetCount) c.fail('assets', `at most ${LIMITS.assetCount} files`);
+  for (const [key, a] of Object.entries(rawAssets).slice(0, LIMITS.assetCount)) {
+    const at = `assets.${key.slice(0, 80)}`;
+    if (!isObj(a) || typeof a.data !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(a.data) || a.data.length > Math.ceil(LIMITS.asset / 3) * 4 + 4) { c.fail(at, 'expected base64 data under 2 MB'); continue; }
+    const kind = c.pick(a.kind, ['upload', 'sticker', 'theme'], `${at}.kind`, 'upload');
+    const buf = Buffer.from(a.data, 'base64');
+    total += buf.length;
+    if (a.sha256 !== undefined && a.sha256 !== sha256(buf)) { c.fail(at, 'the file does not match its checksum'); continue; }
+    if (kind === 'theme') {
+      const css = buf.toString('utf8');
+      if (!isThemeFilename(key) || buf.length > LIMITS.theme || css.includes('\u0000') || !parseThemeMetadata(css).compatible) { c.fail(at, 'expected a compatible *.theme.css file under 512 KB'); continue; }
+    } else {
+      const type = sniffImageType(buf);
+      if (!ASSET_RE.test(key) || !type || IMAGE_EXT[type] !== (path.extname(key).toLowerCase() === '.jpeg' ? '.jpg' : path.extname(key).toLowerCase())) { c.fail(at, 'expected a PNG, JPEG, GIF or WebP image with a plain file name that matches its type'); continue; }
+    }
+    assets[key] = { kind, buf: kind === 'theme' ? buf : stripImageBuffer(buf), sha256: sha256(buf) };
+  }
+  if (total > LIMITS.assets) c.fail('assets', 'more than 8 MB of files in total');
+  const asset = (v, at, kind = 'upload') => (v === undefined || v === null ? null : typeof v === 'string' && assets[v] && assets[v].kind === kind ? v : c.fail(at, `unknown ${kind} file ${String(v).slice(0, 80)}`));
+  const meta = isObj(input.meta) ? input.meta : {};
+  const out = {
+    meta: { name: c.text(meta.name, 60, 'meta.name'), description: c.text(meta.description, 500, 'meta.description'), author: c.text(meta.author, 60, 'meta.author') },
+    assets,
+  };
+  out.roles = c.list(input.roles, LIMITS.roles, 'roles').map((r, i) => {
+    const at = `roles[${i}]`;
+    if (!isObj(r)) return c.fail(at, 'expected an object');
+    const permsOf = (v, key) => [...new Set(c.list(v, 100, `${at}.${key}`).filter((p) => VALID_ROLE_PERMS.includes(p) || c.fail(`${at}.${key}`, `unknown permission ${String(p).slice(0, 40)}`)))];
+    return {
+      ref: c.ref(r.ref, `${at}.ref`), name: c.name(r.name, 30, `${at}.name`), level: c.int(r.level, 0, 99, `${at}.level`, 25), scope: c.pick(r.scope, ['server', 'channel'], `${at}.scope`, 'server'),
+      color: c.opt(r.color, (v) => (typeof v === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(v) ? v : c.fail(`${at}.color`, 'expected a colour like #3498db'))),
+      autoAssign: c.flag(r.autoAssign, `${at}.autoAssign`, false), linkChannelAccess: c.flag(r.linkChannelAccess, `${at}.linkChannelAccess`, false),
+      icon: asset(r.icon, `${at}.icon`), maxUploadMb: c.int(r.maxUploadMb, 1, 102400, `${at}.maxUploadMb`, null), permissions: permsOf(r.permissions, 'permissions'), denied: permsOf(r.denied, 'denied'),
+    };
+  }).filter(Boolean);
+  out.channels = c.list(input.channels, LIMITS.channels, 'channels').map((ch, i) => {
+    const at = `channels[${i}]`;
+    if (!isObj(ch)) return c.fail(at, 'expected an object');
+    const name = typeof ch.name === 'string' ? ch.name.trim() : '';
+    if (!name || name.length > 50 || !CHANNEL_NAME_RE.test(name)) c.fail(`${at}.name`, 'expected a channel name of 1-50 letters, numbers, spaces, emoji or - ! ? . , \' & +');
+    const o = {
+      ref: c.ref(ch.ref, `${at}.ref`), name, category: c.opt(ch.category, (v) => c.name(v, 30, `${at}.category`)), parent: c.opt(ch.parent, (v) => c.ref(v, `${at}.parent`)),
+      topic: c.text(ch.topic, 256, `${at}.topic`), afkChannel: c.opt(ch.afkChannel, (v) => c.ref(v, `${at}.afkChannel`)), defaultRole: c.opt(ch.defaultRole, (v) => c.ref(v, `${at}.defaultRole`)),
+      autoDeleteHours: c.int(ch.autoDeleteHours, 1, 720, `${at}.autoDeleteHours`, null),
+      roleGate: c.opt(ch.roleGate, (g) => (isObj(g) ? { mode: c.pick(g.mode, ['any', 'all'], `${at}.roleGate.mode`, 'any'), roles: c.list(g.roles, 50, `${at}.roleGate.roles`).map((x) => c.ref(x, `${at}.roleGate.roles`)) } : c.fail(`${at}.roleGate`, 'expected an object'))),
+      forumTags: c.opt(ch.forumTags, (tags) => {
+        const seen = new Set();
+        return c.list(tags, 40, `${at}.forumTags`).map((t) => (isObj(t) && c.name(t.name, 30, `${at}.forumTags`) ? { name: t.name.trim(), ...(t.emoji ? { emoji: c.opt(t.emoji, (e) => (typeof e === 'string' && e.length <= 16 && LABEL_RE.test(e) ? e : c.fail(`${at}.forumTags`, 'bad emoji'))) } : {}) } : null))
+          .filter((t) => t && !seen.has(t.name.toLowerCase()) && seen.add(t.name.toLowerCase()));
+      }),
+      forumLayout: c.opt(ch.forumLayout, (l) => (isObj(l) ? {
+        view: c.pick(l.view, ['list', 'gallery', 'feed'], `${at}.forumLayout.view`, 'list'), shape: c.pick(l.shape, ['square', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'], `${at}.forumLayout.shape`, 'square'),
+        tile: l.tile === undefined ? 11 : typeof l.tile === 'number' && l.tile >= 7 && l.tile <= 28 ? Math.round(l.tile * 2) / 2 : (c.fail(`${at}.forumLayout.tile`, 'expected 7-28'), 11), locked: c.flag(l.locked, `${at}.forumLayout.locked`, false),
+      } : c.fail(`${at}.forumLayout`, 'expected an object'))),
+    };
+    for (const [k, , kind, arg, dflt] of CHANNEL_FIELDS) o[k] = kind === 'flag' ? c.flag(ch[k], `${at}.${k}`, dflt) : kind === 'range' ? c.int(ch[k], arg[0], arg[1], `${at}.${k}`, dflt) : c.pick(ch[k], arg, `${at}.${k}`, dflt);
+    return o;
+  }).filter(Boolean);
+  const chByRef = new Map(), roleByRef = new Map(), siblings = new Set(), roleNames = new Set();
+  out.channels.forEach((ch, i) => (chByRef.has(ch.ref) ? c.fail(`channels[${i}].ref`, `${ch.ref} is used twice`) : chByRef.set(ch.ref, ch)));
+  out.roles.forEach((r, i) => {
+    roleByRef.has(r.ref) ? c.fail(`roles[${i}].ref`, `${r.ref} is used twice`) : roleByRef.set(r.ref, r);
+    const key = String(r.name).toLowerCase();
+    roleNames.has(key) ? c.fail(`roles[${i}].name`, `${r.name} is used twice`) : roleNames.add(key);
+  });
+  const chRef = (v, at) => (v && chByRef.has(v) ? v : c.fail(at, `unknown channel ${String(v).slice(0, 48)}`));
+  const roleRef = (v, at) => (v && roleByRef.has(v) ? v : c.fail(at, `unknown role ${String(v).slice(0, 48)}`));
+  out.channels.forEach((ch, i) => {
+    const at = `channels[${i}]`;
+    if (ch.parent && (!chByRef.has(ch.parent) || chByRef.get(ch.parent).parent || ch.parent === ch.ref)) c.fail(`${at}.parent`, 'must be a top-level channel in this template');
+    const key = `${ch.parent || ''}/${ch.name.toLowerCase()}`;
+    siblings.has(key) ? c.fail(`${at}.name`, `${ch.name} is used twice at the same level`) : siblings.add(key);
+    if (ch.afkChannel && (!chByRef.has(ch.afkChannel) || chByRef.get(ch.afkChannel).parent !== ch.ref)) c.fail(`${at}.afkChannel`, 'must be a sub-channel of this channel');
+    if (ch.roleGate) ch.roleGate.roles.forEach((r) => roleRef(r, `${at}.roleGate.roles`));
+    if (ch.defaultRole) roleRef(ch.defaultRole, `${at}.defaultRole`);
+  });
+  out.roleChannelAccess = c.list(input.roleChannelAccess, LIMITS.access, 'roleChannelAccess').map((a, i) => (isObj(a) ? {
+    role: roleRef(a.role, `roleChannelAccess[${i}].role`), channel: chRef(a.channel, `roleChannelAccess[${i}].channel`),
+    grantOnPromote: c.flag(a.grantOnPromote, `roleChannelAccess[${i}]`, false), revokeOnDemote: c.flag(a.revokeOnDemote, `roleChannelAccess[${i}]`, false),
+  } : c.fail(`roleChannelAccess[${i}]`, 'expected an object'))).filter(Boolean);
+  out.roleMenus = c.list(input.roleMenus, LIMITS.menus, 'roleMenus').map((m, i) => {
+    const at = `roleMenus[${i}]`;
+    if (!isObj(m)) return c.fail(at, 'expected an object');
+    const roles = c.list(m.roles, 20, `${at}.roles`).map((x) => (isObj(x) && typeof x.emoji === 'string' && x.emoji.trim() && x.emoji.length <= 16 && LABEL_RE.test(x.emoji) ? { role: roleRef(x.role, `${at}.roles`), emoji: x.emoji.trim() } : c.fail(`${at}.roles`, 'each entry needs a role and an emoji')));
+    const content = c.text(m.content, 4000, `${at}.content`);
+    if (!roles.length || !content) c.fail(at, 'needs text and at least one role');
+    return { channel: chRef(m.channel, `${at}.channel`), title: c.text(m.title, 120, `${at}.title`), content, roles };
+  }).filter(Boolean);
+  out.webhooks = c.list(input.webhooks, LIMITS.webhooks, 'webhooks').map((w, i) => {
+    const at = `webhooks[${i}]`;
+    if (!isObj(w)) return c.fail(at, 'expected an object');
+    const events = w.events === undefined || w.events === '*' ? '*' : typeof w.events === 'string' && w.events.split(',').every((e) => WEBHOOK_EVENTS.includes(e.trim())) ? w.events.split(',').map((e) => e.trim()).join(',') : (c.fail(`${at}.events`, `expected * or ${WEBHOOK_EVENTS.join(', ')}`), '*');
+    return { channel: chRef(w.channel, `${at}.channel`), name: c.name(w.name, 32, `${at}.name`), avatar: asset(w.avatar, `${at}.avatar`), events, canModerate: c.flag(w.canModerate, `${at}.canModerate`, false), canUseVoice: c.flag(w.canUseVoice, `${at}.canUseVoice`, false) };
+  }).filter(Boolean);
+  out.posts = c.list(input.posts, LIMITS.posts, 'posts').map((p, i) => {
+    const at = `posts[${i}]`;
+    if (!isObj(p)) return c.fail(at, 'expected an object');
+    const content = c.text(p.content, LIMITS.post, `${at}.content`);
+    if (!content) c.fail(`${at}.content`, 'is empty');
+    for (const [, file] of content.matchAll(ASSET_TOKEN_RE)) asset(file, `${at}.content`);
+    return { channel: chRef(p.channel, `${at}.channel`), author: c.name(p.author, 32, `${at}.author`), avatar: asset(p.avatar, `${at}.avatar`), pinned: c.flag(p.pinned, `${at}.pinned`, false), content };
+  }).filter(Boolean);
+  out.automodDomains = c.list(input.automodDomains, LIMITS.domains, 'automodDomains').map((d, i) => {
+    const at = `automodDomains[${i}]`;
+    const host = isObj(d) && typeof d.domain === 'string' && d.domain.length <= 253 ? normalizeHost(d.domain.trim()) : '';
+    if (!host || !host.includes('.') || !/^[a-z0-9.-]+$/.test(host)) return c.fail(`${at}.domain`, 'expected a domain like example.com');
+    return { domain: host, mode: c.pick(d.mode, ['allow', 'deny'], `${at}.mode`, 'allow'), includeSubdomains: c.flag(d.includeSubdomains, `${at}.includeSubdomains`, true), note: c.text(d.note, 200, `${at}.note`) };
+  }).filter(Boolean);
+  out.emojis = c.list(input.emojis, LIMITS.emojis, 'emojis').map((e, i) => (isObj(e) && typeof e.name === 'string' && /^[a-z0-9_-]{1,30}$/.test(e.name) ? { name: e.name, asset: asset(e.asset, `emojis[${i}].asset`) } : c.fail(`emojis[${i}]`, 'expected a name of a-z, 0-9, _ and - and a file'))).filter(Boolean);
+  out.stickers = c.list(input.stickers, LIMITS.stickers, 'stickers').map((s, i) => (isObj(s) && typeof s.name === 'string' && /^[a-z0-9_-]{1,40}$/.test(s.name) ? { name: s.name, pack: s.pack === undefined ? 'General' : c.name(s.pack, 40, `stickers[${i}].pack`), asset: asset(s.asset, `stickers[${i}].asset`, 'sticker') } : c.fail(`stickers[${i}]`, 'expected a name of a-z, 0-9, _ and - and a file'))).filter(Boolean);
+  const srv = isObj(input.server) ? input.server : {};
+  const settings = {};
+  for (const [key, value] of Object.entries(isObj(srv.settings) ? srv.settings : {})) {
+    if (!SETTINGS[key]) { warnings.push(`Ignored setting ${key.slice(0, 60)}: templates cannot change it`); continue; }
+    const v = checkSetting(key, value);
+    v === null ? c.fail(`server.settings.${key}`, 'is not a valid value') : (settings[key] = v);
+  }
+  const refs = (v, at) => c.opt(v, (x) => c.list(x, LIMITS.channels, at).map((r) => chRef(r, at)).filter(Boolean));
+  out.server = {
+    settings, icon: asset(srv.icon, 'server.icon'), banner: asset(srv.banner, 'server.banner'), defaultJoinChannels: refs(srv.defaultJoinChannels, 'server.defaultJoinChannels'), guestChannels: refs(srv.guestChannels, 'server.guestChannels'),
+    automodLogChannel: c.opt(srv.automodLogChannel, (v) => chRef(v, 'server.automodLogChannel')),
+    channelCreatorRole: c.opt(srv.channelCreatorRole, (v) => (['default', 'none'].includes(v) ? v : roleRef(v, 'server.channelCreatorRole'))),
+  };
+  return c.errors.length ? { errors: c.errors, warnings } : { template: out, warnings };
+}
+function summarizeTemplate(tpl) {
+  return {
+    name: tpl.meta.name, description: tpl.meta.description, author: tpl.meta.author, roles: tpl.roles.length, channels: tpl.channels.length,
+    categories: [...new Set(tpl.channels.map((ch) => ch.category).filter(Boolean))].length, posts: tpl.posts.length, roleMenus: tpl.roleMenus.length,
+    webhooks: tpl.webhooks.length, automodDomains: tpl.automodDomains.length, emojis: tpl.emojis.length, stickers: tpl.stickers.length,
+    settings: Object.keys(tpl.server.settings).length, assets: Object.keys(tpl.assets).length,
+  };
+}
+function applyTemplate(db, tpl, opts = {}) {
+  const { mode = 'merge', actorId = null, uploadsDir = null, themesDir = null, dryRun = false, posts: withPosts = true, webhooks: withWebhooks = true, joinMembers = true, installThemes = false } = opts;
+  const replace = mode === 'replace';
+  const r = {
+    mode: replace ? 'replace' : 'merge', dryRun,
+    created: { roles: [], channels: [], webhooks: [], emojis: [], stickers: [], files: [], themes: [] }, updated: { roles: [], channels: [], settings: [] },
+    existing: { roles: [], channels: [], settings: [] }, extra: { roles: [], channels: [] }, counts: { posts: 0, roleMenus: 0, domains: 0, access: 0 }, warnings: [], changedSettings: {},
+  };
+  const warn = (msg) => { if (!r.warnings.includes(msg)) r.warnings.push(msg); };
+  const files = [], urls = {}, themes = new Set();
+  for (const [name, a] of Object.entries(tpl.assets)) {
+    const dir = a.kind === 'theme' ? themesDir : a.kind === 'sticker' ? uploadsDir && path.join(uploadsDir, 'stickers') : uploadsDir;
+    const file = a.kind === 'theme' ? name : `${path.basename(name, path.extname(name))}-${a.sha256.slice(0, 10)}${path.extname(name).toLowerCase()}`;
+    urls[name] = { file, url: `/uploads/${a.kind === 'sticker' ? 'stickers/' : ''}${file}` };
+    const dest = dir && path.join(dir, file);
+    const current = dest && fs.existsSync(dest) ? fs.readFileSync(dest) : null;
+    if (a.kind === 'theme') {
+      if (current && sha256(current) === a.sha256) themes.add(name);
+      else if (current) warn(`Theme ${name} is already installed with different contents; it was left as it is`), themes.add(name);
+      else if (installThemes && dir) files.push({ dest, buf: a.buf, name }), themes.add(name);
+      else warn(`Theme ${name} is not installed on this server, so it was not made the default. Copy it into Haven's themes folder, or import with tools/template.js --install-themes`);
+    } else if (!dir) warn('No uploads folder was given, so images were not copied');
+    else if (!current) files.push({ dest, buf: a.buf, name: file });
+  }
+  const url = (name) => (name && urls[name] ? urls[name].url : null);
+  const run = () => {
+    const now = Date.now();
+    const roleId = new Map(), chId = new Map(), touched = new Set();
+    const existingRoles = db.prepare('SELECT id, name FROM roles').all();
+    const roleByName = new Map(existingRoles.map((x) => [x.name.toLowerCase(), x.id]));
+    const insPerm = db.prepare('INSERT OR REPLACE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, ?)');
+    const setPerms = (id, role) => { db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(id); if (role.level > 0) { role.permissions.forEach((p) => insPerm.run(id, p, 1)); role.denied.forEach((p) => insPerm.run(id, p, 0)); } };
+    let autoRole = db.prepare('SELECT id FROM roles WHERE auto_assign = 1').get()?.id || null;
+    for (const role of tpl.roles) {
+      const found = roleByName.get(role.name.toLowerCase());
+      if (found && !replace) { roleId.set(role.ref, found); r.existing.roles.push(role.name); continue; }
+      const auto = role.autoAssign && (replace || !autoRole || autoRole === found);
+      if (role.autoAssign && !auto) warn(`${role.name} was not made the role new members get, because this server already has one`);
+      if (auto) db.prepare('UPDATE roles SET auto_assign = 0 WHERE auto_assign = 1').run();
+      const vals = [role.level, role.scope, role.color, auto ? 1 : 0, role.linkChannelAccess ? 1 : 0, url(role.icon), role.maxUploadMb];
+      const id = found || db.prepare('INSERT INTO roles (name, level, scope, color, auto_assign, link_channel_access, icon, max_upload_mb) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(role.name, ...vals).lastInsertRowid;
+      if (found) db.prepare('UPDATE roles SET name = ?, level = ?, scope = ?, color = ?, auto_assign = ?, link_channel_access = ?, icon = ?, max_upload_mb = ? WHERE id = ?').run(role.name, ...vals, found);
+      setPerms(id, role);
+      roleId.set(role.ref, id);
+      (found ? r.updated : r.created).roles.push(role.name);
+      if (auto) autoRole = id;
+    }
+    const tplRoles = new Set(tpl.roles.map((x) => x.name.toLowerCase()));
+    r.extra.roles = existingRoles.filter((x) => !tplRoles.has(x.name.toLowerCase())).map((x) => x.name);
+    const existing = db.prepare('SELECT id, name, parent_channel_id, position, show_welcome FROM channels WHERE is_dm = 0 ORDER BY position, id').all();
+    const hadWelcome = existing.find((x) => x.show_welcome);
+    const matched = new Set();
+    const users = joinMembers ? db.prepare('SELECT id FROM users').all() : [];
+    const addMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+    const newCode = () => generateUniqueChannelCode(db, () => crypto.randomBytes(4).toString('hex'));
+    let pos = existing.reduce((m, x) => Math.max(m, x.position || 0), 0);
+    const order = new Map(tpl.channels.map((ch, i) => [ch.ref, i + 1]));
+    for (const ch of [...tpl.channels.filter((x) => !x.parent), ...tpl.channels.filter((x) => x.parent)]) {
+      const parentId = ch.parent ? chId.get(ch.parent) : null;
+      const found = existing.find((x) => !matched.has(x.id) && x.name.toLowerCase() === ch.name.toLowerCase() && (x.parent_channel_id || null) === parentId);
+      if (found) matched.add(found.id);
+      if (found && !replace) { chId.set(ch.ref, found.id); r.existing.channels.push(ch.name); continue; }
+      const id = found ? found.id : db.prepare('INSERT INTO channels (name, code, created_by) VALUES (?, ?, ?)').run(ch.name, newCode(), actorId).lastInsertRowid;
+      chId.set(ch.ref, id);
+      touched.add(ch.ref);
+      (found ? r.updated : r.created).channels.push(ch.name);
+      if (!found && actorId) addMember.run(id, actorId);
+      if (!found && !ch.private && !ch.roleGate) users.forEach((u) => addMember.run(id, u.id));
+      const cols = {
+        name: ch.name, category: ch.category, parent_channel_id: parentId, topic: ch.topic, position: replace ? order.get(ch.ref) : ++pos,
+        role_gate: ch.roleGate && ch.roleGate.roles.length ? JSON.stringify({ mode: ch.roleGate.mode, roles: ch.roleGate.roles.map((x) => roleId.get(x)) }) : null,
+        default_role_id: ch.defaultRole ? roleId.get(ch.defaultRole) : null, forum_tags: ch.forumTags && ch.forumTags.length ? JSON.stringify(ch.forumTags) : null,
+        forum_layout: ch.forumLayout ? JSON.stringify({ ...ch.forumLayout, at: now }) : null, auto_delete_interval_hours: ch.autoDeleteMode === 'clear' ? ch.autoDeleteHours : null,
+        expires_at: ch.autoDeleteMode === 'clear' && ch.autoDeleteHours ? new Date(now + ch.autoDeleteHours * 3600000).toISOString() : null,
+      };
+      for (const [k, col, kind] of CHANNEL_FIELDS) cols[col] = kind === 'flag' ? (ch[k] ? 1 : 0) : ch[k];
+      if (ch.welcome && !replace && hadWelcome) cols.show_welcome = 0, warn(`#${ch.name} was not made the welcome channel, because this server already has one`);
+      db.prepare(`UPDATE channels SET ${Object.keys(cols).map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...Object.values(cols), id);
+    }
+    const extra = existing.filter((x) => !matched.has(x.id));
+    r.extra.channels = extra.map((x) => x.name);
+    if (replace) extra.forEach((x, i) => db.prepare('UPDATE channels SET position = ? WHERE id = ?').run(tpl.channels.length + i + 1, x.id));
+    const welcome = tpl.channels.find((ch) => ch.welcome && touched.has(ch.ref));
+    if (welcome && replace) db.prepare('UPDATE channels SET show_welcome = 0 WHERE is_dm = 0 AND id != ?').run(chId.get(welcome.ref));
+    for (const ch of tpl.channels) if (ch.afkChannel && touched.has(ch.ref)) db.prepare('UPDATE channels SET afk_sub_code = (SELECT code FROM channels WHERE id = ?) WHERE id = ?').run(chId.get(ch.afkChannel), chId.get(ch.ref));
+    const access = db.prepare(`INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO role_channel_access (role_id, channel_id, grant_on_promote, revoke_on_demote) VALUES (?, ?, ?, ?)`);
+    for (const a of tpl.roleChannelAccess) r.counts.access += access.run(roleId.get(a.role), chId.get(a.channel), a.grantOnPromote ? 1 : 0, a.revokeOnDemote ? 1 : 0).changes;
+    const cur = new Map(db.prepare('SELECT key, value FROM server_settings').all().map((x) => [x.key, x.value]));
+    const set = (key, value, force = false) => {
+      if (value === null || value === undefined || cur.get(key) === value) return;
+      if (!replace && !force && cur.has(key) && cur.get(key) !== '') return r.existing.settings.push(key);
+      db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(key, value);
+      cur.set(key, value);
+      r.updated.settings.push(key);
+      r.changedSettings[key] = value;
+    };
+    const s = { ...tpl.server.settings };
+    const tplCats = [...(s.channel_cat_order ? JSON.parse(s.channel_cat_order) : []), ...tpl.channels.map((ch) => ch.category).filter(Boolean)].filter((x, i, a) => a.indexOf(x) === i);
+    let curCats = [];
+    try { curCats = JSON.parse(cur.get('channel_cat_order') || '[]'); } catch { curCats = []; }
+    if (!Array.isArray(curCats)) curCats = [];
+    delete s.channel_cat_order;
+    if (tplCats.length) set('channel_cat_order', JSON.stringify(replace ? [...tplCats, ...curCats.filter((x) => !tplCats.includes(x))] : [...curCats, ...tplCats.filter((x) => !curCats.includes(x))]), true);
+    if (s.published_themes) {
+      const want = JSON.parse(s.published_themes);
+      want.filter((f) => !themes.has(f)).forEach((f) => warn(`Theme ${f} is not installed on this server, so it was not published`));
+      s.published_themes = JSON.stringify(want.filter((f) => themes.has(f)));
+    }
+    if (s.default_theme && s.default_theme.startsWith('file:') && !themes.has(s.default_theme.slice(5))) delete s.default_theme;
+    const dflt = s.default_theme && s.default_theme.startsWith('file:') ? s.default_theme.slice(5) : null;
+    if (dflt && replace && s.published_themes) s.published_themes = JSON.stringify([...new Set([...JSON.parse(s.published_themes), dflt])]);
+    else if (dflt && (replace || !cur.get('default_theme'))) {
+      let published = [];
+      try { published = JSON.parse(cur.get('published_themes') || '[]'); } catch { published = []; }
+      if (Array.isArray(published) && !published.includes(dflt)) set('published_themes', JSON.stringify([...published, dflt]), true);
+    }
+    for (const [key, value] of Object.entries(s)) set(key, value);
+    set('server_icon', url(tpl.server.icon));
+    set('server_banner', url(tpl.server.banner));
+    if (tpl.server.defaultJoinChannels) set('default_join_channels', JSON.stringify(tpl.server.defaultJoinChannels.map((x) => chId.get(x))));
+    if (tpl.server.guestChannels) set('guest_channels', tpl.server.guestChannels.map((x) => chId.get(x)).join(','));
+    if (tpl.server.automodLogChannel) set('automod_log_channel', db.prepare('SELECT code FROM channels WHERE id = ?').get(chId.get(tpl.server.automodLogChannel)).code);
+    if (tpl.server.channelCreatorRole) set('channel_creator_role', ['default', 'none'].includes(tpl.server.channelCreatorRole) ? tpl.server.channelCreatorRole : String(roleId.get(tpl.server.channelCreatorRole)));
+    const withAsset = (text) => text.replace(ASSET_TOKEN_RE, (_, name) => url(name) || '');
+    if (withPosts) {
+      const has = db.prepare('SELECT 1 FROM messages WHERE channel_id = ? AND content = ? LIMIT 1');
+      const ins = db.prepare('INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar) VALUES (?, NULL, ?, 1, ?, ?)');
+      const pin = db.prepare('INSERT OR IGNORE INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)');
+      for (const p of tpl.posts) {
+        const cid = chId.get(p.channel), content = withAsset(p.content);
+        if (has.get(cid, content)) continue;
+        const mid = ins.run(cid, content, p.author, url(p.avatar)).lastInsertRowid;
+        r.counts.posts++;
+        if (p.pinned) actorId ? pin.run(mid, cid, actorId) : warn('Posts were added but not pinned, because no admin account was given to pin them as');
+      }
+      if (tpl.roleMenus.length && !actorId) warn('Role menus were not posted, because no admin account was given to post them as');
+      for (const m of actorId ? tpl.roleMenus : []) {
+        const cid = chId.get(m.channel), entries = m.roles.map((x) => ({ roleId: roleId.get(x.role), emoji: x.emoji }));
+        const key = JSON.stringify(entries.map((e) => e.roleId).sort());
+        const same = db.prepare('SELECT data FROM role_menus WHERE channel_id = ?').all(cid).some((row) => { try { return JSON.stringify((JSON.parse(row.data).roles || []).map((e) => e.roleId).sort()) === key; } catch { return false; } });
+        if (same) continue;
+        const mid = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(cid, actorId, m.content).lastInsertRowid;
+        db.prepare('INSERT INTO role_menus (message_id, channel_id, created_by, title, data) VALUES (?, ?, ?, ?, ?)').run(mid, cid, actorId, m.title, JSON.stringify({ roles: entries }));
+        entries.forEach((e) => db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)').run(mid, actorId, e.emoji));
+        r.counts.roleMenus++;
+      }
+    }
+    for (const w of withWebhooks ? tpl.webhooks : []) {
+      const cid = chId.get(w.channel);
+      if (db.prepare('SELECT 1 FROM webhooks WHERE channel_id = ? AND name = ?').get(cid, w.name)) continue;
+      db.prepare('INSERT INTO webhooks (channel_id, name, token, avatar_url, created_by, subscribed_events, can_moderate, can_use_voice) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(cid, w.name, crypto.randomBytes(32).toString('hex'), url(w.avatar), actorId, w.events, w.canModerate ? 1 : 0, w.canUseVoice ? 1 : 0);
+      r.created.webhooks.push(`${w.name} (#${tpl.channels.find((ch) => ch.ref === w.channel).name})`);
+    }
+    const dom = db.prepare(`INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO automod_domains (domain, mode, include_subdomains, note, added_by) VALUES (?, ?, ?, ?, ?)`);
+    for (const d of tpl.automodDomains) r.counts.domains += dom.run(d.domain, d.mode, d.includeSubdomains ? 1 : 0, d.note, actorId).changes;
+    const emo = db.prepare(`INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)`);
+    for (const e of tpl.emojis) if (emo.run(e.name, urls[e.asset].file, actorId).changes) r.created.emojis.push(e.name);
+    const stk = db.prepare(`INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)`);
+    for (const st of tpl.stickers) if (stk.run(st.name, st.pack, urls[st.asset].file, actorId).changes) r.created.stickers.push(st.name);
+  };
+  const written = [];
+  try {
+    if (!dryRun) for (const f of files) { fs.mkdirSync(path.dirname(f.dest), { recursive: true }); fs.writeFileSync(f.dest, f.buf, { flag: 'wx' }); written.push(f.dest); }
+    db.transaction(() => { run(); if (dryRun) throw ROLLBACK; })();
+  } catch (err) {
+    written.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+    if (err !== ROLLBACK) throw err;
+  }
+  r.created.files = files.filter((f) => tpl.assets[f.name]?.kind !== 'theme').map((f) => f.name);
+  r.created.themes = files.filter((f) => tpl.assets[f.name]?.kind === 'theme').map((f) => f.name);
+  return r;
+}
+module.exports = { FORMAT, VERSION, LIMITS, SETTINGS, checkSetting, exportTemplate, validateTemplate, summarizeTemplate, applyTemplate };

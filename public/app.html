@@ -1508,6 +1508,7 @@
 
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_maintenance">Maintenance</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-backup" style="display:none">💾 <span data-i18n="settings.nav.backup">Backup</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-template" style="display:none">🧩 <span data-i18n="settings.nav.template">Server Template</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-cleanup" style="display:none">🗑️ <span data-i18n="settings.nav.cleanup">Cleanup</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-modmode" style="display:none">🔧 <span data-i18n="settings.nav.mod_mode">Mod Mode</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-audit-log" style="display:none">📜 <span data-i18n="settings.nav.audit_log">Audit Log</span></div>
@@ -3423,6 +3424,36 @@
           </div>
         </div>
 
+        <div class="admin-settings" id="section-template" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🧩 <span data-i18n="settings.admin.template.title">Server Template</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.template.hint">Save this server's layout as a file others can use to set up theirs the same way, or set this server up from someone else's template.</small>
+          <div class="settings-group" style="margin-top:10px">
+            <small class="settings-group-label" data-i18n="settings.admin.template.export_label">Export</small>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+              <label class="toggle-row"><span data-i18n="settings.admin.template.export_posts">Pinned setup posts (welcome, rules, channel intros)</span><input type="checkbox" id="template-export-posts" checked></label>
+              <label class="toggle-row"><span data-i18n="settings.admin.template.export_assets">Server icon, banner, role icons and themes</span><input type="checkbox" id="template-export-assets" checked></label>
+            </div>
+            <button class="btn-sm btn-accent" id="template-export-btn" style="margin-top:8px">⬇️ <span data-i18n="settings.admin.template.export_btn">Download Template</span></button>
+            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.template.export_note">Includes the name and branding, categories, channels and their settings, roles and permissions, self-assign role menus, webhook slots and link rules. Never includes members, messages, DMs, encryption keys, invite codes, webhook tokens, passwords or API keys.</small>
+          </div>
+          <div class="settings-group" style="margin-top:14px">
+            <small class="settings-group-label" data-i18n="settings.admin.template.import_label">Import</small>
+            <input type="file" id="template-file" accept=".json,application/json" style="margin-top:4px;max-width:100%">
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
+              <label class="select-row"><span data-i18n="settings.admin.template.mode_label">When something already exists</span><select id="template-mode">
+                <option value="merge" data-i18n="settings.admin.template.mode_merge">Add missing: leave it alone</option>
+                <option value="replace" data-i18n="settings.admin.template.mode_replace">Replace layout: update it to match</option>
+              </select></label>
+              <label class="toggle-row"><span data-i18n="settings.admin.template.opt_posts">Add setup posts and role menus</span><input type="checkbox" id="template-opt-posts" checked></label>
+              <label class="toggle-row"><span data-i18n="settings.admin.template.opt_webhooks">Create the template's webhooks (with new tokens)</span><input type="checkbox" id="template-opt-webhooks" checked></label>
+              <label class="toggle-row"><span data-i18n="settings.admin.template.opt_join">Add current members to new public channels</span><input type="checkbox" id="template-opt-join" checked></label>
+            </div>
+            <div id="template-preview" class="template-preview" style="display:none;margin-top:8px"></div>
+            <button class="btn-sm btn-accent" id="template-apply-btn" style="margin-top:8px" disabled>🧩 <span data-i18n="settings.admin.template.apply_btn">Apply Template</span></button>
+            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.template.import_note">Nothing is deleted in either mode: channels and roles that are not in the template stay as they are.</small>
+          </div>
+        </div>
+
         <!-- Cleanup -->
         <div class="admin-settings" id="section-cleanup" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🗑️ <span data-i18n="settings.admin.cleanup_title">Auto-Cleanup</span></h5>
@@ -4989,7 +5020,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.18.6"></script>
+  <script type="module" src="/js/app.js?v=4.18.7"></script>
   <script src="/js/plugin-loader.js?v=4.18.3"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
