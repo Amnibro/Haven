@@ -492,10 +492,10 @@ _openDMPiP(code) {
   }
   panel.style.display = 'flex';
   panel.dataset.code = code;
-  // Title: partner name
-  const partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
+  // Title: partner name, or the group's name for a group DM
+  const partnerName = ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
   const titleEl = document.getElementById('dm-pip-title');
-  if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${t('dm_runtime.self_title', { name: partnerName })}` : `@ ${partnerName}`;
+  if (titleEl) titleEl.textContent = ch.is_group ? `👥 ${partnerName}` : ch.is_self_dm ? `📝 ${t('dm_runtime.self_title', { name: partnerName })}` : `@ ${partnerName}`;
 
   this._refreshDMPipHeader(ch, partnerName);
   // Ask for the DM's own online list so the header is right straight away,
@@ -528,7 +528,7 @@ _refreshDMPipHeader(ch, partnerName) {
     ch = code ? (this.channels || []).find(c => c.code === code) : null;
     if (!ch) return;
   }
-  if (!partnerName) partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
+  if (!partnerName) partnerName = ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
   const avatarWrap = document.getElementById('dm-pip-avatar-wrap');
   if (avatarWrap) {
     const partnerId = ch.dm_target && ch.dm_target.id;
@@ -566,7 +566,8 @@ _refreshDMPipHeader(ch, partnerName) {
       : (statusClass === 'away' || statusClass === 'offline') ? t('dm_runtime.offline_away')
       : statusClass === 'invisible' ? t('app.profile.invisible')
       : t('app.profile.online');
-    const statusDot = `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
+    // A group has no single partner whose status the dot could show.
+    const statusDot = ch.is_group ? '' : `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
     if (avatarUrl) {
       avatarWrap.style.backgroundColor = '';
       avatarWrap.innerHTML = `<img src="${this._escapeHtml(avatarUrl)}" alt="">${statusDot}`;
