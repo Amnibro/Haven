@@ -20,8 +20,11 @@ function looksEncrypted(content) {
   if (typeof content !== 'string' || content.charCodeAt(0) !== 123) return false;
   try {
     const o = JSON.parse(content);
-    return !!(o && (o.v === 1 || o.v === 2) && typeof o.iv === 'string' && typeof o.ct === 'string');
+    return !!(o && (o.v === 1 || o.v === 2 || (o.v === 3 && Number.isInteger(o.e) && typeof o.sig === 'string')) && typeof o.iv === 'string' && typeof o.ct === 'string');
   } catch { return false; }
+}
+function isGroupEnvelope(content) {
+  return looksEncrypted(content) && JSON.parse(content).v === 3;
 }
 function contentCap(maxChars, channel, content) {
   return channel && channel.is_dm && looksEncrypted(content) ? encryptedDmCap(maxChars) : maxChars;
@@ -1128,8 +1131,9 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
     }
 
-    const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_group, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
+    if (channel.is_group && !isGroupEnvelope(content)) return socket.emit('error-msg', 'Group messages must be end-to-end encrypted. Update Haven to send here.');
     if (content.length > contentCap(_maxChars, channel, content)) {
       return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
     }
@@ -1913,8 +1917,9 @@ module.exports = function register(socket, ctx) {
     const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
     if (!code) return;
 
-    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm, is_group FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    if (channel.is_group && !isGroupEnvelope(data.content)) return socket.emit('error-msg', 'Group messages must be end-to-end encrypted. Update Haven to send here.');
     if (data.content.length > contentCap(_editMax, channel, data.content)) {
       return socket.emit('error-msg', `Message too long (max ${_editMax} characters)`);
     }
@@ -1959,6 +1964,7 @@ module.exports = function register(socket, ctx) {
     io.to(`channel:${code}`).emit('message-edited', {
       channelCode: code,
       messageId: data.messageId,
+      userId: socket.user.id,
       content: newContent,
       editedAt: new Date().toISOString()
     });

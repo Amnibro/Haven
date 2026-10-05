@@ -436,11 +436,11 @@ _listenMessageChanges() {
       if (!msgEls.length) return;
       // E2E: decrypt once if needed (same content for both copies)
       let displayContent = data.content;
-      if (HavenE2E.isEncrypted(data.content)) {
+      if (HavenE2E.isEncrypted(data.content) || this._isGroupEnvelope?.(data.content) || this._isGroupDm?.(data.channelCode)) {
         const partner = this._getE2EPartnerFor(data.channelCode);
         if (partner) {
           try {
-            const plain = await this.e2e.decrypt(data.content, partner.userId, partner.publicKeyJwk);
+            const plain = await this._e2eDecryptText(partner, data.content, data.userId);
             if (plain !== null) displayContent = plain;
             else displayContent = t('header.messages.decrypt_failed');
           } catch { displayContent = t('header.messages.decrypt_failed'); }

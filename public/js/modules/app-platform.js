@@ -1012,6 +1012,7 @@ async _initE2E() {
 async _e2eSetupListeners() {
   // Publish our public key (force if keys were explicitly reset)
   const result = await this.e2e.publishKey(this.socket, this.e2e.keysWereReset);
+  this.e2e.initSigning(this.socket).catch(() => {});
 
   // Handle publish conflict: server has a different key (another device changed it).
   // Sync from the server backup instead of overwriting.
@@ -1421,6 +1422,7 @@ _getE2EPartner() {
 _getE2EPartnerFor(code) {
   if (!this.e2e || !this.e2e.ready) return null;
   const ch = this.channels.find(c => c.code === code);
+  if (ch && ch.is_dm && ch.is_group) return { group: true, code: ch.code, userId: null, publicKeyJwk: null };
   if (!ch || !ch.is_dm || !ch.dm_target) return null;
   const jwk = this._dmPublicKeys[ch.dm_target.id];
   return jwk ? { userId: ch.dm_target.id, publicKeyJwk: jwk } : null;
@@ -1471,6 +1473,7 @@ _e2eSupported() {
  */
 _dmSendGate(code) {
   const ch = this.channels?.find(c => c.code === code);
+  if (ch?.is_dm && ch.is_group) return this._groupEnsure(code).then(() => ({ partner: this._getE2EPartnerFor(code) }), () => { this._showToast(t('toasts.encryption_failed_not_sent'), 'error'); return null; });
   if (!ch || !ch.is_dm || !ch.dm_target) return Promise.resolve({ partner: null });
   // One question per conversation at a time, so a batch of files asks once.
   if (this._dmGateAsking.has(code)) return this._dmGateAsking.get(code);
@@ -1787,8 +1790,10 @@ _appendE2ENotice(text) {
  * Both sides derive the same ECDH shared secret.
  */
 async _decryptMessages(messages, channelCode = null) {
-  if (!this.e2e || !this.e2e.ready || !messages || !messages.length) return;
+  if (!messages || !messages.length) return;
   const ch = this.channels.find(c => c.code === (channelCode || this.currentChannel));
+  if (ch && ch.is_dm && ch.is_group) return this.e2e?.ready ? this._decryptGroupMessages(messages, ch) : messages.forEach(m => { if (m.user_id && m.content) m.content = t('groups.no_key'); });
+  if (!this.e2e || !this.e2e.ready) return;
   if (!ch || !ch.is_dm || !ch.dm_target) return;
 
   const partnerId = ch.dm_target.id;
@@ -1863,7 +1868,7 @@ _decryptE2EFiles(root) {
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(resp.status);
         const buf = await resp.arrayBuffer();
-        const plain = await this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk);
+        const plain = await this._e2eDecryptBytes(partner, new Uint8Array(buf));
         const blob = new Blob([plain], { type: mime });
         const objectUrl = URL.createObjectURL(blob);
 
@@ -2019,7 +2024,7 @@ _e2eImageBlob(img, partner = null) {
   if (!partner || !url || !url.startsWith('/uploads/')) return Promise.reject(new Error('not decryptable here'));
   return fetch(url)
     .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-    .then(buf => this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk))
+    .then(buf => this._e2eDecryptBytes(partner, new Uint8Array(buf)))
     .then(plain => new Blob([plain], { type: mime }));
 },
 

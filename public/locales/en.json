@@ -604,6 +604,27 @@
     "start": "📞 Call",
     "join": "📞 Join call"
   },
+  "groups": {
+    "new_group": "New group DM",
+    "add_people": "Add people",
+    "leave": "Leave group",
+    "name_placeholder": "Group name (optional)",
+    "search_people": "Search people",
+    "e2e_hint": "Group DMs are end-to-end encrypted. Everyone needs a Haven app that supports them, and each person is invited and joins when they accept.",
+    "invite": "Invite",
+    "create": "Create group",
+    "nobody": "Nobody to add. People you share a channel or DM with show up here.",
+    "invited": "{{name}} invited you to {{group}}",
+    "accept": "Join",
+    "decline": "Decline",
+    "default_name": "Group DM",
+    "left": "You left the group",
+    "leave_confirm": "Leave {{group}}? You won't be able to read new messages unless someone invites you again.",
+    "key_changed": "{{name}}'s encryption key changed. Verify it before the group key is shared again.",
+    "no_key": "🔒 Sent before you joined, or waiting for a group member to share the key",
+    "cannot_verify": "⚠️ This message could not be verified and was not shown",
+    "already_exists": "You already have a group with these people: {{name}}"
+  },
   "modmode": {
     "enabled": "Mod Mode ON — drag sections or panel handles to rearrange",
     "disabled": "Mod Mode OFF — layout saved",

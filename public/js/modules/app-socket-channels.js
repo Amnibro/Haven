@@ -38,7 +38,7 @@ _listenChannelsAndMessages() {
     // overwriting would wipe DM entries and break E2E decryption until the
     // user reopens the DM.
     const existingDMs = (this.channels || []).filter(c => c.is_dm);
-    this.channels = [...channels];
+    this.channels = channels.map(c => c.is_group ? { ...c, dm_target: null } : c);
     for (const dm of existingDMs) {
       if (!this.channels.find(c => c.code === dm.code)) {
         this.channels.push(dm);
@@ -834,7 +834,7 @@ _listenPresenceAndVoice() {
       this._renderVoiceUsers([]);
       this.currentChannel = null;
       this._showWelcome();
-      this._showToast(t('toasts.channel_deleted'), 'error');
+      if (this._leavingGroup !== data.code) this._showToast(t('toasts.channel_deleted'), 'error');
     }
   });
 
