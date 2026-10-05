@@ -500,7 +500,7 @@ function applyTemplate(db, tpl, opts = {}) {
     if (!dryRun) for (const f of files) { fs.mkdirSync(path.dirname(f.dest), { recursive: true }); fs.writeFileSync(f.dest, f.buf, { flag: 'wx' }); written.push(f.dest); }
     db.transaction(() => { run(); if (dryRun) throw ROLLBACK; })();
   } catch (err) {
-    written.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+    written.forEach((f) => { try { fs.unlinkSync(f); } catch (e) { console.warn('[template] could not remove a copied file after a failed import:', e.message); } });
     if (err !== ROLLBACK) throw err;
   }
   r.created.files = files.filter((f) => tpl.assets[f.name]?.kind !== 'theme').map((f) => f.name);
