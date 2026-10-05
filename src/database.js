@@ -1144,6 +1144,14 @@ function initDatabase() {
 
   addColumn('users', 'signing_backup', "TEXT DEFAULT NULL");
   addColumn('channels', 'is_group', "INTEGER DEFAULT 0");
+  // A DM with yourself has one member by design; the orphan DM sweep used to
+  // take it for an abandoned DM and delete it. Existing ones: a one member DM
+  // whose member started it.
+  if (addColumn('channels', 'is_self_dm', "INTEGER DEFAULT 0")) {
+    db.exec(`UPDATE channels SET is_self_dm = 1 WHERE is_dm = 1 AND COALESCE(is_group, 0) = 0
+      AND (SELECT COUNT(*) FROM channel_members m WHERE m.channel_id = channels.id) = 1
+      AND EXISTS (SELECT 1 FROM channel_members m WHERE m.channel_id = channels.id AND m.user_id = channels.created_by)`);
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS dm_group_invites (
       channel_id INTEGER NOT NULL,

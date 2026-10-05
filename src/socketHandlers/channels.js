@@ -1823,7 +1823,7 @@ module.exports = function register(socket, ctx) {
     }
     const code = generateUniqueSharedCode();
     try {
-      const result = db.prepare('INSERT INTO channels (name, code, created_by, is_dm) VALUES (?, ?, ?, 1)').run('DM', code, socket.user.id);
+      const result = db.prepare('INSERT INTO channels (name, code, created_by, is_dm, is_self_dm) VALUES (?, ?, ?, 1, ?)').run('DM', code, socket.user.id, isSelfDm ? 1 : 0);
       const channelId = result.lastInsertRowid;
       db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, socket.user.id);
       // Self-DMs only have one member; PRIMARY KEY prevents duplicate insert.
