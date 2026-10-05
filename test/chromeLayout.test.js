@@ -705,3 +705,18 @@ test('ChromeLayout does not listen for the retired haven:layout-effect event', (
   assert.doesNotMatch(source, /haven:layout-effect/);
   assert.doesNotMatch(source, /_togglePeoplePanel|_openSettingsModal/);
 });
+
+test('ChromeLayout menu strings use Haven translations and fall back to English', () => {
+  withEnv(({ document }) => {
+    window.t = (key) => (key === 'app.sidebar.add_server' ? 'Servidor' : key);
+    const plugin = new ChromeLayout();
+    plugin.start();
+    const home = document.getElementById('home-server-menu');
+    const label = (action) => home.children.find(b => b.dataset.homeAction === action).textContent;
+    assert.match(label('add-server'), /Servidor$/);
+    assert.match(label('manage-servers'), /Manage Servers$/, 'a missing key falls back to English');
+    const channelMenu = document.getElementById('channel-actions-menu');
+    assert.equal(channelMenu.children.find(b => b.dataset.action === 'join').textContent, 'Join channel');
+    plugin.stop();
+  });
+});

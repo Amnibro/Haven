@@ -260,6 +260,15 @@ class ChromeLayout {
     this._listeners.push([target, type, fn, opts]);
   }
 
+  // Haven's own translation for strings core already has a key for. t()
+  // returns the key itself when it has no text, so that falls back to English.
+  _t(key, fallback) {
+    const translate = typeof window !== 'undefined' ? window.t : null;
+    if (typeof translate !== 'function') return fallback;
+    const text = translate(key);
+    return typeof text === 'string' && text && text !== key ? text : fallback;
+  }
+
   _dispatch(type, detail) {
     if (typeof document === 'undefined') return;
     const event = typeof CustomEvent === 'function'
@@ -364,11 +373,19 @@ class ChromeLayout {
     // Add sheet menu
     let menu = document.getElementById('channel-actions-menu');
     if (!menu) {
-      menu = this._createInjected('span', 'channel-actions-menu', 'channel-actions-menu', `
-        <button type="button" role="menuitem" data-action="join">Join channel</button>
-        <button type="button" role="menuitem" data-action="create">Create channel</button>
-        <button type="button" role="menuitem" data-action="temp">Temporary channel</button>
-      `);
+      menu = this._createInjected('span', 'channel-actions-menu', 'channel-actions-menu');
+      for (const [action, key, fallback] of [
+        ['join', 'app.sidebar.join_channel', 'Join channel'],
+        ['create', 'app.sidebar.create_channel', 'Create channel'],
+        ['temp', 'channels.create_temp_channel', 'Temporary channel'],
+      ]) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.setAttribute('role', 'menuitem');
+        item.dataset.action = action;
+        item.textContent = this._t(key, fallback);
+        menu.appendChild(item);
+      }
       menu.hidden = true;
       menu.setAttribute('role', 'menu');
       channelsToggle.appendChild(menu);
@@ -448,7 +465,10 @@ class ChromeLayout {
     }
     if (action === 'temp' && !canCreate) {
       // Without create_channel Haven hides the create form, so ask for a name.
-      app?._showPromptModal?.('Temporary Channel', 'Enter a name for the auto-expiring channel:').then((name) => {
+      app?._showPromptModal?.(
+        this._t('channels.create_temp_channel_title', 'Temporary Channel'),
+        this._t('channels.create_temp_channel_hint', 'Enter a name for the auto-expiring channel:')
+      ).then((name) => {
         if (name?.trim() && app.socket) {
           app.socket.emit('create-temp-channel', { name: name.trim() });
         }
@@ -496,7 +516,7 @@ class ChromeLayout {
         </svg>
       `);
       dmBtn.type = 'button';
-      dmBtn.title = 'Direct messages';
+      dmBtn.title = this._t('app.sidebar.direct_messages', 'Direct messages');
       dmBtn.setAttribute('aria-pressed', 'false');
       bottomBar.insertBefore(dmBtn, peopleBtn.nextSibling);
     }
@@ -595,13 +615,22 @@ class ChromeLayout {
 
     let menu = document.getElementById('home-server-menu');
     if (!menu) {
-      menu = this._createInjected('div', 'home-server-menu', 'home-server-menu', `
-        <button type="button" data-home-action="add-server">➕ Add Server</button>
-        <button type="button" data-home-action="manage-servers">⚙️ Manage Servers</button>
-        <button type="button" data-home-action="sync-servers">🔄 Sync Servers</button>
-        <button type="button" data-home-action="server-settings">🛠️ Server Settings</button>
-        <button type="button" data-home-action="app-settings">🔧 App Settings</button>
-      `);
+      menu = this._createInjected('div', 'home-server-menu', 'home-server-menu');
+      // Server Settings and App Settings have no matching Haven string yet,
+      // so they stay in English.
+      for (const [action, icon, key, fallback] of [
+        ['add-server', '➕', 'app.sidebar.add_server', 'Add Server'],
+        ['manage-servers', '⚙️', 'app.sidebar.manage_servers', 'Manage Servers'],
+        ['sync-servers', '🔄', 'app.sidebar.sync_servers', 'Sync Servers'],
+        ['server-settings', '🛠️', null, 'Server Settings'],
+        ['app-settings', '🔧', null, 'App Settings'],
+      ]) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.dataset.homeAction = action;
+        item.textContent = `${icon} ${key ? this._t(key, fallback) : fallback}`;
+        menu.appendChild(item);
+      }
       menu.hidden = true;
       document.body.appendChild(menu);
     }
@@ -714,7 +743,9 @@ class ChromeLayout {
     btn.classList.toggle('is-live', inThisVoice);
     btn.classList.toggle('is-leave', inThisVoice);
     btn.innerHTML = inThisVoice ? ChromeLayout._LEAVE_SVG : '🎤';
-    btn.title = inThisVoice ? 'Disconnect Voice' : 'Join Voice';
+    btn.title = inThisVoice
+      ? this._t('context_menu.channel.disconnect_voice', 'Disconnect Voice')
+      : this._t('context_menu.channel.join_voice', 'Join Voice');
     btn.setAttribute('aria-label', btn.title);
   }
 
