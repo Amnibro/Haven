@@ -41,7 +41,7 @@ _isGroupEnvelope(content) {
 },
 _groupState(code) {
   if (!this._groups) this._groups = new Map();
-  if (!this._groups.has(code)) this._groups.set(code, { keys: new Map(), epoch: 0, roster: null, needsRotation: false, lastHash: null, lastId: 0, signers: new Map(), busy: null });
+  if (!this._groups.has(code)) this._groups.set(code, { keys: new Map(), epoch: 0, roster: null, needsRotation: false, lastHash: null, lastId: 0, busy: null });
   return this._groups.get(code);
 },
 _groupReq(emitEvent, payload, results, ms = 8000) {
@@ -59,7 +59,11 @@ async _groupRoster(code) {
   if (!r) return null;
   const st = this._groupState(code);
   st.roster = r.data;
-  r.data.members.forEach(m => m.signingKey && st.signers.set(m.id, m.signingKey));
+  // A current key we have not seen means the list we hold is out of date.
+  for (const m of r.data.members) {
+    const known = this._signerKeys?.get(m.id);
+    if (known && m.signingKey && !known.some(k => k.x === m.signingKey.x && k.y === m.signingKey.y)) this._signerKeys.delete(m.id);
+  }
   return r.data;
 },
 async _groupPublicKey(userId, roster) {
@@ -166,12 +170,20 @@ async _groupEncrypt(code, text) {
   st.lastHash = await HavenGroupCrypto.envelopeHash(env);
   return env;
 },
-async _groupSigner(code, userId) {
-  const st = this._groupState(code);
-  if (st.signers.has(userId)) return st.signers.get(userId);
+/**
+ * Every signing key the server has on record for a user, current one first.
+ * A key reset replaces the current key but the old ones stay on record, so
+ * messages signed before the reset still verify.
+ */
+async _groupSignerKeys(userId) {
+  if (!this._signerKeys) this._signerKeys = new Map();
+  if (this._signerKeys.has(userId)) return this._signerKeys.get(userId);
   const r = await this._groupReq('get-signing-key', { userId }, { 'signing-key-result': d => d.userId === userId });
-  if (r?.data?.jwk) st.signers.set(userId, r.data.jwk);
-  return r?.data?.jwk || null;
+  if (!r) return [];
+  const all = [r.data.jwk, ...(r.data.keys || [])].filter(k => k && k.x && k.y);
+  const keys = all.filter((k, i) => all.findIndex(o => o.x === k.x && o.y === k.y) === i);
+  this._signerKeys.set(userId, keys);
+  return keys;
 },
 async _groupDecrypt(code, content, senderId, msgId = 0) {
   const st = this._groupState(code);
@@ -180,10 +192,29 @@ async _groupDecrypt(code, content, senderId, msgId = 0) {
   if (!st.keys.has(env.e)) await this._groupFetchKeys(code);
   const key = st.keys.get(env.e);
   if (!key) return { ok: false, reason: 'no-key' };
-  const signer = await this._groupSigner(code, senderId);
-  if (!signer) return { ok: false, reason: 'no-signer' };
   const ch = this.channels.find(c => c.code === code);
-  const r = await HavenGroupCrypto.decryptGroupMessage(env, { epochKey: key, channelId: ch?.id, senderId, signingPublicJwk: signer });
+  const attempt = async () => {
+    const signers = await this._groupSignerKeys(senderId);
+    if (!signers.length) return { ok: false, reason: 'no-signer' };
+    // Fail closed: a message that verifies under none of its author's
+    // recorded keys stays hidden.
+    let res = { ok: false, reason: 'bad-signature' };
+    for (const signer of signers) {
+      res = await HavenGroupCrypto.decryptGroupMessage(env, { epochKey: key, channelId: ch?.id, senderId, signingPublicJwk: signer });
+      if (res.reason !== 'bad-signature') break;
+    }
+    return res;
+  };
+  let r = await attempt();
+  // The author may have changed keys since we last asked. Ask again, but not
+  // for every message in a page of history.
+  const asked = this._signerAskedAt?.get(senderId) || 0;
+  if (!r.ok && (r.reason === 'bad-signature' || r.reason === 'no-signer') && Date.now() - asked > 30000) {
+    if (!this._signerAskedAt) this._signerAskedAt = new Map();
+    this._signerAskedAt.set(senderId, Date.now());
+    this._signerKeys?.delete(senderId);
+    r = await attempt();
+  }
   if (r.ok && msgId >= st.lastId) { st.lastId = msgId; st.lastHash = await HavenGroupCrypto.envelopeHash(content); }
   return r;
 },

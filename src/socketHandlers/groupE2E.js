@@ -95,21 +95,34 @@ module.exports = function register(socket, ctx) {
         return socket.emit('signing-key-conflict', { existing, rid });
       }
     }
-    if (backup) {
-      db.prepare('UPDATE users SET signing_key = ?, signing_backup = ? WHERE id = ?').run(JSON.stringify(publicJwk), backup, socket.user.id);
-    } else {
-      db.prepare('UPDATE users SET signing_key = ? WHERE id = ?').run(JSON.stringify(publicJwk), socket.user.id);
-    }
+    const stored = JSON.stringify(publicJwk);
+    db.transaction(() => {
+      if (backup) {
+        db.prepare('UPDATE users SET signing_key = ?, signing_backup = ? WHERE id = ?').run(stored, backup, socket.user.id);
+      } else {
+        db.prepare('UPDATE users SET signing_key = ? WHERE id = ?').run(stored, socket.user.id);
+      }
+      // Append-only: a replaced key stays on record for the messages it signed.
+      db.prepare('INSERT OR IGNORE INTO user_signing_keys (user_id, fp, jwk) VALUES (?, ?, ?)')
+        .run(socket.user.id, `${publicJwk.x}.${publicJwk.y}`, stored);
+    })();
     socket.emit('signing-key-published', { rid });
   });
 
+  /**
+   * A user's current signing key, plus every key they have published before
+   * (newest first), so history signed before a key reset still verifies.
+   */
   socket.on('get-signing-key', (data) => {
     const userId = isInt(data && data.userId) ? data.userId : null;
     if (!userId) return;
     const row = db.prepare('SELECT signing_key FROM users WHERE id = ?').get(userId);
+    const keys = db.prepare('SELECT jwk FROM user_signing_keys WHERE user_id = ? ORDER BY rowid DESC LIMIT 50').all(userId)
+      .map((r) => JSON.parse(r.jwk));
     socket.emit('signing-key-result', {
       userId,
       jwk: row && row.signing_key ? JSON.parse(row.signing_key) : null,
+      keys,
     });
   });
 

@@ -124,6 +124,21 @@ test('group DM rules', async (t) => {
     E.close();
   });
 
+  await t.test('a replaced signing key stays on record for the messages it signed', async () => {
+    const frank = await register('frank');
+    const F = await connect(frank.token);
+    F.emit('publish-signing-key', { jwk: jwk('f1') });
+    await next(F, ['signing-key-published']);
+    F.emit('publish-signing-key', { jwk: jwk('f2'), force: true });
+    await next(F, ['signing-key-published']);
+    const r = next(A, ['signing-key-result']);
+    A.emit('get-signing-key', { userId: frank.user.id });
+    const { data } = await r;
+    assert.strictEqual(data.jwk.x, 'f2', 'the current key is the newest');
+    assert.deepStrictEqual(data.keys.map((k) => k.x), ['f2', 'f1'], 'every key ever published, newest first');
+    F.close();
+  });
+
   let code;
   await t.test('a group DM invites rather than silently joining people', async () => {
     const opened = next(A, ['group-dm-opened', 'error-msg']);
