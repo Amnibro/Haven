@@ -1905,6 +1905,8 @@
       "unlimit_frame_rate": "Remove Chromium frame-rate cap (Nvidia G-Sync fix)",
       "unlimit_frame_rate_hint": "Pairs with the GPU vsync toggle above. Removes Chromium's internal frame-rate limit, which on some Nvidia G-Sync setups gets stuck at a very low value and never recovers. Only useful if the vsync toggle alone didn't help. Can increase CPU/GPU usage. Requires restart to take effect.",
       "linux_vaapi": "Hardware video encoding on Linux (VA-API)",
+      "linux_x11": "Run in X11 mode on Linux",
+      "linux_x11_hint": "Linux only. Runs Haven Desktop through X11 (XWayland) instead of native Wayland. Try it if the window flickers, which some Nvidia cards do on Wayland. In this mode screen sharing may only list some windows. Requires restart to take effect.",
       "linux_vaapi_hint": "Linux only. Lets Haven Desktop use your graphics card's VA-API video encoder for screen sharing even where Chromium's driver blocklist would not, including on Nvidia cards. It can lower CPU use while you share, but some drivers give black or broken video, so it is off by default. Requires restart to take effect."
     },
     "admin": {
@@ -3789,7 +3791,8 @@
       "color_updated": "Color profile updated. Restart Haven Desktop to apply.",
       "vsync_updated": "GPU vsync setting updated. Restart Haven Desktop to apply.",
       "frame_cap_updated": "Frame-rate cap setting updated. Restart Haven Desktop to apply.",
-      "vaapi_updated": "VA-API setting updated. Restart Haven Desktop to apply."
+      "vaapi_updated": "VA-API setting updated. Restart Haven Desktop to apply.",
+      "x11_updated": "X11 mode updated. Restart Haven Desktop to apply."
     },
     "shortcuts": {
       "record": "Record",

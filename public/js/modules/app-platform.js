@@ -822,6 +822,7 @@ async _setupDesktopAppPrefs() {
   const gpuVsyncEl     = document.getElementById('pref-disable-gpu-vsync');
   const unlimitFpsEl   = document.getElementById('pref-unlimit-frame-rate');
   const linuxVaapiEl   = document.getElementById('pref-linux-vaapi');
+  const linuxX11El     = document.getElementById('pref-linux-x11');
   const versionEl = document.getElementById('desktop-version-info');
 
   if (startEl) { startEl.checked = !!prefs.startOnLogin; }
@@ -833,6 +834,7 @@ async _setupDesktopAppPrefs() {
   if (gpuVsyncEl)   { gpuVsyncEl.checked   = !!prefs.disableGpuVsync; }
   if (unlimitFpsEl) { unlimitFpsEl.checked = !!prefs.unlimitFrameRate; }
   if (linuxVaapiEl) { linuxVaapiEl.checked = !!prefs.linuxVaapiBypass; }
+  if (linuxX11El)   { linuxX11El.checked   = !!prefs.linuxForceX11; }
 
   // Show desktop version
   if (versionEl && window.havenDesktop.getVersion) {
@@ -903,6 +905,18 @@ async _setupDesktopAppPrefs() {
     } catch (err) {
       console.warn('[Desktop] could not save the VA-API setting', err);
       linuxVaapiEl.checked = !linuxVaapiEl.checked;
+    }
+  });
+
+  linuxX11El?.addEventListener('change', async () => {
+    try {
+      const res = await window.havenDesktop.prefs.setLinuxForceX11(linuxX11El.checked);
+      if (res?.requiresRestart) {
+        this._showToast?.(t('platform.desktop.x11_updated'), 'info');
+      }
+    } catch (err) {
+      console.warn('[Desktop] could not save the X11 setting', err);
+      linuxX11El.checked = !linuxX11El.checked;
     }
   });
 },
