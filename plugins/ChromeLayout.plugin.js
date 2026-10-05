@@ -1101,7 +1101,6 @@ html[data-chrome-layout="1"] #voice-leave-header-btn,
 html[data-chrome-layout="1"] #add-server-btn,
 html[data-chrome-layout="1"] #manage-servers-btn,
 html[data-chrome-layout="1"] #sync-servers-btn,
-html[data-chrome-layout="1"] #update-banner,
 html[data-chrome-layout="1"] #desktop-app-banner,
 html[data-chrome-layout="1"] #android-beta-banner {
   display: none !important;

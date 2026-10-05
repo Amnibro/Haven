@@ -592,6 +592,7 @@ test('ChromeLayout home menu opens Settings through Haven\'s Settings button and
     assert.deepEqual(opened, ['open', 'open', 'admin']);
 
     assert.doesNotMatch(ChromeLayout.CSS, /sidebar-settings-panel/);
+    assert.doesNotMatch(ChromeLayout.CSS, /#update-banner/, 'admins still see update notices');
     plugin.stop();
   });
 });
