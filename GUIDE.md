@@ -743,6 +743,7 @@ Haven also ships optional extras that are **installed but switched off by defaul
 | `themes/halloween.theme.css` | Halloween, a cartoony haunted night with bats over the moon, a floating ghost, flickering jack-o'-lanterns, a black cat, a bubbling cauldron, fog and dripping goo |
 | `themes/thanksgiving.theme.css` | Thanksgiving, a harvest evening with tumbling leaves, swaying trees, wobbling turkeys, hay bales, corn and pumpkins |
 | `plugins/CompactLayout.plugin.js` | Reversible desktop layout that pairs with Compact or any other theme |
+| `plugins/ChromeLayout.plugin.js` | Condensed sidebar with docked DMs, prominent + action, and channel voice controls |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
 | `plugins/MessageTimestamps.plugin.js` | Adds timestamps to messages |
 | `plugins/HavenGlyphs.plugin.js` | Reversible contextual interface icons using the bundled local Font Awesome font |
