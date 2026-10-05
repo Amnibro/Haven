@@ -568,3 +568,27 @@ test('ChromeLayout row voice button joins voice in that row\'s channel', (t) => 
     plugin.stop();
   });
 });
+
+test('ChromeLayout home menu opens Settings through Haven\'s Settings button and keeps that button visible', () => {
+  withEnv(({ document, app, elementsById }) => {
+    const opened = [];
+    const settingsBtn = new FakeElement('button', elementsById);
+    settingsBtn.id = 'open-settings-btn';
+    settingsBtn.click = () => opened.push('open');
+    document.body.appendChild(settingsBtn);
+    app._switchSettingsTab = (tab) => opened.push(tab);
+    app._hasAnyAdminSettingsAccess = () => true;
+
+    const plugin = new ChromeLayout();
+    plugin.start();
+
+    const menu = document.getElementById('home-server-menu');
+    const item = (action) => ({ closest: () => ({ dataset: { homeAction: action } }) });
+    menu.dispatchEvent({ type: 'click', target: item('app-settings') });
+    menu.dispatchEvent({ type: 'click', target: item('server-settings') });
+    assert.deepEqual(opened, ['open', 'open', 'admin']);
+
+    assert.doesNotMatch(ChromeLayout.CSS, /sidebar-settings-panel/);
+    plugin.stop();
+  });
+});

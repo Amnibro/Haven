@@ -636,7 +636,12 @@ class ChromeLayout {
       e?.stopPropagation?.();
       menu.hidden = !menu.hidden;
       homeBtn.setAttribute('aria-expanded', (!menu.hidden).toString());
-      if (!menu.hidden) place();
+      if (!menu.hidden) {
+        const app = typeof window !== 'undefined' ? window.app : null;
+        const serverItem = menu.querySelector?.('[data-home-action="server-settings"]');
+        if (serverItem) serverItem.hidden = !app?._hasAnyAdminSettingsAccess?.();
+        place();
+      }
     };
     this._listen(homeBtn, 'click', toggle);
 
@@ -650,8 +655,12 @@ class ChromeLayout {
       if (action === 'add-server') document.getElementById('add-server-btn')?.click();
       else if (action === 'manage-servers') document.getElementById('manage-servers-btn')?.click();
       else if (action === 'sync-servers') document.getElementById('sync-servers-btn')?.click();
-      else if (action === 'server-settings') app?._openSettingsModal?.('admin');
-      else if (action === 'app-settings') app?._openSettingsModal?.('user');
+      else if (action === 'server-settings' || action === 'app-settings') {
+        // Open Settings through Haven's own button (it always opens on the
+        // User tab), then switch tabs for Server Settings.
+        document.getElementById('open-settings-btn')?.click();
+        if (action === 'server-settings') app?._switchSettingsTab?.('admin');
+      }
     });
 
     this._listen(document, 'click', (e) => {
@@ -1087,8 +1096,7 @@ html[data-chrome-layout="1"] #manage-servers-btn,
 html[data-chrome-layout="1"] #sync-servers-btn,
 html[data-chrome-layout="1"] #update-banner,
 html[data-chrome-layout="1"] #desktop-app-banner,
-html[data-chrome-layout="1"] #android-beta-banner,
-html[data-chrome-layout="1"] .sidebar-settings-panel {
+html[data-chrome-layout="1"] #android-beta-banner {
   display: none !important;
 }
 `;
