@@ -794,7 +794,6 @@ _refuseSelfDestructing(msgEl) {
 },
 
 _setReply(msgEl, msgId) {
-  if (this._refuseSelfDestructing(msgEl)) return;
   // In a forum a reply to a topic belongs in the topic's thread: that is what
   // bumps it, and it keeps the answer under the question instead of posting
   // a second topic that quotes the first. (#144)
@@ -804,6 +803,9 @@ _setReply(msgEl, msgId) {
     this._openThread(msgId);
     return;
   }
+  // Opening a forum topic's thread (above) stays allowed, as from the
+  // Threads button; a reply in the channel itself does not.
+  if (this._refuseSelfDestructing(msgEl)) return;
   // Get message info — works for both full messages and compact messages
   let author = msgEl.querySelector('.message-author')?.textContent;
   if (!author) {

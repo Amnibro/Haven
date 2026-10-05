@@ -100,6 +100,17 @@ test('startup removes what came due while the server was down', () => {
   assert.equal(onDisk('sd-later.png'), false);
 });
 
+test('a file already shared in an older message stays', () => {
+  file('sd-shared.png', author);
+  const earlier = add('/uploads/sd-shared.png', null);
+  const msg = add('/uploads/sd-shared.png', at(MIN));
+  selfDestruct.schedule(at(MIN));
+  test.mock.timers.tick(MIN);
+  assert.equal(exists(msg), false);
+  assert.equal(exists(earlier), true);
+  assert.equal(onDisk('sd-shared.png'), true, 'the older message still shows it');
+});
+
 test("the sender's own link in another message does not keep the file either", () => {
   file('sd-reused.png', author);
   const msg = add('/uploads/sd-reused.png', at(MIN));

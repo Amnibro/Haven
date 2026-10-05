@@ -89,9 +89,9 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload }) {
         let m;
         while ((m = UPLOAD_PATH_RE.exec(row.content || '')) !== null) paths.push(m[1]);
         // Someone else's file named in the message is never touched, and a
-        // file a profile still uses stays. A link in another message does
-        // not keep it, or pasting the link would beat the timer.
-        for (const rel of releasableUploads(db, paths, [row.user_id], { ignoreMessages: true })) dispose(rel);
+        // file a profile or an older message still uses stays. A link posted
+        // after it does not keep it, or pasting the link would beat the timer.
+        for (const rel of releasableUploads(db, paths, [row.user_id], { ignoreMessagesAfter: row.id })) dispose(rel);
         io.to(`channel:${row.code}`).emit('message-deleted', { channelCode: row.code, messageId: row.id });
         removed++;
       } catch (err) {
