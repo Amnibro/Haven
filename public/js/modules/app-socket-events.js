@@ -823,7 +823,13 @@ _listenAdminAndPrefs() {
 
   // ── Server settings ────────────────────────────────
   this.socket.on('server-settings', (settings, envInfo) => {
+    // The channel list can land first (it is asked for first, and on a slow
+    // start it usually wins), drawn without this setting; redraw it once the
+    // real value is known (#5723).
+    const hideBadges = (s) => !!s && s.hide_disabled_channel_badges === 'true';
+    const redrawChannels = hideBadges(this.serverSettings) !== hideBadges(settings);
     this.serverSettings = settings;
+    if (redrawChannels) this._renderChannels?.();
     // Idle detection starts during app initialization, before this async
     // settings payload arrives. Re-plan its initial timer with server values.
     this._refreshIdleTimeout?.();
@@ -881,6 +887,7 @@ _listenAdminAndPrefs() {
   // ── User preferences (persistent theme etc.) ───────
   this.socket.on('preferences', (prefs) => {
     this._userPrefs = prefs || {};
+    this._prefsReceived = true;
     // The top-bar Android banner waits for this record before it shows (#5594).
     this._syncAndroidBanner?.();
     // Effects come back from the server like the theme does; restore them
