@@ -600,7 +600,6 @@ function applyTemplate(db, tpl, opts = {}) {
       s.permission_thresholds = JSON.stringify({ ...JSON.parse(s.permission_thresholds), ...keep });
     }
     for (const [key, value] of Object.entries(s)) set(key, value);
-
     set('server_icon', url(tpl.server.icon));
     set('server_banner', url(tpl.server.banner));
     if (tpl.server.defaultJoinChannels) set('default_join_channels', JSON.stringify(tpl.server.defaultJoinChannels.map((x) => chId.get(x))));
