@@ -498,6 +498,8 @@ _initDmContextMenu() {
     this._syncChannelMutePref(code, willBeMuted);
   });
 
+  document.querySelector('[data-action="dm-group-add"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._openGroupPicker({ code }); });
+  document.querySelector('[data-action="dm-group-leave"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._leaveGroup(code); });
   // Delete DM
   document.querySelector('[data-action="dm-delete"]')?.addEventListener('click', async () => {
     const code = this._dmCtxMenuCode;
@@ -570,6 +572,10 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
   const muteBtn = menu.querySelector('[data-action="dm-mute"]');
   if (muteBtn) muteBtn.textContent = muted.includes(code) ? `🔕 ${t('channels.unmute_dm')}` : `🔔 ${t('channels.mute_dm')}`;
 
+  const isGroup = !!this.channels.find(c => c.code === code)?.is_group;
+  menu.querySelectorAll('[data-action="dm-group-add"], [data-action="dm-group-leave"]').forEach(b => { b.style.display = isGroup ? '' : 'none'; });
+  const delBtn = menu.querySelector('[data-action="dm-delete"]');
+  if (delBtn) delBtn.style.display = isGroup ? 'none' : '';
   // Show/hide "Mark as Read" based on unread count
   const markReadBtn = menu.querySelector('[data-action="dm-mark-read"]');
   if (markReadBtn) markReadBtn.style.display = (this.unreadCounts[code] > 0) ? '' : 'none';

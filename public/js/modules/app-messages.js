@@ -235,7 +235,7 @@ async _sendMessage() {
   if (content) {
     // E2E: encrypt DM messages
     const ch = this.channels.find(c => c.code === this.currentChannel);
-    const isDm = ch && ch.is_dm && ch.dm_target;
+    const isDm = ch && ch.is_dm && (ch.dm_target || ch.is_group);
     let partner = null;
     // A DM that is not sent after all goes back in the box, with its reply.
     const replyId = payload.replyTo;
@@ -328,7 +328,7 @@ async _sendMessage() {
 
     if (partner) {
       try {
-        const encrypted = await this.e2e.encrypt(content, partner.userId, partner.publicKeyJwk);
+        const encrypted = await this._e2eEncryptText(partner, content);
         payload.content = encrypted;
         payload.encrypted = true;
       } catch (err) {

@@ -960,7 +960,7 @@ _startEditMessage(msgEl, msgId) {
     const partner = pipContext ? this._getE2EPartnerFor(pipContext) : this._getE2EPartner();
     if (partner) {
       try {
-        newContent = await this.e2e.encrypt(newContent, partner.userId, partner.publicKeyJwk);
+        newContent = await this._e2eEncryptText(partner, newContent);
       } catch (err) {
         console.warn('[E2E] Failed to encrypt edited message:', err);
       }

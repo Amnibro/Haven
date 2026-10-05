@@ -184,6 +184,7 @@ _setupSocketListeners() {
 _listenSession() {
   this._setupFerrySocket();
   this._setupCallListeners?.();
+  this._setupGroupListeners?.();
   // Authoritative user info pushed by server on every connect
   this.socket.on('session-info', (data) => {
     this.user = { ...this.user, ...data };

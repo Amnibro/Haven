@@ -63,6 +63,7 @@ import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.17.23';
 import CallMethods from './modules/app-calls.js?v=4.17.1';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
+import GroupMethods from './modules/app-groups.js?v=4.14.0';
 
 class HavenApp {
   constructor() {
@@ -553,6 +554,7 @@ Object.assign(HavenApp.prototype,
   PermMatrixMethods,
   CallMethods,
   ScalingMethods,
+  GroupMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

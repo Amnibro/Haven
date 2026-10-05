@@ -24,7 +24,7 @@ async switchChannel(code) {
   if (jumpBtn) jumpBtn.classList.remove('visible');
   const channel = this.channels.find(c => c.code === code);
   const isDm = channel && channel.is_dm;
-  const displayName = isDm && channel.dm_target
+  const displayName = isDm && channel.is_group ? `👥 ${this._groupName(channel)}` : isDm && channel.dm_target
     ? `@ ${this._getNickname(channel.dm_target.id, channel.dm_target.username)}`
     : channel ? `# ${channel.name}` : code;
 
@@ -192,7 +192,7 @@ async switchChannel(code) {
   // Refresh thread-mention pill for the channel we just entered
   this._updateThreadMentionsPill?.();
 
-  document.getElementById('status-channel').textContent = isDm && channel.dm_target
+  document.getElementById('status-channel').textContent = isDm && channel.is_group ? this._groupName(channel) : isDm && channel.dm_target
     ? t('channels.dm_status', { name: channel.dm_target.username }) : channel ? channel.name : code;
 
   // Reset pagination state for the new channel
@@ -1025,7 +1025,7 @@ _renderChannels() {
     const dmSortMode = localStorage.getItem('haven_dm_sort_mode') || 'manual';
     const dmOrder = JSON.parse(localStorage.getItem('haven_dm_order') || '[]');
 
-    const getDmName = (ch) => ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
+    const getDmName = (ch) => ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
 
     // Sort DMs by saved order first, then append any new ones
     let sortedDms = [];
@@ -1055,7 +1055,7 @@ _renderChannels() {
       el.dataset.code = ch.code;
       const dmName = getDmName(ch);
       el.innerHTML = `
-        <span class="channel-hash">@</span>
+        <span class="channel-hash">${ch.is_group ? '👥' : '@'}</span>
         <span class="channel-name">${this._escapeHtml(dmName)}</span>
       `;
       const count = (ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0);
@@ -1256,7 +1256,7 @@ _openQuickSwitcher() {
 
   const allChannels = (this.channels || []).map(ch => ({
     code: ch.code,
-    name: ch.is_dm && ch.dm_target
+    name: ch.is_dm && ch.is_group ? `👥 ${this._groupName(ch)}` : ch.is_dm && ch.dm_target
       ? `@ ${this._getNickname(ch.dm_target.id, ch.dm_target.username)}`
       : `# ${ch.name}`,
     isDm: ch.is_dm,

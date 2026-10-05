@@ -187,6 +187,7 @@ class HavenE2E {
     if (!wrappingKey) return false;
     try {
       this._sharedKeys = {};
+      this._signingPair = null;
       this._keyPair = await this._generate();
       await this._saveLocal(this._keyPair);
       this._publicKeyJwk = await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
@@ -475,6 +476,7 @@ class HavenE2E {
       socket.once('public-key-published', () => {
         clearTimeout(t);
         resolve({ ok: true, conflict: false });
+        this.initSigning(socket).then((ok) => ok && this.onSigningReady && this.onSigningReady()).catch(() => {});
       });
       socket.once('public-key-conflict', (data) => {
         clearTimeout(t);
@@ -497,6 +499,67 @@ class HavenE2E {
    * Request a partner's public key from the server.
    * Returns a promise that resolves with the JWK or null.
    */
+  pairKey(partnerId, partnerJwk) {
+    return this._deriveShared(partnerId, partnerJwk);
+  }
+  get signingPrivateKey() { return this._signingPair ? this._signingPair.privateKey : null; }
+  get signingPublicJwk() { return this._signingPublicJwk || null; }
+  async _signingWrapKey() {
+    const jwk = await crypto.subtle.exportKey('jwk', this._keyPair.privateKey);
+    const d = this._fromB64(jwk.d.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((jwk.d.length + 3) % 4));
+    const ikm = await crypto.subtle.importKey('raw', d, 'HKDF', false, ['deriveKey']);
+    d.fill(0);
+    return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new TextEncoder().encode('haven-signing-backup-v1'), info: new TextEncoder().encode('aes-gcm-key') }, ikm, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  _request(socket, emitEvent, payload, resultEvent, ms = 5000) {
+    return new Promise(resolve => {
+      const t = setTimeout(() => { socket.off(resultEvent, h); resolve(null); }, ms);
+      const h = (d) => { clearTimeout(t); socket.off(resultEvent, h); resolve(d); };
+      socket.on(resultEvent, h);
+      socket.emit(emitEvent, payload);
+    });
+  }
+  async initSigning(socket, { force = false } = {}) {
+    if (!this._ready || !this._keyPair || !socket || typeof HavenGroupCrypto === 'undefined') return false;
+    if (this._signingPair && !force) return true;
+    const probe = await this._request(socket, 'get-encrypted-key', undefined, 'encrypted-key-result');
+    if (!probe) return false;
+    const wrapKey = await this._signingWrapKey();
+    const pinned = probe.signingKey || null;
+    let pair = null;
+    if (probe.signingBackup && !force) {
+      try {
+        const o = JSON.parse(probe.signingBackup);
+        const raw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: this._fromB64(o.iv) }, wrapKey, this._fromB64(o.ct));
+        const jwk = JSON.parse(new TextDecoder().decode(raw));
+        const privateKey = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+        const publicKey = await crypto.subtle.importKey('jwk', { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']);
+        pair = { privateKey, publicKey };
+      } catch { pair = null; }
+    }
+    let publicJwk = pair ? await HavenGroupCrypto.exportPublicJwk(pair.publicKey) : null;
+    const matchesPin = !!(pinned && publicJwk && pinned.x === publicJwk.x && pinned.y === publicJwk.y);
+    if (!pair || (pinned && !matchesPin)) {
+      const fresh = await HavenGroupCrypto.generateSigningKeyPair();
+      const privateJwk = await crypto.subtle.exportKey('jwk', fresh.privateKey);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrapKey, new TextEncoder().encode(JSON.stringify(privateJwk)));
+      const stored = await this._request(socket, 'store-signing-backup', { backup: JSON.stringify({ v: 1, iv: this._toB64(iv), ct: this._toB64(new Uint8Array(ct)) }) }, 'signing-backup-stored');
+      if (!stored) return false;
+      pair = fresh;
+      publicJwk = await HavenGroupCrypto.exportPublicJwk(fresh.publicKey);
+    }
+    if (!matchesPin) {
+      const res = await Promise.race([
+        this._request(socket, 'publish-signing-key', { jwk: publicJwk, force: !!pinned }, 'signing-key-published'),
+        new Promise(r => socket.once('signing-key-conflict', () => r(false))),
+      ]);
+      if (res === false) return false;
+    }
+    this._signingPair = pair;
+    this._signingPublicJwk = publicJwk;
+    return true;
+  }
   requestPartnerKey(socket, userId) {
     return new Promise(resolve => {
       const t = setTimeout(() => resolve(null), 5000);
@@ -588,6 +651,7 @@ class HavenE2E {
    * the returned object is truthy; callers that want richer feedback can read .ok.
    */
   async syncFromServer(socket, wrappingKey) {
+    this._signingPair = null;
     if (!wrappingKey) return { ok: false, reason: 'bad-password' };
     try {
       await this._openDB();

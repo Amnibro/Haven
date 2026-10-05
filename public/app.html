@@ -138,7 +138,7 @@
           </div>
           <div class="sidebar-split-handle" id="sidebar-split-handle" data-i18n-title="app.actions.drag_to_resize" title="Drag to resize"></div>
           <div class="sidebar-section dm-section-pane" id="dm-pane" data-haven-region="direct-messages">
-            <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.direct_messages">Direct Messages</span><span style="display:flex;align-items:center;gap:4px;position:relative;z-index:2"><span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span><button class="icon-btn small" id="organize-dms-btn" data-i18n-title="app.actions.organize_dms" title="Organize DMs" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">📋</button></span></h5>
+            <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.direct_messages">Direct Messages</span><span style="display:flex;align-items:center;gap:4px;position:relative;z-index:2"><span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span><button class="icon-btn small" id="new-group-dm-btn" data-i18n-title="groups.new_group" title="New group DM" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">👥</button><button class="icon-btn small" id="organize-dms-btn" data-i18n-title="app.actions.organize_dms" title="Organize DMs" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">📋</button></span></h5>
             <div class="dm-list-scroll" id="dm-list"></div>
           </div>
         </div>
@@ -4298,6 +4298,8 @@
     <button class="channel-ctx-item" data-action="mark-all-read">☑️ <span data-i18n="context_menu.channel.mark_all_read">Mark everything as read</span></button>
     <button class="channel-ctx-item" data-action="dm-mute">🔔 <span data-i18n="context_menu.dm.mute">Mute DM</span></button>
     <hr class="channel-ctx-sep">
+    <button class="channel-ctx-item" data-action="dm-group-add" style="display:none">➕ <span data-i18n="groups.add_people">Add people</span></button>
+    <button class="channel-ctx-item danger" data-action="dm-group-leave" style="display:none">🚪 <span data-i18n="groups.leave">Leave group</span></button>
     <button class="channel-ctx-item danger" data-action="dm-delete">🗑️ <span data-i18n="context_menu.dm.delete">Delete DM</span></button>
   </div>
 
@@ -4969,7 +4971,8 @@
   <script src="/js/voice-relay.js?v=4.14.2"></script>
   <script src="/js/voice.js?v=4.17.17"></script>
   <script src="/js/modmode.js?v=3.16.16"></script>
-  <script src="/js/e2e.js?v=3.16.15"></script>
+  <script src="/js/e2e-group.js?v=4.14.0"></script>
+  <script src="/js/e2e.js?v=4.14.0"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
