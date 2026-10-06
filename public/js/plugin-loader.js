@@ -255,6 +255,7 @@ window.HavenPluginLoader = (function () {
   let recoveryPending = detectRecoveryPending();
   const suppressExtensions = safeMode || recoveryPending;
   let themeMetadataReady = false;
+  let loaderReady = false;
   let pendingFileTheme = null;
 
   function storedList(key) {
@@ -375,10 +376,12 @@ window.HavenPluginLoader = (function () {
       }
 
       const instance = new PluginClass();
+      const effectDriven = meta.file === 'BraidLayout.plugin.js'
+        || meta.file === 'CompactLayout.plugin.js';
       const enabled = getEnabledPlugins().includes(meta.file);
-      loadedPlugins.set(meta.file, { instance, meta, enabled });
+      loadedPlugins.set(meta.file, { instance, meta, enabled: enabled || effectDriven, effectDriven });
 
-      if (enabled) {
+      if (enabled || effectDriven) {
         try { instance.start(); } catch (err) { console.error(`[Plugin ${meta.name}] start() error:`, err); }
       }
     } catch (err) {
@@ -518,6 +521,7 @@ window.HavenPluginLoader = (function () {
       applyEffects(typeof _getStoredEffectMode === 'function' ? _getStoredEffectMode() : 'auto');
     }
     if (!suppressExtensions && typeof showEffectEditorIfDynamic === 'function') showEffectEditorIfDynamic(theme);
+    if (typeof dispatchHavenThemeChange === 'function') dispatchHavenThemeChange(theme);
   }
 
   function persistThemePreference(theme) {
@@ -585,6 +589,7 @@ window.HavenPluginLoader = (function () {
     }
     if (syncPreference) void persistThemePreference('haven');
     if (notify) HavenApi.UI.showToast(t('settings.plugins_section.theme_fallback'), 'warning');
+    if (typeof dispatchHavenThemeChange === 'function') dispatchHavenThemeChange('haven');
     renderPluginUI();
   }
 
@@ -671,6 +676,7 @@ window.HavenPluginLoader = (function () {
     } else {
       container.innerHTML = '';
       for (const [file, p] of loadedPlugins) {
+        if (p.effectDriven) continue;
         const card = document.createElement('div');
         card.className = 'plugin-card';
         const suppressedLabel = suppressExtensions && p.enabled
@@ -807,6 +813,9 @@ window.HavenPluginLoader = (function () {
 
       setupSafeModeUI();
       renderPluginUI();
+      if (!suppressExtensions && typeof applyEffects === 'function') {
+        applyEffects(typeof _getStoredEffectMode === 'function' ? _getStoredEffectMode() : 'auto');
+      }
       if (recoveryPending) {
         const saved = await persistThemePreference('haven');
         if (saved) {
@@ -912,7 +921,21 @@ window.HavenPluginLoader = (function () {
     if (!suppressExtensions && typeof showEffectEditorIfDynamic === 'function') {
       showEffectEditorIfDynamic(`file:${file}`);
     }
-    document.documentElement.removeAttribute('data-haven-theme-pending');
+    const clearPending = () => {
+      if (typeof document !== 'undefined') {
+        document.documentElement.removeAttribute('data-haven-theme-pending');
+        document.documentElement.setAttribute('data-haven-theme-loaded', file);
+      }
+    };
+    if (linkEl && linkEl.sheet) {
+      clearPending();
+    } else if (linkEl && typeof linkEl.addEventListener === 'function') {
+      linkEl.addEventListener('load', clearPending, { once: true });
+      linkEl.addEventListener('error', clearPending, { once: true });
+      setTimeout(clearPending, 3000);
+    } else {
+      clearPending();
+    }
     return true;
   }
 
@@ -953,13 +976,24 @@ window.HavenPluginLoader = (function () {
   }
 
   // Start when the app is ready
-  if (document.readyState === 'complete') {
-    setTimeout(init, 500);
-  } else {
-    window.addEventListener('load', () => setTimeout(init, 500));
+  let _initScheduled = false;
+  function scheduleInit(delay = 0) {
+    if (_initScheduled) return;
+    _initScheduled = true;
+    if (delay > 0) setTimeout(init, delay);
+    else init();
+  }
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'complete') {
+      scheduleInit(0);
+    } else {
+      document.addEventListener('DOMContentLoaded', () => scheduleInit(0), { once: true });
+      window.addEventListener('load', () => scheduleInit(0), { once: true });
+    }
   }
 
   return {
+    get isReady() { return loaderReady; },
     loadedPlugins,
     loadedThemes,
     enablePlugin,

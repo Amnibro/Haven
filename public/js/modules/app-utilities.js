@@ -364,9 +364,18 @@ _replaceBurnedMessage(el) {
   el.classList.add('message-burned');
 },
 
+_isDiscordCdnMedia(str) {
+  return /^https?:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/(?:attachments|ephemeral-attachments)\/\S+$/i.test(str || '');
+},
+
 _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
+  // Two pictures in one message (Ferry, a paste, a Discord gallery) used to
+  // match as one URL because `.+` ate the space or the second link. The
+  // bubble then got a single <img> whose src was both addresses, so it
+  // painted blank.
+  if (/\s/.test(trimmed)) return false;
   // Spoiler-wrapped image (sender marked it as a spoiler): unwrap and test
   // the payload so the message still gets image layout treatment.
   if (trimmed.startsWith('spoiler-img:')) return this._isImageUrl(trimmed.slice(12));
@@ -375,13 +384,31 @@ _isImageUrl(str) {
   // basename. Must stay in lockstep with the early-return regex in
   // `_formatContent` or classified-as-image messages render as empty.
   if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
-  // The query part stops at whitespace: two Discord CDN links on separate
-  // lines used to match as one URL, which drew one broken image for the pair.
-  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>\s]*)?$/i.test(trimmed)) return true;
+  if (/^https?:\/\/\S+\.(jpg|jpeg|png|gif|webp|svg)(\?\S*)?$/i.test(trimmed)) return true;
+  if (this._isDiscordCdnMedia(trimmed)) return true;
   // GIPHY / Tenor GIF URLs (may not have file extensions)
-  if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
-  if (/^https:\/\/(media|c)\.tenor\.com\/.+/i.test(trimmed)) return true;
+  if (/^https:\/\/media\d*\.giphy\.com\/\S+$/i.test(trimmed)) return true;
+  if (/^https:\/\/(media|c)\.tenor\.com\/\S+$/i.test(trimmed)) return true;
   return false;
+},
+
+_pullImageUrls(str) {
+  const out = [];
+  const seen = new Set();
+  const add = (u) => {
+    if (!u || seen.has(u)) return;
+    seen.add(u);
+    out.push(u);
+  };
+  const text = String(str || '');
+  const re = /(?:https?:\/\/[^\s<>"']+?|\/uploads\/(?:[\w\-]+\/)?[\w\-.]+)\.(?:jpg|jpeg|png|gif|webp|svg)(?:\?[^\s<>"']*)?/gi;
+  let m;
+  while ((m = re.exec(text))) add(m[0]);
+  const discord = /https?:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/(?:attachments|ephemeral-attachments)\/[^\s<>"']+/gi;
+  while ((m = discord.exec(text))) add(m[0]);
+  const md = /!\[[^\]]*\]\((https?:\/\/[^)\s]+|\/uploads\/[^)\s]+)\)/gi;
+  while ((m = md.exec(text))) add(m[1]);
+  return out;
 },
 
 // Auto-link and markdown image handlers run after `_escapeHtml`, so query
@@ -401,6 +428,7 @@ _rawHttpUrl(escapedOrRaw) {
 _isRemoteImageUrl(url) {
   if (typeof url !== 'string' || !url) return false;
   return /\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(url) ||
+    this._isDiscordCdnMedia(url) ||
     /^https:\/\/media\d*\.giphy\.com\//i.test(url) ||
     /^https:\/\/(media|c)\.tenor\.com\//i.test(url);
 },
@@ -1030,6 +1058,15 @@ _showToast(message, type = 'info', action = null, duration = 4000) {
  *  against showing twice within a single session (e.g. socket reconnects). */
 _showRecoveryNotice() {
   if (this._recoveryNoticeShown) return;
+  if (this.user?.isGuest) return;
+  const promoOpen = ['android-beta-modal', 'desktop-promo-modal'].some((id) => {
+    const el = document.getElementById(id);
+    return el && el.style.display === 'flex';
+  });
+  if (promoOpen) {
+    setTimeout(() => this._showRecoveryNotice(), 400);
+    return;
+  }
   this._recoveryNoticeShown = true;
 
   const overlay = document.createElement('div');
