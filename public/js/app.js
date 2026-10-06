@@ -5,8 +5,8 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.18.4';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.17.13';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.18.8';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.19.1';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.19.1';
 import UIBindMethods   from './modules/app-ui.js?v=4.17.21';
 import ComposerMethods from './modules/app-composer.js?v=4.17.21';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.19';

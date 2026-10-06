@@ -619,6 +619,8 @@
     "decline": "Decline",
     "default_name": "Group DM",
     "left": "You left the group",
+    "removed": "You were removed from {{group}}",
+    "removed_reason": "You were removed from {{group}}: {{reason}}",
     "leave_confirm": "Leave {{group}}? You won't be able to read new messages unless someone invites you again.",
     "key_changed": "{{name}}'s encryption key changed. Verify it before the group key is shared again.",
     "no_key": "🔒 Sent before you joined, or waiting for a group member to share the key",

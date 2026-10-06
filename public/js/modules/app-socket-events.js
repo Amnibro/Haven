@@ -759,7 +759,14 @@ _listenMessageChanges() {
 _listenAdminAndPrefs() {
   // ── Admin moderation events ────────────────────────
   this.socket.on('kicked', (data) => {
-    this._showToast(data.reason ? t('toasts.kicked_from_server_reason', { reason: data.reason }) : t('toasts.kicked_from_server'), 'error');
+    if (data.group) {
+      // Removed from a group DM, not from the server.
+      const ch = this.channels?.find(c => c.code === data.channelCode);
+      const group = ch ? this._groupName(ch) : t('groups.default_name');
+      this._showToast(data.reason ? t('groups.removed_reason', { group, reason: data.reason }) : t('groups.removed', { group }), 'error');
+    } else {
+      this._showToast(data.reason ? t('toasts.kicked_from_server_reason', { reason: data.reason }) : t('toasts.kicked_from_server'), 'error');
+    }
     if (this.currentChannel === data.channelCode) {
       this.currentChannel = null;
       this._showWelcome();

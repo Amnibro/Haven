@@ -125,29 +125,40 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'User is not in this channel');
     }
     const targetName = targetInfo ? targetInfo.username : (targetUser.display_name || targetUser.username);
-
-    if (kickCh) {
-      db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(kickCh.id, data.userId);
-      const subs = db.prepare('SELECT id FROM channels WHERE parent_channel_id = ?').all(kickCh.id);
-      const delSub = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
-      subs.forEach(s => delSub.run(s.id, data.userId));
-    }
-
-    if (targetInfo) {
-      io.to(targetInfo.socketId).emit('kicked', {
-        channelCode: code,
-        reason: typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : ''
-      });
-    }
-
+    const kickReason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : '';
     const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === data.userId);
-    for (const ts of targetSockets) {
-      ts.leave(`channel:${code}`);
+
+    // A group DM is encrypted with a key every member holds, so a kick there
+    // is the same as leaving it: the kicked person loses the group on every
+    // device at once, and the members still in it are told, which makes them
+    // replace the key the kicked person has. (#5740)
+    const groupKick = !!(kickCh && isMember && typeof ctx.leaveGroupDm === 'function'
+      && db.prepare('SELECT 1 FROM channels WHERE id = ? AND is_dm = 1 AND is_group = 1').get(kickCh.id));
+
+    if (groupKick) {
+      // Told first, while their app still knows the group's name.
+      for (const ts of targetSockets) ts.emit('kicked', { channelCode: code, group: true, reason: kickReason });
+      ctx.leaveGroupDm(code, data.userId, []);
+    } else {
       if (kickCh) {
-        const subs = db.prepare('SELECT code FROM channels WHERE parent_channel_id = ?').all(kickCh.id);
-        subs.forEach(sub => ts.leave(`channel:${sub.code}`));
+        db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(kickCh.id, data.userId);
+        const subs = db.prepare('SELECT id FROM channels WHERE parent_channel_id = ?').all(kickCh.id);
+        const delSub = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
+        subs.forEach(s => delSub.run(s.id, data.userId));
       }
-      ts.emit('channels-list', getEnrichedChannels(data.userId, false, (room) => ts.join(room)));
+
+      if (targetInfo) {
+        io.to(targetInfo.socketId).emit('kicked', { channelCode: code, reason: kickReason });
+      }
+
+      for (const ts of targetSockets) {
+        ts.leave(`channel:${code}`);
+        if (kickCh) {
+          const subs = db.prepare('SELECT code FROM channels WHERE parent_channel_id = ?').all(kickCh.id);
+          subs.forEach(sub => ts.leave(`channel:${sub.code}`));
+        }
+        ts.emit('channels-list', getEnrichedChannels(data.userId, false, (room) => ts.join(room)));
+      }
     }
 
     if (channelRoom) {

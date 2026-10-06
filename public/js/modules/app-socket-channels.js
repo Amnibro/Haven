@@ -36,8 +36,10 @@ _listenChannelsAndMessages() {
     // Preserve any DM channels that were added client-side (via dm-opened
     // events). The server only sends server channels in channels-list, so
     // overwriting would wipe DM entries and break E2E decryption until the
-    // user reopens the DM.
-    const existingDMs = (this.channels || []).filter(c => c.is_dm);
+    // user reopens the DM. A group DM only ever comes from this list, so one
+    // missing from it is a group this user is no longer in (left, removed or
+    // deleted) and goes. (#5740)
+    const existingDMs = (this.channels || []).filter(c => c.is_dm && !c.is_group);
     this.channels = channels.map(c => c.is_group ? { ...c, dm_target: null } : c);
     for (const dm of existingDMs) {
       if (!this.channels.find(c => c.code === dm.code)) {
@@ -826,6 +828,8 @@ _listenPresenceAndVoice() {
   this.socket.on('channel-deleted', (data) => {
     this.channels = this.channels.filter(c => c.code !== data.code);
     this._renderChannels();
+    // A DM gone while open in the pop-out DM window closes it too.
+    if (this._activeDMPip === data.code) this._closeDMPiP?.();
     // Disconnect from voice if the user is in the deleted channel's voice
     if (this.voice && this.voice.inVoice && this.voice.currentChannel === data.code) {
       this._leaveVoice();
