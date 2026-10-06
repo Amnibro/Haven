@@ -293,6 +293,7 @@ _syncAndroidBanner() {
 _initWelcomePopups() {
   // Run the queue at most once per page load.
   if (this._welcomePopupsStarted) return;
+  if (this.user?.isGuest) return;
 
   // Dismissal state lives server-side in user_preferences (fetched via
   // get-preferences). Wait for it to land before deciding what to show;
@@ -356,7 +357,7 @@ _runWelcomePromoQueue() {
       modalId: 'android-beta-modal',
       prefKey: 'promo_seen_android',
       checkboxId: 'android-beta-dismiss-check',
-      shouldShow: () => true,
+      shouldShow: () => !isElectron,
     },
   ];
 
@@ -1060,6 +1061,7 @@ async _e2eSetupListeners() {
   // conflict means this device holds a stale key, which must not be used to
   // open or replace the signing key backup until it has synced below.
   const result = await this.e2e.publishKey(this.socket, this.e2e.keysWereReset);
+  this.e2e.initSigning(this.socket).catch(() => {});
 
   // Handle publish conflict: server has a different key (another device changed it).
   // Sync from the server backup instead of overwriting.

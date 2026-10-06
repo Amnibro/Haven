@@ -137,6 +137,8 @@ class AutoModQuarantine {
         'w3.org',
         'npm.im',
         'npmjs.com',
+        'haven.amni-scient.com',
+        'amniscient.com',
         'steampowered.com',
         'steamcommunity.com',
         'discord.com',
