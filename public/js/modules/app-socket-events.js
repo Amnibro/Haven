@@ -765,7 +765,14 @@ _listenAdminAndPrefs() {
       const group = ch ? this._groupName(ch) : t('groups.default_name');
       this._showToast(data.reason ? t('groups.removed_reason', { group, reason: data.reason }) : t('groups.removed', { group }), 'error');
     } else {
-      this._showToast(data.reason ? t('toasts.kicked_from_server_reason', { reason: data.reason }) : t('toasts.kicked_from_server'), 'error');
+      // A kick is from one channel, not the server: name it when known.
+      const ch = this.channels?.find(c => c.code === data.channelCode);
+      if (ch && ch.name) {
+        const channel = ch.name;
+        this._showToast(data.reason ? t('toasts.kicked_from_channel_reason', { channel, reason: data.reason }) : t('toasts.kicked_from_channel', { channel }), 'error');
+      } else {
+        this._showToast(data.reason ? t('toasts.kicked_from_server_reason', { reason: data.reason }) : t('toasts.kicked_from_server'), 'error');
+      }
     }
     if (this.currentChannel === data.channelCode) {
       this.currentChannel = null;

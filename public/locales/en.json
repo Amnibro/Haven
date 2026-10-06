@@ -357,6 +357,8 @@
     "kicked_from_voice": "Kicked from voice by {{by}}",
     "kicked_from_server": "You were kicked",
     "kicked_from_server_reason": "You were kicked: {{reason}}",
+    "kicked_from_channel": "You were kicked from #{{channel}}",
+    "kicked_from_channel_reason": "You were kicked from #{{channel}}: {{reason}}",
     "banned_from_server": "You have been banned",
     "banned_from_server_reason": "You have been banned: {{reason}}",
     "muted": "You have been muted for {{duration}} min",

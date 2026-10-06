@@ -85,6 +85,14 @@ test('a kick from a group says you were removed from the group, not kicked', () 
   assert.equal(toasts[1].message, 'You were removed from Crew: spam');
 });
 
+test('a kick from a channel names the channel instead of sounding like the server', () => {
+  const { toasts, handlers } = makeApp({ channels: [lounge] });
+  handlers.kicked({ channelCode: lounge.code, reason: '' });
+  handlers.kicked({ channelCode: lounge.code, reason: 'spam' });
+  handlers.kicked({ channelCode: 'ffffffff', reason: '' });
+  assert.deepEqual(toasts.map((x) => x.message), ['You were kicked from #lounge', 'You were kicked from #lounge: spam', 'You were kicked']);
+});
+
 test('a group that goes away closes in the pop-out DM window too', () => {
   let closed = 0;
   const { app, handlers } = makeApp({ channels: [lounge, group], _activeDMPip: group.code, _closeDMPiP() { closed++; this._activeDMPip = null; } });
