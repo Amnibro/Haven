@@ -1199,7 +1199,8 @@ function buildHavenContent(msg) {
   if (text) authored.push(text);
 
   for (const att of msg.attachments || []) {
-    if (att.url) media.push(att.url);
+    const url = discordHttpUrl(att);
+    if (url) media.push(url);
   }
   // Discord's own client now sends a post with two or more pictures as a
   // media gallery component and leaves `attachments` empty, so walking the
