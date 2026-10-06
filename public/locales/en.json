@@ -3941,6 +3941,8 @@
     "edit": "Edit server",
     "remove": "Remove",
     "sync_success": "Server list synced",
+    "sync_up_to_date": "Server list is up to date",
+    "sync_updated": "Server list updated: {{added}} added, {{removed}} removed, {{renamed}} renamed",
     "sync_failed": "Sync failed",
     "same_server_as": "Same server as {{name}}"
   },

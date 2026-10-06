@@ -121,37 +121,48 @@ _setupServerBar() {
   document.getElementById('sync-servers-btn')?.addEventListener('click', async () => {
     const btn = document.getElementById('sync-servers-btn');
     btn.classList.add('spinning');
+    const manager = this.serverManager;
+    const before = new Map(manager.servers.map(s => [s.url, s.name]));
     try {
-      // 1. Pull from Desktop history (cross-server bridge)
-      if (window.havenDesktop?.getServerHistory) {
-        const history = await window.havenDesktop.getServerHistory();
-        const removed = this.serverManager._loadRemoved();
-        let added = false;
-        for (const h of (history || [])) {
-          if (!h.url) continue;
-          let normalizedUrl;
-          try { normalizedUrl = new URL(h.url).origin; } catch { normalizedUrl = h.url; }
-          if (removed.has(h.url) || removed.has(normalizedUrl)) continue;
-          if (this.serverManager.add(h.name || h.url, h.url)) added = true;
-        }
-        if (added) this._renderServerBar();
-      }
+      // 1. The Desktop app's list, shared by every server: removals, servers,
+      //    order and names
+      await manager.reconcileWithDesktop();
 
-      // 2. Pull from server-side encrypted backup
+      // 2. This account's encrypted list on this server
       const syncKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
-      if (syncKey && this.serverManager && this.token) {
-        await this.serverManager.syncWithServer(this.token, syncKey);
-      }
+      let synced = { ok: true };
+      if (syncKey && this.token) synced = await manager.syncWithServer(this.token, syncKey);
 
-      // 3. Push merged list back to Desktop history + encrypted backup
-      this._pushServersToDesktopHistory();
+      // 3. Hand what that brought in to the Desktop app, and the merged list
+      //    back to the encrypted backup
+      if (window.havenDesktop) await manager.reconcileWithDesktop();
       this._pushServerListToServer();
 
-      // 4. Health-check all servers
-      await this.serverManager.checkAll();
+      // 4. Health-check all servers (names follow their server)
+      await manager.checkAll();
       this._renderServerBar();
-      this._showToast(t('servers.sync_success'), 'success');
-    } catch {
+      if (this._renderManageServersList && document.getElementById('manage-servers-modal')?.style.display === 'flex') {
+        this._renderManageServersList();
+      }
+
+      if (!synced.ok) {
+        this._showToast(t('servers.sync_failed'), 'error');
+        return;
+      }
+      const after = new Map(manager.servers.map(s => [s.url, s.name]));
+      let added = 0, removed = 0, renamed = 0;
+      for (const [url, name] of after) {
+        if (!before.has(url)) added++;
+        else if (before.get(url) !== name) renamed++;
+      }
+      for (const url of before.keys()) if (!after.has(url)) removed++;
+      if (added || removed || renamed) {
+        this._showToast(t('servers.sync_updated', { added, removed, renamed }), 'success');
+      } else {
+        this._showToast(t('servers.sync_up_to_date'), 'success');
+      }
+    } catch (err) {
+      console.warn('[Sync] server list sync failed', err);
       this._showToast(t('servers.sync_failed'), 'error');
     } finally {
       btn.classList.remove('spinning');

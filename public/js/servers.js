@@ -454,8 +454,11 @@ class ServerManager {
     return true;
   }
 
+  /** Check one server. Resolves to { renamed } (true when its stored name
+   *  followed a new name from the server). */
   async checkServer(url) {
     const normalizedUrl = this._normalizeUrl(url);
+    let renamed = false;
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
@@ -479,7 +482,7 @@ class ServerManager {
           fingerprint: data.fingerprint || null,
           checkedAt: Date.now()
         });
-        if (data.name) this._refreshName(normalizedUrl, data.name);
+        if (data.name) renamed = this._refreshName(normalizedUrl, data.name);
         // Persist discovered icon to the server entry so it survives
         // across page reloads and offline periods (an icon the user chose
         // stays)
@@ -507,10 +510,13 @@ class ServerManager {
     } catch {
       this.statusCache.set(normalizedUrl, { online: false, checkedAt: Date.now() });
     }
+    return { renamed };
   }
 
+  /** Check every server. Resolves to how many names followed their server. */
   async checkAll() {
-    await Promise.allSettled(this.servers.map(s => this.checkServer(s.url)));
+    const results = await Promise.allSettled(this.servers.map(s => this.checkServer(s.url)));
+    return results.filter(r => r.status === 'fulfilled' && r.value && r.value.renamed).length;
   }
 
   startPolling(intervalMs = 30000) {
@@ -544,14 +550,17 @@ class ServerManager {
     } catch { return null; }
   }
 
+  /** Merge with this account's encrypted list on this server. Resolves to
+   *  { ok, added }; ok is false when the server could not be reached. */
   async syncWithServer(token, wrappingHex) {
-    if (!token || !wrappingHex) return;
+    if (!token || !wrappingHex) return { ok: true, added: 0 };
+    let added = 0;
     try {
       // 1. Fetch the encrypted blob from the server
       const res = await fetch('/api/auth/user-servers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) return;
+      if (!res.ok) return { ok: false, added: 0 };
       const { blob } = await res.json();
 
       // 2. Decrypt server-side list (if any)
@@ -588,6 +597,7 @@ class ServerManager {
           this.servers.push(rs);
           localUrls.add(normalizedUrl); // prevent duplicate adds within same sync
           changed = true;
+          added++;
         }
       }
 
@@ -603,8 +613,10 @@ class ServerManager {
       if (changed || !blob) {
         await this._pushToServer(token, wrappingHex);
       }
+      return { ok: true, added };
     } catch (err) {
       console.warn('[ServerSync] Sync failed:', err.message);
+      return { ok: false, added };
     }
   }
 
