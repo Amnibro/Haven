@@ -254,7 +254,8 @@ test('names follow the server everywhere when the user never chose one', async (
     [Y]: { name: 'Haven', fingerprint: 'fy' },
     [B]: { name: 'Haven', fingerprint: 'fb' },
   };
-  const bStorage = createStorage({ haven_servers: JSON.stringify([{ name: 'Red Earth', url: X }, { name: Y, url: Y }]) });
+  // A list saved since 4.19 (its old names were already kept once).
+  const bStorage = createStorage({ haven_servers: JSON.stringify([{ name: 'Red Earth', url: X }, { name: Y, url: Y }]), haven_servers_names_kept: '1' });
   const b = openPage(B, { desktop: desktopApi(store), storage: bStorage, health });
   await b.manager.reconcileWithDesktop();
   assert.equal(await b.manager.checkAll(), 1);
@@ -267,6 +268,73 @@ test('names follow the server everywhere when the user never chose one', async (
   const a = openPage(A, { desktop: desktopApi(store), storage: storageWith([X]) });
   await a.manager.reconcileWithDesktop();
   assert.equal(a.manager.servers.find(s => s.url === X).name, 'LIT');
+});
+
+test('a name typed when adding a server is kept and shared as the user\'s own', async () => {
+  const store = seeded([A, B]);
+  const health = { [X]: { name: 'LIT', fingerprint: 'fx' } };
+  const api = desktopApi(store);
+  const a = openPage(A, { desktop: api, storage: storageWith([B]), health });
+  await a.manager.reconcileWithDesktop();
+  assert.ok(a.manager.add('Red Earth', X, null, { userInitiated: true, customName: true }));
+  await api.addServerHistory(X, 'Red Earth', { userInitiated: true });
+  await a.manager.shareName(X);
+  await a.manager.checkAll();
+  const x = a.manager.servers.find(s => s.url === X);
+  assert.equal(x.name, 'Red Earth', 'the health check does not replace it');
+  assert.equal(x.customName, true);
+  const shared = store.state.history.find(h => h.url === X);
+  assert.equal(shared.name, 'Red Earth');
+  assert.equal(shared.customName, true, 'the Desktop list gets the custom flag');
+
+  // Another page that renames from the server's report keeps the user name.
+  const b = openPage(B, { desktop: desktopApi(store), storage: storageWith([A]), health });
+  await b.manager.reconcileWithDesktop();
+  await b.manager.checkAll();
+  assert.equal(b.manager.servers.find(s => s.url === X).name, 'Red Earth');
+
+  // An address or the default name typed in still follows the server.
+  assert.ok(a.manager.add(Y, Y, null, { userInitiated: true, customName: true }));
+  assert.ok(a.manager.add('Haven', Z, null, { userInitiated: true, customName: true }));
+  assert.ok(!a.manager.servers.find(s => s.url === Y).customName);
+  assert.ok(!a.manager.servers.find(s => s.url === Z).customName);
+  assert.deepEqual(a.warnings, []);
+});
+
+test('names saved before 4.19 are kept once, and later lists are left alone', async () => {
+  const health = { [X]: { name: 'LIT', fingerprint: 'fx' }, [Y]: { name: 'Why', fingerprint: 'fy' }, [Z]: { name: 'Zed', fingerprint: 'fz' } };
+  const storage = createStorage({ haven_servers: JSON.stringify([
+    { name: 'Red Earth', url: X, addedAt: 1 },
+    { name: Y, url: Y, addedAt: 1 },
+    { name: 'Haven', url: Z, addedAt: 1 },
+  ]) });
+  const page = openPage(A, { storage, health });
+  await page.manager.checkAll();
+  const byUrl = u => page.manager.servers.find(s => s.url === u);
+  assert.equal(byUrl(X).name, 'Red Earth');
+  assert.equal(byUrl(X).customName, true);
+  assert.equal(byUrl(Y).name, 'Why', 'a bare address follows the server');
+  assert.equal(byUrl(Z).name, 'Zed', 'the default name follows the server');
+  assert.equal(storage.getItem('haven_servers_names_kept'), '1');
+  assert.equal(JSON.parse(storage.getItem('haven_servers')).find(s => s.url === X).customName, true, 'saved');
+
+  // Runs once: a name that followed the server later is not frozen.
+  storage.setItem('haven_servers', JSON.stringify([{ name: 'Old', url: X, addedAt: 1 }]));
+  const again = openPage(A, { storage, health });
+  await again.manager.checkAll();
+  assert.equal(again.manager.servers[0].name, 'LIT');
+
+  // With the Desktop app, an edit made there wins over a kept old name,
+  // and a kept old name reaches the app when it has no edit of its own.
+  const store = seeded([A, X, Y]);
+  store.rename(X, 'Desk Name', { custom: true, editedAt: 5 });
+  const s2 = createStorage({ haven_servers: JSON.stringify([{ name: 'Red Earth', url: X }, { name: 'My Y', url: Y }]) });
+  const d = openPage(A, { desktop: desktopApi(store), storage: s2, health });
+  await d.manager.reconcileWithDesktop();
+  assert.equal(d.manager.servers.find(s => s.url === X).name, 'Desk Name');
+  const y = store.state.history.find(h => h.url === Y);
+  assert.equal(y.name, 'My Y');
+  assert.equal(y.customName, true);
 });
 
 test('a new order on one server shows on the others, and the hidden server keeps its place', async () => {
@@ -360,6 +428,8 @@ test('the server bar uses the shared list and reports what Sync did', () => {
   assert.match(bar, /t\('servers\.sync_updated', \{ added, removed, renamed \}\)/);
   assert.match(bar, /t\('servers\.sync_up_to_date'\)/);
   assert.match(bar, /addServerHistory\(finalUrl, name, \{ userInitiated: true \}\)/);
+  assert.match(bar, /add\(name, url, icon, \{ userInitiated: true, customName: true \}\)/);
+  assert.match(bar, /shareName\(finalUrl\)/);
   assert.doesNotMatch(bar, /servers\.sync_success/);
   const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
   for (const key of ['sync_up_to_date', 'sync_updated', 'same_server_as']) assert.ok(en.servers[key], key);

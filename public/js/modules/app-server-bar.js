@@ -304,7 +304,7 @@ _addServer() {
   } else {
     // Adding new server
     const icon = iconInput || null;
-    if (this.serverManager.add(name, url, icon, { userInitiated: true })) {
+    if (this.serverManager.add(name, url, icon, { userInitiated: true, customName: true })) {
       document.getElementById('add-server-modal').style.display = 'none';
       this._renderServerBar();
       this._showToast(t('toasts.server_added', { name }), 'success');
@@ -314,7 +314,11 @@ _addServer() {
       if (window.havenDesktop?.addServerHistory) {
         const cleanUrl = url.replace(/\/+$/, '');
         const finalUrl = /^https?:\/\//.test(cleanUrl) ? cleanUrl : 'https://' + cleanUrl;
-        window.havenDesktop.addServerHistory(finalUrl, name, { userInitiated: true }).catch((err) => { console.warn('[Desktop] could not add to server history', err); });
+        // Then the name typed here is shared as the user's own, so the
+        // server's name does not replace it on the other servers either.
+        window.havenDesktop.addServerHistory(finalUrl, name, { userInitiated: true })
+          .then(() => this.serverManager.shareName(finalUrl))
+          .catch((err) => { console.warn('[Desktop] could not add to server history', err); });
       }
       // Auto-pull icon after health check completes
       if (autoPull) {

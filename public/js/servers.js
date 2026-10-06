@@ -294,11 +294,35 @@ class ServerManager {
         seen.add(normalizedUrl);
         deduped.push(s);
       }
-      if (deduped.length !== raw.length) {
+      const marked = this._markOldNamesCustom(deduped);
+      if (deduped.length !== raw.length || marked) {
         localStorage.setItem('haven_servers', JSON.stringify(deduped));
       }
       return deduped;
     } catch { return []; }
+  }
+
+  /** Before 4.19 a stored name never followed the server, so every name a
+   *  list from then holds was typed by the user or kept on purpose. Once,
+   *  mark those (not a bare address, not the default "Haven") as the
+   *  user's own so the server's name does not replace them. editedAt 1 is
+   *  older than any real edit: an edit made in the Desktop app wins, and
+   *  the name is only handed to the app when it has no edit of its own.
+   *  Returns true when an entry changed. */
+  _markOldNamesCustom(list) {
+    const KEY = 'haven_servers_names_kept';
+    if (localStorage.getItem(KEY) === '1') return false;
+    let changed = false;
+    for (const s of list) {
+      const name = String(s.name || '').trim();
+      if (s.customName || name === 'Haven' || this._isUrlName(s)) continue;
+      s.customName = true;
+      if (!s.editedAt) s.editedAt = 1;
+      changed = true;
+    }
+    try { localStorage.setItem(KEY, '1'); }
+    catch (err) { console.warn('[Servers] could not save the kept-names flag', err); }
+    return changed;
   }
 
   _save() {
@@ -323,10 +347,26 @@ class ServerManager {
       return false;
     }
 
-    this.servers.push({ name, url, icon, addedAt: Date.now() });
+    const entry = { name, url, icon, addedAt: Date.now() };
+    // A name the user typed is theirs: the server's own name does not
+    // replace it (a bare address or the default "Haven" still follows it).
+    if (opts.customName && String(name || '').trim() !== 'Haven' && !this._isUrlName(entry)) {
+      entry.customName = true;
+      entry.editedAt = Date.now();
+    }
+    this.servers.push(entry);
     this._save();
     this.checkServer(url);
     return true;
+  }
+
+  /** Hand a name the user chose to the Desktop app's shared list (call once
+   *  the app knows the server). */
+  shareName(url) {
+    const normalizedUrl = this._normalizeUrl(url);
+    const server = this.servers.find(s => this._normalizeUrl(s.url) === normalizedUrl);
+    if (!server || !server.customName) return Promise.resolve();
+    return this._pushEdit(server);
   }
 
   update(url, updates) {
