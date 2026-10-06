@@ -255,12 +255,9 @@ _renderMobileServerList() {
 _renderMobileSidebarServers() {
   const scroll = document.getElementById('mobile-servers-scroll');
   if (!scroll || !this.serverManager) return;
-  const currentOrigin = window.location.origin;
-  const selfFp = this.serverManager.selfFingerprint;
-  const servers = this.serverManager.getAll().filter(s => {
-    if (selfFp && s.status.fingerprint === selfFp) return false;
-    try { return new URL(s.url).origin !== currentOrigin; } catch { return true; }
-  });
+  // The same servers as the desktop rail: not this one, and a server
+  // reachable at two addresses only once.
+  const servers = this.serverManager.railServers(window.location.origin);
   if (servers.length === 0) {
     scroll.innerHTML = `<span class="mobile-servers-empty">${t('servers.no_servers')}</span>`;
     return;

@@ -401,11 +401,40 @@ class ServerManager {
     }
   }
 
+  /** Every server with its last status. A server answering with the same
+   *  fingerprint as one earlier in the list is the same server under a
+   *  second address and carries duplicateOf: { url, name } of the first. */
   getAll() {
-    return this.servers.map(s => ({
-      ...s,
-      status: this.statusCache.get(s.url) || { online: null, name: s.name }
-    }));
+    const firstByFingerprint = new Map();
+    return this.servers.map(s => {
+      const status = this.statusCache.get(s.url) || { online: null, name: s.name };
+      const out = { ...s, status };
+      const fp = status.online === true ? status.fingerprint : null;
+      if (fp) {
+        const first = firstByFingerprint.get(fp);
+        if (first) out.duplicateOf = { url: first.url, name: first.name };
+        else firstByFingerprint.set(fp, s);
+      }
+      return out;
+    });
+  }
+
+  /** True for this server itself, by address or by fingerprint. */
+  isSelf(server, currentOrigin) {
+    if (this.selfFingerprint && server.status && server.status.fingerprint === this.selfFingerprint) return true;
+    try { return new URL(server.url).origin === currentOrigin; }
+    catch { return false; } // an unparsable address is never this server
+  }
+
+  /** Servers for Manage Servers: everything but this server. */
+  otherServers(currentOrigin) {
+    return this.getAll().filter(s => !this.isSelf(s, currentOrigin));
+  }
+
+  /** Servers for the rail: everything but this server and second addresses
+   *  of a server already shown. */
+  railServers(currentOrigin) {
+    return this.otherServers(currentOrigin).filter(s => !s.duplicateOf);
   }
 
   /** Follow the name a server reports, unless the user chose one. "Haven"

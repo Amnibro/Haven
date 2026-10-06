@@ -3941,7 +3941,8 @@
     "edit": "Edit server",
     "remove": "Remove",
     "sync_success": "Server list synced",
-    "sync_failed": "Sync failed"
+    "sync_failed": "Sync failed",
+    "same_server_as": "Same server as {{name}}"
   },
   "common": {
     "copy": "Copy",

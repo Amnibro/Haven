@@ -346,12 +346,9 @@ _openManageServersModal() {
 
 _renderManageServersList() {
   const container = document.getElementById('manage-servers-list');
-  const currentOrigin = window.location.origin;
-  const selfFp = this.serverManager.selfFingerprint;
-  const servers = this.serverManager.getAll().filter(s => {
-    if (selfFp && s.status.fingerprint === selfFp) return false;
-    try { return new URL(s.url).origin !== currentOrigin; } catch { return true; }
-  });
+  // Second addresses of a server stay listed here, with a note, so one can
+  // be deleted; the rail shows only the first.
+  const servers = this.serverManager.otherServers(window.location.origin);
   container.innerHTML = '';
   if (servers.length === 0) return;  // CSS :empty handles empty state
 
@@ -378,6 +375,7 @@ _renderManageServersList() {
       <div class="manage-server-info">
         <div class="manage-server-name">${this._escapeHtml(s.name)}</div>
         <div class="manage-server-url">${this._escapeHtml(s.url)}</div>
+        ${s.duplicateOf ? `<div class="manage-server-duplicate">${this._escapeHtml(t('servers.same_server_as', { name: s.duplicateOf.name || s.duplicateOf.url }))}</div>` : ''}
       </div>
       <span class="manage-server-status ${statusClass}">${statusText}</span>
       <div class="manage-server-actions">
@@ -660,12 +658,8 @@ _withCacheBust(url) {
 
 _renderServerBar() {
   const list = document.getElementById('server-list');
-  const currentOrigin = window.location.origin;
-  const selfFp = this.serverManager.selfFingerprint;
-  const servers = this.serverManager.getAll().filter(s => {
-    if (selfFp && s.status.fingerprint === selfFp) return false;
-    try { return new URL(s.url).origin !== currentOrigin; } catch { return true; }
-  });
+  // Not this server, and a server reachable at two addresses only once.
+  const servers = this.serverManager.railServers(window.location.origin);
 
   list.innerHTML = servers.map(s => {
     const initial = s.name.charAt(0).toUpperCase();
