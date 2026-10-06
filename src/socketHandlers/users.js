@@ -20,6 +20,7 @@ const { parseStatus, updateStatus } = require('./profileStatus');
 
 const PUSH_SCOPES = ['all', 'mentions'];
 const deletableKeys = ['timezone', 'time_format', 'channel_order', 'server_mute', 'muted_users', 'media_group_layout', 'dm_sort', 'dm_order', 'pinned_dms'];
+const { validateCallbackUrl } = require('../webhookCallback');
 
 // A personal sidebar order (#5779): category keys and, per category, channel
 // codes. Only that shape is kept, within limits, so the value cannot carry
@@ -90,7 +91,8 @@ module.exports = function register(socket, ctx) {
     // duplicate display names produced confusing sidebars where two people
     // appeared identical.
     try {
-      const conflict = profile.conflictingDisplayName(db, socket.user.id, newName);
+      const conflict = profile.conflictingDisplayName(db, socket.user.id, newName)
+        || db.prepare('SELECT id FROM users WHERE id != ? AND LOWER(username) = LOWER(?) LIMIT 1').get(socket.user.id, newName);
       if (conflict) {
         return socket.emit('error-msg', 'That display name is already taken on this server');
       }
@@ -435,6 +437,8 @@ module.exports = function register(socket, ctx) {
     // be a public push service: a client-chosen endpoint on the server's own
     // network was a way to make it send requests there. A self-hosted ntfy
     // next to Haven is the exception HAVEN_ALLOW_PRIVATE_CALLBACKS opts into.
+    if (endpoint.length > 1024 || keys.p256dh.length > 256 || keys.auth.length > 256) return;
+    if (!validateCallbackUrl(endpoint, process.env.HAVEN_ALLOW_PRIVATE_CALLBACKS === 'true')) return;
     try {
       await require('../webhookCallback').resolveCallbackDestination(endpoint,
         { allowPrivateCallbacks: process.env.HAVEN_ALLOW_PRIVATE_CALLBACKS === 'true' });
@@ -542,6 +546,12 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const jwk = data.jwk;
     if (!jwk || typeof jwk !== 'object' || jwk.kty !== 'EC' || jwk.crv !== 'P-256') {
+      return socket.emit('error-msg', 'Invalid public key format');
+    }
+    // P-256 coordinates are 32 bytes (43 base64url chars). Anything that is not
+    // a short base64url string would be stored and handed to every DM partner.
+    if (typeof jwk.x !== 'string' || typeof jwk.y !== 'string' ||
+        !/^[A-Za-z0-9_=-]{1,64}$/.test(jwk.x) || !/^[A-Za-z0-9_=-]{1,64}$/.test(jwk.y)) {
       return socket.emit('error-msg', 'Invalid public key format');
     }
     const publicJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
@@ -818,6 +828,10 @@ module.exports = function register(socket, ctx) {
   // like the promo-modal dismissals).
   socket.on('get-recovery-notice-state', () => {
     try {
+      if (socket.user.isGuest) {
+        socket.emit('recovery-notice-state', { show: false });
+        return;
+      }
       const codes = db.prepare(
         'SELECT COUNT(*) AS c FROM account_recovery_codes WHERE user_id = ? AND used = 0'
       ).get(socket.user.id);
@@ -1219,7 +1233,7 @@ module.exports = function register(socket, ctx) {
           SELECT id FROM users
           WHERE id != ?
             AND (LOWER(display_name) = LOWER(?)
-                 OR (display_name IS NULL AND LOWER(username) = LOWER(?)))
+                 OR LOWER(username) = LOWER(?))
           LIMIT 1
         `).get(targetId, raw, raw);
         if (conflict) {
