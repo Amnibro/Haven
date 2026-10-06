@@ -205,6 +205,8 @@ module.exports = function register(socket, ctx) {
   // Mod could strip or reshape another Mod's or a higher staffer's roles.
   function canActOnUser(targetId, channelId = null) {
     if (socket.user.isAdmin) return true;
+    const t = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(targetId);
+    if (t && t.is_admin) return false;
     return getUserEffectiveLevel(targetId, channelId) < getUserEffectiveLevel(socket.user.id, channelId);
   }
 
@@ -338,8 +340,9 @@ module.exports = function register(socket, ctx) {
   }
 
   function canEditRoleMenu(channelId, createdBy) {
-    if (socket.user.isAdmin || createdBy === socket.user.id) return true;
+    if (socket.user.isAdmin) return true;
     if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
+    if (createdBy === socket.user.id) return true;
     return getUserEffectiveLevel(socket.user.id) > getUserEffectiveLevel(createdBy || 0);
   }
   function messageReactions(messageId) {
@@ -1512,12 +1515,21 @@ module.exports = function register(socket, ctx) {
       return !!reachableChannel(ctx, socket.user, chId);
     };
 
+    // Existing links to channels a non-admin editor cannot reach are kept
+    // exactly as they were, since the editor cannot see or change them.
+    let keptRows = [];
+    if (!socket.user.isAdmin) {
+      keptRows = db.prepare('SELECT channel_id, grant_on_promote, revoke_on_demote FROM role_channel_access WHERE role_id = ?')
+        .all(roleId).filter(r => !accessChannelOk(r.channel_id));
+    }
+
     try {
       const txn = db.transaction(() => {
         db.prepare('DELETE FROM role_channel_access WHERE role_id = ?').run(roleId);
         const ins = db.prepare('INSERT INTO role_channel_access (role_id, channel_id, grant_on_promote, revoke_on_demote) VALUES (?, ?, ?, ?)');
+        keptRows.forEach(r => ins.run(roleId, r.channel_id, r.grant_on_promote, r.revoke_on_demote));
         data.access.slice(0, 500).forEach(a => {
-          const chId = isInt(a.channelId) ? a.channelId : null;
+          const chId = isInt(a && a.channelId) ? a.channelId : null;
           if (!chId || !accessChannelOk(chId)) return;
           const grant = a.grant ? 1 : 0;
           const revoke = a.revoke ? 1 : 0;

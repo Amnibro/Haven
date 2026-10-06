@@ -1309,6 +1309,7 @@ app.get('/api/public-config', (req, res) => {
     const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
     const adminPwResetRow = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
     const loginSetting = (k) => db.prepare('SELECT value FROM server_settings WHERE key = ?').get(k)?.value || '';
+    const iosVersionRow = db.prepare("SELECT value FROM server_settings WHERE key = 'ios_latest_version'").get();
     const oidcConfig = require('./src/oidc').getOidcConfig();
     let storedPublishedThemes = [];
     try { storedPublishedThemes = JSON.parse(publishedThemesRow?.value || '[]'); } catch { /* malformed setting: treat as no published themes */ }
@@ -1332,6 +1333,7 @@ app.get('/api/public-config', (req, res) => {
       // an admin can reset their password is the trust-and-warning half
       // of the feature: admins enable, users get the disclosure.
       admin_password_reset_enabled: adminPwResetRow?.value === 'true',
+      ios_latest_version: iosVersionRow?.value || '',
       // SSO (#12). Reports configured-and-usable, not just the toggle, so the
       // login page never offers a button that can only fail. The issuer and
       // client id stay server-side; the client needs neither.
@@ -3131,7 +3133,7 @@ if (useSSL) {
     httpRedirectServer.on('error', (err) => {
       console.warn(`⚠️  HTTP→HTTPS redirect server could not bind port ${HTTP_REDIRECT_PORT} (${(err && err.code) || err}). HTTPS continues on port ${safePort}.`);
     });
-    httpRedirectServer.listen(HTTP_REDIRECT_PORT, process.env.HOST || '0.0.0.0', () => {
+    httpRedirectServer.listen(HTTP_REDIRECT_PORT, process.env.HOST || '::', () => {
       console.log(`↪️  HTTP redirect running on port ${HTTP_REDIRECT_PORT} → HTTPS`);
     });
   } catch (err) {
@@ -3465,7 +3467,7 @@ app.use((err, req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+let HOST = process.env.HOST || '::';
 const protocol = useSSL ? 'https' : 'http';
 
 // ── Crash log helper ─────────────────────────────────────
@@ -3633,6 +3635,11 @@ server.timeout = 120000;           // 2 min socket inactivity timeout (resets on
 // no exit, and the stale port-holder makes launch scripts think the
 // server came up.  Bind failures are fatal: say why, then exit.
 server.on('error', (err) => {
+  if (err && !process.env.HOST && HOST === '::' && (err.code === 'EAFNOSUPPORT' || err.code === 'EADDRNOTAVAIL')) {
+    console.warn('⚠️  IPv6 is unavailable on this machine, listening on IPv4 only.');
+    HOST = '0.0.0.0';
+    return server.listen(PORT, HOST);
+  }
   if (err && (err.code === 'EADDRINUSE' || err.code === 'EACCES' || err.code === 'EADDRNOTAVAIL')) {
     const why = err.code === 'EADDRINUSE'
       ? `port ${PORT} is already in use. Is another Haven instance (or other app) running?`

@@ -1,0 +1,626 @@
+{
+  "_doc": "Product pages for haven.amni-scient.com. Image paths are relative to ~/ai. Groups become sidebar categories in this order. Read by amniScientLayout.js.",
+  "groups": [
+    "OS & Platform",
+    "AI & Dev Tools",
+    "Privacy & Comms",
+    "Science & Learning",
+    "Life & Play"
+  ],
+  "products": [
+    {
+      "name": "Amni-OS",
+      "group": "OS & Platform",
+      "tagline": "Leave Windows without learning a shell. Arch + Plasma 6 with a Start menu, Steam, Wine, local AI and Amni-Browse.",
+      "features": [
+        {
+          "name": "A desktop that feels familiar",
+          "desc": "Start menu, bottom bar, folders, printers and NTFS drives work the way you expect.",
+          "image": "product-shots/amni-os/01-a-desktop-that-feels-familiar.png"
+        },
+        {
+          "name": "Control",
+          "desc": "Drivers, updates, printers and colours in one panel.",
+          "image": "product-shots/amni-os/02-control.png"
+        },
+        {
+          "name": "Guided installer",
+          "desc": "A branded installer that walks you through it.",
+          "image": "product-shots/amni-os/03-guided-installer.png"
+        },
+        {
+          "name": "Games and local AI",
+          "desc": "Steam, Proton, Wine and Lutris, plus Ollama with one-click GPU setup.",
+          "image": "product-shots/amni-os/04-games-and-local-ai.png"
+        },
+        {
+          "name": "Restore and apps",
+          "desc": "Snapshots you can boot from GRUB; Discover, Flathub and distroboxes for apps.",
+          "image": "product-shots/amni-os/05-restore-and-apps.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Core",
+      "group": "OS & Platform",
+      "tagline": "A from-scratch, GPU-forward OS with a frosted-glass desktop that runs real Windows, Linux and macOS programs natively.",
+      "features": [
+        {
+          "name": "Frosted-glass desktop",
+          "desc": "UEFI boot straight to a GPU-composited desktop.",
+          "image": "product-shots/amni-core/01-frosted-glass-desktop.png"
+        },
+        {
+          "name": "Universal binaries",
+          "desc": "PE, ELF and Mach-O run on the kernel, no VM.",
+          "image": "product-shots/amni-core/02-universal-binaries.png"
+        },
+        {
+          "name": "Built from zero",
+          "desc": "Its own bootloader, kernel, drivers and window system.",
+          "image": "product-shots/amni-core/03-built-from-zero.png"
+        },
+        {
+          "name": "Modern crypto and integrity",
+          "desc": "ChaCha20-Poly1305 and an integrity-checked boot.",
+          "image": "product-shots/amni-core/04-modern-crypto-and-integrity.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Connect",
+      "group": "OS & Platform",
+      "tagline": "End-to-end encrypted remote desktop: WebRTC peer-to-peer streaming, self-hostable signalling. No cloud, no accounts.",
+      "features": [
+        {
+          "name": "Browser viewer",
+          "desc": "Control a machine from any browser, nothing to install.",
+          "image": "product-shots/amni-connect/01-browser-viewer.png"
+        },
+        {
+          "name": "Custom room codes and clipboard sync",
+          "desc": "Ephemeral rooms and two-way clipboard.",
+          "image": "product-shots/amni-connect/02-custom-room-codes-and-clipboard-sync.png"
+        },
+        {
+          "name": "End-to-end encrypted",
+          "desc": "DTLS-SRTP; the signalling server never sees a frame.",
+          "image": "product-shots/amni-connect/03-end-to-end-encrypted.png"
+        },
+        {
+          "name": "Self-hostable signalling",
+          "desc": "A small Node server on any VPS, Pi or LAN box.",
+          "image": "product-shots/amni-connect/04-self-hostable-signalling.png"
+        },
+        {
+          "name": "Adaptive quality",
+          "desc": "Bitrate follows the link, with a signal indicator.",
+          "image": "product-shots/amni-connect/05-adaptive-quality.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Browse",
+      "group": "OS & Platform",
+      "tagline": "A privacy-first, zero-telemetry browser in a single Rust binary on the Servo engine. Ad blocker, private tabs, profiles.",
+      "features": [
+        {
+          "name": "Zero telemetry",
+          "desc": "It only contacts the pages you navigate to.",
+          "image": "product-shots/amni-browse/01-zero-telemetry.png"
+        },
+        {
+          "name": "Built-in ad blocker",
+          "desc": "Ads, pixels and fingerprinting blocked at the navigation layer.",
+          "image": "product-shots/amni-browse/02-built-in-ad-blocker.png"
+        },
+        {
+          "name": "Bring your own vault",
+          "desc": "AES-256 vault plus Bitwarden, 1Password and KeePassXC autofill."
+        },
+        {
+          "name": "Private tabs and profiles",
+          "desc": "No persistent history, tracking parameters stripped, isolated profiles."
+        }
+      ]
+    },
+    {
+      "name": "Amni-Space",
+      "group": "OS & Platform",
+      "tagline": "Maps a whole Windows drive in about 20 seconds from the NTFS $MFT, then helps you clean it up safely.",
+      "features": [
+        {
+          "name": "Two ways to look",
+          "desc": "Nested treemap or sunburst, coloured by type, age or size.",
+          "image": "product-shots/amni-space/01-two-ways-to-look.png"
+        },
+        {
+          "name": "Finds the fat",
+          "desc": "Caches, build output, duplicates and the biggest files.",
+          "image": "product-shots/amni-space/02-finds-the-fat.png"
+        },
+        {
+          "name": "An AI that asks first",
+          "desc": "A local or cloud model proposes a plan; nothing happens until you approve.",
+          "image": "product-shots/amni-space/03-an-ai-that-asks-first.png"
+        },
+        {
+          "name": "Nothing vanishes",
+          "desc": "Deletes go to the Recycle Bin and every run can be undone.",
+          "image": "product-shots/amni-space/04-nothing-vanishes.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-AI",
+      "group": "AI & Dev Tools",
+      "tagline": "Adam: a local, self-improving AI assistant. Runs in about 4 GB of VRAM, remembers corrections, speaks the Ollama/OpenAI API.",
+      "features": [
+        {
+          "name": "HUD dashboard",
+          "desc": "Voice, sessions and skills at a glance.",
+          "image": "product-shots/amni-ai/01-hud-dashboard.png"
+        },
+        {
+          "name": "Chat that streams locally",
+          "desc": "Local chat with maths and diagram rendering.",
+          "image": "product-shots/amni-ai/02-chat-that-streams-locally.png"
+        },
+        {
+          "name": "Socratic coach",
+          "desc": "A coach mode that asks you the questions.",
+          "image": "product-shots/amni-ai/03-socratic-coach.png"
+        },
+        {
+          "name": "Live widgets",
+          "desc": "System stats and live data at a glance.",
+          "image": "product-shots/amni-ai/04-live-widgets.png"
+        }
+      ]
+    },
+    {
+      "name": "Braid",
+      "group": "AI & Dev Tools",
+      "tagline": "Claude, Grok, Gemini, ChatGPT, Copilot, Cursor and a local model in one room. Ask once; they answer together.",
+      "features": [
+        {
+          "name": "All at once",
+          "desc": "The same question to every seat in parallel, compared blind.",
+          "image": "product-shots/braid/01-all-at-once.png"
+        },
+        {
+          "name": "One at a time",
+          "desc": "Each seat reads the last and extends, pushes back or fixes it.",
+          "image": "product-shots/braid/02-one-at-a-time.png"
+        },
+        {
+          "name": "Squads",
+          "desc": "Builders against attackers at the same table.",
+          "image": "product-shots/braid/03-squads.png"
+        },
+        {
+          "name": "Your accounts, not a token meter",
+          "desc": "Uses the CLIs you already signed into.",
+          "image": "product-shots/braid/04-your-accounts-not-a-token-meter.png"
+        },
+        {
+          "name": "Permissions per seat",
+          "desc": "Plan, Edit or Bypass: set each seat's rights before the round.",
+          "image": "product-shots/braid/05-permissions-per-seat.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Code",
+      "group": "AI & Dev Tools",
+      "tagline": "An agentic coding assistant in a single Rust binary. Any LLM provider, or your existing Claude Code, Codex, Copilot or Cursor plan.",
+      "features": [
+        {
+          "name": "Agentic tool loop",
+          "desc": "Reads, writes and runs on its own for up to 15 iterations.",
+          "image": "product-shots/amni-code/01-agentic-tool-loop.png"
+        },
+        {
+          "name": "Any provider",
+          "desc": "Adam, Gemini, Grok, GPT, Claude, Ollama, or your subscription.",
+          "image": "product-shots/amni-code/02-any-provider.png"
+        },
+        {
+          "name": "Integrated terminal",
+          "desc": "Runs builds, tests and git, and feeds the output back.",
+          "image": "product-shots/amni-code/03-integrated-terminal.png"
+        },
+        {
+          "name": "Diffs and history",
+          "desc": "Highlighted diffs and a persistent chat.",
+          "image": "product-shots/amni-code/04-diffs-and-history.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-LLM",
+      "group": "AI & Dev Tools",
+      "tagline": "Load any GGUF model from Hugging Face right in the browser. Built-in search, one-click install, WebLLM-compatible API.",
+      "features": [
+        {
+          "name": "Hugging Face search",
+          "desc": "Search live, pick a quant, load it.",
+          "image": "product-shots/amni-llm/01-hugging-face-search.png"
+        },
+        {
+          "name": "Fully client-side",
+          "desc": "WASM inference; nothing goes to a server.",
+          "image": "product-shots/amni-llm/02-fully-client-side.png"
+        },
+        {
+          "name": "Local files",
+          "desc": "Drop a .gguf in from disk.",
+          "image": "product-shots/amni-llm/03-local-files.png"
+        },
+        {
+          "name": "WebLLM-compatible API",
+          "desc": "chatCompletions.create and chatStream() work as-is.",
+          "image": "product-shots/amni-llm/04-webllm-compatible-api.png"
+        }
+      ]
+    },
+    {
+      "name": "Grok-Remote",
+      "group": "AI & Dev Tools",
+      "tagline": "A live phone cockpit for Grok Build. Pair with one QR, watch thinking and tool calls stream live, run many sessions.",
+      "features": [
+        {
+          "name": "Live stream, not a transcript",
+          "desc": "Thinking, tool calls and the answer arrive as they happen.",
+          "image": "product-shots/grok-remote/01-live-stream-not-a-transcript.png"
+        },
+        {
+          "name": "Organised sessions",
+          "desc": "Sessions filed by where they came from.",
+          "image": "product-shots/grok-remote/02-organised-sessions.png"
+        },
+        {
+          "name": "Pair with one QR",
+          "desc": "Scan once for a 30-day key; every request is key-gated.",
+          "image": "product-shots/grok-remote/03-pair-with-one-qr.png"
+        },
+        {
+          "name": "Skills a tap away",
+          "desc": "Every installed skill in a slash palette.",
+          "image": "product-shots/grok-remote/04-skills-a-tap-away.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Haven",
+      "group": "Privacy & Comms",
+      "tagline": "The native Android client for Haven: real-time chat, push, voice, video, screen share and encrypted DMs.",
+      "features": [
+        {
+          "name": "Real-time chat",
+          "desc": "Live messages and typing indicators.",
+          "image": "product-shots/amni-haven/01-real-time-chat.png"
+        },
+        {
+          "name": "Channels",
+          "desc": "A channel sidebar with unread badges.",
+          "image": "product-shots/amni-haven/02-channels.png"
+        },
+        {
+          "name": "Any Haven server",
+          "desc": "Connect to any self-hosted Haven with an invite code.",
+          "image": "product-shots/amni-haven/03-any-haven-server.png"
+        },
+        {
+          "name": "Voice, video and encrypted DMs",
+          "desc": "Peer-to-peer calls and end-to-end encrypted direct messages.",
+          "image": "product-shots/amni-haven/04-voice-video-and-encrypted-dms.png"
+        }
+      ]
+    },
+    {
+      "name": "Symphony",
+      "group": "Privacy & Comms",
+      "tagline": "A private, end-to-end encrypted app for family and community: feeds, chat, calls, photos, stories and polls. No account.",
+      "features": [
+        {
+          "name": "A feed, not an algorithm",
+          "desc": "Your people's posts, no ads, no ranking.",
+          "image": "product-shots/symphony/01-a-feed-not-an-algorithm.png"
+        },
+        {
+          "name": "Chat, calls and rooms",
+          "desc": "Group and 1:1 chat, voice, video and screen share.",
+          "image": "product-shots/symphony/02-chat-calls-and-rooms.png"
+        },
+        {
+          "name": "Stories and polls",
+          "desc": "24-hour stories, polls and swipe-to-reply.",
+          "image": "product-shots/symphony/03-stories-and-polls.png"
+        },
+        {
+          "name": "End-to-end encrypted",
+          "desc": "The relay can't read anything.",
+          "image": "product-shots/symphony/04-end-to-end-encrypted.png"
+        },
+        {
+          "name": "Make it yours",
+          "desc": "Whole-app themes and wallpapers.",
+          "image": "product-shots/symphony/05-make-it-yours.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Mail",
+      "group": "Privacy & Comms",
+      "tagline": "A local-first Outlook replacement: mail, threads, calendar, contacts and rules. Your mail stays on your machine.",
+      "features": [
+        {
+          "name": "Mail",
+          "desc": "Unified inbox, threads, search and rules.",
+          "image": "product-shots/amni-mail/01-mail.png"
+        },
+        {
+          "name": "Clean review",
+          "desc": "Adam proposes a cleanup; you review it, with undo.",
+          "image": "product-shots/amni-mail/02-clean-review.png"
+        },
+        {
+          "name": "Subscriptions",
+          "desc": "One-click unsubscribe.",
+          "image": "product-shots/amni-mail/03-subscriptions.png"
+        },
+        {
+          "name": "Calendar",
+          "desc": "Month grid, .ics invites and RSVP.",
+          "image": "product-shots/amni-mail/04-calendar.png"
+        }
+      ]
+    },
+    {
+      "name": "HedgeDoc",
+      "group": "Privacy & Comms",
+      "tagline": "An unofficial native Android client for HedgeDoc 1.x and 2. Connect to the server you already run.",
+      "features": [
+        {
+          "name": "HedgeDoc 1.x and 2",
+          "desc": "History, create, edit, pin, delete and revisions.",
+          "image": "product-shots/hedgedoc/01-hedgedoc-1-x-and-2.png"
+        },
+        {
+          "name": "Your login, your cookies",
+          "desc": "Local, LDAP, guest, cookie or API token; no phone-home.",
+          "image": "product-shots/hedgedoc/02-your-login-your-cookies.png"
+        },
+        {
+          "name": "Scient themes",
+          "desc": "Twelve Amni-Scient palettes plus Light.",
+          "image": "product-shots/hedgedoc/03-scient-themes.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Type",
+      "group": "Privacy & Comms",
+      "tagline": "An Android keyboard that swipes, predicts and corrects entirely on your phone. No telemetry, no cloud, no account.",
+      "features": [
+        {
+          "name": "Swipe on-device",
+          "desc": "Full-vocabulary glide typing scored on the phone.",
+          "image": "product-shots/amni-type/01-swipe-on-device.png"
+        },
+        {
+          "name": "Look and feel",
+          "desc": "Haptics, swipe trail and key gap, your way.",
+          "image": "product-shots/amni-type/02-look-and-feel.png"
+        },
+        {
+          "name": "Zero telemetry",
+          "desc": "The dictionary and language model never leave the phone.",
+          "image": "product-shots/amni-type/03-zero-telemetry.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Crypt",
+      "group": "Privacy & Comms",
+      "tagline": "File encryption for Android built on a 1024-bit, 16-round block cipher with HMAC-SHA512 tamper detection.",
+      "features": [
+        {
+          "name": "1024-bit blocks",
+          "desc": "A block cipher over a 16x16 grid, 16 rounds.",
+          "image": "product-shots/amni-crypt/01-1024-bit-blocks.png"
+        },
+        {
+          "name": "Tamper detection",
+          "desc": "HMAC-SHA512 verifies every file.",
+          "image": "product-shots/amni-crypt/02-tamper-detection.png"
+        },
+        {
+          "name": "Cipher seal and QR",
+          "desc": "A visual certificate you can verify by QR.",
+          "image": "product-shots/amni-crypt/03-cipher-seal-and-qr.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Explore",
+      "group": "Science & Learning",
+      "tagline": "A WebGL space game: an 80,000-particle galaxy with NASA exoplanet data, a rocket engineering lab and colonies.",
+      "features": [
+        {
+          "name": "A galaxy you can fly",
+          "desc": "80,000 particles with spiral arms, from galaxy scale down to a single system.",
+          "image": "product-shots/amni-explore/01-a-galaxy-you-can-fly.png"
+        },
+        {
+          "name": "Real exoplanets",
+          "desc": "500 NASA exoplanets among 3,000+ systems.",
+          "image": "product-shots/amni-explore/02-real-exoplanets.png"
+        },
+        {
+          "name": "Planet detail",
+          "desc": "3D planets with tilt, moons, atmosphere and data.",
+          "image": "product-shots/amni-explore/03-planet-detail.png"
+        },
+        {
+          "name": "Rocket engineering lab",
+          "desc": "Build rockets part by part, then launch them.",
+          "image": "product-shots/amni-explore/04-rocket-engineering-lab.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Calc",
+      "group": "Science & Learning",
+      "tagline": "A free in-browser engineering calculator suite: 37 modules from FEA and bolts to fluids, HVAC and electrical.",
+      "features": [
+        {
+          "name": "Fasteners and seals",
+          "desc": "Bolt torque and preload, springs, O-ring glands.",
+          "image": "product-shots/amni-calc/01-fasteners-and-seals.png"
+        },
+        {
+          "name": "Reference library",
+          "desc": "Materials database and surface finishes.",
+          "image": "product-shots/amni-calc/02-reference-library.png"
+        },
+        {
+          "name": "Fluids and thermal",
+          "desc": "Moody/Colebrook, pump NPSH, heat transfer, cycles.",
+          "image": "product-shots/amni-calc/03-fluids-and-thermal.png"
+        },
+        {
+          "name": "Stress and structural",
+          "desc": "Mohr's circle, beams, columns, shafts and welds.",
+          "image": "product-shots/amni-calc/04-stress-and-structural.png"
+        },
+        {
+          "name": "Electrical",
+          "desc": "3-phase, NEC ampacity, electrochemistry, battery sizing.",
+          "image": "product-shots/amni-calc/05-electrical.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Learn",
+      "group": "Science & Learning",
+      "tagline": "Privacy-first learning for every age: Pre-K tracing, K-12 maths, reading and STEM, adult brain games. 71 games.",
+      "features": [
+        {
+          "name": "Tracing",
+          "desc": "Letters, numbers, shapes and cursive with stroke guidance.",
+          "image": "product-shots/amni-learn/01-tracing.png"
+        },
+        {
+          "name": "Brain gym",
+          "desc": "Sudoku, puzzles and cards for adults.",
+          "image": "product-shots/amni-learn/02-brain-gym.png"
+        },
+        {
+          "name": "Maths and life skills",
+          "desc": "Arithmetic, word problems, clocks, money and music.",
+          "image": "product-shots/amni-learn/03-maths-and-life-skills.png"
+        },
+        {
+          "name": "Private by design",
+          "desc": "Everything stays on the device, with a printable daily packet.",
+          "image": "product-shots/amni-learn/04-private-by-design.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Weather",
+      "group": "Science & Learning",
+      "tagline": "Interactive weather maps in the browser: live fields, point forecasts, NWS and GDACS hazards, a Rust/WASM engine.",
+      "features": [
+        {
+          "name": "Map layers",
+          "desc": "Temperature, dew point, precipitation, pressure, wind, CAPE, UV and more.",
+          "image": "product-shots/amni-weather/01-map-layers.png"
+        },
+        {
+          "name": "Point forecast",
+          "desc": "Drop a pin for now, hourly, 7-day, surf and air quality.",
+          "image": "product-shots/amni-weather/02-point-forecast.png"
+        },
+        {
+          "name": "Hazards",
+          "desc": "NWS and GDACS alerts on the map.",
+          "image": "product-shots/amni-weather/03-hazards.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Game",
+      "group": "Life & Play",
+      "tagline": "A bolt-sized robot sets out to bring colour back to thirteen realms. Play in the browser; saves stay on your device.",
+      "features": [
+        {
+          "name": "Thirteen realms",
+          "desc": "Find the canvases, beat the tyrants, repaint the world.",
+          "image": "product-shots/amni-game/01-thirteen-realms.png"
+        },
+        {
+          "name": "A hub world to explore",
+          "desc": "Every realm branches from the glade.",
+          "image": "product-shots/amni-game/02-a-hub-world-to-explore.png"
+        },
+        {
+          "name": "Boss arenas",
+          "desc": "Each realm ends in a sealed arena.",
+          "image": "Amni-Game-v2/docs/qa/iso_shots/20260722_215807/foundry_boss_ne.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Life",
+      "group": "Life & Play",
+      "tagline": "A 3D memory map for the fragments of a life: seven views, local-first, encrypted sharing, photo and Takeout import.",
+      "features": [
+        {
+          "name": "Constellation",
+          "desc": "A 3D graph of your life.",
+          "image": "product-shots/amni-life/01-constellation.png"
+        },
+        {
+          "name": "Timeline",
+          "desc": "Your life laid out by year.",
+          "image": "product-shots/amni-life/02-timeline.png"
+        },
+        {
+          "name": "Globe",
+          "desc": "Geo-tagged memories on a sphere.",
+          "image": "product-shots/amni-life/03-globe.png"
+        },
+        {
+          "name": "Calendar",
+          "desc": "A year-by-month grid.",
+          "image": "product-shots/amni-life/04-calendar.png"
+        }
+      ]
+    },
+    {
+      "name": "Amni-Prayer",
+      "group": "Life & Play",
+      "tagline": "An interactive 3D map of the whole Catholic Bible: 35,817 verses, 64,497 cross-references, 17 layouts, Tandem reading.",
+      "features": [
+        {
+          "name": "Cross-reference graph",
+          "desc": "Pick a verse and its connections glow gold.",
+          "image": "product-shots/amni-prayer/01-cross-reference-graph.png"
+        },
+        {
+          "name": "Tandem mode",
+          "desc": "Text, the 3D view and linked passages side by side.",
+          "image": "product-shots/amni-prayer/02-tandem-mode.png"
+        },
+        {
+          "name": "Seventeen layouts",
+          "desc": "Solar, golden ratio, double helix, cross and more.",
+          "image": "product-shots/amni-prayer/03-seventeen-layouts.png"
+        }
+      ]
+    }
+  ]
+}

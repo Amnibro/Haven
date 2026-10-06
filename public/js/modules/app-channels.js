@@ -77,33 +77,8 @@ async switchChannel(code) {
   // Update voice button state: persist controls if in voice anywhere
   if (this.voice && this.voice.inVoice) {
     this._updateVoiceButtons(true);
-    // If viewing a different channel from the one we're in voice in, show "Join Voice" instead of "Voice Active"
-    if (this.voice.currentChannel !== code) {
-      const indic = document.getElementById('voice-active-indicator');
-      if (indic) indic.style.display = 'none';
-      const _showJoin = this._voiceJoinAvailable();
-      const _scJoinBtn = document.getElementById('voice-join-btn');
-      if (_scJoinBtn) _scJoinBtn.style.display = _showJoin ? 'inline-flex' : 'none';
-      const mobileJoin = document.getElementById('voice-join-mobile');
-      if (mobileJoin) {
-        if (_showJoin) mobileJoin.style.removeProperty('display');
-        else mobileJoin.style.setProperty('display', 'none', 'important');
-      }
-    }
   } else {
-    // Show just the join button (not the indicator), but hide it for text-only channels or users without voice permission
-    const _showJoin = this._voiceJoinAvailable();
-    const _scJoinBtn = document.getElementById('voice-join-btn');
-    if (_scJoinBtn) _scJoinBtn.style.display = _showJoin ? 'inline-flex' : 'none';
-    const indic = document.getElementById('voice-active-indicator');
-    if (indic) indic.style.display = 'none';
-    const vp = document.getElementById('voice-panel');
-    if (vp) vp.style.display = 'none';
-    const mobileJoin = document.getElementById('voice-join-mobile');
-    if (mobileJoin) {
-      if (_showJoin) mobileJoin.style.removeProperty('display');
-      else mobileJoin.style.setProperty('display', 'none', 'important');
-    }
+    this._updateVoiceButtons(false);
   }
   document.getElementById('search-toggle-btn').style.display = '';
   document.getElementById('pinned-toggle-btn').style.display = '';
@@ -131,7 +106,9 @@ async switchChannel(code) {
 
   // Show/hide topic bar. DMs don't have topics; showing the placeholder
   // overlaps the E2E encryption dropdown that lives in the same header.
-  if (isDm) {
+  // Forums already carry status on the cards, so the topic strip is leftover
+  // grey copy under the title.
+  if (isDm || channel?.is_forum) {
     const bar = document.getElementById('channel-topic-bar');
     if (bar) bar.style.display = 'none';
   } else {
@@ -169,9 +146,11 @@ async switchChannel(code) {
   // In a forum the composer starts topics, and says so. (#144)
   if (_msgInput) {
     const _forumCh = this.channels && this.channels.find(c => c.code === code);
-    _msgInput.placeholder = (_forumCh && _forumCh.is_forum)
+    const isForum = !!(_forumCh && _forumCh.is_forum);
+    _msgInput.placeholder = isForum
       ? t('app.messages.placeholder_forum')
       : t(window.innerWidth <= 480 ? 'app.messages.placeholder_short' : 'header.message_placeholder_commands');
+    document.documentElement.classList.toggle('forum-channel', isForum);
   }
   const _timeBtn = document.getElementById('time-btn');
   const _timeDivider = document.getElementById('time-divider');
@@ -412,6 +391,8 @@ _showWelcome() {
   document.getElementById('channel-code-display').textContent = '';
   document.getElementById('copy-code-btn').style.display = 'none';
   document.getElementById('voice-join-btn').style.display = 'none';
+  const leaveHdr2 = document.getElementById('voice-leave-header-btn');
+  if (leaveHdr2) leaveHdr2.style.display = 'none';
   const indic2 = document.getElementById('voice-active-indicator');
   if (indic2) indic2.style.display = 'none';
   const vp2 = document.getElementById('voice-panel');
@@ -620,6 +601,12 @@ _renderChannels() {
     const _mutedList = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
     if (_mutedList.includes(ch.code)) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.muted_unsubscribed')}">🔕</span>`);
     const indicators = _badges.length ? `<span class="channel-indicators" style="margin-left:auto;display:flex;gap:2px;align-items:center;flex-shrink:0">${_badges.join('')}</span>` : '';
+    const canJoinVoice = !ch.is_dm && ch.voice_enabled !== 0
+      && !!(this.user?.isAdmin || this.user?.isGuest || this._hasPerm?.('use_voice'));
+    const inThisVoice = !!(this.voice?.inVoice && this.voice.currentChannel === ch.code);
+    const joinVoiceBtn = canJoinVoice
+      ? `<button type="button" class="channel-join-voice${inThisVoice ? ' is-live is-leave' : ''}" data-join-voice="${ch.code}" title="${inThisVoice ? t('voice.disconnect') : t('voice.join_ctx')}" aria-label="${inThisVoice ? t('voice.disconnect') : t('voice.join_ctx')}">${inThisVoice ? this._channelVoiceLeaveIcon() : '🎤'}</button>`
+      : '';
 
     const expiryTitle = isTemporary ? ` title="${t('channels.temporary_expires', { date: this._fmtDateTime(ch.expires_at) })}"` : '';
     el.innerHTML = `
@@ -627,6 +614,7 @@ _renderChannels() {
       <span class="channel-hash"${expiryTitle}>${hashIcon}</span>
       <span class="channel-name">${this._escapeHtml(ch.name)}</span>
       ${indicators}
+      ${joinVoiceBtn}
       <button class="channel-more-btn" title="${t('channels.channel_options')}">⋯</button>
     `;
 
@@ -697,6 +685,17 @@ _renderChannels() {
         setTimeout(() => this._joinVoice(), 300);
       }
     });
+    el.querySelector('[data-join-voice]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const code = e.currentTarget.dataset.joinVoice;
+      if (this.voice?.inVoice && this.voice.currentChannel === code) {
+        this._leaveVoice();
+        return;
+      }
+      if (this.currentChannel !== code) this.switchChannel(code);
+      setTimeout(() => this._joinVoice(), 300);
+    });
     // Double-click to join voice in the channel (blocked for text-only;
     // a voice-only channel already joined on the first click)
     el.addEventListener('dblclick', () => {
@@ -731,6 +730,7 @@ _renderChannels() {
       if (e.target.closest('#organize-channels-btn')) return;
       if (e.target.closest('#arrange-channels-btn')) return;
       if (e.target.closest('#sub-channel-panel-btn')) return;
+      if (e.target.closest('#channel-actions-btn, #channel-actions-menu')) return;
       const nowCollapsed = list.style.display !== 'none';
       list.style.display = nowCollapsed ? 'none' : '';
       const arrow = document.getElementById('channels-toggle-arrow');
@@ -948,40 +948,6 @@ _renderChannels() {
     }
   }
 
-  // ── "Create Temp Channel" button (visible if user has create_temp_channel perm) ──
-  if (this.user?.isAdmin || this._hasPerm('create_temp_channel')) {
-    const tempBtn = document.createElement('div');
-    tempBtn.className = 'channel-item temp-channel-create-btn';
-    tempBtn.style.cssText = 'opacity:0.5;cursor:pointer;padding:4px 12px;font-size:0.8rem;display:flex;align-items:center;gap:6px';
-    tempBtn.innerHTML = `<span style="font-size:0.9rem">➕</span><span>${t('channels.create_temp_channel')}</span>`;
-    tempBtn.title = t('channels.create_temp_channel_title');
-    tempBtn.addEventListener('click', async () => {
-      // One create form for every kind of channel: open it with Temporary
-      // ticked instead of a second prompt that only made a temp channel.
-      const form = document.getElementById('create-section-body');
-      const nameInput = document.getElementById('new-channel-name');
-      const tmp = document.getElementById('new-channel-temporary');
-      if (form && nameInput && tmp) {
-        form.style.display = '';
-        const arrow = document.getElementById('create-section-arrow');
-        if (arrow) arrow.textContent = '▾';
-        tmp.checked = true;
-        tmp.dispatchEvent(new Event('change'));
-        nameInput.focus();
-        nameInput.scrollIntoView({ block: 'center' });
-        return;
-      }
-      const name = await this._showPromptModal(
-        t('channels.create_temp_channel_title'),
-        t('channels.create_temp_channel_hint')
-      );
-      if (name && name.trim()) {
-        this.socket.emit('create-temp-channel', { name: name.trim() });
-      }
-    });
-    list.appendChild(tempBtn);
-  }
-
   // ── Hidden channels restore bar (#5409) ──
   // Only counts hidden channels that still exist and aren't the one currently
   // being viewed (a hidden current channel is still shown in the list).
@@ -1028,30 +994,18 @@ _renderChannels() {
       });
     }
 
-    if (dmArrow) dmArrow.classList.toggle('collapsed', dmCollapsed);
-    if (dmCollapsed) {
+    const dockOpen = document.documentElement.classList.contains('dms-open');
+    if (dmArrow) dmArrow.classList.toggle('collapsed', dmCollapsed && !dockOpen);
+    if (dmCollapsed && !dockOpen) {
       dmList.style.display = 'none';
-      const dp = document.getElementById('dm-pane');
-      const cp = document.getElementById('channels-pane');
-      if (dp) dp.style.flex = '0 0 auto';
-      if (cp) cp.style.flex = '1 1 0';
+    } else {
+      dmList.style.removeProperty('display');
     }
 
-    // Update unread badge
-    const totalUnread = dmChannels.reduce((sum, ch) => sum + ((ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0)), 0);
-    const badge = document.getElementById('dm-unread-badge');
-    if (badge) {
-      if (totalUnread > 0) {
-        badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-        badge.style.display = '';
-      } else {
-        badge.style.display = 'none';
-      }
-    }
+    this._updateDmSectionBadge?.();
 
-    // Show/hide DM pane
     const dmPane = document.getElementById('dm-pane');
-    if (dmPane) dmPane.style.display = dmChannels.length ? '' : 'none';
+    if (dmPane) dmPane.style.removeProperty('display');
 
     // ── DM categorization (client-side localStorage) ──
     const dmAssignments = JSON.parse(localStorage.getItem('haven_dm_assignments') || '{}');
@@ -1202,6 +1156,12 @@ _renderChannels() {
       // No tags: flat list (original behavior)
       sortedDms.forEach(ch => dmList.appendChild(renderDmItem(ch)));
     }
+    if (!sortedDms.length) {
+      const empty = document.createElement('div');
+      empty.className = 'dm-empty';
+      empty.textContent = t('app.sidebar.no_dms');
+      dmList.appendChild(empty);
+    }
   }
 
   // Render voice indicators for channels with active voice users
@@ -1222,6 +1182,7 @@ _renderChannels() {
   Object.keys(this.forumUnread || {}).forEach(code => this._updateForumDot?.(code));
   // So are the dots for news in threads you take part in (app-thread-unread.js).
   this._paintThreadDots?.();
+  this._bindDmDock?.();
 },
 
 // ── Keyboard Navigation ──────────────────────────────────

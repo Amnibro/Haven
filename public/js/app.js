@@ -500,9 +500,7 @@ class HavenApp {
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${this.user.username}`;
 
-    if (this.user.isAdmin || this._hasGlobalPerm('create_channel')) {
-      document.getElementById('admin-controls').style.display = 'block';
-    }
+    this._refreshChannelActions?.();
     if (this.user.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('manage_server')) {
       document.getElementById('admin-mod-panel').style.display = 'block';
     }

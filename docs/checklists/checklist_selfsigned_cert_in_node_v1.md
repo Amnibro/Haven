@@ -1,0 +1,14 @@
+# Checklist: self-signed cert without OpenSSL (v1, 2026-09-07)
+- [x] Diagnose MutantRabbit767 report: OpenSSH != OpenSSL, every Windows path shells out to openssl.exe
+- [x] Backups: server.js, Start Haven.bat, Install Haven.ps1 -> backups/*.v4.3.0.bak
+- [x] src/selfsignedCert.js pure-Node RSA-2048 X.509 v3 with SAN (loopback + LAN IPv4 + hostname)
+- [x] Verified with Node X509Certificate and external OpenSSL 3.5.5 (verify + asn1parse)
+- [ ] server.js generates certs at boot when missing and FORCE_HTTP != true
+- [ ] scripts/gen-cert.js CLI wrapper for installers
+- [ ] Start Haven.bat: node generator replaces the openssl hunt
+- [ ] Install Haven.ps1 + installer/server.js: node generator, no more "Skipped (OpenSSL not found)"
+- [ ] test/selfsignedCert.test.js incl. real TLS handshake
+- [ ] full test suite green
+- [ ] GUIDE.md / CHANGELOG.md updated
+- [ ] architecture_map.md + changelog.md (workspace) updated
+- [ ] commit, push fork, PR to ancsemi/Haven

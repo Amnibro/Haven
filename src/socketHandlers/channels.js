@@ -44,6 +44,12 @@ const { reachableChannel } = require('./channelAccess');
 const protectedMessages = require('../protectedMessages');
 const channelTypes = require('../channelTypes');
 
+// Failed join-by-code attempts per user, so channel codes (32-bit) and custom
+// invite slugs cannot be enumerated at the general event rate.
+const JOIN_FAIL_MAX = 20;
+const JOIN_FAIL_WINDOW_MS = 10 * 60 * 1000;
+const joinFailures = new Map(); // userId → timestamps
+
 module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
@@ -408,6 +414,19 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code) return socket.emit('error-msg', 'Invalid channel code');
 
+    const _now = Date.now();
+    const _fails = (joinFailures.get(socket.user.id) || []).filter(t => _now - t < JOIN_FAIL_WINDOW_MS);
+    if (_fails.length) joinFailures.set(socket.user.id, _fails); else joinFailures.delete(socket.user.id);
+    if (_fails.length >= JOIN_FAIL_MAX) {
+      return socket.emit('error-msg', 'Too many invalid codes — try again in a few minutes');
+    }
+    const _failJoin = (msg) => {
+      _fails.push(_now);
+      joinFailures.set(socket.user.id, _fails);
+      return socket.emit('error-msg', msg);
+    };
+    const _gateOk = (ch) => socket.user.isAdmin || !ctx.roleGateAllows || ctx.roleGateAllows(socket.user.id, ch);
+
     // (#5345) Helper: figure out which channels a server-code / vanity-code
     // joiner should be added to. Always EXCLUDES private parents (private
     // channels were never supposed to be unlocked by an invite code).
@@ -419,7 +438,7 @@ module.exports = function register(socket, ctx) {
     // array means "all public", same as leaving the global default unset.
     const _resolveAutoJoinChannels = (explicitChannelIds) => {
       const allParents = db.prepare(
-        "SELECT id, code, parent_channel_id FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private')"
+        "SELECT id, code, parent_channel_id, role_gate FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private')"
       ).all();
       let allowSet = null;
       if (Array.isArray(explicitChannelIds)) {
@@ -461,7 +480,7 @@ module.exports = function register(socket, ctx) {
           // Sub-channels: never grant private subs via invite. When a
           // default-channels allowlist is set, only grant subs whose
           // parent is on the list (matches admin intent).
-          const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(parent.id);
+          const subs = db.prepare('SELECT id, code, role_gate FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(parent.id);
           for (const sub of subs) {
             insertMember.run(sub.id, socket.user.id);
             joinedChannelIds.push(sub.id);
@@ -537,7 +556,7 @@ module.exports = function register(socket, ctx) {
 
     // Standard 8-char hex code
     if (!/^[a-f0-9]{8}$/i.test(code)) {
-      return socket.emit('error-msg', 'Invalid channel code format');
+      return _failJoin('Invalid channel code format');
     }
 
     // ── Check if this is a server-wide invite code ─────
@@ -551,7 +570,7 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
     if (!channel) {
-      return socket.emit('error-msg', 'Invalid channel code. Double-check it');
+      return _failJoin('Invalid channel code. Double-check it');
     }
 
     // (#5348) DMs are private one-to-one channels. Their codes must never be
@@ -559,7 +578,7 @@ module.exports = function register(socket, ctx) {
     // (who is talking to whom, timing, frequency). Reject silently with the
     // same generic error so callers can't distinguish "no channel" from "is DM".
     if (channel.is_dm) {
-      return socket.emit('error-msg', 'Invalid channel code. Double-check it');
+      return _failJoin('Invalid channel code. Double-check it');
     }
 
     const membership = db.prepare(
@@ -587,8 +606,15 @@ module.exports = function register(socket, ctx) {
       // matching the public-only auto-join rule); public subs require parent
       // membership. Reuse the generic error so the code's existence stays hidden.
       if (isPrivateSub || !parentMember) {
-        return socket.emit('error-msg', 'Invalid channel code. Double-check it');
+        return _failJoin('Invalid channel code. Double-check it');
       }
+    }
+
+    // A role gate covers joining by code too. Without this, anyone holding
+    // the code became a member and sat in the room receiving every new
+    // message of a channel whose gate they fail.
+    if (!_gateOk(channel)) {
+      return socket.emit('error-msg', 'This channel needs a role you do not hold');
     }
 
     if (!membership) {
@@ -1066,7 +1092,7 @@ module.exports = function register(socket, ctx) {
       if (!name || seen.has(name.toLowerCase())) continue;
       seen.add(name.toLowerCase());
       tags.push(emoji ? { name, emoji } : { name });
-      if (tags.length >= 20) break;
+      if (tags.length >= 40) break;
     }
     try {
       db.prepare('UPDATE channels SET forum_tags = ? WHERE id = ?').run(tags.length ? JSON.stringify(tags) : null, channel.id);

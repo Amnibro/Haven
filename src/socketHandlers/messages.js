@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
@@ -182,6 +183,14 @@ module.exports = function register(socket, ctx) {
     }
   }
 
+  // The client renders a whole-message `[file:name](url|size)` as an
+  // attachment card (download link / inline player). Real ones always point
+  // at a file on this server; anything else is a disguised external link.
+  function isForgedFileCard(content) {
+    const m = typeof content === 'string' ? content.match(/^\[file:(.+?)\]\((.+?)\|(.+?)\)$/) : null;
+    return !!m && !UPLOAD_PATH_EXACT_RE.test(m[2]);
+  }
+
   // Reply banners must match message rendering: bots live in webhook_* with
   // user_id NULL, so a users-table COALESCE alone becomes "[Deleted User]".
   const REPLY_CONTEXT_SELECT = `
@@ -202,7 +211,7 @@ module.exports = function register(socket, ctx) {
   // Likes minus dislikes, for the Most liked order (#5742).
   const FORUM_SCORE = '(SELECT COALESCE(SUM(v.value), 0) FROM forum_votes v WHERE v.message_id = m.id)';
   const FORUM_SELECT = `
-    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.title, m.tags, m.closed, m.nsfw,
+    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.title, m.tags, m.closed, m.request_status, m.topic_kind, m.subtasks, m.nsfw,
            COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
            COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile,
            ${FORUM_ACTIVITY} AS activity_at, ${FORUM_SCORE} AS score
@@ -219,6 +228,87 @@ module.exports = function register(socket, ctx) {
     const one = "EXISTS (SELECT 1 FROM json_each(COALESCE(m.tags, '[]')) je WHERE je.value = ?)";
     return { sql: ` AND (${tags.map(() => one).join(mode === 'all' ? ' AND ' : ' OR ')})`, params: tags };
   }
+  function parseRequestStatus(v) {
+    return v === 'planned' || v === 'in_progress' || v === 'blocked' || v === 'review' || v === 'complete' ? v : null;
+  }
+  function parseTopicKind(v) {
+    return v === 'request' || v === 'report' || v === 'bug' || v === 'feature' || v === 'chore'
+      || v === 'idea' || v === 'docs' || v === 'showcase' || v === 'hobby' || v === 'chat'
+      || v === 'discussion' || v === 'announcement' ? v : null;
+  }
+  function parseTopicTagList(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    const seen = new Set();
+    for (const t of raw) {
+      const name = String(t || '').trim().replace(/\s+/g, ' ').slice(0, 30);
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      out.push(name);
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
+  function absorbForumTags(channel, names) {
+    if (!channel || !names || !names.length || typeof broadcastChannelLists !== 'function') return;
+    const cur = parseChannelTags(channel.forum_tags);
+    const seen = new Set(cur.map((t) => t.name.toLowerCase()));
+    let added = false;
+    for (const name of names) {
+      if (seen.has(name.toLowerCase())) continue;
+      cur.push({ name });
+      seen.add(name.toLowerCase());
+      added = true;
+      if (cur.length >= 40) break;
+    }
+    if (!added) return;
+    db.prepare('UPDATE channels SET forum_tags = ? WHERE id = ?').run(JSON.stringify(cur), channel.id);
+    channel.forum_tags = JSON.stringify(cur);
+    try { broadcastChannelLists(); } catch { /* list refresh is best-effort */ }
+  }
+  function parseSubtasks(raw) {
+    let arr = raw;
+    if (typeof raw === 'string') {
+      try { arr = JSON.parse(raw); } catch { return []; }
+    }
+    if (!Array.isArray(arr)) return [];
+    const out = [];
+    const seen = new Set();
+    for (const item of arr.slice(0, 40)) {
+      let title = '';
+      let done = false;
+      let id = '';
+      if (typeof item === 'string') title = item.trim();
+      else if (item && typeof item === 'object') {
+        title = String(item.title || '').trim();
+        done = !!item.done;
+        if (typeof item.id === 'string' && /^[a-zA-Z0-9_-]{1,16}$/.test(item.id)) id = item.id;
+      }
+      title = title.slice(0, 140);
+      if (!title) continue;
+      if (!id || seen.has(id)) id = crypto.randomBytes(4).toString('hex');
+      seen.add(id);
+      out.push({ id, title, done });
+    }
+    return out;
+  }
+  function forumStatusSql(status) {
+    const s = parseRequestStatus(status);
+    if (!s) return { sql: '', params: [] };
+    return { sql: ' AND m.request_status = ?', params: [s] };
+  }
+  function forumKindSql(kind) {
+    const k = parseTopicKind(kind);
+    if (!k) return { sql: '', params: [] };
+    if (k === 'feature') return { sql: ' AND (m.topic_kind = ? OR m.topic_kind IS NULL)', params: [k] };
+    return { sql: ' AND m.topic_kind = ?', params: [k] };
+  }
+  function forumFilterSql(opts) {
+    const tag = forumTagSql(opts.tags || [], opts.tagMode);
+    const st = forumStatusSql(opts.requestStatus);
+    const kind = forumKindSql(opts.topicKind);
+    return { sql: tag.sql + st.sql + kind.sql, params: [...tag.params, ...st.params, ...kind.params] };
+  }
   function forumKeyOf(id, sort) {
     const row = db.prepare(`SELECT ${forumKeyExpr(sort)} AS k FROM messages m WHERE m.id = ?`).get(id);
     return row ? row.k : null;
@@ -228,25 +318,25 @@ module.exports = function register(socket, ctx) {
   function forumOlder(channelId, cursorId, limit, opts) {
     const at = forumKeyOf(cursorId, opts.sort);
     if (at == null) return [];
-    const key = forumKeyCol(opts.sort); const tag = forumTagSql(opts.tags, opts.tagMode);
+    const key = forumKeyCol(opts.sort); const filter = forumFilterSql(opts);
     return db.prepare(`
-      SELECT * FROM (${FORUM_SELECT}${tag.sql})
+      SELECT * FROM (${FORUM_SELECT}${filter.sql})
       WHERE ${key} < ? OR (${key} = ? AND id < ?)
       ORDER BY ${key} DESC, id DESC LIMIT ?
-    `).all(channelId, ...tag.params, at, at, cursorId, limit);
+    `).all(channelId, ...filter.params, at, at, cursorId, limit);
   }
   function forumNewer(channelId, cursorId, limit, opts) {
     const at = forumKeyOf(cursorId, opts.sort);
     if (at == null) return [];
-    const key = forumKeyCol(opts.sort); const tag = forumTagSql(opts.tags, opts.tagMode);
+    const key = forumKeyCol(opts.sort); const filter = forumFilterSql(opts);
     return db.prepare(`
-      SELECT * FROM (${FORUM_SELECT}${tag.sql})
+      SELECT * FROM (${FORUM_SELECT}${filter.sql})
       WHERE ${key} > ? OR (${key} = ? AND id > ?)
       ORDER BY ${key} ASC, id ASC LIMIT ?
-    `).all(channelId, ...tag.params, at, at, cursorId, limit);
+    `).all(channelId, ...filter.params, at, at, cursorId, limit);
   }
-  function forumHistory(channelId, { before, after, around, limit, sort = 'active', tags = [], tagMode = 'some' }) {
-    const opts = { sort, tags, tagMode };
+  function forumHistory(channelId, { before, after, around, limit, sort = 'active', tags = [], tagMode = 'some', requestStatus = null, topicKind = null }) {
+    const opts = { sort, tags, tagMode, requestStatus, topicKind };
     if (before) return forumOlder(channelId, before, limit, opts);
     if (after) return forumNewer(channelId, after, limit, opts);
     if (around) {
@@ -254,19 +344,19 @@ module.exports = function register(socket, ctx) {
       const target = db.prepare(`SELECT * FROM (${FORUM_SELECT}) WHERE id = ?`).all(channelId, around);
       return [...forumOlder(channelId, around, half, opts).reverse(), ...target, ...forumNewer(channelId, around, half, opts)];
     }
-    const key = forumKeyCol(sort); const tag = forumTagSql(tags, tagMode);
+    const key = forumKeyCol(sort); const filter = forumFilterSql(opts);
     // Pinned topics ride on the first page whatever their last activity, so
     // they are on top from the start rather than only once they happen to
     // load. Later pages may hand one back again; the client skips repeats.
     const pinned = db.prepare(`
-      SELECT * FROM (${FORUM_SELECT}${tag.sql})
+      SELECT * FROM (${FORUM_SELECT}${filter.sql})
       WHERE id IN (SELECT message_id FROM pinned_messages WHERE channel_id = ?)
       ORDER BY ${key} DESC, id DESC
-    `).all(channelId, ...tag.params, channelId);
+    `).all(channelId, ...filter.params, channelId);
     const page = db.prepare(`
-      SELECT * FROM (${FORUM_SELECT}${tag.sql})
+      SELECT * FROM (${FORUM_SELECT}${filter.sql})
       ORDER BY ${key} DESC, id DESC LIMIT ?
-    `).all(channelId, ...tag.params, limit);
+    `).all(channelId, ...filter.params, limit);
     const seen = new Set(pinned.map(r => r.id));
     return [...pinned, ...page.filter(r => !seen.has(r.id))];
   }
@@ -286,6 +376,8 @@ module.exports = function register(socket, ctx) {
     const sort = data.sort === 'created' || data.sort === 'top' ? data.sort : 'active';
     const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 10) : [];
     const tagMode = data.tagMode === 'all' ? 'all' : 'some';
+    const requestStatus = parseRequestStatus(data.requestStatus);
+    const topicKind = parseTopicKind(data.topicKind);
 
     const channel = db.prepare('SELECT id, is_forum, role_gate, forum_blog, is_dm, is_group FROM channels WHERE code = ?').get(code);
     if (!channel) return;
@@ -300,7 +392,7 @@ module.exports = function register(socket, ctx) {
     const floor = groupHistoryFloor(db, channel, socket.user.id);
     let messages;
     if (channel.is_forum) {
-      messages = forumHistory(channel.id, { before, after, around, limit, sort, tags, tagMode });
+      messages = forumHistory(channel.id, { before, after, around, limit, sort, tags, tagMode, requestStatus, topicKind });
     } else if (before) {
       messages = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
@@ -529,6 +621,9 @@ module.exports = function register(socket, ctx) {
       const atags = attachmentTagMap.get(m.id);
       if (atags && atags.length) obj.attachmentTags = atags;
       if ('closed' in m) obj.closed = !!m.closed;
+      if ('request_status' in m) obj.request_status = parseRequestStatus(m.request_status);
+      if ('topic_kind' in m) obj.topic_kind = parseTopicKind(m.topic_kind);
+      if ('subtasks' in m) obj.subtasks = parseSubtasks(m.subtasks);
       // Sent only when set, so ordinary messages carry nothing extra.
       if (m.nsfw) obj.nsfw = true; else delete obj.nsfw;
       if (m.poll_data) {
@@ -807,6 +902,8 @@ module.exports = function register(socket, ctx) {
     if (!member && (!socket.user.isAdmin || channel.is_dm)) {
       return socket.emit('error-msg', 'Not a member of this channel');
     }
+    // Up to 5000 rows plus disk stats per call: share search's tighter bucket.
+    if (floodCheck('search')) return;
 
     // Pull every message in this channel that mentions /uploads/ or http(s)://
     // Cap at 5000 to avoid pathological loads on giant channels.
@@ -1298,17 +1395,25 @@ module.exports = function register(socket, ctx) {
     // ignored outside forum channels so a stale client cannot tag chat.
     let topicTitle = null;
     let topicTags = null;
+    let topicStatus = null;
+    let topicKind = null;
+    let topicSubtasks = null;
     let topicNsfw = 0;
     if (channel.is_forum) {
       if (typeof data.title === 'string' && data.title.trim()) topicTitle = sanitizeText(data.title.trim().replace(/\s+/g, ' ').slice(0, 120)) || null;
       if (topicTitle && enforceAutomod(topicTitle, { surface: channel.is_dm ? 'dm' : 'message', channelId: channel.id })) return;
       // The poster can mark the topic NSFW (#5633).
       if (data.nsfw === true) topicNsfw = 1;
-      const allowed = new Set(parseChannelTags(channel.forum_tags).map(t => t.name));
-      if (Array.isArray(data.tags)) {
-        const picked = [...new Set(data.tags.filter(t => typeof t === 'string').map(t => t.trim()).filter(t => allowed.has(t)))].slice(0, 5);
-        if (picked.length) topicTags = JSON.stringify(picked);
+      const picked = parseTopicTagList(data.tags);
+      if (picked.length) {
+        topicTags = JSON.stringify(picked);
+        absorbForumTags(channel, picked);
       }
+      topicKind = parseTopicKind(data.topicKind) || 'discussion';
+      const boardKind = topicKind === 'request' || topicKind === 'report' || topicKind === 'bug' || topicKind === 'feature' || topicKind === 'chore' || topicKind === 'idea' || topicKind === 'docs';
+      topicStatus = boardKind ? (parseRequestStatus(data.requestStatus) || 'planned') : parseRequestStatus(data.requestStatus);
+      const sub = parseSubtasks(data.subtasks);
+      if (sub.length) topicSubtasks = JSON.stringify(sub);
     }
 
     const member = db.prepare(
@@ -1574,10 +1679,12 @@ module.exports = function register(socket, ctx) {
       e2eFiles = e2eFiles.length ? JSON.stringify([...new Set(e2eFiles)]) : null;
     }
 
+    if (isForgedFileCard(finalContent)) return socket.emit('error-msg', 'Attachments must be uploaded to this server');
+
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw, e2e_files, destruct_at, silent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw, e2eFiles, destructAt, silent);
+        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw, e2e_files, destruct_at, silent, request_status, topic_kind, subtasks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw, e2eFiles, destructAt, silent, topicStatus, topicKind, topicSubtasks);
       if (destructAt) selfDestruct.schedule(destructAt);
 
       // Attachment tags (#tagging): the composer sends `attachmentTags` alongside
@@ -1631,6 +1738,9 @@ module.exports = function register(socket, ctx) {
         content: finalContent,
         title: topicTitle || undefined,
         tags: topicTags ? JSON.parse(topicTags) : undefined,
+        request_status: topicStatus || undefined,
+        topic_kind: topicKind || undefined,
+        subtasks: topicSubtasks ? JSON.parse(topicSubtasks) : undefined,
         nsfw: topicNsfw ? true : undefined,
         created_at: new Date().toISOString(),
         username: personaUsername || socket.user.displayName,
@@ -1992,6 +2102,7 @@ module.exports = function register(socket, ctx) {
     if (wait) return cb({ error: wait.message, newAccountWait: wait.minutes });
     const content = sanitizeText(pingSafe(data.content.trim(), socket.user.id, channel.id));
     if (!content) return cb({ error: 'Nothing to send' });
+    if (isForgedFileCard(content)) return cb({ error: 'Attachments must be uploaded to this server' });
     // The same checks a live send gets, at the moment it is queued.
     if (enforceAutomod(content, { surface: 'message', channelId: channel.id, markdown: true })) return cb({ error: 'That message was blocked' });
     const pending = db.prepare('SELECT COUNT(*) AS c FROM scheduled_messages WHERE user_id = ?').get(socket.user.id).c;
@@ -2023,6 +2134,7 @@ module.exports = function register(socket, ctx) {
     const chRow = db.prepare('SELECT id, is_dm, text_enabled, media_enabled FROM channels WHERE id = ?').get(row.channel_id);
     const refusal = chRow ? scheduleRefusal(content, chRow, socket.user.isAdmin) : 'Channel not found';
     if (refusal) return cb({ error: refusal });
+    if (isForgedFileCard(content)) return cb({ error: 'Attachments must be uploaded to this server' });
     if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id, markdown: true })) return cb({ error: 'That message was blocked' });
     db.prepare('UPDATE scheduled_messages SET content = ?, send_at = ? WHERE id = ?').run(content, sendAt, row.id);
     cb({ success: true, items: scheduledList(socket.user.id) });
@@ -2137,22 +2249,39 @@ module.exports = function register(socket, ctx) {
     // the same automod check.
     const title = typeof data.title === 'string' ? sanitizeText(data.title.trim().replace(/\s+/g, ' ').slice(0, 120)) : null;
     if (title && enforceAutomod(title, { surface: 'edit', channelId: msg.channel_id })) return;
-    const allowed = new Set(parseChannelTags(msg.forum_tags).map(t => t.name));
-    const tags = Array.isArray(data.tags) ? [...new Set(data.tags.filter(t => typeof t === 'string').map(t => t.trim()).filter(t => allowed.has(t)))].slice(0, 5) : [];
+    const tags = parseTopicTagList(data.tags);
+    if (tags.length) {
+      const ch = db.prepare('SELECT id, forum_tags FROM channels WHERE id = ?').get(msg.channel_id);
+      if (ch) absorbForumTags(ch, tags);
+    }
     // Closed is only changed when the editor sent it, so an older client that
     // edits the title leaves it alone (#5624).
     const closed = typeof data.closed === 'boolean' ? (data.closed ? 1 : 0) : null;
+    const requestStatus = data.requestStatus === null ? null : parseRequestStatus(data.requestStatus);
+    const statusSent = data.requestStatus === null || requestStatus !== null;
+    const topicKind = data.topicKind === null ? null : parseTopicKind(data.topicKind);
+    const kindSent = data.topicKind === null || topicKind !== null;
+    const subtasksSent = Array.isArray(data.subtasks) || typeof data.subtasks === 'string';
+    const subtasks = subtasksSent ? parseSubtasks(data.subtasks) : null;
     // Same rule for the NSFW flag (#5633).
     const nsfw = typeof data.nsfw === 'boolean' ? (data.nsfw ? 1 : 0) : null;
     try {
       db.prepare('UPDATE messages SET title = ?, tags = ? WHERE id = ?').run(title || null, tags.length ? JSON.stringify(tags) : null, msg.id);
       if (closed !== null) db.prepare('UPDATE messages SET closed = ? WHERE id = ?').run(closed, msg.id);
+      if (statusSent) db.prepare('UPDATE messages SET request_status = ? WHERE id = ?').run(requestStatus, msg.id);
+      if (kindSent) db.prepare('UPDATE messages SET topic_kind = ? WHERE id = ?').run(topicKind, msg.id);
+      if (subtasksSent) db.prepare('UPDATE messages SET subtasks = ? WHERE id = ?').run(subtasks.length ? JSON.stringify(subtasks) : null, msg.id);
       if (nsfw !== null) db.prepare('UPDATE messages SET nsfw = ? WHERE id = ?').run(nsfw, msg.id);
-      const row = db.prepare('SELECT closed, nsfw FROM messages WHERE id = ?').get(msg.id) || {};
-      const closedNow = closed !== null ? closed : (row.closed || 0);
-      const nsfwNow = nsfw !== null ? nsfw : (row.nsfw || 0);
-      io.to(`channel:${msg.code}`).emit('topic-updated', { channelCode: msg.code, messageId: msg.id, title: title || null, tags, closed: !!closedNow, nsfw: !!nsfwNow });
-      if (!mine) auditMessage('topic_edit', msg.id, msg.channel_id, { title: title || null, tags, closed: !!closedNow });
+      const now = db.prepare('SELECT closed, nsfw, request_status, topic_kind, subtasks FROM messages WHERE id = ?').get(msg.id);
+      io.to(`channel:${msg.code}`).emit('topic-updated', {
+        channelCode: msg.code, messageId: msg.id, title: title || null, tags,
+        closed: !!(closed !== null ? closed : now?.closed),
+        nsfw: !!(nsfw !== null ? nsfw : now?.nsfw),
+        request_status: parseRequestStatus(now?.request_status),
+        topic_kind: parseTopicKind(now?.topic_kind),
+        subtasks: parseSubtasks(now?.subtasks),
+      });
+      if (!mine) auditMessage('topic_edit', msg.id, msg.channel_id, { title: title || null, tags, closed: !!(closed !== null ? closed : now?.closed) });
     } catch (err) {
       console.error('set-topic-meta error:', err);
       socket.emit('error-msg', 'Failed to update the topic');
@@ -2212,8 +2341,9 @@ module.exports = function register(socket, ctx) {
     const editMute = channel.is_dm ? null : activeMuteNotice(socket.user.id);
     if (editMute) return socket.emit('error-msg', editMute);
 
-    const newContent = sanitizeText(data.content.trim());
+    const newContent = sanitizeText(pingSafe(data.content.trim(), socket.user.id, channel.id));
     if (!newContent) return;
+    if (isForgedFileCard(newContent)) return socket.emit('error-msg', 'Attachments must be uploaded to this server');
 
     // Edits get the same link policy as sends. Without this the filter is
     // trivially bypassed: post something harmless, then edit the payload in.
@@ -3291,6 +3421,7 @@ module.exports = function register(socket, ctx) {
 
     const safeContent = sanitizeText(pingSafe(content, socket.user.id, channel.id));
     if (!safeContent) return;
+    if (isForgedFileCard(safeContent)) return socket.emit('error-msg', 'Attachments must be uploaded to this server');
 
     let replyTo = isInt(data.replyTo) ? data.replyTo : null;
     if (replyTo) {
