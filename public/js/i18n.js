@@ -129,7 +129,9 @@ const I18n = (() => {
     }
     let str = String(val);
     for (const [k, v] of Object.entries(params)) {
-      str = str.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+      // Function replacer so "$`" / "$'" / "$&" in a (user-supplied) value are
+      // inserted literally instead of splicing template text into the output.
+      str = str.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), () => String(v));
     }
     return str;
   }

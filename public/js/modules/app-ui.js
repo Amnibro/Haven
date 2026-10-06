@@ -472,6 +472,8 @@ _applyGuestMode() {
   if (dmPane) dmPane.style.display = 'none';
   const split = document.getElementById('sidebar-split-handle');
   if (split) split.style.display = 'none';
+  const dmDock = document.getElementById('dm-dock-btn');
+  if (dmDock) dmDock.hidden = true;
   const dmPip = document.getElementById('dm-pip-panel');
   if (dmPip) dmPip.style.display = 'none';
   document.body.classList.add('is-guest');
@@ -511,19 +513,48 @@ _setupImageUpload() {
   });
 
   // Drag & drop: QUEUE instead of uploading immediately
-  messageArea.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    messageArea.classList.add('drag-over');
+  const handleDragOver = (e) => {
+    if (e.dataTransfer?.types?.includes('Files')) {
+      e.preventDefault();
+      messageArea.classList.add('drag-over');
+    }
+  };
+  messageArea.addEventListener('dragover', handleDragOver);
+
+  messageArea.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget || !messageArea.contains(e.relatedTarget)) {
+      messageArea.classList.remove('drag-over');
+    }
   });
 
-  messageArea.addEventListener('dragleave', () => {
-    messageArea.classList.remove('drag-over');
+  const handleDrop = (e) => {
+    if (e.dataTransfer?.files?.length) {
+      e.preventDefault();
+      messageArea.classList.remove('drag-over');
+      this._queueComposerFiles(e.dataTransfer.files);
+    }
+  };
+  messageArea.addEventListener('drop', handleDrop);
+
+  const inputArea = document.getElementById('message-input-area');
+  const messageInput = document.getElementById('message-input');
+  [inputArea, messageInput].forEach(el => {
+    if (!el) return;
+    el.addEventListener('dragover', handleDragOver);
+    el.addEventListener('drop', handleDrop);
   });
 
-  messageArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    messageArea.classList.remove('drag-over');
-    this._queueComposerFiles(e.dataTransfer?.files);
+  window.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+  });
+  window.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.types?.includes('Files')) {
+      e.preventDefault();
+      messageArea.classList.remove('drag-over');
+      if (!e.target.closest('#forum-new-modal, #dm-pip-panel, #thread-area, #import-dropzone, #message-area, #message-input-area')) {
+        this._queueComposerFiles(e.dataTransfer.files);
+      }
+    }
   });
 },
 
@@ -559,7 +590,8 @@ _setupCollapsibleSections() {
       bodyEl.classList.add('collapsed');
     }
 
-    toggleEl.addEventListener('click', () => {
+    toggleEl.addEventListener('click', (e) => {
+      if (e.target.closest('[data-close-sheet]')) return;
       const isCollapsed = bodyEl.classList.toggle('collapsed');
       arrowEl?.classList.toggle('collapsed', isCollapsed);
       localStorage.setItem(key, isCollapsed ? '1' : '0');

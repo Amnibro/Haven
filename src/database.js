@@ -515,6 +515,7 @@ function initDatabase() {
   insertSetting.run('session_duration_days', '0');       // login token lifetime in days; 0 = never expire (default for new installs, #5391). Existing installs that were seeded with '7' keep that value until the admin changes it.
   insertSetting.run('published_themes', '[]');             // JSON array of *.theme.css filenames shown in the theme picker
   insertSetting.run('admin_password_reset_enabled', 'false'); // admin can reset user passwords (#5300), opt-in, defaults off
+  insertSetting.run('ios_latest_version', '');           // version the iOS app compares itself against for its update prompt; empty = no prompt
   insertSetting.run('guests_enabled', 'false');          // (#5381) allow Join-as-Guest on the login page
   insertSetting.run('guest_channels', '');               // (#5381) CSV of channel IDs guests are auto-joined to (empty = none)
   insertSetting.run('guests_allow_voice', 'true');       // (#5687) guests may join voice and video; false keeps them to text
@@ -1706,6 +1707,9 @@ function initDatabase() {
     { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
     // Closed topics grey out and sit below the open ones (#5624).
     { name: 'closed', sql: "ALTER TABLE messages ADD COLUMN closed INTEGER DEFAULT 0" },
+    { name: 'request_status', sql: "ALTER TABLE messages ADD COLUMN request_status TEXT DEFAULT NULL" },
+    { name: 'topic_kind', sql: "ALTER TABLE messages ADD COLUMN topic_kind TEXT DEFAULT NULL" },
+    { name: 'subtasks', sql: "ALTER TABLE messages ADD COLUMN subtasks TEXT DEFAULT NULL" },
     // NSFW topics blur their picture and preview until clicked, and stay out
     // of the list for anyone who hides NSFW channels (#5633).
     { name: 'nsfw', sql: "ALTER TABLE messages ADD COLUMN nsfw INTEGER DEFAULT 0" },

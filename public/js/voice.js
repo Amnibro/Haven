@@ -231,6 +231,7 @@ class VoiceManager {
 
   // Run the STUN probes once, on the first voice join (see the constructor).
   _ensureStunProbed() {
+    if (typeof RTCPeerConnection === 'undefined') return;
     if (this._stunProbeStarted) return;
     this._stunProbeStarted = true;
     if (this._adminIceServersLoaded && !(this.rtcConfig.iceServers || []).length) return;
@@ -263,6 +264,11 @@ class VoiceManager {
   // third-party ICE test page and reads the candidate list for them. The browser
   // already knows all of this at gathering time. (#5542)
   _probeIceServer(server, timeoutMs = 5000) {
+    if (typeof RTCPeerConnection === 'undefined') {
+      const urls = [].concat((server && server.urls) || []).map(String);
+      const isTurn = urls.some(u => /^turns?:/i.test(u));
+      return Promise.resolve({ urls: urls.join(', '), isTurn, srflx: false, relay: false, error: 'WebRTC is not supported in this client' });
+    }
     return new Promise(resolve => {
       const urls = [].concat((server && server.urls) || []).map(String);
       const isTurn = urls.some(u => /^turns?:/i.test(u));
@@ -307,6 +313,20 @@ class VoiceManager {
   // Run the whole configured ICE list and turn it into something an admin can
   // act on. Returns plain data; the wording lives in the settings panel.
   async diagnoseConnectivity(iceServers) {
+    if (typeof RTCPeerConnection === 'undefined') {
+      return {
+        results: [],
+        stunTotal: 0,
+        stunLive: 0,
+        deadStun: [],
+        turnTotal: 0,
+        turnLive: 0,
+        deadTurn: [],
+        canCrossNetworks: false,
+        hasRelay: false,
+        unsupported: true
+      };
+    }
     const servers = (iceServers || []).filter(s => s && s.urls);
     const results = await Promise.all(servers.map(s => this._probeIceServer(s)));
 
@@ -332,6 +352,9 @@ class VoiceManager {
   }
 
   _probeStunUrl(url, timeoutMs = 2500) {
+    if (typeof RTCPeerConnection === 'undefined') {
+      return Promise.resolve({ url, ok: false, unsupported: true });
+    }
     return new Promise(resolve => {
       let settled = false;
       let pc;
@@ -375,6 +398,7 @@ class VoiceManager {
   //
   // This only reports. The configuration is left exactly as the admin set it.
   async _probeConfiguredStun(iceServers) {
+    if (typeof RTCPeerConnection === 'undefined') return;
     try {
       // Relay-only deliberately discards srflx candidates, so every server
       // would probe as dead. Same reason the default probe skips it.
@@ -444,6 +468,7 @@ class VoiceManager {
   }
 
   async _probeDefaultStun() {
+    if (typeof RTCPeerConnection === 'undefined') return;
     try {
       // Need a tiny delay so _fetchIceServers can win the race if the
       // admin has configured their own servers; we don't want to clobber

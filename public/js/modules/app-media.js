@@ -335,11 +335,33 @@ _setupModalExpand() {
 
       // When a settings-style header is present, slot the expand button
       // directly next to its close button so the two stay aligned on
-      // every viewport size. Otherwise drop both controls into a floating
-      // group at the top-right of the modal.
+      // every viewport size. The permissions header has a Roles / Users
+      // pill on that same edge, so the pair goes in the header row
+      // instead of the floating group. Otherwise drop both controls
+      // into a floating group at the top-right of the modal.
       if (settingsClose) {
         expandBtn.classList.add('modal-expand-btn-inline');
         settingsClose.parentElement.insertBefore(expandBtn, settingsClose);
+      } else if (modal.querySelector('.perm-matrix-header')) {
+        const header = modal.querySelector('.perm-matrix-header');
+        expandBtn.classList.add('modal-expand-btn-inline');
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'modal-expand-btn modal-expand-btn-inline';
+        closeBtn.title = t('modals.common.close');
+        closeBtn.textContent = '✕';
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const overlay = modal.closest('.modal-overlay');
+          if (overlay) overlay.style.display = 'none';
+          if (modal.classList.contains('modal-maximized')) {
+            modal.classList.remove('modal-maximized');
+            expandBtn.textContent = '⛶';
+            expandBtn.title = t('media_runtime.modal.expand_restore');
+          }
+        });
+        header.appendChild(expandBtn);
+        header.appendChild(closeBtn);
       } else {
         const group = document.createElement('div');
         group.className = 'modal-controls';
@@ -838,6 +860,16 @@ _showImageContextMenu(e, src, opts = {}) {
           // main-process IPC too: navigator.clipboard is often gesture-
           // locked in Electron BrowserViews after a context menu closes.
           try {
+            // data: / blob: / raw base64 is what Discord pastes as
+            // iVBORw0KGgo… — never put that on the clipboard as text.
+            const srcIsPasteableUrl = typeof src === 'string'
+              && !/^data:/i.test(src)
+              && !/^blob:/i.test(src)
+              && !/^(?:[A-Za-z0-9+/]{80,}={0,2})$/.test(src.replace(/\s+/g, ''))
+              && src.length < 2048;
+            if (!srcIsPasteableUrl) {
+              throw new Error('image pixels unavailable');
+            }
             if (window.havenDesktop?.clipboardWriteText) {
               const res = await window.havenDesktop.clipboardWriteText(src);
               if (res?.ok) {
@@ -872,6 +904,11 @@ _showImageContextMenu(e, src, opts = {}) {
       this._openLightbox(src, opts.viewImage);
       return;
     } else if (action === 'open') {
+      if (/^(blob|data):/i.test(src) && !sourceImg?.dataset?.e2eSrc) {
+        this._hideImageContextMenu();
+        this._openLocalImageInNewTab(src);
+        return;
+      }
       if (sourceImg) this._openImageInNewTab(sourceImg);
       else window.open(src, '_blank', 'noopener,noreferrer');
     } else if (action === 'edit-tags') {
@@ -907,6 +944,20 @@ _showImageContextMenu(e, src, opts = {}) {
     document.addEventListener('click', closer, true);
     document.addEventListener('contextmenu', closer, true);
   }, 0);
+},
+
+// A blob:/data: URL opened top-level becomes a document on this origin, and
+// its type is whatever the blob says. A decrypted DM image carries the
+// sender's chosen type (image/svg+xml is allowed), so opening it raw would run
+// the sender's SVG as a same-origin page. Only ever open raster bytes;
+// anything else is redrawn to PNG first.
+async _openLocalImageInNewTab(src) {
+  try {
+    const blob = await this._inertImageBlob(await (await fetch(src)).blob());
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch { /* undecodable or revoked: nothing safe to open */ }
 },
 
 _hideImageContextMenu() {
@@ -947,7 +998,9 @@ _lazyBlank() {
 
 // A blank with the real picture's own size, for the unloaded state.
 _lazySizedBlank(w, h) {
-  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'/%3E`;
+  const ww = Math.max(1, parseInt(w, 10) || 1);
+  const hh = Math.max(1, parseInt(h, 10) || 1);
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${ww}' height='${hh}'%3E%3Crect width='100%25' height='100%25' fill='transparent'/%3E%3C/svg%3E`;
 },
 
 // Wrap an emitted `src="…"` attribute so the loader owns the fetch. Attributes
@@ -1137,11 +1190,23 @@ _lazyPump() {
   if (!L || document.hidden) return;
   const vh = window.innerHeight || 800;
   const pending = [];
+  const seen = new Set();
   for (const img of L.near) {
     if (!img.isConnected) { L.near.delete(img); continue; }
     if (img.dataset.lazy !== 'pending') continue;
+    seen.add(img);
     pending.push({ img, distance: this._lazyDistance(img.getBoundingClientRect(), vh) });
   }
+  // Some layouts (Braid, compact, a Tauri webview with a different
+  // overflow parent) never fire the IntersectionObserver we attached.
+  // If the picture is on screen, load it anyway.
+  document.querySelectorAll('img[data-lazy="pending"]').forEach((img) => {
+    if (seen.has(img) || !img.isConnected) return;
+    const distance = this._lazyDistance(img.getBoundingClientRect(), vh);
+    if (distance > (L.NEAR || 800)) return;
+    seen.add(img);
+    pending.push({ img, distance });
+  });
   for (const img of this._lazyPickNext(pending, L.inFlight, L.MAX_PARALLEL)) {
     const onScreen = this._lazyDistance(img.getBoundingClientRect(), vh) === 0;
     img.dataset.lazy = 'loading';
@@ -1179,7 +1244,14 @@ _lazyLoad(img) {
     this._lazyPump();
   };
   img.onload = () => done(true);
-  img.onerror = () => done(false);
+  img.onerror = () => {
+    if (!img.dataset.lazyRetry) {
+      img.dataset.lazyRetry = '1';
+      setTimeout(() => { if (img.dataset.lazy === 'loading') img.src = img.dataset.lazySrc; }, 400);
+      return;
+    }
+    done(false);
+  };
   img.src = img.dataset.lazySrc;
 },
 

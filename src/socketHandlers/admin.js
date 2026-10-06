@@ -143,6 +143,7 @@ module.exports = function register(socket, ctx) {
       'session_duration_days', 'max_message_chars', 'auto_away_visible_minutes', 'auto_away_hidden_minutes', 'auto_away_enabled',
       'default_join_channels', 'registration_token_enabled', 'invites_bypass_registration_token', // (#5344, #5345), registration_token has its own generate/clear handlers
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
+      'ios_latest_version', // version string the iOS app compares itself against for its update prompt
       'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
       'guests_allow_voice', // (#5687) whether guests may join voice and video
       'stun_urls', 'turn_url', 'turn_username', 'turn_password', 'voice_ice_disabled', // (#5399) voice connectivity (STUN/TURN)
@@ -333,6 +334,7 @@ module.exports = function register(socket, ctx) {
       } catch { return; } // not JSON: refused like any other bad value
     }
     if (key === 'admin_password_reset_enabled' && !['true', 'false'].includes(value)) return;
+    if (key === 'ios_latest_version' && value && !/^\d{1,3}(\.\d{1,4}){0,3}$/.test(value)) return;
     // (#12) OIDC. The issuer must be an absolute https URL; anything else is
     // either a typo or an attempt to point discovery somewhere it shouldn't go.
     if (key === 'oidc_enabled' && !['0', '1'].includes(value)) return;
@@ -500,6 +502,13 @@ module.exports = function register(socket, ctx) {
     }
 
     emitSettingChanged(key, value);
+    // Non-admins only need to know whether a GIF provider exists (#5654).
+    if (['giphy_api_key', 'klipy_api_key', 'tenor_api_key'].includes(key)) {
+      const gifRows = db.prepare("SELECT value FROM server_settings WHERE key IN ('giphy_api_key', 'klipy_api_key', 'tenor_api_key')").all();
+      const available = gifRows.some(r => !!r.value)
+        || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY);
+      io.except('bot-sockets').emit('server-setting-changed', { key: 'gif_search_available', value: String(available) });
+    }
     if (clearDefaultTheme) {
       io.except('bot-sockets').emit('server-setting-changed', { key: 'default_theme', value: '' });
     }
@@ -1165,6 +1174,9 @@ module.exports = function register(socket, ctx) {
       const requestedChannelId = parseInt(data.channel_id);
       if (!socket.user.isAdmin && requestedChannelId !== wh.channel_id && (wh.can_use_voice || wh.can_moderate)) {
         return socket.emit('error-msg', 'Only admins can move a bot with privileged permissions');
+      }
+      if (!isNaN(requestedChannelId) && requestedChannelId !== wh.channel_id && !canBotChannel(requestedChannelId)) {
+        return socket.emit('error-msg', 'Channel not found');
       }
     }
 
