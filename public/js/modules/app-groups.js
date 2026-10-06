@@ -25,7 +25,12 @@ _setupGroupListeners() {
   s.on('group-dm-updated', () => s.emit('get-channels'));
   s.on('group-dm-left', (d) => {
     this._groups.delete(d.code);
-    if (this._leavingGroup === d.code) { this._leavingGroup = null; this._showToast(t('groups.left'), 'info'); }
+    if (this._leavingGroup === d.code) {
+      const deleted = this._deletingGroup === d.code;
+      this._leavingGroup = null;
+      this._deletingGroup = null;
+      this._showToast(deleted ? t('groups.deleted') : t('groups.left'), 'info');
+    }
   });
   s.on('group-epoch-published', (d) => {
     const st = this._groups.get(d.code);
@@ -569,11 +574,38 @@ _showGroupInvite(d) {
   card.querySelector('.gi-decline').addEventListener('click', () => { this.socket.emit('decline-group-dm', { code: d.code }); card.remove(); });
   stack.appendChild(card);
 },
-_leaveGroup(code) {
+/** True when this user is the only member left in the group, by the
+ *  server's current member list (others may have left since this app last
+ *  heard). Without an answer it falls back to the list it has. */
+async _groupIsMineAlone(code) {
+  const me = this.user?.id;
+  let members = null;
+  try { members = (await this._groupRoster(code))?.members || null; }
+  catch (err) { console.warn('[Groups] could not load the member list:', err.message); }
+  if (!members) members = this.channels?.find(c => c.code === code)?.group_members || [];
+  return members.length > 0 && members.every(m => m.id === me);
+},
+async _leaveGroup(code) {
   const ch = this.channels.find(c => c.code === code);
   if (!ch || !confirm(t('groups.leave_confirm', { group: this._groupName(ch) }))) return;
   this._leavingGroup = code;
-  const last = (ch.group_members || []).every(m => m.id === this.user?.id);
-  (last ? this._collectDmAttachments(code) : Promise.resolve([])).then(attachments => this.socket.emit('leave-group-dm', { code, attachments }));
+  // The last one out deletes the group, so its encrypted attachments are
+  // gathered first for the server to remove with it.
+  const last = await this._groupIsMineAlone(code);
+  const attachments = last ? await this._collectDmAttachments(code) : [];
+  this.socket.emit('leave-group-dm', { code, attachments });
+},
+/** The last member deletes the group: the same as leaving last, which
+ *  removes it with its messages and attachments. */
+async _deleteGroup(code) {
+  const ch = this.channels.find(c => c.code === code);
+  if (!ch) return;
+  const ok = await this._showConfirmModal('⚠️ ' + t('groups.delete_confirm', { group: this._groupName(ch) }), '', { danger: true, confirmLabel: t('groups.delete') });
+  if (!ok) return;
+  if (!(await this._groupIsMineAlone(code))) return this._showToast(t('groups.delete_not_alone'), 'error');
+  this._leavingGroup = code;
+  this._deletingGroup = code;
+  const attachments = await this._collectDmAttachments(code);
+  this.socket.emit('leave-group-dm', { code, attachments });
 },
 };

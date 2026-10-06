@@ -500,6 +500,7 @@ _initDmContextMenu() {
 
   document.querySelector('[data-action="dm-group-add"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._openGroupPicker({ code }); });
   document.querySelector('[data-action="dm-group-leave"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._leaveGroup(code); });
+  document.querySelector('[data-action="dm-group-delete"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._deleteGroup(code); });
   // Delete DM
   document.querySelector('[data-action="dm-delete"]')?.addEventListener('click', async () => {
     const code = this._dmCtxMenuCode;
@@ -585,6 +586,17 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
   menu.querySelectorAll('[data-action="dm-group-add"], [data-action="dm-group-leave"]').forEach(b => { b.style.display = isGroup ? '' : 'none'; });
   const delBtn = menu.querySelector('[data-action="dm-delete"]');
   if (delBtn) delBtn.style.display = isGroup ? 'none' : '';
+  // Delete group shows only to the last member left, checked against the
+  // server's current member list rather than the one this app last saw.
+  const groupDelBtn = menu.querySelector('[data-action="dm-group-delete"]');
+  if (groupDelBtn) {
+    groupDelBtn.style.display = 'none';
+    if (isGroup) {
+      this._groupIsMineAlone(code).then(alone => {
+        if (alone && this._dmCtxMenuCode === code) groupDelBtn.style.display = '';
+      });
+    }
+  }
   // Show/hide "Mark as Read" based on unread count
   const markReadBtn = menu.querySelector('[data-action="dm-mark-read"]');
   if (markReadBtn) markReadBtn.style.display = (this.unreadCounts[code] > 0) ? '' : 'none';
