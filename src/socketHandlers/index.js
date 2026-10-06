@@ -1934,7 +1934,8 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Connection rate limiting (per IP)
   const connTracker = new Map();
-  const MAX_CONN_PER_MIN = 15;
+  const MAX_CONN_PER_MIN = 120;
+  const MAX_FAILED_PER_MIN = 20;
 
   io.use((socket, next) => {
     // Real client IP, not the proxy's. socket.handshake.address is the raw TCP
@@ -1943,14 +1944,16 @@ function setupSocketHandlers(io, db, opts = {}) {
     const ip = clientIp(socket);
     const now = Date.now();
     if (!connTracker.has(ip)) {
-      connTracker.set(ip, { count: 0, resetTime: now + 60000 });
+      connTracker.set(ip, { count: 0, failed: 0, resetTime: now + 60000 });
     }
     const entry = connTracker.get(ip);
-    if (now > entry.resetTime) { entry.count = 0; entry.resetTime = now + 60000; }
+    if (now > entry.resetTime) { entry.count = 0; entry.failed = 0; entry.resetTime = now + 60000; }
     entry.count++;
-    if (entry.count > MAX_CONN_PER_MIN) {
+    entry.failed++;
+    if (entry.count > MAX_CONN_PER_MIN || entry.failed > MAX_FAILED_PER_MIN) {
       return next(new Error('Rate limited: too many connections'));
     }
+    socket._connEntry = entry;
     next();
   });
 
@@ -2012,6 +2015,9 @@ function setupSocketHandlers(io, db, opts = {}) {
 
       const user = await verifyTokenAsync(token);
       if (!user) return next(new Error('Invalid token'));
+      // Single-purpose tokens (TOTP challenge, 'connect' redirect) are signed
+      // with the same secret but are not sessions.
+      if (user.purpose || user.scope) return next(new Error('Invalid token'));
 
       const asyncAccountReads = db.async.kind !== 'sqlite';
       const accountDb = asyncAccountReads ? db.async : db;
@@ -2152,6 +2158,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   // ══════════════════════════════════════════════════════════
 
   io.on('connection', (socket) => {
+    if (socket._connEntry) socket._connEntry.failed = Math.max(0, socket._connEntry.failed - 1);
     if (!socket.user || !socket.user.username) {
       console.warn('⚠️  Connection without valid user, disconnecting');
       socket.disconnect(true);

@@ -1014,7 +1014,7 @@ module.exports = function register(socket, ctx) {
   socket.on('ban-ip', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!_canBanIp()) return socket.emit('error-msg', 'You don\'t have permission to ban IPs');
-    const input = (data.ip || '').trim();
+    const input = typeof data.ip === 'string' ? data.ip.trim() : '';
     if (!isValidIpOrCidr(input)) return socket.emit('error-msg', 'Invalid IP address or CIDR range');
     const ip = _canonicalBanEntry(input);
     const refusal = _ipBanRefusal(ip);
@@ -1051,7 +1051,7 @@ module.exports = function register(socket, ctx) {
   socket.on('unban-ip', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!_canBanIp()) return socket.emit('error-msg', 'You don\'t have permission to unban IPs');
-    const raw = (data.ip || '').trim();
+    const raw = typeof data.ip === 'string' ? data.ip.trim() : '';
     if (!raw) return;
     // Try the canonical form first, then the literal string, so entries stored
     // by older versions (pre-normalisation) can still be lifted from the UI.
