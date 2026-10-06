@@ -9,6 +9,9 @@ class ServerManager {
     this.statusCache = new Map();
     this.checkInterval = null;
     this.selfFingerprint = null;
+    // Servers the Desktop app says the user removed, on any server. Filled
+    // from the Desktop app's shared list; always empty in a browser.
+    this.desktopRemoved = new Set();
     this.selfFingerprintReady = this._fetchSelfFingerprint();
     // Desktop bootstrap: pull the cross-server history from the Electron
     // main process synchronously (preload exposes it as a plain array).
@@ -17,13 +20,27 @@ class ServerManager {
     this.bootstrappedFromDesktop = this._mergeDesktopBootstrap();
   }
 
+  _desktop() {
+    return (typeof window !== 'undefined' && window.havenDesktop) || null;
+  }
+
   /** Merge the Desktop app's cross-server history into the local list.
    *  Returns true if any new servers were added. Removed-server tracking
    *  is honored so the user doesn't see servers they intentionally deleted. */
   _mergeDesktopBootstrap() {
+    const desktop = this._desktop();
+    // Newer Desktop versions keep one shared list (removals, order, names).
+    const shared = desktop && desktop.initialServerList;
+    if (shared && Array.isArray(shared.servers)) {
+      try { return this.applyDesktopList(shared).added > 0; }
+      catch (err) {
+        console.warn('[Servers] could not apply the Desktop server list', err);
+        return false;
+      }
+    }
     try {
-      const history = (typeof window !== 'undefined' && window.havenDesktop && Array.isArray(window.havenDesktop.initialServerHistory))
-        ? window.havenDesktop.initialServerHistory
+      const history = (desktop && Array.isArray(desktop.initialServerHistory))
+        ? desktop.initialServerHistory
         : null;
       if (!history || !history.length) return false;
       const removed = this._loadRemoved();
@@ -45,9 +62,211 @@ class ServerManager {
       }
       if (added) this._save();
       return added;
-    } catch {
+    } catch (err) {
+      console.warn('[Servers] could not read the Desktop server history', err);
       return false;
     }
+  }
+
+  // ── Desktop shared list ──────────────────────────────
+  // Each server keeps this list in its own browser storage, so without the
+  // Desktop app's shared copy the lists drift apart per server. With it, the
+  // Desktop list decides: removals, the order, and names the user chose.
+
+  /** True once this page has handed its own removals to the Desktop list;
+   *  from then on the Desktop list wins over this page's removed set. */
+  _trustsDesktop() {
+    try { return localStorage.getItem('haven_servers_desktop_list') === '1'; }
+    catch { return false; } // storage blocked: keep this page's own removals
+  }
+
+  _isUrlName(entry) {
+    const name = String(entry && entry.name || '').trim();
+    return !name || name === entry.url || this._normalizeUrl(name) === this._normalizeUrl(entry.url);
+  }
+
+  /** Bring this page's list in line with the Desktop app's shared list
+   *  ({ servers, removed, order, hasOrder }). Returns counts of what changed. */
+  applyDesktopList(list) {
+    const stats = { added: 0, removed: 0, renamed: 0 };
+    if (!list || !Array.isArray(list.servers)) return stats;
+    const gone = new Set((Array.isArray(list.removed) ? list.removed : []).map(u => this._normalizeUrl(u)).filter(Boolean));
+    this.desktopRemoved = gone;
+    const trusted = this._trustsDesktop();
+    const localRemoved = this._loadRemoved();
+    let removedChanged = false;
+    let changed = false;
+
+    // Removed on any server: removed here too.
+    const kept = [];
+    for (const s of this.servers) {
+      const url = this._normalizeUrl(s.url);
+      if (!gone.has(url)) { kept.push(s); continue; }
+      stats.removed++;
+      this.statusCache.delete(url);
+      if (!localRemoved.has(url)) { localRemoved.add(url); removedChanged = true; }
+    }
+    if (kept.length !== this.servers.length) { this.servers = kept; changed = true; }
+
+    // Known to the app but not to this page, and newer edits from elsewhere.
+    const byUrl = new Map(this.servers.map(s => [this._normalizeUrl(s.url), s]));
+    for (const ds of list.servers) {
+      const url = this._normalizeUrl(ds && ds.url);
+      if (!url || gone.has(url)) continue;
+      const local = byUrl.get(url);
+      if (local) {
+        const edit = this._adoptDesktopEdit(local, ds);
+        if (edit.changed) changed = true;
+        if (edit.renamed) stats.renamed++;
+        continue;
+      }
+      if (localRemoved.has(url)) {
+        // Until this page has handed its removals over, they still count.
+        if (!trusted) continue;
+        localRemoved.delete(url);
+        removedChanged = true;
+      }
+      const entry = {
+        name: ds.name || url,
+        url,
+        icon: ds.customIcon && ds.icon ? ds.icon : null,
+        addedAt: ds.lastConnected || Date.now(),
+      };
+      if (ds.customName) entry.customName = true;
+      if (ds.customIcon && ds.icon) entry.customIcon = true;
+      if (ds.editedAt) entry.editedAt = Number(ds.editedAt) || 0;
+      this.servers.push(entry);
+      byUrl.set(url, entry);
+      stats.added++;
+      changed = true;
+    }
+
+    if (list.hasOrder && Array.isArray(list.order) && this._applyOrder(list.order)) changed = true;
+    if (removedChanged) this._saveRemoved(localRemoved);
+    if (changed) this._save();
+    return stats;
+  }
+
+  /** The newer user edit of a name or icon wins. Without any user edit, a
+   *  real name from the app replaces a bare address. */
+  _adoptDesktopEdit(local, ds) {
+    const theirs = Number(ds.editedAt) || 0;
+    const mine = Number(local.editedAt) || 0;
+    const before = local.name;
+    let changed = false;
+    if (theirs > mine) {
+      if (ds.name) local.name = ds.name;
+      if (ds.customName) local.customName = true;
+      else delete local.customName;
+      if (ds.customIcon && ds.icon) {
+        if (local.icon !== ds.icon) { local.icon = ds.icon; local.iconData = null; }
+        local.customIcon = true;
+      } else if (local.customIcon) {
+        delete local.customIcon;
+        local.icon = null;
+        local.iconData = null;
+      }
+      local.editedAt = theirs;
+      changed = true;
+    } else if (theirs === mine && !local.customName && !ds.customName && ds.name
+        && this._isUrlName(local) && !this._isUrlName(ds)) {
+      local.name = ds.name;
+      changed = true;
+    }
+    return { changed, renamed: local.name !== before };
+  }
+
+  /** Sort by a list of addresses; servers it does not list go last, in the
+   *  order they had. Returns true when the order changed. */
+  _applyOrder(order) {
+    const rank = new Map();
+    order.forEach((u, i) => { const n = this._normalizeUrl(u); if (n && !rank.has(n)) rank.set(n, i); });
+    const before = this.servers.map(s => s.url).join('\n');
+    const indexed = this.servers.map((s, i) => ({ s, i, r: rank.has(this._normalizeUrl(s.url)) ? rank.get(this._normalizeUrl(s.url)) : Infinity }));
+    indexed.sort((a, b) => (a.r - b.r) || (a.i - b.i));
+    this.servers = indexed.map(x => x.s);
+    return this.servers.map(s => s.url).join('\n') !== before;
+  }
+
+  /** Reconcile with the Desktop app: take its removals, servers, order and
+   *  names, and give it what only this page knows. Throws when the Desktop
+   *  app cannot be reached. Returns counts of what changed here. */
+  async reconcileWithDesktop() {
+    const desktop = this._desktop();
+    if (!desktop) return { added: 0, removed: 0, renamed: 0 };
+    if (typeof desktop.getServerList !== 'function') return this._legacyDesktopMerge(desktop);
+
+    let list = await desktop.getServerList();
+    if (!list || !Array.isArray(list.servers)) return { added: 0, removed: 0, renamed: 0 };
+
+    if (!this._trustsDesktop()) {
+      // First time with the shared list: servers removed on this server are
+      // removed for every server, then the shared list leads.
+      const gone = new Set((list.removed || []).map(u => this._normalizeUrl(u)));
+      const here = this._normalizeUrl(typeof location !== 'undefined' ? location.origin : '');
+      const mine = [...this._loadRemoved()].map(u => this._normalizeUrl(u)).filter(u => u && u !== here && !gone.has(u));
+      if (mine.length && typeof desktop.removeServerHistory === 'function') {
+        for (const url of mine) await desktop.removeServerHistory(url);
+        list = await desktop.getServerList();
+      }
+      try { localStorage.setItem('haven_servers_desktop_list', '1'); }
+      catch (err) { console.warn('[Servers] could not save the Desktop list flag', err); }
+    }
+
+    const stats = this.applyDesktopList(list);
+    await this._pushToDesktop(desktop, list);
+    return stats;
+  }
+
+  /** Give the Desktop app the servers, user edits and first order that only
+   *  this page has. */
+  async _pushToDesktop(desktop, list) {
+    const known = new Map(list.servers.map(s => [this._normalizeUrl(s.url), s]));
+    for (const s of this.servers) {
+      const url = this._normalizeUrl(s.url);
+      if (this.desktopRemoved.has(url)) continue;
+      const ds = known.get(url);
+      if (!ds && typeof desktop.addServerHistory === 'function') await desktop.addServerHistory(url, s.name);
+      if (s.editedAt && (!ds || (Number(ds.editedAt) || 0) < s.editedAt)) await this._pushEdit(s);
+    }
+    if (!list.hasOrder && this.servers.length > 1 && typeof desktop.setServerOrder === 'function') {
+      await desktop.setServerOrder(this.servers.map(s => s.url));
+    }
+  }
+
+  _pushEdit(server) {
+    const desktop = this._desktop();
+    if (!desktop || typeof desktop.updateServerName !== 'function') return Promise.resolve();
+    return Promise.resolve(desktop.updateServerName(server.url, server.name, {
+      custom: !!server.customName,
+      icon: server.customIcon ? (server.icon || null) : null,
+      editedAt: server.editedAt || Date.now(),
+    }));
+  }
+
+  /** Desktop versions without the shared list: the plain history, merged
+   *  both ways, with this page's removals kept out. */
+  async _legacyDesktopMerge(desktop) {
+    const stats = { added: 0, removed: 0, renamed: 0 };
+    if (typeof desktop.getServerHistory !== 'function') return stats;
+    const history = await desktop.getServerHistory();
+    const removed = this._loadRemoved();
+    const historyUrls = new Set();
+    for (const h of (history || [])) {
+      if (!h || !h.url) continue;
+      const url = this._normalizeUrl(h.url);
+      historyUrls.add(url);
+      if (removed.has(url) || removed.has(h.url)) continue;
+      if (this.add(h.name || url, url)) stats.added++;
+    }
+    if (typeof desktop.addServerHistory === 'function') {
+      for (const s of this.servers) {
+        if (historyUrls.has(this._normalizeUrl(s.url))) continue;
+        Promise.resolve(desktop.addServerHistory(s.url, s.name))
+          .catch((err) => { console.warn('[Desktop] could not add to server history', err); });
+      }
+    }
+    return stats;
   }
 
   /** Fetch the current server's fingerprint so we can hide "self" from the sidebar. */
@@ -97,10 +316,10 @@ class ServerManager {
         removed.delete(url);
         this._saveRemoved(removed);
       }
-    } else if (removed.has(url)) {
-      // Bootstrap / sync path: never resurrect a server the user has removed.
-      // This was the root cause of removed servers (e.g. http://localhost:3000)
-      // re-appearing on every restart via the Desktop history merge.
+      this.desktopRemoved.delete(url);
+    } else if (removed.has(url) || this.desktopRemoved.has(url)) {
+      // Bootstrap / sync path: never resurrect a server the user has removed,
+      // here or (in the Desktop app) on any other server.
       return false;
     }
 
@@ -115,8 +334,37 @@ class ServerManager {
     const server = this.servers.find(s => this._normalizeUrl(s.url) === normalizedUrl);
     if (!server) return false;
     if (updates.name !== undefined) server.name = updates.name;
-    if (updates.icon !== undefined) server.icon = updates.icon;
+    if (updates.icon !== undefined) {
+      server.icon = updates.icon;
+      delete server.customIcon;
+    }
     this._save();
+    return true;
+  }
+
+  /** The user edited a server's name or icon. A name other than the one the
+   *  server reports is the user's own and is kept (and shared with every
+   *  server in the Desktop app); the server's own name goes back to
+   *  following the server. */
+  editByUser(url, { name, icon = null }) {
+    const normalizedUrl = this._normalizeUrl(url);
+    const server = this.servers.find(s => this._normalizeUrl(s.url) === normalizedUrl);
+    if (!server || !name) return false;
+    const status = this.statusCache.get(normalizedUrl);
+    const reported = status && status.online ? status : null;
+    if (name !== server.name) server.customName = true;
+    if (reported && name === reported.name) delete server.customName;
+    server.name = name;
+    const newIcon = icon || null;
+    if (newIcon !== (server.icon || null)) {
+      server.icon = newIcon;
+      server.iconData = null;
+    }
+    if (newIcon && newIcon !== (reported && reported.icon)) server.customIcon = true;
+    else delete server.customIcon;
+    server.editedAt = Date.now();
+    this._save();
+    this._pushEdit(server).catch((err) => { console.warn('[Desktop] could not share the server name', err); });
     return true;
   }
 
@@ -126,20 +374,31 @@ class ServerManager {
     this.statusCache.delete(normalizedUrl);
     this._save();
     this.markRemoved(normalizedUrl);
+    // In the Desktop app the removal applies to every server's list.
+    const desktop = this._desktop();
+    if (desktop && typeof desktop.removeServerHistory === 'function') {
+      if (normalizedUrl) this.desktopRemoved.add(normalizedUrl);
+      Promise.resolve(desktop.removeServerHistory(normalizedUrl))
+        .catch((err) => { console.warn('[Desktop] could not remove from server history', err); });
+    }
   }
 
-  /** Reorder servers by an array of URLs in the desired order. */
+  /** Reorder servers by an array of URLs in the desired order. Servers the
+   *  list leaves out (this server, a second address of one shown) keep
+   *  their places; only the listed ones move among theirs. */
   reorder(orderedUrls) {
-    const map = new Map(this.servers.map(s => [s.url, s]));
-    const reordered = [];
-    for (const url of orderedUrls) {
-      const s = map.get(url);
-      if (s) { reordered.push(s); map.delete(url); }
-    }
-    // Append any servers not in the ordered list (shouldn't happen, but safe)
-    for (const s of map.values()) reordered.push(s);
-    this.servers = reordered;
+    const want = [...new Set((orderedUrls || []).map(u => this._normalizeUrl(u)))];
+    const byUrl = new Map(this.servers.map(s => [this._normalizeUrl(s.url), s]));
+    const moving = want.filter(u => byUrl.has(u));
+    const movingSet = new Set(moving);
+    let i = 0;
+    this.servers = this.servers.map(s => (movingSet.has(this._normalizeUrl(s.url)) ? byUrl.get(moving[i++]) : s));
     this._save();
+    const desktop = this._desktop();
+    if (desktop && typeof desktop.setServerOrder === 'function') {
+      Promise.resolve(desktop.setServerOrder(this.servers.map(s => s.url)))
+        .catch((err) => { console.warn('[Desktop] could not share the server order', err); });
+    }
   }
 
   getAll() {
@@ -147,6 +406,23 @@ class ServerManager {
       ...s,
       status: this.statusCache.get(s.url) || { online: null, name: s.name }
     }));
+  }
+
+  /** Follow the name a server reports, unless the user chose one. "Haven"
+   *  is the default of a server that never set a name and is skipped.
+   *  Returns true when the stored name changed. */
+  _refreshName(normalizedUrl, reportedName) {
+    const entry = this.servers.find(s => this._normalizeUrl(s.url) === normalizedUrl);
+    const name = String(reportedName || '').trim();
+    if (!entry || entry.customName || !name || name === 'Haven' || name === entry.name) return false;
+    entry.name = name;
+    this._save();
+    const desktop = this._desktop();
+    if (desktop && typeof desktop.updateServerName === 'function') {
+      Promise.resolve(desktop.updateServerName(entry.url, name))
+        .catch((err) => { console.warn('[Desktop] could not share the server name', err); });
+    }
+    return true;
   }
 
   async checkServer(url) {
@@ -157,11 +433,11 @@ class ServerManager {
 
       const healthBase = normalizedUrl;
 
+      // The timer is cleared whether the request answers or fails.
       const res = await fetch(`${healthBase}/api/health`, {
         signal: controller.signal,
         mode: 'cors'
-      });
-      clearTimeout(timeout);
+      }).finally(() => clearTimeout(timeout));
 
       if (res.ok) {
         const data = await res.json();
@@ -174,11 +450,13 @@ class ServerManager {
           fingerprint: data.fingerprint || null,
           checkedAt: Date.now()
         });
+        if (data.name) this._refreshName(normalizedUrl, data.name);
         // Persist discovered icon to the server entry so it survives
-        // across page reloads and offline periods
+        // across page reloads and offline periods (an icon the user chose
+        // stays)
         if (discoveredIcon) {
           const entry = this.servers.find(s => this._normalizeUrl(s.url) === normalizedUrl);
-          if (entry) {
+          if (entry && !entry.customIcon) {
             // Always update the icon URL (server may have changed its icon)
             if (entry.icon !== discoveredIcon) {
               entry.icon = discoveredIcon;
@@ -269,11 +547,14 @@ class ServerManager {
       const remoteUrls = new Set(remoteServers.map(s => this._normalizeUrl(s.url)));
       let changed = false;
 
-      // Add remote servers we don't have locally (and haven't removed)
+      // Add remote servers we don't have locally (and haven't removed, here
+      // or in the Desktop app)
       for (const rs of remoteServers) {
+        if (!rs || !rs.url) continue;
         const normalizedUrl = this._normalizeUrl(rs.url);
         if (!localUrls.has(rs.url) && !localUrls.has(normalizedUrl)
-            && !removed.has(rs.url) && !removed.has(normalizedUrl)) {
+            && !removed.has(rs.url) && !removed.has(normalizedUrl)
+            && !this.desktopRemoved.has(normalizedUrl)) {
           rs.url = normalizedUrl; // store the normalized form
           this.servers.push(rs);
           localUrls.add(normalizedUrl); // prevent duplicate adds within same sync
@@ -300,9 +581,13 @@ class ServerManager {
 
   async _pushToServer(token, wrappingHex) {
     try {
-      const payload = JSON.stringify(this.servers.map(s => ({
-        url: s.url, name: s.name, icon: s.icon, iconData: s.iconData || null, addedAt: s.addedAt
-      })));
+      const payload = JSON.stringify(this.servers.map(s => {
+        const out = { url: s.url, name: s.name, icon: s.icon, iconData: s.iconData || null, addedAt: s.addedAt };
+        if (s.customName) out.customName = true;
+        if (s.customIcon) out.customIcon = true;
+        if (s.editedAt) out.editedAt = s.editedAt;
+        return out;
+      }));
       const blob = await this._encryptBlob(payload, wrappingHex);
       await fetch('/api/auth/user-servers', {
         method: 'PUT',

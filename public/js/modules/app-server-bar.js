@@ -12,61 +12,45 @@ _pushServerListToServer() {
   }
 },
 
-/** Push all ServerManager entries to Desktop's global server history.
- *  This ensures servers discovered via encrypted sync propagate to
- *  OTHER Haven servers the next time the user switches. */
+/** Reconcile with the Desktop app's server list, which every server shares:
+ *  take its removals, servers, order and names, and hand it the servers
+ *  discovered here (for example through the encrypted sync) so they reach
+ *  the OTHER Haven servers too. */
 _pushServersToDesktopHistory() {
-  if (!window.havenDesktop?.addServerHistory || !window.havenDesktop?.getServerHistory) return;
-  window.havenDesktop.getServerHistory().then(history => {
-    const historyUrls = new Set((history || []).map(h => h.url));
-    for (const s of this.serverManager.getAll()) {
-      if (!historyUrls.has(s.url)) {
-        window.havenDesktop.addServerHistory(s.url, s.name).catch((err) => { console.warn('[Desktop] could not add to server history', err); });
-      }
-    }
-  }).catch((err) => { console.warn('[Desktop] could not read server history', err); });
+  if (!window.havenDesktop || !this.serverManager) return;
+  this.serverManager.reconcileWithDesktop().then((stats) => {
+    if (stats.added || stats.removed || stats.renamed) this._renderServerBar();
+  }).catch((err) => { console.warn('[Desktop] could not sync the server list', err); });
 },
 
 _setupServerBar() {
   this.serverManager.startPolling(30000);
 
-  // Desktop: merge Electron's server history into the web ServerManager
-  // so the sidebar shows ALL known servers even on first login to this server
-  if (window.havenDesktop?.getServerHistory) {
-    window.havenDesktop.getServerHistory().then(history => {
-      const historyUrls = new Set((history || []).map(h => h.url));
-      const removed = this.serverManager._loadRemoved();
-      let added = false;
-
-      // Add Desktop servers to web ServerManager (skip removed ones)
-      for (const h of (history || [])) {
-        if (!h.url) continue;
-        let normalizedUrl;
-        try { normalizedUrl = new URL(h.url).origin; } catch { normalizedUrl = h.url; }
-        if (removed.has(h.url) || removed.has(normalizedUrl)) continue;
-        if (this.serverManager.add(h.name || h.url, h.url)) {
-          added = true;
-        }
-      }
-
-      // Add web ServerManager servers to Desktop history
-      if (window.havenDesktop.addServerHistory) {
-        for (const s of this.serverManager.getAll()) {
-          if (!historyUrls.has(s.url)) {
-            window.havenDesktop.addServerHistory(s.url, s.name).catch((err) => { console.warn('[Desktop] could not add to server history', err); });
-          }
-        }
-      }
-
+  // Desktop: reconcile with the app's server list so the sidebar shows the
+  // same servers on every server, even on first login to this one
+  if (window.havenDesktop) {
+    this.serverManager.reconcileWithDesktop().then((stats) => {
+      if (stats.removed || stats.renamed) this._renderServerBar();
       // First-join scenario: if the synchronous preload bootstrap pulled in
-      // servers we didn't have locally OR if the async getServerHistory just
-      // added more, push the merged list to THIS server's encrypted backup
-      // immediately so the user is never stranded with an empty sidebar.
-      if (added || this.serverManager.bootstrappedFromDesktop) {
+      // servers we didn't have locally OR the reconcile just added more,
+      // push the merged list to THIS server's encrypted backup immediately
+      // so the user is never stranded with an empty sidebar.
+      if (stats.added || this.serverManager.bootstrappedFromDesktop) {
         this._renderServerBar();
         this._pushServerListToServer();
       }
-    }).catch((err) => { console.warn('[Desktop] could not read server history', err); });
+    }).catch((err) => { console.warn('[Desktop] could not sync the server list', err); });
+
+    // Newer Desktop versions say when the shared list changed on another
+    // server (a removal, rename or new order), so this sidebar follows.
+    window.addEventListener('haven-server-list-changed', () => {
+      clearTimeout(this._serverListChangedTimer);
+      this._serverListChangedTimer = setTimeout(() => {
+        this.serverManager.reconcileWithDesktop()
+          .then(() => this._renderServerBar())
+          .catch((err) => { console.warn('[Desktop] could not sync the server list', err); });
+      }, 300);
+    });
   }
 
   this._renderServerBar();
@@ -296,12 +280,14 @@ _addServer() {
 
   const editUrl = this._editingServerUrl;
   if (editUrl) {
-    // Editing existing server
-    this.serverManager.update(editUrl, { name, icon: iconInput || null });
+    // Editing existing server (a name of your own is kept and, in the
+    // Desktop app, shown on every server)
+    this.serverManager.editByUser(editUrl, { name, icon: iconInput || null });
     this._editingServerUrl = null;
     document.getElementById('add-server-modal').style.display = 'none';
     this._renderServerBar();
     this._showToast(t('toasts.server_updated', { name }), 'success');
+    this._pushServerListToServer();
     // Auto-pull icon if checked
     if (autoPull) this._autoPullServerIcon(editUrl);
   } else {
@@ -313,10 +299,11 @@ _addServer() {
       this._showToast(t('toasts.server_added', { name }), 'success');
       this._pushServerListToServer();
       // Also add to Desktop server history so it persists across all servers
+      // (added on purpose, so it comes back even if it was removed before)
       if (window.havenDesktop?.addServerHistory) {
         const cleanUrl = url.replace(/\/+$/, '');
         const finalUrl = /^https?:\/\//.test(cleanUrl) ? cleanUrl : 'https://' + cleanUrl;
-        window.havenDesktop.addServerHistory(finalUrl, name).catch((err) => { console.warn('[Desktop] could not add to server history', err); });
+        window.havenDesktop.addServerHistory(finalUrl, name, { userInitiated: true }).catch((err) => { console.warn('[Desktop] could not add to server history', err); });
       }
       // Auto-pull icon after health check completes
       if (autoPull) {
@@ -455,11 +442,9 @@ _renderManageServersList() {
     });
     row.querySelector('.manage-server-delete').addEventListener('click', () => {
       if (!confirm(t('confirm.remove_server', { name: s.name }))) return;
-      this.serverManager.markRemoved(s.url);
+      // Also removed from the Desktop app's list, so no other server's
+      // sidebar brings it back.
       this.serverManager.remove(s.url);
-      // Also drop from Desktop's cross-server history so it stops getting
-      // re-merged into other servers' sidebars on the next sync.
-      window.havenDesktop?.removeServerHistory?.(s.url)?.catch?.((err) => { console.warn('[Desktop] could not remove from server history', err); });
       this._renderServerBar();
       this._renderManageServersList();
       this._showToast(t('toasts.server_removed_named', { name: s.name }), 'success');
@@ -546,6 +531,9 @@ _updateServerBadgeDots(payload) {
       // Per-session guard so a server the user actively removes mid-session
       // doesn't ping-pong back in on every badge tick.
       if (this._autoAddedUnreadUrls.has(nUrl)) continue;
+      // Removed in the Desktop app (on any server): a background unread
+      // does not bring it back.
+      if (this.serverManager.desktopRemoved?.has(nUrl)) continue;
       const name = (names && (names[nUrl] || names[nUrl + '/'])) || (() => {
         try { return new URL(nUrl).hostname; } catch { return nUrl; }
       })();
@@ -727,11 +715,9 @@ _renderServerBar() {
         e.stopPropagation();
         const serverName = el.getAttribute('title')?.split(' — ')[0] || el.dataset.url;
         if (!confirm(t('confirm.remove_server', { name: serverName }))) return;
-        this.serverManager.markRemoved(el.dataset.url);
+        // Also removed from the Desktop app's list, so no other server's
+        // sidebar brings it back.
         this.serverManager.remove(el.dataset.url);
-        // Also drop from Desktop's cross-server history so it stops getting
-        // re-merged into other servers' sidebars on the next sync.
-        window.havenDesktop?.removeServerHistory?.(el.dataset.url)?.catch?.((err) => { console.warn('[Desktop] could not remove from server history', err); });
         this._renderServerBar();
         this._showToast(t('toasts.server_removed'), 'success');
         this._pushServerListToServer();
