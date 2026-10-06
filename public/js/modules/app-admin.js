@@ -503,7 +503,8 @@ _applyServerSettings() {
     document.querySelectorAll('.auto-backup-include').forEach(el => {
       el.checked = abSections.includes(el.value);
     });
-    if (typeof this._refreshAutoBackupList === 'function') this._refreshAutoBackupList();
+    // The backup list is admin only; asking for it as anyone else only logs a 403.
+    if (this.user?.isAdmin && typeof this._refreshAutoBackupList === 'function') this._refreshAutoBackupList();
 
     const updateBannerAdminOnly = document.getElementById('update-banner-admin-only');
     if (updateBannerAdminOnly) {
