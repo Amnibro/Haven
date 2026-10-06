@@ -11,6 +11,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.19.0] - 2026-10-06
+
+Group DMs with end-to-end encryption, server templates, the Chrome layout,
+Glassy Neon and seasonal themes, and a server list that stays the same on
+every server in Haven Desktop. Notes to self are no longer deleted.
+
+### Added
+- Group DMs (#5733, thanks Amnibro): start a DM with several people from the New Group button, invite more later, and leave when you like. Messages, edits, replies and files are end-to-end encrypted and signed. A device only shares the group key with keys it has pinned and only accepts keys a member signed, so the server cannot read the group or slip in a key of its own. If someone's keys change, you are asked to trust the new ones, as in 1:1 DMs, and their older messages stay readable.
+- Server templates (#5732, thanks Amnibro): Settings, Admin, Server Template exports your server's branding, categories, channels, roles and setup posts as one file, and imports one, either adding what is missing or replacing the layout. Nothing is ever deleted, and members, messages, DMs, keys and secrets never leave the server. An imported template cannot hand out admin-only permissions, never touches the Admin role, cannot give everyone a role stronger than Member, and posts role menus with Haven's standard text. Every change it makes shows in the audit log. Also available offline through tools/template.js.
+- Chrome layout (#5681, thanks Amnibro): a compact sidebar with a + menu for channels, voice buttons on channel rows, and DMs and People docked at the bottom. Pick it from the theme menu under Layout; Original stays the default.
+- Themes: Glassy Neon, plus Christmas, Halloween and Thanksgiving in a new Seasonal group (#5730, thanks Amnibro). They load nothing from outside your server and switch their animations off for people who ask for reduced motion.
+- Admin, Cleanup: a Keep self-destructed attachments switch (#5731, thanks Bo0sted). On (the default), an expired self-destructing message's files are held for recovery like other deleted files; off, they are deleted for good.
+- Settings, Desktop App: Run in X11 mode on Linux, for Haven Desktop windows that flicker on Wayland, which some Nvidia cards do (#5721). Needs Haven Desktop 1.6.0.
+- German is fully translated (#5735, thanks michues).
+
+### Changed
+- In Haven Desktop the server list is the same on every server: a server you remove stays removed, and the order and names you choose show everywhere. Names follow each server's own name unless you renamed it. A server you reach at two addresses shows once in the sidebar, and Manage Servers marks the second entry so you can delete one. Sync now says what it changed, or that the list was already up to date. Needs Haven Desktop 1.6.0 for the shared list.
+- Self-destructing messages can no longer be replied to or quoted, so a quote cannot outlive the message (#5731). A link to its files posted later does not keep them; a file the sender had shared before still stays.
+- Link Server sign-up has a username box, so a name already taken on this server can be changed instead of failing with "invalid username" (#5734).
+- The chat keeps your place while messages above or below change height (link previews, embeds, pictures), at the bottom and while reading back.
+- The right panel's Join Voice button shows one mic, like the one in the header.
+- The Android row in the README also links the direct download through Obtainium (#5737, thanks monksy).
+
+### Fixed
+- Notes to self (a DM with yourself) were deleted by the 15 minute orphan DM cleanup. They are kept now. Notes removed before this release cannot be brought back.
+- Your theme, effects and other synced settings could fall back to defaults when the first connection dropped right after opening, such as a server still starting after a reboot, until you reloaded. The crossed-out channel icons could also stay after the setting hid them (#5723).
+- Closing a DM popup now stops any video or embed playing in it (#5729).
+- German: bulk cleanup counts and the uploads cap hint showed raw placeholders.
+- Normal members no longer cause two 403 errors on every load by asking for the admin backup list.
+
 ## [4.18.0] - 2026-10-04
 
 Self-destructing messages, plugin and theme updates from Settings, a light mode
