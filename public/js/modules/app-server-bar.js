@@ -282,7 +282,7 @@ async _populateKnownServersDatalist() {
   urlInput.addEventListener('change', onChange);
 },
 
-_addServer() {
+async _addServer() {
   const name = document.getElementById('add-server-name-input').value.trim();
   const url = document.getElementById('server-url-input').value.trim();
   const iconInput = document.getElementById('add-server-icon-input').value.trim();
@@ -292,8 +292,12 @@ _addServer() {
   const editUrl = this._editingServerUrl;
   if (editUrl) {
     // Editing existing server (a name of your own is kept and, in the
-    // Desktop app, shown on every server)
-    this.serverManager.editByUser(editUrl, { name, icon: iconInput || null });
+    // Desktop app, shown on every server). A Desktop app that asks first
+    // makes the edit only once the user says yes there.
+    let edited = false;
+    try { edited = await this.serverManager.editByUser(editUrl, { name, icon: iconInput || null }); }
+    catch (err) { console.warn('[Desktop] could not share the server name', err); }
+    if (!edited) return;
     this._editingServerUrl = null;
     document.getElementById('add-server-modal').style.display = 'none';
     this._renderServerBar();
@@ -301,6 +305,8 @@ _addServer() {
     this._pushServerListToServer();
     // Auto-pull icon if checked
     if (autoPull) this._autoPullServerIcon(editUrl);
+  } else if (this.serverManager.desktopGated()) {
+    await this._addServerThroughDesktop(name, url, iconInput || null, autoPull);
   } else {
     // Adding new server
     const icon = iconInput || null;
@@ -330,6 +336,49 @@ _addServer() {
       this._showToast(t('toasts.server_already_in_list'), 'error');
     }
   }
+},
+
+/** Add Server in a Desktop app that asks first: the app asks the user (and
+ *  keeps the typed name as theirs), and the server is added here once it is
+ *  in the app's list. */
+async _addServerThroughDesktop(name, url, icon, autoPull) {
+  const cleanUrl = url.replace(/\/+$/, '');
+  const finalUrl = /^https?:\/\//.test(cleanUrl) ? cleanUrl : 'https://' + cleanUrl;
+  if (this.serverManager.servers.some(s => this.serverManager._normalizeUrl(s.url) === this.serverManager._normalizeUrl(finalUrl))) {
+    return this._showToast(t('toasts.server_already_in_list'), 'error');
+  }
+  let result = null;
+  try { result = await window.havenDesktop.addServerHistory(finalUrl, name, { userInitiated: true }); }
+  catch (err) { console.warn('[Desktop] could not add to server history', err); }
+  // The user said no in the app's own question: leave the form as it is.
+  if (result === 'declined') return;
+  if (result !== 'added' && result !== 'exists') {
+    return this._showToast(t('servers.desktop_not_changed'), 'error');
+  }
+  this.serverManager.add(name, finalUrl, icon, { userInitiated: true, customName: true });
+  document.getElementById('add-server-modal').style.display = 'none';
+  this._renderServerBar();
+  this._showToast(t('toasts.server_added', { name }), 'success');
+  this._pushServerListToServer();
+  if (autoPull) setTimeout(() => this._autoPullServerIcon(this.serverManager._normalizeUrl(finalUrl)), 2000);
+},
+
+/** Remove a server the user picked. A Desktop app that asks first asks
+ *  instead of this page, and the server goes once the user said yes there.
+ *  done() runs after it is gone. */
+_removeServerByUser(url, name, done) {
+  const manager = this.serverManager;
+  if (!manager.desktopAsksFor(url)) {
+    if (!confirm(t('confirm.remove_server', { name }))) return;
+    // Also removed from the Desktop app's list, so no other server's
+    // sidebar brings it back.
+    manager.remove(url);
+    done();
+    return;
+  }
+  manager.removeThroughDesktop(url).then((removed) => {
+    if (removed) done();
+  }).catch((err) => { console.warn('[Desktop] could not remove from server history', err); });
 },
 
 _autoPullServerIcon(url) {
@@ -454,14 +503,12 @@ _renderManageServersList() {
       this._editServer(s.url);
     });
     row.querySelector('.manage-server-delete').addEventListener('click', () => {
-      if (!confirm(t('confirm.remove_server', { name: s.name }))) return;
-      // Also removed from the Desktop app's list, so no other server's
-      // sidebar brings it back.
-      this.serverManager.remove(s.url);
-      this._renderServerBar();
-      this._renderManageServersList();
-      this._showToast(t('toasts.server_removed_named', { name: s.name }), 'success');
-      this._pushServerListToServer();
+      this._removeServerByUser(s.url, s.name, () => {
+        this._renderServerBar();
+        this._renderManageServersList();
+        this._showToast(t('toasts.server_removed_named', { name: s.name }), 'success');
+        this._pushServerListToServer();
+      });
     });
 
     // CSP-safe icon error handling: hide broken img, show initial letter
@@ -723,13 +770,11 @@ _renderServerBar() {
       if (e.target.classList.contains('server-remove')) {
         e.stopPropagation();
         const serverName = el.getAttribute('title')?.split(' — ')[0] || el.dataset.url;
-        if (!confirm(t('confirm.remove_server', { name: serverName }))) return;
-        // Also removed from the Desktop app's list, so no other server's
-        // sidebar brings it back.
-        this.serverManager.remove(el.dataset.url);
-        this._renderServerBar();
-        this._showToast(t('toasts.server_removed'), 'success');
-        this._pushServerListToServer();
+        this._removeServerByUser(el.dataset.url, serverName, () => {
+          this._renderServerBar();
+          this._showToast(t('toasts.server_removed'), 'success');
+          this._pushServerListToServer();
+        });
         return;
       }
       if (window.havenDesktop?.switchServer) {

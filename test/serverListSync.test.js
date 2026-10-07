@@ -84,11 +84,12 @@ function fakeDesktopStore() {
       return true;
     },
     setOrder(urls) {
-      const want = [...new Set(urls.map(norm))].filter(u => !s.removed.includes(u));
+      // Only servers already listed are placed: an order cannot add one.
+      const want = [...new Set(urls.map(norm))].filter(u => s.history.some(h => h.url === u));
       const base = [...new Set([...s.order, ...orderedUrls()])];
       const inBase = want.filter(u => base.includes(u));
       let i = 0;
-      s.order = base.map(u => (inBase.includes(u) ? inBase[i++] : u)).concat(want.filter(u => !base.includes(u)));
+      s.order = base.map(u => (inBase.includes(u) ? inBase[i++] : u));
     },
   };
 }
@@ -419,6 +420,109 @@ test('in a browser without the Desktop app nothing is shared and nothing breaks'
   assert.deepEqual(plain(page.manager.servers.map(s => s.name)), ['Bee']);
   assert.deepEqual(JSON.parse(page.storage.getItem('haven_servers_removed')), [X]);
   assert.deepEqual(page.warnings, []);
+});
+
+// A Desktop app that asks the user itself before a page changes which
+// servers the user has (Haven Desktop's server-list-gate.js): adds only for
+// the user's own Add Server, removals and renames only with a yes, and a
+// server's reported name only from its own page. answer(kind, url) is the
+// user's answer to the app's question.
+function gatedDesktopApi(store, answer = () => true) {
+  const api = desktopApi(store);
+  api.serverListGated = true;
+  api.asked = [];
+  const listed = (url) => store.state.history.some(h => h.url === norm(url));
+  api.addServerHistory = async (url, name, opts) => {
+    api.calls.push(['add', url]);
+    if (listed(url)) return 'exists';
+    if (!(opts && opts.userInitiated)) return 'refused';
+    api.asked.push(['add', norm(url)]);
+    if (!answer('add', norm(url))) return 'declined';
+    return store.add(url, name, opts);
+  };
+  api.removeServerHistory = async (url) => {
+    api.calls.push(['remove', url]);
+    if (listed(url)) {
+      api.asked.push(['remove', norm(url)]);
+      if (answer('remove', norm(url))) store.remove(url);
+    }
+    return store.view().servers;
+  };
+  api.updateServerName = async (url, name, opts = {}) => {
+    api.calls.push(['rename', url]);
+    if (typeof opts.custom !== 'boolean') return false; // only the server's own page
+    if (!listed(url)) return false;
+    api.asked.push(['rename', norm(url)]);
+    if (!answer('rename', norm(url))) return false;
+    return store.rename(url, name, opts);
+  };
+  return api;
+}
+
+test('a Desktop app that asks first gets no automatic changes from the page', async () => {
+  const store = seeded([A, B, X]);
+  const storage = storageWith([B, X, Y]);
+  storage.setItem('haven_servers_removed', JSON.stringify([Z]));
+  const api = gatedDesktopApi(store);
+  const health = { [X]: { name: 'LIT', fingerprint: 'fx' } };
+  const a = openPage(A, { desktop: api, storage, health });
+  await a.manager.reconcileWithDesktop();
+  await a.manager.checkAll();
+  await new Promise(r => setImmediate(r));
+  assert.deepEqual(api.calls, [], 'no add, removal hand-over or reported name reaches the app');
+  assert.ok(a.manager.servers.some(s => s.url === Y), 'a server only this page knows stays here');
+  assert.ok(!store.state.history.some(h => h.url === Y));
+  assert.equal(a.manager.servers.find(s => s.url === X).name, 'LIT', 'names still follow the server on this page');
+  assert.equal(a.manager.desktopAsksFor(X), true);
+  assert.equal(a.manager.desktopAsksFor(Y), false, 'the app does not ask about a server it does not have');
+  // The order still reaches the app; it only moves servers it has.
+  a.manager.reorder([X, B, Y]);
+  await new Promise(r => setImmediate(r));
+  assert.deepEqual(plain(store.state.order.filter(u => u !== A)), [X, B]);
+  assert.deepEqual(a.warnings, []);
+});
+
+test('removing and renaming wait for the user\'s answer in the Desktop app', async () => {
+  const store = seeded([A, B, X]);
+  let yes = false;
+  const api = gatedDesktopApi(store, () => yes);
+  const a = openPage(A, { desktop: api, storage: storageWith([B, X]) });
+  await a.manager.reconcileWithDesktop();
+
+  assert.equal(await a.manager.removeThroughDesktop(X), false, 'the user said no');
+  assert.ok(a.manager.servers.some(s => s.url === X));
+  assert.ok(store.state.history.some(h => h.url === X));
+  assert.equal(await a.manager.editByUser(B, { name: 'Bee' }), false);
+  assert.equal(a.manager.servers.find(s => s.url === B).name, B);
+
+  yes = true;
+  assert.equal(await a.manager.editByUser(B, { name: 'Bee', icon: 'https://img.example.com/b.png' }), true);
+  const b = a.manager.servers.find(s => s.url === B);
+  assert.equal(b.name, 'Bee');
+  assert.equal(b.customIcon, true);
+  assert.equal(store.state.history.find(h => h.url === B).name, 'Bee');
+  assert.equal(await a.manager.removeThroughDesktop(X), true);
+  assert.ok(!a.manager.servers.some(s => s.url === X));
+  assert.deepEqual(plain(store.state.removed), [X]);
+  assert.deepEqual(api.asked.map(q => q[0]), ['remove', 'rename', 'rename', 'remove']);
+
+  // Saving an edit nobody would see is not asked about.
+  api.asked.length = 0;
+  assert.equal(await a.manager.editByUser(B, { name: 'Bee', icon: 'https://img.example.com/b.png' }), true);
+  assert.deepEqual(api.asked, []);
+  assert.deepEqual(a.warnings, []);
+});
+
+test('the server bar skips its own question only where the Desktop app asks', () => {
+  const bar = fs.readFileSync(path.join(__dirname, '..', 'public/js/modules/app-server-bar.js'), 'utf8');
+  const remove = bar.slice(bar.indexOf('_removeServerByUser(url, name, done) {'));
+  assert.match(remove, /if \(!manager\.desktopAsksFor\(url\)\) \{\s+if \(!confirm\(t\('confirm\.remove_server'/);
+  assert.match(remove, /manager\.removeThroughDesktop\(url\)/);
+  assert.equal((bar.match(/confirm\(t\('confirm\.remove_server'/g) || []).length, 1, 'both remove buttons go through one place');
+  assert.match(bar, /else if \(this\.serverManager\.desktopGated\(\)\) \{\s+await this\._addServerThroughDesktop/);
+  assert.match(bar, /if \(result === 'declined'\) return;/);
+  const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
+  assert.ok(en.servers.desktop_not_changed);
 });
 
 test('the server bar uses the shared list and reports what Sync did', () => {

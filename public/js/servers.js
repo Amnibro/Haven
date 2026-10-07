@@ -12,6 +12,8 @@ class ServerManager {
     // Servers the Desktop app says the user removed, on any server. Filled
     // from the Desktop app's shared list; always empty in a browser.
     this.desktopRemoved = new Set();
+    // Servers in the Desktop app's shared list, as last read.
+    this.desktopListed = new Set();
     this.selfFingerprintReady = this._fetchSelfFingerprint();
     // Desktop bootstrap: pull the cross-server history from the Electron
     // main process synchronously (preload exposes it as a plain array).
@@ -22,6 +24,22 @@ class ServerManager {
 
   _desktop() {
     return (typeof window !== 'undefined' && window.havenDesktop) || null;
+  }
+
+  /** True in a Desktop app that asks the user itself, in its own dialog,
+   *  before a server page adds, removes or renames a server. This page then
+   *  does not ask a second time, and hands the app no automatic changes
+   *  (the app would only ask about them, or refuse them). */
+  desktopGated() {
+    const desktop = this._desktop();
+    return !!(desktop && desktop.serverListGated === true);
+  }
+
+  /** True when the Desktop app asks the user before this server is removed
+   *  or renamed (it is in the app's list), so the page's own question is
+   *  skipped. */
+  desktopAsksFor(url) {
+    return this.desktopGated() && this.desktopListed.has(this._normalizeUrl(url));
   }
 
   /** Merge the Desktop app's cross-server history into the local list.
@@ -92,6 +110,7 @@ class ServerManager {
     if (!list || !Array.isArray(list.servers)) return stats;
     const gone = new Set((Array.isArray(list.removed) ? list.removed : []).map(u => this._normalizeUrl(u)).filter(Boolean));
     this.desktopRemoved = gone;
+    this.desktopListed = new Set(list.servers.map(ds => this._normalizeUrl(ds && ds.url)).filter(Boolean));
     const trusted = this._trustsDesktop();
     const localRemoved = this._loadRemoved();
     let removedChanged = false;
@@ -199,7 +218,9 @@ class ServerManager {
     let list = await desktop.getServerList();
     if (!list || !Array.isArray(list.servers)) return { added: 0, removed: 0, renamed: 0 };
 
-    if (!this._trustsDesktop()) {
+    // A Desktop app that asks before every removal would ask about each of
+    // these, so there this page's earlier removals stay its own.
+    if (!this._trustsDesktop() && !this.desktopGated()) {
       // First time with the shared list: servers removed on this server are
       // removed for every server, then the shared list leads.
       const gone = new Set((list.removed || []).map(u => this._normalizeUrl(u)));
@@ -219,10 +240,11 @@ class ServerManager {
   }
 
   /** Give the Desktop app the servers, user edits and first order that only
-   *  this page has. */
+   *  this page has. A Desktop app that asks before every change only gets
+   *  the order: servers and edits reach it when the user makes them. */
   async _pushToDesktop(desktop, list) {
     const known = new Map(list.servers.map(s => [this._normalizeUrl(s.url), s]));
-    for (const s of this.servers) {
+    for (const s of (this.desktopGated() ? [] : this.servers)) {
       const url = this._normalizeUrl(s.url);
       if (this.desktopRemoved.has(url)) continue;
       const ds = known.get(url);
@@ -385,42 +407,78 @@ class ServerManager {
   /** The user edited a server's name or icon. A name other than the one the
    *  server reports is the user's own and is kept (and shared with every
    *  server in the Desktop app); the server's own name goes back to
-   *  following the server. */
+   *  following the server. Returns true when the edit was made; in a
+   *  Desktop app that asks first, a promise of that, false when the user
+   *  said no there. */
   editByUser(url, { name, icon = null }) {
     const normalizedUrl = this._normalizeUrl(url);
     const server = this.servers.find(s => this._normalizeUrl(s.url) === normalizedUrl);
     if (!server || !name) return false;
     const status = this.statusCache.get(normalizedUrl);
     const reported = status && status.online ? status : null;
-    if (name !== server.name) server.customName = true;
-    if (reported && name === reported.name) delete server.customName;
-    server.name = name;
+    const next = { ...server };
+    if (name !== next.name) next.customName = true;
+    if (reported && name === reported.name) delete next.customName;
+    next.name = name;
     const newIcon = icon || null;
-    if (newIcon !== (server.icon || null)) {
-      server.icon = newIcon;
-      server.iconData = null;
+    if (newIcon !== (next.icon || null)) {
+      next.icon = newIcon;
+      next.iconData = null;
     }
-    if (newIcon && newIcon !== (reported && reported.icon)) server.customIcon = true;
-    else delete server.customIcon;
-    server.editedAt = Date.now();
+    if (newIcon && newIcon !== (reported && reported.icon)) next.customIcon = true;
+    else delete next.customIcon;
+    next.editedAt = Date.now();
+    const seen = (e) => [e.name, e.customIcon ? (e.icon || null) : null].join('\n');
+    if (this.desktopAsksFor(normalizedUrl) && seen(next) !== seen(server)) {
+      // The app asks the user; the edit is made here once it said yes.
+      return this._pushEdit(next).then((changed) => (changed === true ? this._replaceServer(server, next) : false));
+    }
+    this._replaceServer(server, next);
+    if (!this.desktopGated()) {
+      this._pushEdit(next).catch((err) => { console.warn('[Desktop] could not share the server name', err); });
+    }
+    return true;
+  }
+
+  _replaceServer(server, next) {
+    const i = this.servers.indexOf(server);
+    if (i < 0) return false;
+    this.servers[i] = next;
     this._save();
-    this._pushEdit(server).catch((err) => { console.warn('[Desktop] could not share the server name', err); });
     return true;
   }
 
   remove(url) {
+    const normalizedUrl = this._removeHere(url);
+    // In the Desktop app the removal applies to every server's list.
+    const desktop = this._desktop();
+    if (desktop && typeof desktop.removeServerHistory === 'function') {
+      Promise.resolve(desktop.removeServerHistory(normalizedUrl))
+        .catch((err) => { console.warn('[Desktop] could not remove from server history', err); });
+    }
+  }
+
+  /** In a Desktop app that asks first: the app asks the user, and the
+   *  server is removed here only once it is gone from the app's list.
+   *  Resolves to true when it was removed. */
+  async removeThroughDesktop(url) {
+    const normalizedUrl = this._normalizeUrl(url);
+    const history = await this._desktop().removeServerHistory(normalizedUrl);
+    // Anything but a list without it means the app kept it.
+    if (!Array.isArray(history) || history.some(h => this._normalizeUrl(h && h.url) === normalizedUrl)) return false;
+    this._removeHere(normalizedUrl);
+    return true;
+  }
+
+  /** Remove a server from this page's own list. Returns its address. */
+  _removeHere(url) {
     const normalizedUrl = this._normalizeUrl(url);
     this.servers = this.servers.filter(s => this._normalizeUrl(s.url) !== normalizedUrl);
     this.statusCache.delete(normalizedUrl);
     this._save();
     this.markRemoved(normalizedUrl);
-    // In the Desktop app the removal applies to every server's list.
-    const desktop = this._desktop();
-    if (desktop && typeof desktop.removeServerHistory === 'function') {
-      if (normalizedUrl) this.desktopRemoved.add(normalizedUrl);
-      Promise.resolve(desktop.removeServerHistory(normalizedUrl))
-        .catch((err) => { console.warn('[Desktop] could not remove from server history', err); });
-    }
+    if (normalizedUrl && this._desktop()) this.desktopRemoved.add(normalizedUrl);
+    return normalizedUrl;
   }
 
   /** Reorder servers by an array of URLs in the desired order. Servers the
@@ -486,8 +544,10 @@ class ServerManager {
     if (!entry || entry.customName || !name || name === 'Haven' || name === entry.name) return false;
     entry.name = name;
     this._save();
+    // A Desktop app that asks first takes a server's name only from that
+    // server's own page.
     const desktop = this._desktop();
-    if (desktop && typeof desktop.updateServerName === 'function') {
+    if (desktop && typeof desktop.updateServerName === 'function' && !this.desktopGated()) {
       Promise.resolve(desktop.updateServerName(entry.url, name))
         .catch((err) => { console.warn('[Desktop] could not share the server name', err); });
     }
