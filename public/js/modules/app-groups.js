@@ -32,6 +32,21 @@ _setupGroupListeners() {
       this._showToast(deleted ? t('groups.deleted') : t('groups.left'), 'info');
     }
   });
+  // A server admin deleted the group for everyone. Sent just before the
+  // channel-deleted that removes it, so its name is still known here.
+  s.on('group-dm-deleted', (d) => {
+    this._groups.delete(d.code);
+    document.querySelector(`.group-invite[data-code="${CSS.escape(d.code)}"]`)?.remove();
+    const ch = this.channels?.find(c => c.code === d.code);
+    if (this._deletingGroup === d.code) {
+      this._deletingGroup = null;
+      this._showToast(t('groups.deleted'), 'info');
+    } else if (ch) {
+      this._showToast(t('groups.deleted_by_admin', { group: this._groupName(ch) }), 'info');
+    }
+    // The channel-deleted that follows needs no second notice.
+    this._leavingGroup = d.code;
+  });
   s.on('group-epoch-published', (d) => {
     const st = this._groups.get(d.code);
     if (!st || st.keys.has(d.epoch)) return;
@@ -607,5 +622,16 @@ async _deleteGroup(code) {
   this._deletingGroup = code;
   const attachments = await this._collectDmAttachments(code);
   this.socket.emit('leave-group-dm', { code, attachments });
+},
+/** The server admin deletes the group for everyone in it, with its messages
+ *  and attachments, which this app gathers first since it can decrypt them. */
+async _deleteGroupForEveryone(code) {
+  const ch = this.channels.find(c => c.code === code);
+  if (!ch || !this.user?.isAdmin) return;
+  const ok = await this._showConfirmModal('⚠️ ' + t('groups.delete_all_confirm', { group: this._groupName(ch) }), '', { danger: true, confirmLabel: t('groups.delete_all') });
+  if (!ok) return;
+  this._deletingGroup = code;
+  const attachments = await this._collectDmAttachments(code);
+  this.socket.emit('delete-group-dm-for-everyone', { code, attachments });
 },
 };

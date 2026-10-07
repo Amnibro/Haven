@@ -1903,6 +1903,8 @@ module.exports = function register(socket, ctx) {
     const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
     if (!isMember && !socket.user.isAdmin) return socket.emit('error-msg', 'Not authorized');
     if (isMember && channel.is_group && ctx.leaveGroupDm) return void ctx.leaveGroupDm(code, socket.user.id, data.attachments);
+    // An admin outside a group deletes it for everyone, with the same checks and notices as from its menu.
+    if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? ctx.deleteGroupDmForEveryone(code, data.attachments) : socket.emit('error-msg', 'Not authorized'));
 
     purgeDmChannel(channel, data.attachments);
 

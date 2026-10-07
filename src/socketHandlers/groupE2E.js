@@ -296,6 +296,45 @@ module.exports = function register(socket, ctx) {
     if (!ch || !isMember(ch.id, socket.user.id)) return;
     leaveGroup(ch, socket.user.id, data.attachments);
   });
+  // The server admin can delete a group for everyone in it, the way a 1:1 DM
+  // can be deleted for both people (#5740). Moderators and the group's
+  // creator cannot: a moderator kicks, the creator removes people and then
+  // deletes the group as its last member. Checked against the database too,
+  // so an admin demoted since this connection opened is refused.
+  const isServerAdmin = () => {
+    if (!socket.user || !socket.user.isAdmin) return false;
+    const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(socket.user.id);
+    return !!(row && row.is_admin);
+  };
+  function deleteGroupForEveryone(code, attachments) {
+    const ch = groupOf(code);
+    if (!ch) return void socket.emit('error-msg', 'Group not found');
+    if (!isServerAdmin()) return void socket.emit('error-msg', 'Only the server admin can delete a group for everyone');
+    const told = [...new Set([...memberIds(ch.id), ...pendingInvitees(ch.id), socket.user.id])];
+    // Every member's own uploads go with it. Encrypted files the members sent
+    // are also released by the messages they were attached to (#5699); the
+    // list from the admin's app covers files from before that.
+    ctx.purgeDmChannel(ch, Array.isArray(attachments) ? attachments : []);
+    clearChannelRuntimeState(ctx.state, ch.code);
+    // group-dm-deleted goes first, while their app still knows the group's
+    // name; channel-deleted then removes it, the pop-out DM window included.
+    for (const s of socketsOf(told)) {
+      s.emit('group-dm-deleted', { code: ch.code });
+      s.leave(`channel:${ch.code}`);
+      s.emit('channel-deleted', { code: ch.code });
+    }
+    io.to(`voice:${ch.code}`).emit('channel-deleted', { code: ch.code });
+    if (typeof ctx.logAudit === 'function') {
+      ctx.logAudit({ actor: socket.user, action: 'channel_delete', target_type: 'channel', target_id: ch.id,
+        target_name: ch.name, details: { group: true, code: ch.code } });
+    }
+    if (ctx.broadcastChannelLists) ctx.broadcastChannelLists();
+  }
+  ctx.deleteGroupDmForEveryone = deleteGroupForEveryone;
+  socket.on('delete-group-dm-for-everyone', (data) => {
+    if (!data || typeof data !== 'object') return;
+    deleteGroupForEveryone(data.code, data.attachments);
+  });
   /* ── Epoch publication ──────────────────────────── */
 
   socket.on('publish-group-epoch', (data) => {

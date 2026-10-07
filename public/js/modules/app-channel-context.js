@@ -501,6 +501,7 @@ _initDmContextMenu() {
   document.querySelector('[data-action="dm-group-add"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._openGroupPicker({ code }); });
   document.querySelector('[data-action="dm-group-leave"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._leaveGroup(code); });
   document.querySelector('[data-action="dm-group-delete"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._deleteGroup(code); });
+  document.querySelector('[data-action="dm-group-delete-all"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._deleteGroupForEveryone(code); });
   // Delete DM
   document.querySelector('[data-action="dm-delete"]')?.addEventListener('click', async () => {
     const code = this._dmCtxMenuCode;
@@ -597,6 +598,9 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
       });
     }
   }
+  // Only the server admin can delete a group for everyone in it (#5740).
+  const groupDelAllBtn = menu.querySelector('[data-action="dm-group-delete-all"]');
+  if (groupDelAllBtn) groupDelAllBtn.style.display = isGroup && this.user?.isAdmin ? '' : 'none';
   // Show/hide "Mark as Read" based on unread count
   const markReadBtn = menu.querySelector('[data-action="dm-mark-read"]');
   if (markReadBtn) markReadBtn.style.display = (this.unreadCounts[code] > 0) ? '' : 'none';

@@ -30,8 +30,8 @@ const ME = 1;
 const CODE = 'bbbbbbbb';
 
 /** Menu buttons and an app whose server answers the roster with `members`. */
-function setup({ members, cached, confirmed = true }) {
-  const buttons = Object.fromEntries(['dm-mute', 'dm-mark-read', 'dm-group-add', 'dm-group-leave', 'dm-group-delete', 'dm-delete']
+function setup({ members, cached, confirmed = true, admin = false }) {
+  const buttons = Object.fromEntries(['dm-mute', 'dm-mark-read', 'dm-group-add', 'dm-group-leave', 'dm-group-delete', 'dm-group-delete-all', 'dm-delete']
     .map((a) => [a, { style: { display: 'none' }, textContent: '' }]));
   const menu = {
     style: {},
@@ -50,7 +50,7 @@ function setup({ members, cached, confirmed = true }) {
   const app = {
     ...load('app-groups.js', globals),
     ...load('app-channel-context.js', globals),
-    user: { id: ME },
+    user: { id: ME, isAdmin: admin },
     channels: [{ code: CODE, name: 'Crew', is_dm: 1, is_group: 1, group_members: cached }],
     unreadCounts: {},
     _dmCtxMenuEl: menu,
@@ -104,8 +104,31 @@ test('leaving uses the current list to decide whether attachments go with the gr
   assert.deepEqual(JSON.parse(JSON.stringify(notLast.emitted)), [['leave-group-dm', { code: CODE, attachments: [] }]]);
 });
 
+test('Delete group for everyone shows only to the server admin', async () => {
+  const anchor = { getBoundingClientRect: () => ({ bottom: 0, left: 0 }) };
+  const admin = setup({ members: [{ id: ME }, { id: 2 }], cached: [{ id: ME }, { id: 2 }], admin: true });
+  admin.app._openDmCtxMenu(CODE, anchor);
+  assert.equal(admin.buttons['dm-group-delete-all'].style.display, '');
+  const member = setup({ members: [{ id: ME }, { id: 2 }], cached: [{ id: ME }, { id: 2 }] });
+  member.app._openDmCtxMenu(CODE, anchor);
+  assert.equal(member.buttons['dm-group-delete-all'].style.display, 'none');
+});
+
+test('the admin deletes for everyone with the attachments this app can read, after confirming', async () => {
+  const admin = setup({ members: [{ id: ME }, { id: 2 }], cached: [{ id: ME }, { id: 2 }], admin: true });
+  await admin.app._deleteGroupForEveryone(CODE);
+  assert.deepEqual(JSON.parse(JSON.stringify(admin.emitted)), [['delete-group-dm-for-everyone', { code: CODE, attachments: ['/uploads/a.bin'] }]]);
+  const cancelled = setup({ members: [{ id: ME }], cached: [{ id: ME }], admin: true, confirmed: false });
+  await cancelled.app._deleteGroupForEveryone(CODE);
+  assert.deepEqual(cancelled.emitted, []);
+  const member = setup({ members: [{ id: ME }], cached: [{ id: ME }] });
+  await member.app._deleteGroupForEveryone(CODE);
+  assert.deepEqual(member.emitted, [], 'not offered to anyone else');
+});
+
 test('the menu item and its strings exist', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8');
   assert.match(html, /data-action="dm-group-delete"[^>]*>[^<]*<span data-i18n="groups\.delete">/);
-  for (const key of ['delete', 'delete_confirm', 'delete_not_alone', 'deleted']) assert.ok(en.groups[key], key);
+  assert.match(html, /data-action="dm-group-delete-all"[^>]*>[^<]*<span data-i18n="groups\.delete_all">/);
+  for (const key of ['delete', 'delete_confirm', 'delete_not_alone', 'deleted', 'delete_all', 'delete_all_confirm', 'deleted_by_admin']) assert.ok(en.groups[key], key);
 });

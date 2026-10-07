@@ -4345,6 +4345,7 @@
     <button class="channel-ctx-item" data-action="dm-group-add" style="display:none">➕ <span data-i18n="groups.add_people">Add people</span></button>
     <button class="channel-ctx-item danger" data-action="dm-group-leave" style="display:none">🚪 <span data-i18n="groups.leave">Leave group</span></button>
     <button class="channel-ctx-item danger" data-action="dm-group-delete" style="display:none">🗑️ <span data-i18n="groups.delete">Delete group</span></button>
+    <button class="channel-ctx-item danger" data-action="dm-group-delete-all" style="display:none">🗑️ <span data-i18n="groups.delete_all">Delete group for everyone</span></button>
     <button class="channel-ctx-item danger" data-action="dm-delete">🗑️ <span data-i18n="context_menu.dm.delete">Delete DM</span></button>
   </div>
 
@@ -5021,7 +5022,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.19.1"></script>
+  <script type="module" src="/js/app.js?v=4.19.2"></script>
   <script src="/js/plugin-loader.js?v=4.18.3"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
