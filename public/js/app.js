@@ -28,7 +28,7 @@ import AppearanceMethods from './modules/app-appearance.js?v=4.17.5';
 import SoundMethods from './modules/app-sounds.js?v=4.17.5';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.17.5';
 import BotMethods from './modules/app-bots.js?v=4.17.5';
-import ContextMethods  from './modules/app-context.js?v=4.17.19';
+import ContextMethods  from './modules/app-context.js?v=4.19.3';
 import ChannelMethods  from './modules/app-channels.js?v=4.17.23';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.19.2';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.17.10';
@@ -63,7 +63,7 @@ import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.17.23';
 import CallMethods from './modules/app-calls.js?v=4.17.1';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
-import GroupMethods from './modules/app-groups.js?v=4.19.2';
+import GroupMethods from './modules/app-groups.js?v=4.19.3';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 
 class HavenApp {

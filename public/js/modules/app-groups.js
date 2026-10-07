@@ -22,6 +22,7 @@ _setupGroupListeners() {
   const changed = (d) => this._groupMembershipChanged(d.code).catch(err => console.warn('[Groups] could not update keys after a membership change:', err.message));
   s.on('group-dm-member-joined', changed);
   s.on('group-dm-member-left', changed);
+  s.on('group-dm-member-removed', (d) => this._showToast(t('groups.member_removed', { name: this._getNickname(d.user?.id, d.user?.username || t('groups.someone')) }), 'success'));
   s.on('group-dm-updated', () => s.emit('get-channels'));
   s.on('group-dm-left', (d) => {
     this._groups.delete(d.code);
@@ -633,5 +634,29 @@ async _deleteGroupForEveryone(code) {
   this._deletingGroup = code;
   const attachments = await this._collectDmAttachments(code);
   this.socket.emit('delete-group-dm-for-everyone', { code, attachments });
+},
+/** True when this user started the group in `ch` and `userId` is in it. */
+_canRemoveFromGroup(ch, userId) {
+  const me = this.user?.id;
+  return !!(ch && ch.is_dm && ch.is_group && me && ch.created_by === me && userId !== me
+    && (ch.group_members || []).some(m => m.id === userId));
+},
+/** "Remove from group" in the member menu, for the group's creator only. */
+_addGroupMemberActions(userId, name, addBtn, addDivider) {
+  const ch = this.channels?.find(c => c.code === this.currentChannel);
+  if (!this._canRemoveFromGroup(ch, userId)) return;
+  addDivider();
+  addBtn(`🚪 ${t('groups.remove_member')}`, () => {
+    this._hideUserContextMenu();
+    this._removeFromGroup(ch.code, userId, name);
+  }, true);
+},
+async _removeFromGroup(code, userId, name) {
+  const ch = this.channels.find(c => c.code === code);
+  if (!this._canRemoveFromGroup(ch, userId)) return;
+  const who = this._getNickname(userId, name);
+  const ok = await this._showConfirmModal('⚠️ ' + t('groups.remove_confirm', { name: who, group: this._groupName(ch) }), '', { danger: true, confirmLabel: t('groups.remove_member') });
+  if (!ok) return;
+  this.socket.emit('remove-group-member', { code, userId });
 },
 };

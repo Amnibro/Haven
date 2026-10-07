@@ -296,6 +296,28 @@ module.exports = function register(socket, ctx) {
     if (!ch || !isMember(ch.id, socket.user.id)) return;
     leaveGroup(ch, socket.user.id, data.attachments);
   });
+  // The person who started the group can remove people from it (#5740). It
+  // works like a moderator's kick: the removed person loses the group on
+  // every device at once and the rest replace the key they hold. The creator
+  // leaves with Leave group, not this.
+  socket.on('remove-group-member', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const ch = groupOf(data.code);
+    if (!ch || !isMember(ch.id, socket.user.id)) return socket.emit('error-msg', 'Group not found');
+    const targetId = isInt(data.userId) ? data.userId : null;
+    if (!targetId) return;
+    const row = db.prepare('SELECT created_by FROM channels WHERE id = ?').get(ch.id);
+    if (!row || !isInt(row.created_by) || row.created_by !== socket.user.id) {
+      return socket.emit('error-msg', 'Only the person who started this group can remove people from it');
+    }
+    if (targetId === socket.user.id) return socket.emit('error-msg', 'Use Leave group to leave it yourself');
+    if (!isMember(ch.id, targetId)) return socket.emit('error-msg', 'That person is not in this group');
+    const target = db.prepare('SELECT COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(targetId);
+    // Told first, while their app still knows the group's name.
+    for (const s of socketsOf([targetId])) s.emit('kicked', { channelCode: ch.code, group: true, reason: '' });
+    leaveGroup(ch, targetId, []);
+    socket.emit('group-dm-member-removed', { code: ch.code, user: { id: targetId, username: target && target.username } });
+  });
   // The server admin can delete a group for everyone in it, the way a 1:1 DM
   // can be deleted for both people (#5740). Moderators and the group's
   // creator cannot: a moderator kicks, the creator removes people and then

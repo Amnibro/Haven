@@ -187,6 +187,7 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
       this._confirmTransferAdmin(targetUserId, targetName);
     }, true);
   }
+  this._addGroupMemberActions(targetUserId, targetName, addBtn, addDivider);
 
   this._placeUserContextMenu(menu, e);
 },
