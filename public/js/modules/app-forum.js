@@ -324,7 +324,7 @@ _createForumTopicEl(msg) {
       <div class="forum-topic-snippet message-content">${this._escapeHtml(this._forumSnippetOf(msg))}</div>
       <div class="forum-topic-meta">
         <span class="message-author forum-topic-author">${this._escapeHtml(msg.username || '')}</span>
-        <span class="forum-topic-replies" data-thread-parent="${msg.id}">${count ? `💬 ${t('forum.replies', { count })}` : t('thread_runtime.reply_to_topic')}</span>
+        <span class="forum-topic-replies" data-thread-parent="${msg.id}">${this._forumBlogRepliesLabel?.(msg) || (count ? `💬 ${t('forum.replies', { count })}` : t('thread_runtime.reply_to_topic'))}</span>
         ${this._forumVotesHtml ? this._forumVotesHtml(msg) : ''}
         <span class="forum-topic-when" title="${this._fmtDateTime(when)}">${this._forumAgo(when)}</span>
         ${canEdit ? `<button type="button" class="forum-topic-edit" title="${t('forum.edit_post')}">✎</button>` : ''}

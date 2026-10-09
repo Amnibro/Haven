@@ -285,6 +285,12 @@ _bindChannelMenu() {
     } else if (fn === 'forum-tags') {
       document.getElementById('channel-functions-panel').style.display = 'none';
       this._forumEditTags?.(code);
+    } else if (fn === 'forum-blog') {
+      // Blog mode (#5742). Everyone viewing the forum redraws when the
+      // server confirms (app-forum-blog.js).
+      const newVal = ch && Number(ch.forum_blog) === 1 ? 0 : 1;
+      optimistic({ forum_blog: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'forum_blog' });
     } else if (fn === 'forum-votes') {
       document.getElementById('channel-functions-panel').style.display = 'none';
       this._forumVotesEdit?.(code);

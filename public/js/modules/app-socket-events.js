@@ -7,6 +7,7 @@ export default {
 
 _listenFeatureEvents() {
   this._listenForumVotes?.();
+  this._listenForumBlog?.();
   // ── Reactions ──────────────────────────────────────
   this.socket.on('reactions-updated', (data) => {
     if (data.channelCode === this.currentChannel || data.channelCode === this._activeDMPip) {
@@ -50,9 +51,12 @@ _listenFeatureEvents() {
     container.innerHTML = '';
     // A forum topic shows its whole first post above the replies (#5659).
     this._forumThreadRenderTopic?.();
+    // Blog mode: the post's own section, then Comments (#5742).
+    this._forumBlogPrepareThread?.(data);
     if (data.messages) {
       data.messages.forEach(msg => this._appendThreadMessage(msg));
     }
+    this._forumBlogAfterLoad?.();
   });
 
   this.socket.on('new-thread-message', async (data) => {
@@ -502,6 +506,7 @@ _listenMessageChanges() {
         }
         msgEl.remove();
       });
+      this._forumBlogRecount?.();
     }
     // Drop the row from the search panel too, regardless of which channel is
     // open — results are cross-channel and this only fires on a confirmed

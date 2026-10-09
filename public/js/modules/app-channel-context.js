@@ -365,6 +365,11 @@ _updateChannelFunctionsPanel(ch) {
       const b = votesRow.querySelector('.cfn-badge');
       if (b) { b.textContent = this._forumVotesBadge ? this._forumVotesBadge(ch) : ''; b.className = 'cfn-badge ' + (on ? 'cfn-on' : 'cfn-off'); }
     }
+    // Blog mode (#5742): forums only.
+    const blogRow = _cfnPanel?.querySelector('.cfn-row[data-fn="forum-blog"]');
+    if (blogRow) blogRow.style.display = ch.is_forum ? '' : 'none';
+    const blogOn = Number(ch.forum_blog) === 1;
+    this._setCfnBadge('forum-blog', blogOn, t(blogOn ? 'channel_functions.on' : 'channel_functions.off'));
   }
   this._setCfnBadge('private', isPrivate, t(isPrivate ? 'channel_functions.on' : 'channel_functions.off'));
   const gateBadge = this._roleGateBadge(ch);

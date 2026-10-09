@@ -291,6 +291,7 @@ _closeThread() {
   const threadMsgs = document.getElementById('thread-messages');
   if (threadMsgs) threadMsgs.innerHTML = '';
   this._forumApplyThreadChrome?.(null);
+  this._forumBlogClose?.();
 },
 
 _sendThreadMessage() {
@@ -327,6 +328,9 @@ _sendThreadMessage() {
 _appendThreadMessage(msg) {
   const container = document.getElementById('thread-messages');
   if (!container) return;
+  // In a blog-mode forum a reply goes to the post's own section or to the
+  // comments under it (#5742); otherwise straight into the thread.
+  const target = this._forumBlogTargetFor?.(msg) || container;
 
   // Apply the local user's nickname assignment so thread messages match
   // everywhere else nicknames are honored. (#5291)
@@ -368,8 +372,12 @@ _appendThreadMessage(msg) {
   // thread's parent message lives in a separate preview element, not in this
   // container, so we only ever group reply-against-reply.
   let threadCompact = false;
-  const prevEl = container.lastElementChild;
-  if (prevEl && prevEl.classList?.contains('thread-message') && !msg.reply_to) {
+  const prevEl = target.lastElementChild;
+  // The author's additions to a blog post read as more of the post, with no
+  // name header of their own (#5742).
+  if (this._forumBlogIsPart?.(msg)) {
+    threadCompact = true;
+  } else if (prevEl && prevEl.classList?.contains('thread-message') && !msg.reply_to) {
     const samePerson = parseInt(prevEl.dataset.userId, 10) === msg.user_id
       && (prevEl.dataset.personaId || '') === (msg.persona_id ? String(msg.persona_id) : '');
     const prevTime = prevEl.dataset.time ? new Date(prevEl.dataset.time).getTime() : 0;
@@ -428,7 +436,8 @@ _appendThreadMessage(msg) {
       </div>
     `;
   }
-  container.appendChild(el);
+  target.appendChild(el);
+  if (target !== container) this._forumBlogRecount?.();
   // Link cards in threads, the same as in the channel (#5620).
   this._fetchLinkPreviews(el);
   try { this._decryptE2EImages?.(el); } catch (err) { console.warn('[Thread] _decryptE2EImages failed', err); }

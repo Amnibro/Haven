@@ -1032,6 +1032,14 @@
 .messages.forum-gallery[data-forum-tile="small"] .forum-votes { display: none; }
 .messages.forum-gallery .forum-topic-meta:has(.forum-votes) { flex-wrap: wrap; row-gap: 0.25rem; }
 .thread-forum-meta .forum-votes { margin-left: 0.6rem; }
+/* Blog mode (#5742): the post and the author's additions read as one piece,
+   then a Comments heading with everyone else's replies under it. */
+.thread-blog .thread-topic-body { border-bottom: none; margin-bottom: 0; }
+.blog-post-parts { padding-bottom: 0.5rem; }
+.blog-post-parts .thread-msg-compact-spacer { visibility: hidden; }
+.blog-post-parts .thread-message:hover .thread-msg-compact-spacer { visibility: visible; }
+.blog-comments-head { margin: 0.25rem 0 0.5rem; padding: 0.6rem 1rem 0; border-top: 2px solid var(--border); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.blog-comments:empty::before { content: attr(data-empty); display: block; padding: 0.25rem 1rem 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
 .forum-load-more { align-self: center; margin-top: 0.75rem; }
 /* Gallery: a grid of true squares, the image fills the tile, the words sit on a scrim. */
 .messages.forum-gallery .forum-topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--forum-tile, 11rem), 1fr)); gap: clamp(0.25rem, calc(var(--forum-tile, 11rem) * 0.05), 0.85rem); }
