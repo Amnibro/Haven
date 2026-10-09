@@ -440,9 +440,11 @@ function gatedDesktopApi(store, answer = () => true) {
     if (!answer('add', norm(url))) return 'declined';
     return store.add(url, name, opts);
   };
-  api.removeServerHistory = async (url) => {
+  // Like the app: removals and renames not marked as the user's are a page
+  // syncing on its own, and change nothing without asking.
+  api.removeServerHistory = async (url, opts) => {
     api.calls.push(['remove', url]);
-    if (listed(url)) {
+    if (listed(url) && opts && opts.user === true) {
       api.asked.push(['remove', norm(url)]);
       if (answer('remove', norm(url))) store.remove(url);
     }
@@ -451,7 +453,7 @@ function gatedDesktopApi(store, answer = () => true) {
   api.updateServerName = async (url, name, opts = {}) => {
     api.calls.push(['rename', url]);
     if (typeof opts.custom !== 'boolean') return false; // only the server's own page
-    if (!listed(url)) return false;
+    if (!listed(url) || opts.user !== true) return false;
     api.asked.push(['rename', norm(url)]);
     if (!answer('rename', norm(url))) return false;
     return store.rename(url, name, opts);

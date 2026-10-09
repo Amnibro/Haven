@@ -256,14 +256,19 @@ class ServerManager {
     }
   }
 
-  _pushEdit(server) {
+  /** user: the user made this edit just now. A Desktop app that asks first
+   *  only asks about edits marked this way; it takes unmarked ones for
+   *  syncing and leaves its list as it is. */
+  _pushEdit(server, { user = false } = {}) {
     const desktop = this._desktop();
     if (!desktop || typeof desktop.updateServerName !== 'function') return Promise.resolve();
-    return Promise.resolve(desktop.updateServerName(server.url, server.name, {
+    const opts = {
       custom: !!server.customName,
       icon: server.customIcon ? (server.icon || null) : null,
       editedAt: server.editedAt || Date.now(),
-    }));
+    };
+    if (user) opts.user = true;
+    return Promise.resolve(desktop.updateServerName(server.url, server.name, opts));
   }
 
   /** Desktop versions without the shared list: the plain history, merged
@@ -431,7 +436,7 @@ class ServerManager {
     const seen = (e) => [e.name, e.customIcon ? (e.icon || null) : null].join('\n');
     if (this.desktopAsksFor(normalizedUrl) && seen(next) !== seen(server)) {
       // The app asks the user; the edit is made here once it said yes.
-      return this._pushEdit(next).then((changed) => (changed === true ? this._replaceServer(server, next) : false));
+      return this._pushEdit(next, { user: true }).then((changed) => (changed === true ? this._replaceServer(server, next) : false));
     }
     this._replaceServer(server, next);
     if (!this.desktopGated()) {
@@ -460,10 +465,11 @@ class ServerManager {
 
   /** In a Desktop app that asks first: the app asks the user, and the
    *  server is removed here only once it is gone from the app's list.
-   *  Resolves to true when it was removed. */
+   *  Marked as the user's own, since the app takes unmarked removals for
+   *  syncing. Resolves to true when it was removed. */
   async removeThroughDesktop(url) {
     const normalizedUrl = this._normalizeUrl(url);
-    const history = await this._desktop().removeServerHistory(normalizedUrl);
+    const history = await this._desktop().removeServerHistory(normalizedUrl, { user: true });
     // Anything but a list without it means the app kept it.
     if (!Array.isArray(history) || history.some(h => this._normalizeUrl(h && h.url) === normalizedUrl)) return false;
     this._removeHere(normalizedUrl);
