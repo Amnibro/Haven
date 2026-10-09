@@ -6,6 +6,7 @@ const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('./roleDef
 const { migrateGroupDmTrust } = require('./groupDmSchema');
 const { migrateSelfDms } = require('./selfDmSchema');
 const { migrateForumVotes } = require('./forumVotes');
+const { migrateForumBlog } = require('./forumBlog');
 
 let db;
 
@@ -1149,6 +1150,7 @@ function initDatabase() {
   addColumn('channels', 'is_group', "INTEGER DEFAULT 0");
   migrateSelfDms(db, addColumn);
   migrateForumVotes(db, addColumn);
+  migrateForumBlog(addColumn);
   db.exec(`
     CREATE TABLE IF NOT EXISTS dm_group_invites (
       channel_id INTEGER NOT NULL,

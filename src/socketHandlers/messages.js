@@ -8,6 +8,7 @@ const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searc
 const selfDestruct = require('../selfDestruct');
 const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
 const { votesFor } = require('../forumVotes');
+const forumBlog = require('../forumBlog');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -196,7 +197,7 @@ module.exports = function register(socket, ctx) {
     const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 10) : [];
     const tagMode = data.tagMode === 'all' ? 'all' : 'some';
 
-    const channel = db.prepare('SELECT id, is_forum, role_gate FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_forum, role_gate, forum_blog FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = db.prepare(
@@ -383,6 +384,9 @@ module.exports = function register(socket, ctx) {
     }
     // Likes and dislikes on forum topics, with this reader's own vote (#5742).
     const topicVotes = channel.is_forum ? votesFor(db, socket.user.id, msgIds) : null;
+    // Blog mode: each card counts only the comments, not the author's own
+    // follow-ups (#5742).
+    const blogComments = channel.is_forum && Number(channel.forum_blog) === 1 ? forumBlog.commentCounts(db, msgIds) : null;
 
     const enriched = messages.map(m => {
       const obj = { ...m };
@@ -408,6 +412,7 @@ module.exports = function register(socket, ctx) {
         const lastId = tinfo.lastReplyId || 0;
         const seen = threadReadMap.get(m.id);
         tinfo.unread = seen !== undefined ? lastId > seen : (m.user_id !== socket.user.id || lastId > 0);
+        if (blogComments) tinfo.comments = blogComments.get(m.id) || 0;
         obj.thread = tinfo;
         obj.votes = topicVotes.get(m.id) || { likes: 0, dislikes: 0, mine: 0 };
         delete obj.score;
@@ -2879,6 +2884,9 @@ module.exports = function register(socket, ctx) {
       });
     }
 
+    // Blog mode (#5742): which replies are the author's additions to the post.
+    const blogParts = forumBlog.blogOn(db, channel.id) ? forumBlog.partIdsOf(db, parentId) : null;
+
     const enriched = messages.map(m => {
       const obj = { ...m };
       const atags = threadTagMap.get(m.id);
@@ -2904,11 +2912,15 @@ module.exports = function register(socket, ctx) {
         obj.avatar_shape = 'square';
         obj.border = null; obj.borderTransform = null; obj.animateProfile = 'trigger';
       }
+      if (blogParts) obj.post_part = blogParts.has(m.id);
       return obj;
     });
 
     socket.emit('thread-messages', {
       parentId,
+      // Blog mode (#5742): the client shows the post_part replies with the
+      // post and the rest under Comments.
+      blog: !!blogParts,
       parentContent: parent.content,
       parentUserId: parent.user_id || null,
       parentUsername: parent.username || '[Deleted User]',
@@ -3017,6 +3029,10 @@ module.exports = function register(socket, ctx) {
           WHERE m.id = ?
         `).get(replyTo));
       }
+      // Blog mode (#5742): the server, not the sender, says whether this is
+      // part of the post or a comment.
+      const blogMode = forumBlog.blogOn(db, channel.id);
+      if (blogMode) message.post_part = forumBlog.isPart(db, message.id);
 
       // Emit to everyone in the channel who has the thread open
       io.to(`channel:${code}`).emit('new-thread-message', {
@@ -3049,7 +3065,8 @@ module.exports = function register(socket, ctx) {
           lastReplyId: lastMsg ? lastMsg.id : null,
           // Lets forum cards light up for everyone but the person who replied (#5641).
           senderId: socket.user.id,
-          participants: participants.map(p => ({ username: p.username, avatar: p.avatar }))
+          participants: participants.map(p => ({ username: p.username, avatar: p.avatar })),
+          ...(blogMode ? forumBlog.threadExtras(db, channel.id, parentId) : {})
         }
       });
 

@@ -127,6 +127,7 @@ const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext } = require('./src/socketHandlers');
 const { initFerry, stopFerry } = require('./src/ferry');
+const { threadExtras: forumBlogThreadExtras } = require('./src/forumBlog');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
 const {
   BotAudioManager,
@@ -1967,6 +1968,8 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
         lastReplyId: last ? last.id : null,
         senderId: null,
         participants: participants.map(p => ({ username: p.username, avatar: p.avatar })),
+        // A bot's reply is always a comment in a blog-mode forum (#5742).
+        ...forumBlogThreadExtras(db, webhook.channel_id, threadId),
       },
     });
   } else if (io) {
