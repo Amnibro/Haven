@@ -59,6 +59,7 @@ const createRoleRefresh  = require('./roleRefresh');
 const registerFerry      = require('./ferry');
 const registerGroupE2E   = require('./groupE2E');
 const registerTags       = require('./tags');
+const registerMemberDefaults = require('./memberDefaults');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
 // Some failures would repeat on every timer tick, connection or message.
@@ -2695,6 +2696,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerFerry(socket, ctx);
     registerGroupE2E(socket, ctx);
     registerTags(socket, ctx);
+    registerMemberDefaults(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made

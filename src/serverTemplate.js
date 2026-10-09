@@ -9,6 +9,7 @@ const diskGuard = require('./diskGuard');
 const { MEMBER_PERMS, getAdminRoleId } = require('./roleDefaults');
 const { normalizeHost } = require('../public/js/automod-rules.js');
 const { BUILTIN_THEMES, isThemeFilename, parseThemeMetadata } = require('./themeMetadata');
+const memberDefaults = require('./memberDefaults');
 const FORMAT = 'haven-server-template';
 const VERSION = 1;
 const LIMITS = { bytes: 12 * 1024 * 1024, asset: 2 * 1024 * 1024, theme: 512 * 1024, assets: 8 * 1024 * 1024, assetCount: 200, channels: 500, roles: 100, posts: 500, post: 16000, webhooks: 200, domains: 2000, menus: 50, access: 5000, emojis: 500, stickers: 500, categories: 200 };
@@ -63,6 +64,9 @@ const SETTINGS = {
   automod_preview_allowlist_only: B, automod_ban_ip: B, automod_escalation: F((v) => (validEscalation(v) ? v : null)), automod_words: F(normalizeWordGroups),
   default_theme: F((v) => (BUILTIN_THEMES.includes(v) || (v.startsWith('file:') && isThemeFilename(v.slice(5))) ? v : null)),
   published_themes: F(jsonOf((o) => Array.isArray(o) && o.length <= 500 && o.every(isThemeFilename) && new Set(o).size === o.length)),
+  // Defaults for new members (#5739): the look-and-feel snapshot, without the
+  // source server's version.
+  member_defaults: F(memberDefaults.templateValue),
 };
 function checkSetting(key, raw) {
   const s = SETTINGS[key];
