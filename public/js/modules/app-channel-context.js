@@ -18,6 +18,8 @@ _initChannelContextMenu() {
 },
 
 _openChannelCtxMenu(code, btnEl) {
+  // One menu at a time: a DM menu left open sat on top of this one (#5744).
+  this._closeDmCtxMenu?.();
   this._ctxMenuChannel = code;
   const menu = this._ctxMenuEl;
   if (!menu) return;
@@ -574,6 +576,8 @@ async _collectDmAttachments(code) {
 },
 
 _openDmCtxMenu(code, anchorEl, mouseEvent) {
+  // One menu at a time, as for channels (#5744).
+  this._closeChannelCtxMenu?.();
   this._dmCtxMenuCode = code;
   const menu = this._dmCtxMenuEl;
   if (!menu) return;

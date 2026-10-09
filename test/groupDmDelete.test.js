@@ -54,6 +54,8 @@ function setup({ members, cached, confirmed = true, admin = false }) {
     channels: [{ code: CODE, name: 'Crew', is_dm: 1, is_group: 1, group_members: cached }],
     unreadCounts: {},
     _dmCtxMenuEl: menu,
+    // Opening a DM menu closes the channel menu (#5744); there is no page here.
+    _closeChannelCtxMenu: () => {},
     _groupName: (ch) => ch.name,
     _groupRoster: async () => (members ? { members } : null),
     _collectDmAttachments: async () => ['/uploads/a.bin'],
