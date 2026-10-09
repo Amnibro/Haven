@@ -2020,7 +2020,7 @@
       "automod_min_age": "New accounts can't post links for (hours)",
       "automod_min_age_hint": "0 disables this. Applies even to allowed domains, and is the single most effective rule against register-post-link-get-banned-repeat.",
       "automod_post_wait": "New accounts must wait before posting (minutes)",
-      "automod_post_wait_hint": "0 turns this off. A new account cannot post messages, forum topics, thread replies, polls or files, or message anyone, until it is this old. Up to 10080 (one week). Members at or above the role level below are not held back.",
+      "automod_post_wait_hint": "0 turns this off. A new account cannot post messages, forum topics, thread replies, polls or files, or message anyone, until it is this old. Up to 10080 (one week). Members at or above the role level below are not held back. Guest accounts are always new, so with this on, guests can only read.",
       "automod_exempt_level": "Skip filtering at role level",
       "automod_exempt_hint": "Members at or above this level are never filtered. Admins are always exempt.",
       "automod_rules_group": "Rules",
