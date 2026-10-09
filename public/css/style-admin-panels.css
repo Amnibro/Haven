@@ -1515,3 +1515,13 @@
 .template-row { margin-top: 3px; color: var(--text-secondary); }
 .template-row-label { color: var(--text-primary); font-weight: 600; }
 
+/* ── Defaults for new members (#5739) ── */
+.member-defaults-list { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; max-height: 280px; overflow-y: auto; }
+.member-defaults-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; font-size: 0.75rem; padding: 3px 0; cursor: pointer; }
+.member-defaults-row.is-disabled { cursor: default; opacity: 0.6; }
+.member-defaults-name { color: var(--text-primary); }
+.member-defaults-value { color: var(--text-muted); text-align: right; overflow-wrap: anywhere; }
+.member-defaults-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.member-defaults-summary { margin-top: 8px; font-size: 0.75rem; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; }
+.member-defaults-summary strong { color: var(--text-primary); font-weight: 600; }
+.member-defaults-summary-label { display: block; color: var(--text-primary); font-weight: 600; }

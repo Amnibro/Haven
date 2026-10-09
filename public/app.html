@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.18.15">
+  <link rel="stylesheet" href="/css/style.css?v=4.19.13">
   <script src="/js/theme-compat.js?v=4.18.3"></script>
   <script src="/js/theme-init.js?v=4.17.22"></script>
 </head>
@@ -2608,6 +2608,22 @@
             <small class="settings-hint" data-i18n-html="settings.admin.welcome_message_hint">Shown when a new user joins a channel. Use <code>{user}</code> for the username. Leave blank to disable.</small>
           </div>
 
+          <!-- Defaults for new members (#5739): app-member-defaults.js -->
+          <div class="settings-group member-defaults" id="member-defaults-group" style="margin-top:12px">
+            <small class="settings-group-label" data-i18n="settings.admin.member_defaults.title">Defaults for New Members</small>
+            <p class="settings-hint" style="margin:0 0 8px" data-i18n="settings.admin.member_defaults.hint">Share your own look and feel. New members start with it once, and anyone can change any of it afterwards. Tick what to share; the right column is your current value. These buttons take effect right away, no Save needed.</p>
+            <div id="member-defaults-list" class="member-defaults-list"></div>
+            <div class="member-defaults-actions">
+              <button type="button" class="btn-sm btn-accent" id="member-defaults-capture" data-i18n="settings.admin.member_defaults.capture">Use my current settings as the defaults</button>
+              <button type="button" class="btn-sm" id="member-defaults-clear" data-i18n="settings.admin.member_defaults.clear">Clear defaults</button>
+            </div>
+            <div class="member-defaults-summary" id="member-defaults-summary"></div>
+            <div class="member-defaults-actions">
+              <button type="button" class="btn-sm" id="member-defaults-push" data-i18n="settings.admin.member_defaults.push">Apply once to everyone now</button>
+            </div>
+            <small class="settings-hint" data-i18n="settings.admin.member_defaults.push_hint">Everyone gets the saved defaults once more at their next load, but only for settings they never changed: ones still at Haven's default or at the previous shared default.</small>
+          </div>
+
           <!-- Custom Themes -->
           <div class="settings-group" style="margin-top:12px">
             <small class="settings-group-label" data-i18n="settings.admin.custom_themes_title">Custom Themes</small>
@@ -5022,7 +5038,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.19.6"></script>
+  <script type="module" src="/js/app.js?v=4.19.13"></script>
   <script src="/js/plugin-loader.js?v=4.18.3"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
