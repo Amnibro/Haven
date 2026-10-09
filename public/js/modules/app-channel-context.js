@@ -357,6 +357,14 @@ _updateChannelFunctionsPanel(ch) {
     if (nsfwRow) { nsfwRow.textContent = ch.is_nsfw ? t('channel_functions.on') : t('channel_functions.off'); nsfwRow.className = 'cfn-badge ' + (ch.is_nsfw ? 'cfn-on' : 'cfn-off'); }
     const tagsRow = _cfnPanel?.querySelector('.cfn-row[data-fn="forum-tags"]');
     if (tagsRow) { tagsRow.style.display = ch.is_forum ? '' : 'none'; const b = tagsRow.querySelector('.cfn-badge'); if (b) b.textContent = String(this._forumTagsOf ? this._forumTagsOf(ch.code).length : 0); }
+    // Votes on posts (#5742): forums only.
+    const votesRow = _cfnPanel?.querySelector('.cfn-row[data-fn="forum-votes"]');
+    if (votesRow) {
+      votesRow.style.display = ch.is_forum ? '' : 'none';
+      const on = !!Number(ch.forum_votes);
+      const b = votesRow.querySelector('.cfn-badge');
+      if (b) { b.textContent = this._forumVotesBadge ? this._forumVotesBadge(ch) : ''; b.className = 'cfn-badge ' + (on ? 'cfn-on' : 'cfn-off'); }
+    }
   }
   this._setCfnBadge('private', isPrivate, t(isPrivate ? 'channel_functions.on' : 'channel_functions.off'));
   const gateBadge = this._roleGateBadge(ch);

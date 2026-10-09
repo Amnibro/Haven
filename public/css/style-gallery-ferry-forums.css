@@ -1022,6 +1022,16 @@
 .forum-topic-replies { color: var(--accent); }
 .forum-topic-edit { margin-left: auto; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; opacity: 0.6; }
 .forum-topic-edit:hover { opacity: 1; color: var(--accent); }
+/* Votes on posts (#5742): a like button with its count, and a dislike button when the forum allows them. */
+.forum-votes { display: inline-flex; align-items: center; gap: 0.3rem; }
+.forum-vote { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.1rem 0.45rem; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: inherit; font: inherit; line-height: 1.4; cursor: pointer; }
+.forum-vote:hover { border-color: var(--accent); }
+.forum-vote.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text-primary); }
+.messages.forum-gallery .forum-vote { border-color: rgba(235,235,245,0.35); }
+.messages.forum-gallery .forum-vote.active { color: #fff; }
+.messages.forum-gallery[data-forum-tile="small"] .forum-votes { display: none; }
+.messages.forum-gallery .forum-topic-meta:has(.forum-votes) { flex-wrap: wrap; row-gap: 0.25rem; }
+.thread-forum-meta .forum-votes { margin-left: 0.6rem; }
 .forum-load-more { align-self: center; margin-top: 0.75rem; }
 /* Gallery: a grid of true squares, the image fills the tile, the words sit on a scrim. */
 .messages.forum-gallery .forum-topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--forum-tile, 11rem), 1fr)); gap: clamp(0.25rem, calc(var(--forum-tile, 11rem) * 0.05), 0.85rem); }

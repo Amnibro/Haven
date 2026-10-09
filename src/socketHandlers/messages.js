@@ -7,6 +7,7 @@ const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyCo
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
 const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
+const { votesFor } = require('../forumVotes');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -107,19 +108,21 @@ module.exports = function register(socket, ctx) {
   // id) but resolve to that message's activity stamp first, so "older than X"
   // means "less recently active than X".
   const FORUM_ACTIVITY = 'COALESCE((SELECT MAX(t.created_at) FROM messages t WHERE t.thread_id = m.id), m.created_at)';
+  // Likes minus dislikes, for the Most liked order (#5742).
+  const FORUM_SCORE = '(SELECT COALESCE(SUM(v.value), 0) FROM forum_votes v WHERE v.message_id = m.id)';
   const FORUM_SELECT = `
     SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.title, m.tags, m.closed, m.nsfw,
            COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
            COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile,
-           ${FORUM_ACTIVITY} AS activity_at
+           ${FORUM_ACTIVITY} AS activity_at, ${FORUM_SCORE} AS score
     FROM messages m LEFT JOIN users u ON m.user_id = u.id
     WHERE m.channel_id = ? AND m.thread_id IS NULL`;
   // Sort key for a forum page: 'active' (default, latest reply bumps the
-  // topic) or 'created' (date posted). Tags filter with 'some' (any of the
-  // picked tags) or 'all' (every picked tag), read from the JSON array on
-  // the topic row.
-  function forumKeyExpr(sort) { return sort === 'created' ? 'm.created_at' : FORUM_ACTIVITY; }
-  function forumKeyCol(sort) { return sort === 'created' ? 'created_at' : 'activity_at'; }
+  // topic), 'created' (date posted) or 'top' (most liked). Tags filter with
+  // 'some' (any of the picked tags) or 'all' (every picked tag), read from
+  // the JSON array on the topic row.
+  function forumKeyExpr(sort) { return sort === 'created' ? 'm.created_at' : sort === 'top' ? FORUM_SCORE : FORUM_ACTIVITY; }
+  function forumKeyCol(sort) { return sort === 'created' ? 'created_at' : sort === 'top' ? 'score' : 'activity_at'; }
   function forumTagSql(tags, mode) {
     if (!tags.length) return { sql: '', params: [] };
     const one = "EXISTS (SELECT 1 FROM json_each(COALESCE(m.tags, '[]')) je WHERE je.value = ?)";
@@ -133,7 +136,7 @@ module.exports = function register(socket, ctx) {
   // (reversed by the caller, like the chronological "before" query).
   function forumOlder(channelId, cursorId, limit, opts) {
     const at = forumKeyOf(cursorId, opts.sort);
-    if (!at) return [];
+    if (at == null) return [];
     const key = forumKeyCol(opts.sort); const tag = forumTagSql(opts.tags, opts.tagMode);
     return db.prepare(`
       SELECT * FROM (${FORUM_SELECT}${tag.sql})
@@ -143,7 +146,7 @@ module.exports = function register(socket, ctx) {
   }
   function forumNewer(channelId, cursorId, limit, opts) {
     const at = forumKeyOf(cursorId, opts.sort);
-    if (!at) return [];
+    if (at == null) return [];
     const key = forumKeyCol(opts.sort); const tag = forumTagSql(opts.tags, opts.tagMode);
     return db.prepare(`
       SELECT * FROM (${FORUM_SELECT}${tag.sql})
@@ -189,7 +192,7 @@ module.exports = function register(socket, ctx) {
     const after  = isInt(data.after)  ? data.after  : null;
     const around = isInt(data.around) ? data.around : null;
     const limit = isInt(data.limit) && data.limit > 0 && data.limit <= 100 ? data.limit : 80;
-    const sort = data.sort === 'created' ? 'created' : 'active';
+    const sort = data.sort === 'created' || data.sort === 'top' ? data.sort : 'active';
     const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 10) : [];
     const tagMode = data.tagMode === 'all' ? 'all' : 'some';
 
@@ -378,6 +381,8 @@ module.exports = function register(socket, ctx) {
         .all(socket.user.id, ...msgIds)
         .forEach(r => threadReadMap.set(r.thread_id, r.last_read_reply_id));
     }
+    // Likes and dislikes on forum topics, with this reader's own vote (#5742).
+    const topicVotes = channel.is_forum ? votesFor(db, socket.user.id, msgIds) : null;
 
     const enriched = messages.map(m => {
       const obj = { ...m };
@@ -404,6 +409,8 @@ module.exports = function register(socket, ctx) {
         const seen = threadReadMap.get(m.id);
         tinfo.unread = seen !== undefined ? lastId > seen : (m.user_id !== socket.user.id || lastId > 0);
         obj.thread = tinfo;
+        obj.votes = topicVotes.get(m.id) || { likes: 0, dislikes: 0, mine: 0 };
+        delete obj.score;
       }
       if ('tags' in m) obj.tags = parseTags(m.tags);
       const atags = attachmentTagMap.get(m.id);

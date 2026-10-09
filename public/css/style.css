@@ -18,8 +18,8 @@
 @import url('/css/style-streams-markdown.css?v=4.17.8');
 @import url('/css/style-presence-connections.css?v=4.17.8');
 @import url('/css/style-roles-layout-polls.css?v=4.17.23');
-@import url('/css/style-admin-panels.css?v=4.19.13');
-@import url('/css/style-gallery-ferry-forums.css?v=4.17.8');
+@import url('/css/style-admin-panels.css?v=4.19.14');
+@import url('/css/style-gallery-ferry-forums.css?v=4.19.14');
 
 /* The rules themselves live in the files imported above, in this order. Later
    files win over earlier ones on equal specificity, as they did when this was

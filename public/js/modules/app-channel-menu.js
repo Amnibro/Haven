@@ -285,6 +285,9 @@ _bindChannelMenu() {
     } else if (fn === 'forum-tags') {
       document.getElementById('channel-functions-panel').style.display = 'none';
       this._forumEditTags?.(code);
+    } else if (fn === 'forum-votes') {
+      document.getElementById('channel-functions-panel').style.display = 'none';
+      this._forumVotesEdit?.(code);
     } else if (fn === 'slow-mode') {
       const badge = row.querySelector('.cfn-badge');
       if (!badge || badge.tagName === 'INPUT') return;

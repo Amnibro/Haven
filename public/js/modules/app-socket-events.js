@@ -6,6 +6,7 @@
 export default {
 
 _listenFeatureEvents() {
+  this._listenForumVotes?.();
   // ── Reactions ──────────────────────────────────────
   this.socket.on('reactions-updated', (data) => {
     if (data.channelCode === this.currentChannel || data.channelCode === this._activeDMPip) {

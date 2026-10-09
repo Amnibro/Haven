@@ -45,7 +45,8 @@ _forumPrefs(code) {
   // default view and shape; the size slider is still theirs (#5656).
   const locked = !!def.locked && !this._forumCanManage();
   return {
-    sort: saved.sort === 'created' ? 'created' : 'active',
+    // Most liked only while the forum has votes on (#5742).
+    sort: saved.sort === 'created' ? 'created' : saved.sort === 'top' && this._forumVotesMode?.(code) ? 'top' : 'active',
     view: this._forumParseView(!locked && own && saved.view ? saved.view : def.view),
     tile: this._forumParseTile(own && saved.tile != null ? saved.tile : def.tile),
     shape: this._forumParseShape(!locked && own && saved.shape ? saved.shape : def.shape),
@@ -147,7 +148,8 @@ _forumThumbOf(msg) {
 
 _forumSortTopics(list) {
   const p = this._forumPrefs();
-  const key = p.sort === 'created' ? (m) => new Date(m.created_at).getTime() || 0 : (m) => this._forumActivityOf(m);
+  const key = p.sort === 'created' ? (m) => new Date(m.created_at).getTime() || 0
+    : p.sort === 'top' ? (m) => this._forumScoreOf(m) : (m) => this._forumActivityOf(m);
   // Pinned first, then open topics, then closed ones (#5624), each by the chosen order.
   return [...list].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (a.closed ? 1 : 0) - (b.closed ? 1 : 0) || key(b) - key(a) || b.id - a.id);
 },
@@ -214,6 +216,7 @@ _forumToolbarEl(code) {
         <select id="forum-sort" class="forum-select" title="${t('forum.sort')}">
           <option value="active"${p.sort === 'active' ? ' selected' : ''}>${t('forum.sort_active')}</option>
           <option value="created"${p.sort === 'created' ? ' selected' : ''}>${t('forum.sort_created')}</option>
+          ${this._forumVotesMode?.(code) ? `<option value="top"${p.sort === 'top' ? ' selected' : ''}>${t('forum.sort_top')}</option>` : ''}
         </select>
         ${showViewControls ? `<div class="forum-view-toggle" role="group">
           <button type="button" class="forum-view-btn${p.view === 'list' ? ' active' : ''}" data-view="list" title="${t('forum.view_list')}">☰</button>
@@ -322,10 +325,12 @@ _createForumTopicEl(msg) {
       <div class="forum-topic-meta">
         <span class="message-author forum-topic-author">${this._escapeHtml(msg.username || '')}</span>
         <span class="forum-topic-replies" data-thread-parent="${msg.id}">${count ? `💬 ${t('forum.replies', { count })}` : t('thread_runtime.reply_to_topic')}</span>
+        ${this._forumVotesHtml ? this._forumVotesHtml(msg) : ''}
         <span class="forum-topic-when" title="${this._fmtDateTime(when)}">${this._forumAgo(when)}</span>
         ${canEdit ? `<button type="button" class="forum-topic-edit" title="${t('forum.edit_post')}">✎</button>` : ''}
       </div>
     </div>`;
+  this._forumBindVotes?.(el, msg);
   el.addEventListener('click', (e) => {
     if (e.target.closest('.forum-topic-edit')) { e.stopPropagation(); this._forumEditTopicMeta(msg.id); return; }
     // The first click on a blurred picture or preview shows it; the title and
@@ -821,10 +826,11 @@ _forumApplyThreadChrome(parentId) {
     <div class="thread-forum-text">
       <div class="thread-forum-title">${this._escapeHtml(this._forumTitleOf(topic))}</div>
       ${flags ? `<div class="forum-topic-tags thread-forum-tags">${flags}</div>` : ''}
-      <div class="thread-forum-meta">${this._escapeHtml(topic.username || '')} · <span title="${this._escapeHtml(this._fmtDateTime(when))}">${this._forumAgo(when)}</span></div>
+      <div class="thread-forum-meta">${this._escapeHtml(topic.username || '')} · <span title="${this._escapeHtml(this._fmtDateTime(when))}">${this._forumAgo(when)}</span>${this._forumVotesHtml ? this._forumVotesHtml(topic) : ''}</div>
     </div>
     <button type="button" class="btn-sm thread-forum-layout" title="${this._escapeHtml(t(full ? 'thread_runtime.forum_side_title' : 'thread_runtime.forum_full_title'))}">${t(full ? 'thread_runtime.forum_side' : 'thread_runtime.forum_full')}</button>`;
   bar.style.display = 'flex';
+  this._forumBindVotes?.(bar, topic);
   bar.querySelector('.thread-forum-layout').addEventListener('click', () => {
     localStorage.setItem('haven_forum_topic_full', full ? '0' : '1');
     this._forumApplyThreadChrome(parentId);
