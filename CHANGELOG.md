@@ -11,6 +11,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.20.0] - 2026-10-09
+
+Defaults for new members, a posting wait for new accounts, likes on forum
+posts, more control over group DMs, and fixes for issues found after 4.19.0.
+
+### Added
+- Defaults for new members (#5739): in Server Branding, under Default Theme, set Haven up the way you like and share it as the starting point for new members: theme, effects, layout, density, zoom, icon style, reaction size and more, each one optional. New members start with them and can change anything afterwards. "Apply once to everyone now" gives people who are already here the same defaults once, only for settings they have not changed themselves.
+- Auto-Mod: new accounts can be made to wait a number of minutes before they post messages, thread replies, forum posts, files, polls or DMs (#5742). Off by default. Admins and anyone at or above the Auto-Mod exempt level are never held back, and a refused post keeps what was typed. Guests are always new, so while it is on they can only read.
+- Forums: a Votes on posts switch in Channel Functions, for likes or likes and dislikes on each post, with live counts and a Most liked sort (#5742).
+- Group DMs: the server admin can delete a group for everyone in it, and the person who started a group can remove members from it. The last person left in a group can delete it from the DM menu.
+
+### Changed
+- Kicking someone from a group DM removes the group from their app at once, and everyone still in it gets an updated member list and a new key the kicked person does not have (#5740).
+- In Haven Desktop 1.6.1, the app itself asks before a server page adds, removes or renames another server in your list, so the page no longer asks a second time.
+- Someone kicked from a channel is told which channel, instead of a message that read like a kick from the server.
+- Push notifications through a self-hosted ntfy on the same network work again when HAVEN_ALLOW_PRIVATE_CALLBACKS is set, the same setting bot callbacks use, and a refused push subscription is now logged (#5743, thanks Bo0sted).
+
+### Fixed
+- Names you gave servers in your list were replaced by each server's own name a few seconds later. Your names stay now, including ones set before 4.19.0.
+- The 4.19.0 upgrade could turn an old one to one DM, where the other person had left, into notes to self. Those DMs are corrected.
+- A channel menu and a DM menu could be open at the same time (#5744).
+- Security: updated proxy-addr, which could let a client fake its IP address behind some proxy setups (GHSA-jqcg-44mw-7w3h).
+
 ## [4.19.0] - 2026-10-06
 
 Group DMs with end-to-end encryption, server templates, the Chrome layout,
