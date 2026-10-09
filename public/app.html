@@ -3041,6 +3041,11 @@
             </label>
             <small class="settings-hint" data-i18n="settings.admin.automod_min_age_hint">0 disables this. Applies even to allowed domains, and is the single most effective rule against register-post-link-get-banned-repeat.</small>
             <label class="select-row" style="margin-top:8px">
+              <span data-i18n="settings.admin.automod_post_wait">New accounts must wait before posting (minutes)</span>
+              <input type="number" id="automod-new-account-post-minutes" min="0" max="10080" step="1" style="max-width:90px">
+            </label>
+            <small class="settings-hint" data-i18n="settings.admin.automod_post_wait_hint">0 turns this off. A new account cannot post messages, forum topics, thread replies, polls or files, or message anyone, until it is this old. Up to 10080 (one week). Members at or above the role level below are not held back.</small>
+            <label class="select-row" style="margin-top:8px">
               <span data-i18n="settings.admin.automod_exempt_level">Skip filtering at role level</span>
               <input type="number" id="automod-exempt-level" min="0" max="100" step="1" style="max-width:90px">
             </label>
@@ -5038,7 +5043,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.19.13"></script>
+  <script type="module" src="/js/app.js?v=4.19.14"></script>
   <script src="/js/plugin-loader.js?v=4.18.3"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

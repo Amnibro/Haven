@@ -877,6 +877,19 @@ _listenPresenceAndVoice() {
     this._showToast(msg, 'error');
   });
 
+  // New accounts wait before posting (#5742). The server says how long is
+  // left; the text, or the forum post being written, comes back for later.
+  this.socket.on('new-account-wait', (data) => {
+    const n = Number(data && data.minutes) || 0;
+    const msg = !n ? t('automod.new_account_check_failed')
+      : n === 1 ? t('automod.new_account_wait_one')
+      : n >= 120 ? t('automod.new_account_wait_hours', { n: Math.round(n / 60) })
+      : t('automod.new_account_wait_minutes', { n });
+    this._restoreRefusedDraft(null, true);
+    this._forumRestoreDraft?.();
+    this._showToast(msg, 'error');
+  });
+
   this.socket.on('toast', (data) => {
     if (data && data.message) this._showToast(data.message, data.type || 'info');
   });

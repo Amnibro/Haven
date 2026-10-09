@@ -516,6 +516,7 @@ function initDatabase() {
   insertSetting.run('automod_link_mode', 'allowlist');        // 'off' | 'allowlist' | 'blocklist'
   insertSetting.run('automod_link_exempt_level', '50');       // effective level that bypasses link filtering
   insertSetting.run('automod_link_min_account_hours', '24');  // accounts younger than this post no links at all
+  insertSetting.run('automod_new_account_post_minutes', '0'); // accounts younger than this post nothing (#5742), off by default
   insertSetting.run('automod_scan_edits', 'true');            // otherwise: post clean, edit in the payload
   insertSetting.run('automod_scan_profile', 'true');          // display name / status text / bio
   insertSetting.run('automod_scan_dms', 'true');              // mass-DM spam is worse than a channel post

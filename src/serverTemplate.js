@@ -59,7 +59,7 @@ const SETTINGS = {
   channel_tag_sorts: F(jsonOf((o) => isObj(o) && Object.keys(o).length <= LIMITS.categories && Object.entries(o).every(([k, v]) => label(k, 40) && SORT_MODES.includes(v)))),
   permission_thresholds: F(thresholdsOf),
   channel_templates: F(jsonOf((o) => Array.isArray(o) && o.length <= 20 && o.every((x) => isObj(x) && label(x.name, 30) && isObj(x.fields) && Object.entries(x.fields).every(([k, v]) => typeof v === TEMPLATE_FIELDS[k] && (typeof v !== 'string' || (v.length <= 256 && LABEL_RE.test(v || ' '))) && (typeof v !== 'number' || (Number.isInteger(v) && v >= 0 && v <= 3600)))))),
-  automod_enabled: B, automod_link_mode: E('off', 'allowlist', 'blocklist'), automod_link_exempt_level: N(0, 100), automod_link_min_account_hours: N(0, 8760),
+  automod_enabled: B, automod_link_mode: E('off', 'allowlist', 'blocklist'), automod_link_exempt_level: N(0, 100), automod_link_min_account_hours: N(0, 8760), automod_new_account_post_minutes: N(0, 10080),
   automod_scan_edits: B, automod_scan_profile: B, automod_scan_dms: B, automod_block_ip_urls: B, automod_block_punycode: B, automod_block_obfuscated: B,
   automod_preview_allowlist_only: B, automod_ban_ip: B, automod_escalation: F((v) => (validEscalation(v) ? v : null)), automod_words: F(normalizeWordGroups),
   default_theme: F((v) => (BUILTIN_THEMES.includes(v) || (v.startsWith('file:') && isThemeFilename(v.slice(5))) ? v : null)),

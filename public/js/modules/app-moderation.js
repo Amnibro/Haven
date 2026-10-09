@@ -191,6 +191,7 @@ _initAutomodPanel() {
   ].forEach(([id, key]) => on(id, 'change', (e) => setKey(key, e.target.checked ? 'true' : 'false')));
 
   on('automod-min-account-hours', 'change', (e) => setKey('automod_link_min_account_hours', String(parseInt(e.target.value, 10) || 0)));
+  on('automod-new-account-post-minutes', 'change', (e) => setKey('automod_new_account_post_minutes', String(Math.min(10080, Math.max(0, parseInt(e.target.value, 10) || 0)))));
   on('automod-exempt-level', 'change', (e) => setKey('automod_link_exempt_level', String(parseInt(e.target.value, 10) || 0)));
   on('automod-log-channel', 'change', (e) => setKey('automod_log_channel', e.target.value.trim()));
 
@@ -361,6 +362,7 @@ _applyAutomodSettings() {
   bool('fcm-enabled', 'fcm_enabled', 'true');
 
   num('automod-min-account-hours', 'automod_link_min_account_hours', '0');
+  num('automod-new-account-post-minutes', 'automod_new_account_post_minutes', '0');
   num('automod-exempt-level', 'automod_link_exempt_level', '50');
   const logCh = document.getElementById('automod-log-channel');
   if (logCh) logCh.value = s.automod_log_channel || '';

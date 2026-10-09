@@ -151,7 +151,7 @@ module.exports = function register(socket, ctx) {
       'referrer_policy', // Referrer-Policy header, admin-configurable under Settings → Security
       // (v3.42.0) Auto-moderation + voice privacy
       'automod_enabled', 'automod_link_mode', 'automod_link_exempt_level',
-      'automod_link_min_account_hours', 'automod_scan_edits', 'automod_scan_profile',
+      'automod_link_min_account_hours', 'automod_new_account_post_minutes', 'automod_scan_edits', 'automod_scan_profile',
       'automod_scan_dms', 'automod_block_ip_urls', 'automod_block_punycode',
       'automod_block_obfuscated', 'automod_preview_allowlist_only', 'automod_escalation',
       'automod_ban_ip', 'automod_log_channel', 'automod_words',
@@ -189,6 +189,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'automod_link_mode' && !['off', 'allowlist', 'blocklist'].includes(value)) return;
     if (key === 'automod_link_exempt_level') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100) return; }
     if (key === 'automod_link_min_account_hours') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 8760) return; }
+    if (key === 'automod_new_account_post_minutes') { const n = parseInt(value, 10); if (!Number.isInteger(n) || n < 0 || n > 10080 || String(n) !== String(value).trim()) return; }
     if (key === 'automod_log_channel' && value && !/^[a-f0-9]{8}$/i.test(value)) return;
     if (key === 'role_gate_notice' && !['0', '1'].includes(value)) return;
     // Word groups (#5614): stored normalised, so a hand-edited or oversized

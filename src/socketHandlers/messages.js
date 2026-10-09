@@ -36,6 +36,7 @@ module.exports = function register(socket, ctx) {
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
           logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
+  const { youngAccountWait, refuseYoungAccount } = require('./postingWait')(socket, ctx);
 
   // Membership alone is not access. A person can hold a membership row for a
   // channel whose required roles they lack (joining with the server code adds
@@ -1131,7 +1132,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
     }
 
-    const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_group, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_group, is_self_dm, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
     if (channel.is_group && !isGroupEnvelope(content)) return socket.emit('error-msg', 'Group messages must be end-to-end encrypted. Update Haven to send here.');
     if (content.length > contentCap(_maxChars, channel, content)) {
@@ -1168,6 +1169,10 @@ module.exports = function register(socket, ctx) {
     ).get(channel.id, socket.user.id);
     if (!member) return socket.emit('error-msg', 'Not a member of this channel');
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
+
+    // New accounts wait before posting (#5742): messages, forum topics,
+    // attachments and DMs alike. A DM with yourself is notes, not a post.
+    if (!channel.is_self_dm && refuseYoungAccount(channel.id)) return;
 
     // ── Auto-mod link policy (v3.42.0) ────────────────────
     // Runs before the message is persisted or broadcast. A blocked message
@@ -1740,6 +1745,8 @@ module.exports = function register(socket, ctx) {
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) return cb({ error: 'This channel is read-only' });
     const mute = activeMuteNotice(socket.user.id);
     if (mute) return cb({ error: mute });
+    const wait = youngAccountWait(channel.id);
+    if (wait) return cb({ error: wait.message, newAccountWait: wait.minutes });
     const content = sanitizeText(pingSafe(data.content.trim(), socket.user.id, channel.id));
     if (!content) return cb({ error: 'Nothing to send' });
     // The same checks a live send gets, at the moment it is queued.
@@ -2487,6 +2494,7 @@ module.exports = function register(socket, ctx) {
       if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
         return socket.emit('error-msg', 'This channel is read-only');
       }
+      if (refuseYoungAccount(channel.id)) return;
       if (enforceAutomod([question, ...cleanOptions].join('\n'), { surface: 'message', channelId: channel.id })) return;
       for (let i = 0; i < cleanOptions.length; i++) cleanOptions[i] = pingSafe(cleanOptions[i], socket.user.id, channel.id);
 
@@ -2957,6 +2965,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'This channel is read-only');
     }
 
+    if (refuseYoungAccount(channel.id)) return;
     if (enforceAutomod(content, { surface: 'message', channelId: channel.id, markdown: true })) return;
 
     const safeContent = sanitizeText(pingSafe(content, socket.user.id, channel.id));

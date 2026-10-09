@@ -4,8 +4,8 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.18.4';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.19.1';
+import SocketMethods   from './modules/app-socket.js?v=4.19.10';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.19.10';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.19.1';
 import UIBindMethods   from './modules/app-ui.js?v=4.17.21';
 import ComposerMethods from './modules/app-composer.js?v=4.17.21';
@@ -54,11 +54,11 @@ import StatusMethods from './modules/app-status.js?v=4.17.4';
 import DiscordImportMethods from './modules/app-discord-import.js?v=4.17.4';
 import RoleMethods from './modules/app-roles.js?v=4.17.23';
 import RoleAssignMethods from './modules/app-role-assign.js?v=4.17.23';
-import ModerationMethods from './modules/app-moderation.js?v=4.17.4';
+import ModerationMethods from './modules/app-moderation.js?v=4.19.10';
 import PlatformMethods from './modules/app-platform.js?v=4.18.10';
 import SearchMethods   from './modules/app-search.js?v=4.10.1';
 import FerryMethods    from './modules/app-ferry.js?v=4.17.0';
-import ForumMethods    from './modules/app-forum.js?v=4.17.1';
+import ForumMethods    from './modules/app-forum.js?v=4.19.10';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.17.23';
 import CallMethods from './modules/app-calls.js?v=4.17.1';

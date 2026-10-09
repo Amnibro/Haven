@@ -36,6 +36,7 @@ const DEFAULTS = {
   automod_link_mode: 'off',                 // 'off' | 'allowlist' | 'blocklist'
   automod_link_exempt_level: '50',          // effective level at/above which links are never filtered
   automod_link_min_account_hours: '0',      // accounts younger than this can post no links at all
+  automod_new_account_post_minutes: '0',    // accounts younger than this can post nothing at all (#5742)
   automod_scan_edits: 'true',
   automod_scan_profile: 'true',
   automod_scan_dms: 'true',
@@ -228,6 +229,41 @@ function checkText(text, ctx = {}) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// New-account posting wait (#5742)
+// ══════════════════════════════════════════════════════════════════════
+
+// The users table stores "YYYY-MM-DD HH:MM:SS" in UTC with no zone marker.
+function accountCreatedMs(createdAt) {
+  if (!createdAt) return NaN;
+  const s = String(createdAt);
+  return new Date(/(Z|[+-]\d\d:?\d\d)$/.test(s) ? s : s.replace(' ', 'T') + 'Z').getTime();
+}
+
+// Whole minutes this account still has to wait before it may post anything
+// others can see, or 0 when it may post now. The link rule above only stops
+// links; this one stops everything, for servers that get spam bots which
+// register and post straight away.
+//
+// ctx: { isAdmin, createdAt, effectiveLevel: () => number }. The level is a
+// function so the role lookup only runs for an account that is still young.
+// An account with no creation date (older than the column) counts as old.
+function newAccountWaitMinutes(ctx = {}) {
+  if (!enabled()) return 0;
+  const s = settings();
+  const minutes = parseInt(s.automod_new_account_post_minutes, 10);
+  if (!Number.isFinite(minutes) || minutes <= 0) return 0;
+  if (ctx.isAdmin) return 0;
+  const created = accountCreatedMs(ctx.createdAt);
+  if (!Number.isFinite(created)) return 0;
+  const leftMs = minutes * 60000 - (Date.now() - created);
+  if (leftMs <= 0) return 0;
+  const exemptLevel = parseInt(s.automod_link_exempt_level, 10);
+  const level = typeof ctx.effectiveLevel === 'function' ? ctx.effectiveLevel() : ctx.effectiveLevel;
+  if (Number.isFinite(exemptLevel) && exemptLevel >= 0 && Number.isFinite(level) && level >= exemptLevel) return 0;
+  return Math.max(1, Math.ceil(leftMs / 60000));
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // Infractions and escalation
 // ══════════════════════════════════════════════════════════════════════
 
@@ -320,6 +356,7 @@ module.exports = {
   enabled,
   checkText,
   checkHost,
+  newAccountWaitMinutes,
   previewAllowed,
   extractUrls,
   normalizeHost,

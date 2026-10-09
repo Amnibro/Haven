@@ -151,11 +151,12 @@ _clearChannelCodeMap() {
 // been typed since or the channel changed (#5691). The same for a
 // self-destructing message the sender may not send: the text comes back
 // so it can go as a normal one, by choice.
-_restoreRefusedDraft(msg) {
+// A new account told to wait before posting gets its text back too (#5742).
+_restoreRefusedDraft(msg, always = false) {
   const d = this._lastSendDraft;
   const tooLong = typeof msg === 'string' && /^Message too long/.test(msg);
   const sdRefused = typeof msg === 'string' && /self-destructing messages$/.test(msg);
-  if (!d || (!tooLong && !sdRefused)) return;
+  if (!d || (!tooLong && !sdRefused && !always)) return;
   this._lastSendDraft = null;
   const inputId = d.inputId || 'message-input';
   const open = inputId === 'dm-pip-input' ? this._activeDMPip

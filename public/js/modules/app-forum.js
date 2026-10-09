@@ -565,10 +565,10 @@ _forumAppendOlder(messages) {
 
 // ── New Post composer ──────────────────────────────────────
 
-_openForumComposer(existing = null) {
+_openForumComposer(existing = null, draft = null) {
   const code = this.currentChannel;
   const tags = this._forumTagsOf(code);
-  const picked = new Set(existing && Array.isArray(existing.tags) ? existing.tags : []);
+  const picked = new Set(existing && Array.isArray(existing.tags) ? existing.tags : (draft && draft.tags) || []);
   // The author can rewrite the body from here too; it goes through the
   // ordinary edit path, so it gets the same checks as any message (#5650).
   const canEditBody = !!(existing && this.user && existing.user_id === this.user.id);
@@ -577,7 +577,7 @@ _openForumComposer(existing = null) {
   // of its own, so a post can be text with pictures between it (#5689, #5690).
   const attachRow = `<div class="forum-attach-row"><button type="button" class="btn-sm forum-attach-btn" id="forum-post-attach">📎 ${t('forum.attach_file')}</button><input type="file" id="forum-post-file" multiple hidden><small class="settings-hint">${t('forum.attach_hint_inline')}</small></div>`;
   const bodyField = !existing
-    ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}"></textarea></label>${attachRow}`
+    ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}">${draft ? this._escapeHtml(draft.body || '') : ''}</textarea></label>${attachRow}`
     : (canEditBody ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" maxlength="${maxChars}">${this._escapeHtml(existing.content || '')}</textarea></label>${attachRow}` : '');
   // Deleting a topic from here too: a gallery card is nearly all picture, and
   // right-clicking the picture gets the image menu, not the topic's (#5690).
@@ -589,10 +589,10 @@ _openForumComposer(existing = null) {
     <div class="modal forum-post-modal">
       <div class="modal-header forum-modal-header"><h3>${existing ? t('forum.edit_post') : t('forum.new_post')}</h3><button class="modal-close" type="button">&times;</button></div>
       <div class="modal-body">
-        <label class="forum-field"><span>${t('forum.title')}</span><input type="text" id="forum-post-title" maxlength="120" placeholder="${t('forum.title_placeholder')}" value="${existing ? this._escapeHtml(existing.title || '') : ''}"></label>
+        <label class="forum-field"><span>${t('forum.title')}</span><input type="text" id="forum-post-title" maxlength="120" placeholder="${t('forum.title_placeholder')}" value="${this._escapeHtml((existing ? existing.title : draft && draft.title) || '')}"></label>
         ${bodyField}
         ${tags.length ? `<div class="forum-field"><span>${t('forum.tags')} <small>${t('forum.tags_hint')}</small></span><div class="forum-tag-picker">${tags.map(tg => `<button type="button" class="forum-tag-chip${picked.has(tg.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tg.name)}">${tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(tg.name)}</button>`).join('')}</div></div>` : ''}
-        <label class="forum-field forum-field-closed forum-field-nsfw"><span><input type="checkbox" id="forum-post-nsfw"${existing && existing.nsfw ? ' checked' : ''}> 🔞 ${t('forum.mark_nsfw')}</span></label>
+        <label class="forum-field forum-field-closed forum-field-nsfw"><span><input type="checkbox" id="forum-post-nsfw"${(existing || draft) && (existing || draft).nsfw ? ' checked' : ''}> 🔞 ${t('forum.mark_nsfw')}</span></label>
         ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : ''}
       </div>
       <div class="modal-footer">${canDelete ? `<button type="button" class="btn-sm btn-danger forum-post-delete" id="forum-post-delete">🗑️ ${t('forum.delete_topic')}</button>` : ''}<button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
@@ -654,7 +654,10 @@ _openForumComposer(existing = null) {
     }
     const body = overlay.querySelector('#forum-post-body').value.trim();
     if (!title && !body) { titleEl.focus(); return; }
-    this.socket.emit('send-message', { code, content: body || title, title: title || undefined, tags: [...picked], nsfw: !!overlay.querySelector('#forum-post-nsfw')?.checked });
+    const nsfw = !!overlay.querySelector('#forum-post-nsfw')?.checked;
+    // Kept for a moment so a refusal can reopen the post as it was (#5742).
+    this._forumPostDraft = { code, title, body, tags: [...picked], nsfw, at: Date.now() };
+    this.socket.emit('send-message', { code, content: body || title, title: title || undefined, tags: [...picked], nsfw });
     this.notifications && this.notifications.play && this.notifications.play('sent');
     close();
   });
@@ -700,6 +703,16 @@ async _forumUploadIntoBody(fileList, textarea, code) {
       busy(-1);
     }
   }
+},
+
+// The server refused a New Post just sent: open it again with what was
+// written, unless the forum was left or the window is already open (#5742).
+_forumRestoreDraft() {
+  const d = this._forumPostDraft;
+  this._forumPostDraft = null;
+  if (!d || Date.now() - d.at > 15000 || d.code !== this.currentChannel) return;
+  if (document.getElementById('forum-post-modal')) return;
+  this._openForumComposer(null, d);
 },
 
 _forumEditTopicMeta(messageId) {
