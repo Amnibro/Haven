@@ -1020,7 +1020,11 @@ html[data-chrome-layout="1"] .channel-join-voice {
   justify-content: center;
   width: 1.5rem;
   height: 1.5rem;
-  margin-left: auto;
+  /* Last in the row, after the channel options button: that button only
+     takes room while the row is hovered, so a mic before it slid away just
+     as the pointer reached it. */
+  order: 1;
+  margin-left: 0.25rem;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
@@ -1029,9 +1033,6 @@ html[data-chrome-layout="1"] .channel-join-voice {
   font-size: 0.75rem;
   line-height: 1;
   cursor: pointer;
-}
-html[data-chrome-layout="1"] .channel-item:has(.channel-join-voice) .channel-more-btn {
-  margin-left: 0;
 }
 html[data-chrome-layout="1"] .channel-join-voice:hover {
   background: var(--bg-hover);
