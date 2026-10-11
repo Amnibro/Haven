@@ -397,7 +397,7 @@ native Haven layout. Use its `C` footer button or `Ctrl+Alt+C` to switch between
 Compact and classic layout without disabling the plugin.
 Only one structural layout plugin can be active at a time. If Braid Layout is
 already engaged, Compact waits until Braid restores the native layout, and vice
-versa. The theme menu's **Layout** picker switches between them: **Original**
+versa. The **Sidebar Layout** picker in **Settings → Layout** switches between them: **Original**
 (Haven's own layout), then every layout plugin on the server. A new layout
 plugin appears there by itself; see [Appearing in the Layout picker](docs/theme-authoring.md#appearing-in-the-layout-picker).
 

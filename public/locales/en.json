@@ -1506,6 +1506,10 @@
     },
     "layout": {
       "title": "Layout",
+      "style": {
+        "title": "Sidebar Layout",
+        "hint": "Original is Haven's own layout. The others come from layout plugins on this server. Saved per browser."
+      },
       "density": {
         "title": "Layout Density",
         "compact": "Compact",

@@ -326,7 +326,7 @@ native restore position. `HavenApi.Layout.owner` exposes the current owner.
 
 ### Appearing in the Layout picker
 
-The theme menu's **Layout** picker lists **Original** (Haven's own layout) and
+The **Sidebar Layout** picker in Settings, Layout lists **Original** (Haven's own layout) and
 every layout plugin on the server, one at a time. A plugin shows up there when:
 
 - its file is named `<Name>Layout.plugin.js` (the picker shows its `@name`,

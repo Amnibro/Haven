@@ -229,11 +229,7 @@
             </div>
             <!-- Effect overlay picker (mashup) -->
             <div class="effect-overlay-section">
-              <div class="theme-popup-title" style="margin-top: 2px;" data-i18n="app.theme.layout">Layout</div>
-              <div class="layout-picker" id="layout-picker" role="radiogroup" data-i18n-aria-label="app.theme.layout" aria-label="Layout">
-                <button type="button" class="layout-opt active" data-layout="" role="radio" aria-checked="true" data-i18n="app.theme.layout_original">Original</button>
-              </div>
-              <div class="theme-popup-title" style="margin-top: 8px;" data-i18n="app.theme.effect_overlay">Effect Overlay</div>
+              <div class="theme-popup-title" style="margin-top: 2px;" data-i18n="app.theme.effect_overlay">Effect Overlay</div>
               <div class="effect-selector" id="effect-selector">
                 <button class="effect-btn active" data-effect="auto" data-i18n-title="app.theme.match_theme" title="Match theme">⟳</button>
                 <button class="effect-btn" data-effect="none" data-i18n-title="app.theme.no_effects" title="No effects">🚫</button>
@@ -1436,6 +1432,14 @@ console.log(haven);</code></pre></div></div>
 
       <div class="settings-section" id="section-layout">
         <h5 class="settings-section-title">📐 <span data-i18n="settings.layout.title">Layout</span></h5>
+        <div class="settings-subsection" id="layout-style-subsection">
+          <small class="settings-group-label">🧩 <span data-i18n="settings.layout.style.title">Sidebar Layout</span></small>
+          <!-- Original, then every layout plugin on this server (theme.js) -->
+          <div class="layout-picker" id="layout-picker" role="radiogroup" data-i18n-aria-label="app.theme.layout" aria-label="Layout">
+            <button type="button" class="layout-opt active" data-layout="" role="radio" aria-checked="true" data-i18n="app.theme.layout_original">Original</button>
+          </div>
+          <small class="settings-hint" data-i18n="settings.layout.style.hint">Original is Haven's own layout. The others come from layout plugins on this server. Saved per browser.</small>
+        </div>
         <div class="settings-subsection" id="layout-density-subsection">
           <small class="settings-group-label">📏 <span data-i18n="settings.layout.density.title">Layout Density</span></small>
           <div class="density-picker" id="density-picker">
