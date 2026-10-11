@@ -2778,7 +2778,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           <div class="settings-btn-grid" style="margin-top:8px;align-items:center">
             <label class="select-row" style="margin:0">
               <span data-i18n="settings.admin.idle_online_threshold">Flag after (hours)</span>
-              <input type="number" id="idle-online-hours" min="1" max="168" step="1" value="4" style="max-width:90px">
+              <input type="number" class="settings-number-input" id="idle-online-hours" min="1" max="168" step="1" value="4">
             </label>
             <button class="btn-sm btn-accent" id="idle-online-refresh">🔄 <span data-i18n="settings.admin.idle_online_check">Check now</span></button>
           </div>
@@ -2799,19 +2799,19 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           </label>
           <label class="select-row" style="margin-top:6px">
             <span data-i18n="settings.admin.oidc_issuer_label">Issuer URL</span>
-            <input type="text" id="oidc-issuer-url" placeholder="https://auth.example.com" spellcheck="false" autocomplete="off">
+            <input type="text" class="settings-text-input" id="oidc-issuer-url" placeholder="https://auth.example.com" spellcheck="false" autocomplete="off" style="flex:1">
           </label>
           <label class="select-row" style="margin-top:6px">
             <span data-i18n="settings.admin.oidc_client_id_label">Client ID</span>
-            <input type="text" id="oidc-client-id" spellcheck="false" autocomplete="off">
+            <input type="text" class="settings-text-input" id="oidc-client-id" spellcheck="false" autocomplete="off" style="flex:1">
           </label>
           <label class="select-row" style="margin-top:6px">
             <span data-i18n="settings.admin.oidc_scopes_label">Scopes</span>
-            <input type="text" id="oidc-scopes" placeholder="openid profile email" spellcheck="false" autocomplete="off">
+            <input type="text" class="settings-text-input" id="oidc-scopes" placeholder="openid profile email" spellcheck="false" autocomplete="off" style="flex:1">
           </label>
           <label class="select-row" style="margin-top:6px">
             <span data-i18n="settings.admin.oidc_button_label_label">Button text</span>
-            <input type="text" id="oidc-button-label" data-i18n-placeholder="settings.admin.oidc_button_placeholder" placeholder="Sign in with SSO" spellcheck="false" autocomplete="off">
+            <input type="text" class="settings-text-input" id="oidc-button-label" data-i18n-placeholder="settings.admin.oidc_button_placeholder" placeholder="Sign in with SSO" spellcheck="false" autocomplete="off" style="flex:1">
           </label>
           <label class="toggle-row" style="margin-top:6px">
             <span data-i18n="settings.admin.oidc_create_users_label">Create a Haven account on first sign-in</span>
@@ -3130,12 +3130,12 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
             <small class="settings-group-label" style="margin-top:14px;display:block">⚙️ <span data-i18n="settings.admin.automod_rules_group">Rules</span></small>
             <label class="select-row" style="margin-top:6px">
               <span data-i18n="settings.admin.automod_min_age">New accounts can't post links for (hours)</span>
-              <input type="number" id="automod-min-account-hours" min="0" max="8760" step="1" style="max-width:90px">
+              <input type="number" class="settings-number-input" id="automod-min-account-hours" min="0" max="8760" step="1">
             </label>
             <small class="settings-hint" data-i18n="settings.admin.automod_min_age_hint">0 disables this. Applies even to allowed domains, and is the single most effective rule against register-post-link-get-banned-repeat.</small>
             <label class="select-row" style="margin-top:8px">
               <span data-i18n="settings.admin.automod_exempt_level">Skip filtering at role level</span>
-              <input type="number" id="automod-exempt-level" min="0" max="100" step="1" style="max-width:90px">
+              <input type="number" class="settings-number-input" id="automod-exempt-level" min="0" max="100" step="1">
             </label>
             <small class="settings-hint" data-i18n="settings.admin.automod_exempt_hint">Members at or above this level are never filtered. Admins are always exempt.</small>
             <label class="toggle-row" style="margin-top:8px"><span data-i18n="settings.admin.automod_scan_edits">Check message edits</span><input type="checkbox" id="automod-scan-edits"></label>
@@ -3150,14 +3150,14 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
 
             <small class="settings-group-label" style="margin-top:14px;display:block">⚖️ <span data-i18n="settings.admin.automod_escalation_group">Escalation</span></small>
             <small class="settings-hint" style="display:block" data-i18n="settings.admin.automod_escalation_hint">Counts blocked attempts within a rolling window. A blocked link only counts for accounts less than a week old; other members are just told the site is not allowed. Set any threshold to 0 to disable that step. Note that a muted member cannot send anything at all, so they stop collecting strikes until the mute runs out. If you want a fast automatic ban, set the ban threshold close to the mute threshold, or turn muting off.</small>
-            <label class="select-row" style="margin-top:6px"><span data-i18n="settings.admin.automod_window">Window (hours)</span><input type="number" id="automod-window-hours" min="1" max="8760" step="1" style="max-width:90px"></label>
-            <label class="select-row"><span data-i18n="settings.admin.automod_warn_at">Warn after</span><input type="number" id="automod-warn-at" min="0" max="1000" step="1" style="max-width:90px"></label>
-            <label class="select-row"><span data-i18n="settings.admin.automod_mute_at">Mute after</span><input type="number" id="automod-mute-at" min="0" max="1000" step="1" style="max-width:90px"></label>
-            <label class="select-row"><span data-i18n="settings.admin.automod_mute_mins">Mute length (minutes)</span><input type="number" id="automod-mute-minutes" min="1" max="43200" step="1" style="max-width:90px"></label>
-            <label class="select-row"><span data-i18n="settings.admin.automod_ban_at">Ban after</span><input type="number" id="automod-ban-at" min="0" max="1000" step="1" style="max-width:90px"></label>
+            <label class="select-row" style="margin-top:6px"><span data-i18n="settings.admin.automod_window">Window (hours)</span><input type="number" class="settings-number-input" id="automod-window-hours" min="1" max="8760" step="1"></label>
+            <label class="select-row"><span data-i18n="settings.admin.automod_warn_at">Warn after</span><input type="number" class="settings-number-input" id="automod-warn-at" min="0" max="1000" step="1"></label>
+            <label class="select-row"><span data-i18n="settings.admin.automod_mute_at">Mute after</span><input type="number" class="settings-number-input" id="automod-mute-at" min="0" max="1000" step="1"></label>
+            <label class="select-row"><span data-i18n="settings.admin.automod_mute_mins">Mute length (minutes)</span><input type="number" class="settings-number-input" id="automod-mute-minutes" min="1" max="43200" step="1"></label>
+            <label class="select-row"><span data-i18n="settings.admin.automod_ban_at">Ban after</span><input type="number" class="settings-number-input" id="automod-ban-at" min="0" max="1000" step="1"></label>
             <label class="toggle-row" style="margin-top:6px"><span data-i18n="settings.admin.automod_ban_ip">Auto-bans also ban the IP</span><input type="checkbox" id="automod-ban-ip"></label>
             <small class="settings-hint" data-i18n="settings.admin.automod_ban_ip_hint">⚠️ Leave off unless you understand the risk. Shared and mobile-carrier addresses mean an IP ban can catch people who did nothing.</small>
-            <label class="select-row" style="margin-top:8px"><span data-i18n="settings.admin.automod_log_channel">Log to channel</span><input type="text" id="automod-log-channel" data-i18n-placeholder="settings.admin.automod_log_channel_placeholder" placeholder="channel code (optional)" maxlength="8" style="max-width:130px"></label>
+            <label class="select-row" style="margin-top:8px"><span data-i18n="settings.admin.automod_log_channel">Log to channel</span><input type="text" class="settings-text-input" id="automod-log-channel" data-i18n-placeholder="settings.admin.automod_log_channel_placeholder" placeholder="channel code (optional)" maxlength="8" style="max-width:9rem"></label>
 
             <small class="settings-group-label" style="margin-top:14px;display:block">📊 <span data-i18n="settings.admin.automod_activity_group">Recent activity</span></small>
             <div class="settings-btn-grid" style="margin-top:6px">
@@ -3288,7 +3288,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           <div id="invite-links-settings-block" class="invite-server-config">
             <label class="select-row" style="margin-top:8px">
               <span data-i18n="settings.admin.max_invite_uses">Max invite link uses</span>
-              <input type="number" id="max-invite-uses" min="0" max="100000" step="1" style="max-width:90px">
+              <input type="number" class="settings-number-input" id="max-invite-uses" min="0" max="100000" step="1">
             </label>
             <small class="settings-hint" data-i18n="settings.admin.max_invite_uses_hint">The maximum number of uses an invite link can be set to. Admin and manage-server permission ignore this limit. (0 = unlimited)</small>
           </div>

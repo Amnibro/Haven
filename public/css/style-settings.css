@@ -411,15 +411,20 @@
   transform: translateX(18px);
 }
 
+/* One size for every number box in settings, with room for five digits
+   and the spin arrows, and a little space before the value. */
 .settings-number-input {
-  width: 4.375rem;
-  padding: 0.25rem 0.375rem;
+  box-sizing: border-box;
+  width: 5.5rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.5rem;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 0.25rem;
   color: var(--text-primary);
   font-size: 0.75rem;
 }
+
+.settings-number-input:focus { outline: none; border-color: var(--accent); }
 
 .settings-hint {
   color: var(--text-muted);
