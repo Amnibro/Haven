@@ -1,6 +1,6 @@
 /**
  * @name Compact Layout
- * @description Reversible desktop layout from Theme → Layout (Compact layout). Folds the server rail into the navigation sidebar and docks account and voice controls in its footer. Works with any palette. Preserves Haven's tablet, mobile, and message-density behavior.
+ * @description Reversible desktop layout picked in Settings, Layout. Folds the server rail into the navigation sidebar and docks account and voice controls in its footer. Works with any palette. Preserves Haven's tablet, mobile, and message-density behavior.
  * @author bernardokcosta
  * @version 1.1.0
  */
@@ -40,13 +40,8 @@ class CompactLayout {
         if (event.detail.compact) this._engage();
         else this._disengage();
       });
-      this._listen(document, 'haven:original-layout', (event) => {
-        if (event.detail?.original) this._disengage();
-      });
 
-      const saved = HavenApi.Data.load('CompactLayout', 'layoutOn', null);
-      const originalOn = document.documentElement.hasAttribute('data-haven-original-layout');
-      if (saved !== '0' && !originalOn) this._engage(false);
+      if (HavenApi.Data.load('CompactLayout', 'layoutOn', '1') !== '0') this._engage(false);
     } catch (error) {
       this.stop();
       throw error;
@@ -80,10 +75,6 @@ class CompactLayout {
 
   _engage(persist = true) {
     if (this._engaged) return;
-    if (typeof window.setHavenOriginalLayout === 'function'
-        && document.documentElement.hasAttribute('data-haven-original-layout')) {
-      window.setHavenOriginalLayout(false);
-    }
     this._engaged = true;
     document.documentElement.setAttribute('data-compact-layout', '1');
     try {
