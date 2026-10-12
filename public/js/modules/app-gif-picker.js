@@ -33,6 +33,14 @@ _setupGifPicker() {
       this._toggleGifPicker('dmpip', pipBtn);
     });
   }
+  // The thread panel's reply box has one too.
+  const threadBtn = document.getElementById('thread-gif-btn');
+  if (threadBtn) {
+    threadBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._toggleGifPicker('thread', threadBtn);
+    });
+  }
 
   picker.querySelectorAll('.gif-tab').forEach(tab => {
     tab.addEventListener('click', () => this._switchGifTab(tab.dataset.gifTab));
@@ -41,7 +49,7 @@ _setupGifPicker() {
   // Close when clicking outside
   document.addEventListener('click', (e) => {
     if (picker.style.display !== 'none' &&
-        !picker.contains(e.target) && !e.target.closest('#gif-btn, #dm-pip-gif-btn')) {
+        !picker.contains(e.target) && !e.target.closest('#gif-btn, #dm-pip-gif-btn, #thread-gif-btn')) {
       this._closeGifPicker();
     }
   });
@@ -81,6 +89,7 @@ _setupGifPicker() {
     const target = this._gifTarget;
     this._closeGifPicker();
     if (target === 'dmpip') this._sendGifToDMPiP(img.dataset.full);
+    else if (target === 'thread') this._sendGifToThread(img.dataset.full);
     else this._sendGifMessage(img.dataset.full);
   });
 },
@@ -98,13 +107,13 @@ _toggleGifPicker(target, anchor) {
   if (wasOpen) return;
   document.getElementById('emoji-picker').style.display = 'none';
   this._gifTarget = target;
-  if (target === 'dmpip') {
+  if (target === 'dmpip' || target === 'thread') {
     this._gifPickerHome = { parent: picker.parentNode, next: picker.nextSibling };
     document.body.appendChild(picker);
     picker.classList.add('gif-picker-floating');
   }
   picker.style.display = 'flex';
-  if (target === 'dmpip' && anchor) {
+  if ((target === 'dmpip' || target === 'thread') && anchor) {
     const r = anchor.getBoundingClientRect();
     const w = picker.offsetWidth;
     const h = picker.offsetHeight;
@@ -130,6 +139,19 @@ _closeGifPicker() {
   const home = this._gifPickerHome;
   if (home && home.parent) home.parent.insertBefore(picker, home.next && home.next.parentNode === home.parent ? home.next : null);
   this._gifPickerHome = null;
+},
+
+// A GIF in a thread goes straight out as a reply (threads are never
+// encrypted), keeping what was typed and any attachments waiting to send.
+// A reply being answered, or a blog picture being commented on, still is.
+_sendGifToThread(url) {
+  const parentId = this._activeThreadParent;
+  if (!url || !parentId || !this.socket) return;
+  const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
+  this.socket.emit('send-thread-message', { parentId, content: url, replyTo }, (resp) => {
+    if (resp && resp.error) { this._showToast?.(resp.error, 'error'); return; }
+    this._clearThreadReply?.();
+  });
 },
 
 // A GIF from the pop-out goes through the pop-out's own send, so it is
