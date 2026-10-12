@@ -4261,16 +4261,8 @@ class VoiceManager {
     let aboveCount = 0;      // consecutive polls above threshold
 
     this._noiseGateInterval = setInterval(() => {
-      if (this.noiseSensitivity === 0) {
-        gain.gain.value = 1;
-        this.currentMicLevel = 0;
-        gateOpen = false;
-        aboveCount = 0;
-        if (holdTimeout) { clearTimeout(holdTimeout); holdTimeout = null; }
-        return;
-      }
-      // Map sensitivity 1-100 → threshold 2-40
-      const threshold = 2 + (this.noiseSensitivity / 100) * 38;
+      // The analyser hears the raw mic in every noise mode, so the settings
+      // meter keeps moving with the gate off or AI suppression on.
       analyser.getByteFrequencyData(dataArray);
       let sum = 0;
       for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
@@ -4278,6 +4270,16 @@ class VoiceManager {
 
       // Expose current level for UI meter (0-100 scale, capped)
       this.currentMicLevel = Math.min(100, (avg / 50) * 100);
+
+      if (this.noiseSensitivity === 0) {
+        gain.gain.value = 1;
+        gateOpen = false;
+        aboveCount = 0;
+        if (holdTimeout) { clearTimeout(holdTimeout); holdTimeout = null; }
+        return;
+      }
+      // Map sensitivity 1-100 → threshold 2-40
+      const threshold = 2 + (this.noiseSensitivity / 100) * 38;
 
       // Guard against audioCtx being torn down between ticks (leave()
       // nulls it but the interval can still fire once before we clear it).
