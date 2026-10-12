@@ -22,7 +22,7 @@ import ServerBarMethods from './modules/app-server-bar.js?v=4.21.0';
 import MobileMethods from './modules/app-mobile.js?v=4.21.0';
 import MediaMethods    from './modules/app-media.js?v=4.21.0';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.18.1';
-import AttachmentMethods from './modules/app-attachments.js?v=4.21.0';
+import AttachmentMethods from './modules/app-attachments.js?v=4.21.1';
 import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.21.0';
 import AppearanceMethods from './modules/app-appearance.js?v=4.21.0';
 import SoundMethods from './modules/app-sounds.js?v=4.21.0';
@@ -58,7 +58,7 @@ import ModerationMethods from './modules/app-moderation.js?v=4.21.1';
 import PlatformMethods from './modules/app-platform.js?v=4.21.0';
 import SearchMethods   from './modules/app-search.js?v=4.21.0';
 import FerryMethods    from './modules/app-ferry.js?v=4.17.0';
-import ForumMethods    from './modules/app-forum.js?v=4.20.30';
+import ForumMethods    from './modules/app-forum.js?v=4.21.1';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.20.1';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.19.11';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
@@ -67,7 +67,7 @@ import CallMethods from './modules/app-calls.js?v=4.17.1';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 import GroupMethods from './modules/app-groups.js?v=4.19.3';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
-import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.19.13';
+import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.21.1';
 
 class HavenApp {
   constructor() {
