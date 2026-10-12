@@ -20,7 +20,9 @@ export const ALL_PERMS = [
   'create_channel', 'create_temp_channel', 'invite_users',
   'upload_files', 'use_voice', 'use_tts', 'send_self_destruct', 'manage_webhooks', 'use_ferry', 'mention_everyone', 'view_history',
   'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'manage_tags', 'promote_user',
-  'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log', 'manage_display_names'
+  'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log', 'manage_display_names',
+  // Post as your role: a coloured mark and badge on the message.
+  'highlight_messages'
 ];
 // Permissions only the server owner (admin) may grant. Highlighted in the
 // role editors and locked for non-admins; mirrors adminOnlyPerms in
@@ -68,5 +70,6 @@ export const PERM_LABELS = {
   get delete_channel() { return t('permissions.delete_channel'); },
   get read_only_override() { return t('permissions.read_only_override'); },
   get view_audit_log() { return t('permissions.view_audit_log'); },
-  get manage_display_names() { return t('permissions.manage_display_names'); }
+  get manage_display_names() { return t('permissions.manage_display_names'); },
+  get highlight_messages() { return t('permissions.highlight_messages'); }
 };

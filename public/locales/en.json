@@ -278,6 +278,8 @@
       "edited": "(edited)",
       "edited_at": "Edited at {{date}}",
       "pinned": "Pinned message",
+      "official": "Official",
+      "official_as": "Posted officially as {{role}}",
       "protected": "Protected from cleanup",
       "e2e_encrypted": "End-to-end encrypted",
       "protect_btn": "Protect from cleanup",
@@ -327,6 +329,8 @@
       "burn_btn": "Burn after read (DM only)",
       "burn_btn_armed": "Burn after read armed: next message self-destructs 30s after viewing",
       "self_destruct_btn": "Self-destructing message",
+      "highlight_btn": "Official message: post the next message as your role",
+      "highlight_btn_armed": "Official message is on for the next message",
       "self_destruct_btn_armed": "Self-destruct is on: your next message deletes itself"
     },
     "profile": {
@@ -519,6 +523,8 @@
   },
   "msg_toolbar": {
     "react": "React",
+    "highlight_on": "Mark as official",
+    "highlight_off": "Remove official mark",
     "reply": "Reply",
     "quote": "Quote",
     "copy_link": "Copy link to message",
@@ -786,6 +792,7 @@
     "delete_message": "Delete Any Message",
     "delete_lower_messages": "Delete Lower-level Messages",
     "pin_message": "Pin Messages",
+    "highlight_messages": "Post Official Messages",
     "archive_messages": "Protect Messages",
     "kick_user": "Kick Users",
     "mute_user": "Mute Users",

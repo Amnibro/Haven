@@ -19,6 +19,7 @@ const MOD_PERMS = [
   'manage_webhooks', 'use_ferry', 'manage_emojis', 'manage_stickers',
   'manage_soundboard', 'manage_music_queue', 'manage_tags',
   'promote_user', 'read_only_override', 'view_audit_log', 'manage_display_names',
+  'highlight_messages',
 ];
 
 const CHANNEL_MOD_PERMS = [

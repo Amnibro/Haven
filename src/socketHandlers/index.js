@@ -61,6 +61,7 @@ const registerGroupE2E   = require('./groupE2E');
 const registerTags       = require('./tags');
 const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
+const registerMessageHighlights = require('./messageHighlights');
 const registerForumVotes = require('./forumVotes');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -2702,6 +2703,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerTags(socket, ctx);
     registerMemberDefaults(socket, ctx);
     registerGameActivity(socket, ctx);
+    registerMessageHighlights(socket, ctx);
     registerForumVotes(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────

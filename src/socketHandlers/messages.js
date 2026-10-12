@@ -9,6 +9,7 @@ const selfDestruct = require('../selfDestruct');
 const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
 const { votesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
+const highlights = require('../messageHighlights');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -282,6 +283,7 @@ module.exports = function register(socket, ctx) {
     const roleMenuMap = new Map();
     const attachmentTagMap = new Map();
     let pinnedSet = null;
+    let highlightMap = new Map();
     if (msgIds.length > 0) {
       const ph = msgIds.map(() => '?').join(',');
       db.prepare(`
@@ -297,6 +299,7 @@ module.exports = function register(socket, ctx) {
         db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id IN (${ph})`)
           .all(...msgIds).map(r => r.message_id)
       );
+      highlightMap = highlights.lookup(db, msgIds);
 
       db.prepare(`SELECT message_id, title, data FROM role_menus WHERE message_id IN (${ph})`).all(...msgIds)
         .forEach(r => { const menu = ctx.buildRoleMenu?.(r, socket.user.id); if (menu) roleMenuMap.set(r.message_id, menu); });
@@ -404,6 +407,7 @@ module.exports = function register(socket, ctx) {
       if (roleMenuMap.has(m.id)) obj.roleMenu = roleMenuMap.get(m.id);
       obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
       obj.is_archived = !!m.is_archived;
+      if (highlightMap.has(m.id)) obj.highlight = highlightMap.get(m.id);
       obj.thread = threadMap.get(m.id) || null;
       // A forum topic is unread until you open it (your own topics start
       // read), and again whenever a reply lands after the last one you saw.
@@ -1498,6 +1502,11 @@ module.exports = function register(socket, ctx) {
         ferry_target: ferryLabel || undefined,
         attachmentTags: appliedTags.length ? appliedTags : undefined,
       };
+      // Sent as an official message (src/messageHighlights.js), when allowed.
+      if (data.highlight === true && !channel.is_dm && !personaId &&
+          (socket.user.isAdmin || userHasPermission(socket.user.id, 'highlight_messages', channel.id))) {
+        message.highlight = highlights.mark(db, { messageId: message.id, userId: socket.user.id, channelId: channel.id, getUserHighestRole: ctx.getUserHighestRole });
+      }
 
       if (replyTo) {
         message.replyContext = toReplyContext(db.prepare(`${REPLY_CONTEXT_SELECT}

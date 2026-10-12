@@ -68,6 +68,7 @@ import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 import GroupMethods from './modules/app-groups.js?v=4.19.3';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.21.1';
+import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.21.1';
 
 class HavenApp {
   constructor() {
@@ -401,6 +402,7 @@ class HavenApp {
     this._setupToolbarIconPicker();
     // After the pickers above: the defaults apply through them (#5739).
     this._setupMemberDefaults();
+    this._setupMessageHighlights();
     this._setupDebugSection();
     this._setupLightbox();
     this._setupOnlineOverlay();
@@ -565,6 +567,7 @@ Object.assign(HavenApp.prototype,
   GroupMethods,
   TemplateMethods,
   MemberDefaultsMethods,
+  MessageHighlightMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

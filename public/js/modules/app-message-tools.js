@@ -443,6 +443,15 @@ _showMessageContextMenu(e, msgEl) {
                           !!(this.user?.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('promote_user'));
   if (canEditRoleMenu) items.push(`<button class="channel-ctx-item" data-action="edit-role-menu">🎭 <span>${t('settings.admin.role_menu.edit')}</span></button>`);
   if (canEditTags) items.push(`<button class="channel-ctx-item" data-action="edit-tags">🏷️ <span>${t('tags.edit')}</span></button>`);
+  // Official message: mark your own; take the mark off your own, or anyone's
+  // you could delete.
+  const isHighlighted = msgEl.dataset.highlighted === '1';
+  const isPlainOwn = isOwn && !msgEl.dataset.personaId && !msgEl.classList.contains('webhook-message');
+  if (!isDm && !isHighlighted && isPlainOwn && this._canHighlightMessages?.()) {
+    items.push(`<button class="channel-ctx-item" data-action="highlight-on">📣 <span>${t('msg_toolbar.highlight_on')}</span></button>`);
+  } else if (!isDm && isHighlighted && (isOwn || canDelete)) {
+    items.push(`<button class="channel-ctx-item" data-action="highlight-off">📣 <span>${t('msg_toolbar.highlight_off')}</span></button>`);
+  }
   // Separator right above Delete
   if (canDelete) {
     items.push('<hr class="channel-ctx-sep">');
@@ -498,6 +507,8 @@ _showMessageContextMenu(e, msgEl) {
       this._openRoleMenuBuilder?.({ messageId: msgId });
     } else if (action === 'edit-tags') {
       this._openMessageTagEditor(msgId, msgEl);
+    } else if (action === 'highlight-on' || action === 'highlight-off') {
+      this.socket.emit('set-message-highlight', { messageId: msgId, on: action === 'highlight-on' });
     } else if (action === 'delete') {
       if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
         this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });

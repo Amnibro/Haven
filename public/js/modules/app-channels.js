@@ -52,6 +52,7 @@ async switchChannel(code) {
   if (_sdBtn) _sdBtn.style.display = _sdHidden ? 'none' : '';
   if (_sdDiv) _sdDiv.style.display = _sdHidden ? 'none' : '';
   this._setSelfDestructArmed(false);
+  this._updateHighlightButton?.(isDm);
   const displayCode = channel ? (channel.display_code || code) : code;
   const isMaskedCode = (displayCode === '••••••••');
   document.getElementById('channel-code-display').textContent = isDm ? '' : displayCode;

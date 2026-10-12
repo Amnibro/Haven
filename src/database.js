@@ -6,6 +6,7 @@ const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('./roleDef
 const { migrateGroupDmTrust } = require('./groupDmSchema');
 const { migrateSelfDms } = require('./selfDmSchema');
 const { applyDefaultUpdates } = require('./settingDefaults');
+const messageHighlights = require('./messageHighlights');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
 
@@ -1679,6 +1680,7 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
   `);
   applyDefaultUpdates(db);
+  messageHighlights.ensureTable(db);
 
   // ── Rich presence: linked external accounts ─────────────
   // One row per (user, provider). access_token / refresh_token are stored

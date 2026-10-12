@@ -210,6 +210,11 @@ async _sendMessage() {
   if (this.replyingTo) {
     payload.replyTo = this.replyingTo.id;
   }
+  // Official message: one message per press of the button.
+  if (this._highlightArmed) {
+    payload.highlight = true;
+    this._setHighlightArmed(false);
+  }
   // (#5280) Burn-after-read arming (DM-only); cleared in switchChannel
   // when the user moves to a non-DM channel so a stale flag can't leak.
   // The button is a *persistent* toggle: once armed, every message in
@@ -731,6 +736,7 @@ _appendMessages(messages) {
           persona_username: lastEl.dataset.personaUsername || null,
           username: lastEl.dataset.username || null,
           break_chain: lastEl.dataset.breakChain ? 1 : 0,
+          highlight: lastEl.dataset.highlighted === '1' || undefined,
         };
       }
     }
@@ -878,6 +884,7 @@ _appendMessage(message, forceScroll = false) {
       persona_username: lastMsg.dataset.personaUsername || null,
       username: lastMsg.dataset.username || null,
       break_chain: lastMsg.dataset.breakChain ? 1 : 0,
+      highlight: lastMsg.dataset.highlighted === '1' || undefined,
     };
   }
 
@@ -996,6 +1003,9 @@ _createMessageEl(msg, prevMsg) {
     (prevMsg.username || null) === (msg.username || null) &&
     // /break and the persisted break_chain flag (#5393) hard-stop grouping.
     !msg.break_chain && !prevMsg.break_chain &&
+    // An official message always shows who said it, and does not swallow
+    // the next one either.
+    !msg.highlight && !prevMsg.highlight &&
     (prevMsg.is_webhook ? 1 : 0) === (msg.is_webhook ? 1 : 0) &&
     (prevMsg.webhook_username || null) === (msg.webhook_username || null) &&
     (prevMsg.imported_from || null) === (msg.imported_from || null) &&
@@ -1298,6 +1308,7 @@ _createMessageEl(msg, prevMsg) {
       <button class="msg-dots-btn" aria-label="${t('app.actions.message_actions')}">⋯</button>
     </div>
   `;
+  if (msg.highlight) this._applyMessageHighlight(el, msg.highlight);
   return el;
 },
 
