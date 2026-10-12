@@ -1487,6 +1487,7 @@ function initDatabase() {
 
   // ── Migration: encrypted server list for cross-device sync ──────────
   addColumn('users', 'encrypted_servers', "TEXT DEFAULT NULL");
+  addColumn('users', 'official_mode', "INTEGER NOT NULL DEFAULT 1");
 
   // ── Migration: send_self_destruct (#5725) ──
   // Self-destructing messages came out open to everyone. The permission that
