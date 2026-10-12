@@ -139,8 +139,13 @@ _sendGifToDMPiP(url) {
   const input = document.getElementById('dm-pip-input');
   if (!input || !url || !this._activeDMPip || typeof this._sendDMPiPMessage !== 'function') return;
   const draft = input.value;
+  // The pop-out's send also takes the pictures waiting in its queue; those
+  // wait for the person's own send.
+  const queued = this._pipImageQueue;
+  this._pipImageQueue = [];
   input.value = url;
   this._sendDMPiPMessage();
+  this._pipImageQueue = queued;
   input.value = draft;
   if (draft) input.dispatchEvent(new Event('input', { bubbles: true }));
 },
