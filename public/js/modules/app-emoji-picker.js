@@ -795,19 +795,13 @@ _showReactionPicker(msgEl, msgId) {
     msgEl.classList.remove('showing-picker');
     document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
     document.querySelectorAll('.quick-emoji-editor').forEach(el => el.remove());
-    if (this._reactionPickerClose) {
-      document.removeEventListener('click', this._reactionPickerClose);
-      this._reactionPickerClose = null;
-    }
+    this._detachReactionPickerClose();
     return;
   }
 
   // Clean up previous close-on-click-outside handler so it can't
   // interfere with the new picker (e.g. removing showing-picker class).
-  if (this._reactionPickerClose) {
-    document.removeEventListener('click', this._reactionPickerClose);
-    this._reactionPickerClose = null;
-  }
+  this._detachReactionPickerClose();
   document.querySelectorAll('.showing-picker').forEach(el => el.classList.remove('showing-picker'));
   document.querySelectorAll('.reaction-picker').forEach(el => el.remove());
   document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
@@ -842,10 +836,7 @@ _showReactionPicker(msgEl, msgId) {
       this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
       picker.remove();
       msgEl.classList.remove('showing-picker');
-      if (this._reactionPickerClose) {
-        document.removeEventListener('click', this._reactionPickerClose);
-        this._reactionPickerClose = null;
-      }
+      this._detachReactionPickerClose();
     });
     picker.appendChild(btn);
   });
@@ -911,18 +902,36 @@ _showReactionPicker(msgEl, msgId) {
     this._keepPopupInView(picker, msgEl);
   });
 
-  // Close on click outside
+  // Close on a click anywhere outside, or Escape. Listened for in the
+  // capture phase: many buttons stop their clicks from bubbling, and a
+  // click on one of those used to leave the picker (and the full emoji
+  // panel) open. The React button on this message toggles it itself.
   const close = (e) => {
-    if (!picker.contains(e.target) && !e.target.closest('.reaction-full-picker') && !e.target.closest('.quick-emoji-editor')) {
-      picker.remove();
-      msgEl.classList.remove('showing-picker');
-      document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-      document.removeEventListener('click', close);
-      this._reactionPickerClose = null;
+    if (e.type === 'keydown') {
+      if (e.key !== 'Escape') return;
+    } else if (picker.contains(e.target) || e.target.closest('.reaction-full-picker') || e.target.closest('.quick-emoji-editor') ||
+               (msgEl.contains(e.target) && e.target.closest('[data-action="react"]'))) {
+      return;
     }
+    picker.remove();
+    msgEl.classList.remove('showing-picker');
+    document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
+    this._detachReactionPickerClose();
   };
   this._reactionPickerClose = close;
-  setTimeout(() => document.addEventListener('click', close), 0);
+  setTimeout(() => {
+    if (this._reactionPickerClose !== close) return;
+    document.addEventListener('click', close, true);
+    document.addEventListener('keydown', close, true);
+  }, 0);
+},
+
+_detachReactionPickerClose() {
+  const close = this._reactionPickerClose;
+  if (!close) return;
+  document.removeEventListener('click', close, true);
+  document.removeEventListener('keydown', close, true);
+  this._reactionPickerClose = null;
 },
 
 _showFullReactionPicker(msgEl, msgId, quickPicker) {
@@ -974,10 +983,7 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
           panel.remove();
           quickPicker.remove();
           msgEl.classList.remove('showing-picker');
-          if (this._reactionPickerClose) {
-            document.removeEventListener('click', this._reactionPickerClose);
-            this._reactionPickerClose = null;
-          }
+          this._detachReactionPickerClose();
         });
         row.appendChild(btn);
       });
@@ -1006,10 +1012,7 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
             panel.remove();
             quickPicker.remove();
             msgEl.classList.remove('showing-picker');
-            if (this._reactionPickerClose) {
-              document.removeEventListener('click', this._reactionPickerClose);
-              this._reactionPickerClose = null;
-            }
+            this._detachReactionPickerClose();
           });
           row.appendChild(btn);
         });
