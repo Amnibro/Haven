@@ -362,7 +362,9 @@ _renderAllMembers(members) {
     ).join('');
     const adminBadge = m.isAdmin ? `<span class="aml-admin-badge">${t('settings.admin.badge_admin')}</span>` : '';
     const bannedBadge = m.banned ? `<span class="aml-banned-badge">${t('settings.admin.badge_banned')}</span>` : '';
-    const onlineDot = m.online && !m.banned ? 'aml-online' : 'aml-offline';
+    // Same colours as the member list: away and do not disturb show as such.
+    const presence = m.online && !m.banned ? (m.status === 'away' || m.status === 'dnd' ? m.status : 'online') : 'offline';
+    const onlineDot = 'aml-' + presence;
     const created = m.createdAt ? new Date(m.createdAt.endsWith('Z') ? m.createdAt : m.createdAt + 'Z') : null;
     const joinedStr = created ? this._fmtDate(created) : '';
     const isNew = created && (Date.now() - created.getTime()) < 7 * 24 * 60 * 60 * 1000;

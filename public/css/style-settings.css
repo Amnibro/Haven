@@ -625,6 +625,8 @@
 }
 .aml-status-dot.aml-online { background: var(--success); }
 .aml-status-dot.aml-offline { background: var(--text-muted); }
+.aml-status-dot.aml-away { background: #faa61a; }
+.aml-status-dot.aml-dnd { background: var(--danger); }
 
 .aml-member-info {
   display: flex;

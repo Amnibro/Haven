@@ -1321,15 +1321,18 @@ module.exports = function register(socket, ctx) {
         };
       };
 
+      // Invisible members read as offline here too, as in the member list,
+      // except to themselves.
+      const hidden = (u) => u.status === 'invisible' && u.id !== socket.user.id;
       const members = users.map(u => ({
         id: u.id, username: u.username, displayName: u.displayName,
-        isAdmin: !!u.is_admin, online: onlineIds.has(u.id),
+        isAdmin: !!u.is_admin, online: onlineIds.has(u.id) && !hidden(u),
         banned: bannedIds.has(u.id), roles: userRoles[u.id] || [],
         channels: channelCounts[u.id] || 0,
         channelList: canMod ? (userChannelMap[u.id] || []) : undefined,
         storage: storageFor(u.id),
         avatar: u.avatar || null, avatarShape: u.avatar_shape || 'circle',
-        status: u.status || 'online', statusText: u.status_text || '',
+        status: hidden(u) ? 'offline' : (u.status || 'online'), statusText: u.status_text || '',
         createdAt: u.created_at
       }));
 
