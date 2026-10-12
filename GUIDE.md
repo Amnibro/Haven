@@ -1416,13 +1416,16 @@ picker uses; without it the server tries GIPHY first, then KLIPY, then Tenor.
 
 ## Translations
 
-Haven ships in 8 languages: English, French, German, Spanish, Polish, Russian,
-Chinese and Brazilian Portuguese. Users pick one in **Settings → Language** or on
-the login page, and the choice is saved per browser.
+Haven ships in 11 languages: English, French, German, Spanish, Polish, Russian,
+Chinese, Brazilian Portuguese, Persian (فارسی), Japanese (日本語) and Korean
+(한국어). Users pick one in **Settings → Language** or on the login page, and the
+choice is saved per browser. A first visit follows the browser's language.
 
 English is the reference. Polish, Russian and Brazilian Portuguese have been
 reviewed by native speakers; the rest started as machine translations and still
-need a pass, so corrections are genuinely welcome.
+need a pass, so corrections are genuinely welcome. Persian, Japanese and Korean
+cover about two thirds of the app so far (chat, voice, forums, DMs and the common
+settings); the rest shows in English until someone fills it in.
 
 **Improving a language:** edit `public/locales/{code}.json` and open a PR.
 
@@ -1432,8 +1435,10 @@ need a pass, so corrections are genuinely welcome.
 2. Translate the values, leaving the keys unchanged
 3. Fill in the `_meta` block with the language name and flag
 4. Add the code to the `SUPPORTED` array in `public/js/i18n.js`
-5. Add an `<option>` to the language selectors in `public/index.html` and
-   `public/app.html`
+5. Add an `<option>` to the language selectors in `public/index.html`,
+   `public/app.html` and `public/theme-preview.html`
+6. Add the code to the server's allowed list (`validLocales` in
+   `src/socketHandlers/admin.js` and `default_locale` in `src/serverTemplate.js`)
 
 Missing keys fall back to English per phrase, so a partial translation never breaks
 anything. If you would like to own a language and keep it current, say so in an

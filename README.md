@@ -99,7 +99,7 @@ is open, no code needed, just sign up. Volunteer-hosted, thanks MutantRabbit.
 - Custom stickers, custom emoji, personas (send as an alternate character),
   soundboard, avatar shapes and borders.
 - Server branding, sidebar layout options, font size and density controls.
-- 8 languages out of the box, community translated.
+- 11 languages out of the box: English, Français, Deutsch, Español, Polski, Русский, 中文, Português, فارسی, 日本語 and 한국어.
 
 **Running it**
 
