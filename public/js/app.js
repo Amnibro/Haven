@@ -29,7 +29,7 @@ import SoundMethods from './modules/app-sounds.js?v=4.21.0';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.17.5';
 import ContextMethods  from './modules/app-context.js?v=4.21.2';
-import ChannelMethods  from './modules/app-channels.js?v=4.21.1';
+import ChannelMethods  from './modules/app-channels.js?v=4.21.2';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.21.0';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.21.1';
@@ -44,7 +44,7 @@ import MusicMethods from './modules/app-music.js?v=4.21.0';
 import UtilityMethods  from './modules/app-utilities.js?v=4.21.0';
 import MessageContentMethods from './modules/app-message-content.js?v=4.21.0';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.21.1';
-import GifPickerMethods from './modules/app-gif-picker.js?v=4.21.1';
+import GifPickerMethods from './modules/app-gif-picker.js?v=4.21.2';
 import ThreadMethods from './modules/app-threads.js?v=4.21.0';
 import AdminMethods    from './modules/app-admin.js?v=4.21.0';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
@@ -69,7 +69,7 @@ import GroupMethods from './modules/app-groups.js?v=4.19.3';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.21.1';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.21.1';
-import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.1';
+import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 
 class HavenApp {
   constructor() {
