@@ -270,6 +270,11 @@ _setupMemberDefaults() {
     if (data?.key !== 'member_defaults') return;
     this._memberDefaultsPicks = null;
     this._renderMemberDefaultsAdmin();
+    // "Apply once to everyone now" reaches people who are online straight
+    // away instead of at their next load (#5754). The records make a repeat
+    // run a no-op, so a plain save changes nothing for those who have it.
+    this._memberDefaultsChecked = false;
+    this._maybeApplyMemberDefaults();
   });
   this.socket.on('member-defaults-applied', (applied) => this._applyAccountDefaultsLocally(applied || {}));
 

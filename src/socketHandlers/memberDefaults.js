@@ -71,7 +71,7 @@ module.exports = function register(socket, ctx) {
     if (!canManage()) return socket.emit('error-msg', 'Only admins can change server settings');
     const value = memberDefaults.bumpDefaults(db);
     if (!value) return socket.emit('error-msg', 'Save some defaults first');
-    saved(value, 'Everyone gets these defaults once at their next load');
+    saved(value, 'Sent to everyone. Settings people picked themselves stay as they are');
   });
 
   // Asked by the member's own client at load. Only ever touches the asking
