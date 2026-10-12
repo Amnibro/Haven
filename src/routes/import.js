@@ -215,12 +215,12 @@ module.exports = function registerImport(deps) {
 
   // Step C: fetch all messages from selected channels → save temp → return preview
   app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
-    // A large server takes minutes to read and nothing is sent until it is done,
-    // so the 2 minute socket inactivity timeout (server.timeout) would cut it off.
-    req.setTimeout(30 * 60 * 1000);
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
+    // A large server takes minutes to read and nothing is sent until it is done,
+    // so the 2 minute socket inactivity timeout (server.timeout) would cut it off.
+    req.setTimeout(30 * 60 * 1000);
 
     const auth = resolveImportAuth(req.body);
     if (auth.error) return res.status(400).json({ error: auth.error });
