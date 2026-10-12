@@ -506,6 +506,7 @@ _listenMessageChanges() {
         }
         msgEl.remove();
       });
+      this._forumBlogPieceRemoved?.(data.messageId);
       this._forumBlogRecount?.();
     }
     // Drop the row from the search panel too, regardless of which channel is

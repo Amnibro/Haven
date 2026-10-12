@@ -30,6 +30,9 @@ _forumBlogRepliesLabel(msg) {
 // before adding the replies. In blog mode it lays out the post's own section
 // and the Comments section under it.
 _forumBlogPrepareThread(data) {
+  // A topic drawn again (opened, or redrawn after blog mode changed) starts
+  // with no reply armed: the piece it pointed at may be closed or gone.
+  this._clearThreadReply?.();
   const container = document.getElementById('thread-messages');
   const panel = document.getElementById('thread-panel');
   const blog = !!(data && data.blog);
@@ -118,6 +121,20 @@ _forumBlogPieceComments(id, create) {
   return box;
 },
 
+// A deleted piece takes its button with it. Its comments lose their link
+// on the server (the reply goes to nothing), so here they move to the rest.
+_forumBlogPieceRemoved(id) {
+  const container = document.getElementById('thread-messages');
+  if (!container) return;
+  const pid = Number(id);
+  container.querySelector(`.blog-piece-bar[data-piece="${pid}"]`)?.remove();
+  const box = container.querySelector(`.blog-piece-comments[data-piece="${pid}"]`);
+  if (!box) return;
+  const list = container.querySelector('#blog-comments');
+  if (list) [...box.children].forEach(c => list.appendChild(c));
+  box.remove();
+},
+
 // Opens or closes a piece's comments. Opening one also points the reply box
 // at that piece, so what you write lands under it. The author's own replies
 // are always more of the post, so for them it only shows the comments.
@@ -145,10 +162,12 @@ _forumBlogRecount() {
   const head = document.getElementById('blog-comments-head');
   const list = document.getElementById('blog-comments');
   if (!head || !list) return;
-  const n = list.querySelectorAll('.thread-message').length;
-  head.textContent = n ? t('forum.blog_comments_count', { count: n }) : t('forum.blog_comments');
-  // Every piece gets its button, with the number of comments under it.
+  // Every comment counts, under a picture or here, as the topic card does.
   const container = document.getElementById('thread-messages');
+  const n = container ? container.querySelectorAll('#blog-comments .thread-message, .blog-piece-comments .thread-message').length
+    : list.querySelectorAll('.thread-message').length;
+  head.textContent = n ? t('forum.blog_comments_count', { count: n }) : t('forum.blog_comments');
+  list.dataset.empty = n ? '' : t('forum.blog_no_comments');
   const b = this._forumBlogThread;
   if (!container || !b) return;
   const pieces = [b.parentId, ...[...container.querySelectorAll('#blog-post-parts > .thread-message')].map(el => el.dataset.msgId)];
