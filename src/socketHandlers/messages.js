@@ -3172,7 +3172,7 @@ module.exports = function register(socket, ctx) {
     }
 
     const messages = db.prepare(`
-      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.silent, m.nsfw,
+      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.silent, m.nsfw, m.destruct_at,
              COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
       FROM messages m LEFT JOIN users u ON m.user_id = u.id
       WHERE m.thread_id = ?
@@ -3368,11 +3368,30 @@ module.exports = function register(socket, ctx) {
     }
 
     const blogComment = forumBlog.authorComment(db, { parentId, userId: socket.user.id, replyTo, asComment: data.asComment });
-
+    const destructAt = selfDestruct.destructAtFromSeconds(data.destructSeconds);
+    if (destructAt && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'send_self_destruct', channel.id)) {
+      return socket.emit('error-msg', 'You don\'t have permission to send self-destructing messages');
+    }
+    if (destructAt && !socket.user.isAdmin) {
+      try {
+        const chain = getChannelRoleChain(channel.id);
+        const ph = chain.map(() => '?').join(',');
+        const deny = db.prepare(
+          `SELECT allowed FROM user_role_perms WHERE user_id = ? AND permission = 'delete_own_messages' AND (channel_id IS NULL OR channel_id IN (${ph})) ORDER BY allowed ASC LIMIT 1`
+        ).get(socket.user.id, ...chain);
+        if (deny && deny.allowed === 0) {
+          return socket.emit('error-msg', 'You don\'t have permission to send self-destructing messages');
+        }
+      } catch (err) {
+        console.error('send-thread-message: delete_own_messages check failed:', err.message);
+        return socket.emit('error-msg', 'Failed to send message');
+      }
+    }
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to, silent, blog_comment) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, safeContent, parentId, replyTo, tSilent.silent ? 1 : 0, blogComment);
+        'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to, silent, blog_comment, destruct_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, safeContent, parentId, replyTo, tSilent.silent ? 1 : 0, blogComment, destructAt);
+      if (destructAt) selfDestruct.schedule(destructAt);
       // Your own reply is not news to you (#5641).
       db.prepare(`
         INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id) VALUES (?, ?, ?)
@@ -3395,7 +3414,8 @@ module.exports = function register(socket, ctx) {
         reactions: [],
         edited_at: null,
         thread_id: parentId,
-        silent: tSilent.silent ? true : undefined
+        silent: tSilent.silent ? true : undefined,
+        destruct_at: destructAt || undefined
       };
 
       if (replyTo) {

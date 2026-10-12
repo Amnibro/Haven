@@ -32,3 +32,36 @@
 /* The rules themselves live in the files imported above, in this order. Later
    files win over earlier ones on equal specificity, as they did when this was
    one file, so keep the order and add new rules to the file for their area. */
+.channel-join-voice {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.channel-item:has(.channel-join-voice) .channel-more-btn { margin-left: 0; }
+.channel-join-voice:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.channel-join-voice.is-live {
+  color: var(--success, #43b581);
+  border-color: color-mix(in srgb, var(--success, #43b581) 45%, var(--border));
+}
+.channel-join-voice.is-leave {
+  background: var(--danger, #ed4245);
+  color: var(--danger-text, #fff);
+  border-color: var(--danger, #ed4245);
+}
+.channel-join-voice.is-leave:hover { filter: brightness(1.08); color: var(--danger-text, #fff); }
