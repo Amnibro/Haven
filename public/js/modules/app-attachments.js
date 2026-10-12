@@ -326,7 +326,7 @@ _normalizeTag(raw) {
   if (typeof raw !== 'string') return null;
   const name = raw.trim().replace(/\s+/g, ' ');
   if (!name || name.length > this._maxTagLen()) return null;
-  if (!/^[\p{L}\p{N} _-]+$/u.test(name)) return null;
+  if (!/^[\p{L}\p{N} _+.&'!?-]+$/u.test(name)) return null;
   return { name, norm: name.toLocaleLowerCase() };
 },
 

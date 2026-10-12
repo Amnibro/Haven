@@ -40,10 +40,12 @@ function effectiveLimits(db) {
   return { maxTags, maxLen };
 }
 
-// Letters (any script), digits, space, hyphen, underscore. Everything else
-// (control chars, punctuation, emoji) is rejected so tags stay clean, terse and
-// reusable. Display keeps the user's casing; matching/dedupe is case-folded.
-const TAG_CHARS = /^[\p{L}\p{N} _-]+$/u;
+// Letters (any script), digits, space, hyphen, underscore, and the few marks
+// channel names allow too (+ . & ' ! ?), so "4+" or "R&D" work (#5751). Other
+// punctuation, control chars and emoji are rejected so tags stay clean, terse
+// and reusable. Display keeps the user's casing; matching/dedupe is
+// case-folded.
+const TAG_CHARS = /^[\p{L}\p{N} _+.&'!?-]+$/u;
 
 // Normalize a raw tag string into { name, norm } or null when it can't be a
 // valid tag. `name` is the trimmed, whitespace-collapsed display form; `norm`
