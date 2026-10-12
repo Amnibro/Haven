@@ -10,8 +10,28 @@ const SHORT_MAX = 12;
 
 export default {
 
+// The person's own choice in Settings, Layout wins; otherwise the server's
+// (#5767).
 _categoryLayout() {
+  let mine = '';
+  try { mine = localStorage.getItem('haven_category_layout') || ''; } catch { /* storage blocked: follow the server */ }
+  if (mine === 'tabs' || mine === 'list') return mine;
   return this.serverSettings?.category_layout === 'tabs' ? 'tabs' : 'list';
+},
+
+_setupCategoryLayoutPicker() {
+  const select = document.getElementById('category-layout-select');
+  if (!select) return;
+  try { select.value = localStorage.getItem('haven_category_layout') || ''; } catch { select.value = ''; } // storage blocked: show the default
+  select.addEventListener('change', () => {
+    try {
+      if (select.value) localStorage.setItem('haven_category_layout', select.value);
+      else localStorage.removeItem('haven_category_layout');
+    } catch (err) {
+      console.warn('[Categories] could not save the layout choice', err);
+    }
+    this._renderChannels?.();
+  });
 },
 
 _categoryShortNames() {

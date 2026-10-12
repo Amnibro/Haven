@@ -406,6 +406,7 @@ class HavenApp {
     this._setupMemberDefaults();
     this._setupMessageHighlights();
     this._setupForumUnread();
+    this._setupCategoryLayoutPicker();
     this._setupDebugSection();
     this._setupLightbox();
     this._setupOnlineOverlay();

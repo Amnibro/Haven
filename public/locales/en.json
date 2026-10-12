@@ -1519,6 +1519,13 @@
     },
     "layout": {
       "title": "Layout",
+      "categories": {
+        "title": "Channel Categories",
+        "server": "Server default",
+        "list": "List",
+        "tabs": "Tabs",
+        "hint": "Show category headers as a list or as a grid of tabs. Server default follows the admin's choice. Saved per browser."
+      },
       "style": {
         "title": "Sidebar Layout",
         "hint": "Original is Haven's own layout. The others come from layout plugins on this server. Saved per browser."
