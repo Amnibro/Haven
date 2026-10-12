@@ -210,11 +210,11 @@ async _sendMessage() {
   if (this.replyingTo) {
     payload.replyTo = this.replyingTo.id;
   }
-  // Official message: one message per press of the button.
-  if (this._highlightArmed) {
-    payload.highlight = true;
-    this._setHighlightArmed(false);
-  }
+  // Official message: one message per press of the button, or every
+  // message while official mode is kept on (the button goes back to where
+  // it rests).
+  if (this._highlightArmed) payload.highlight = true;
+  this._setHighlightArmed(this._highlightDefault());
   // (#5280) Burn-after-read arming (DM-only); cleared in switchChannel
   // when the user moves to a non-DM channel so a stale flag can't leak.
   // The button is a *persistent* toggle: once armed, every message in
@@ -1003,9 +1003,9 @@ _createMessageEl(msg, prevMsg) {
     (prevMsg.username || null) === (msg.username || null) &&
     // /break and the persisted break_chain flag (#5393) hard-stop grouping.
     !msg.break_chain && !prevMsg.break_chain &&
-    // An official message always shows who said it, and does not swallow
-    // the next one either.
-    !msg.highlight && !prevMsg.highlight &&
+    // Official messages group by the look the reader picked
+    // (_highlightGroups in app-message-highlights.js).
+    this._highlightGroups(msg, prevMsg) &&
     (prevMsg.is_webhook ? 1 : 0) === (msg.is_webhook ? 1 : 0) &&
     (prevMsg.webhook_username || null) === (msg.webhook_username || null) &&
     (prevMsg.imported_from || null) === (msg.imported_from || null) &&
@@ -1166,6 +1166,9 @@ _createMessageEl(msg, prevMsg) {
       ${toolbarHtml}
       <button class="msg-dots-btn" aria-label="${t('app.actions.message_actions')}">⋯</button>
     `;
+    // Only with Coloured text or the look turned off does an official
+    // message land here, as part of a run.
+    if (msg.highlight) this._applyMessageHighlight(el, msg.highlight);
     return el;
   }
 

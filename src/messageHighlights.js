@@ -5,6 +5,11 @@
 // role's name and colour. The role is stored, not its look, so renaming or
 // recolouring the role updates every message it marked; a deleted role
 // leaves the mark with no name.
+//
+// Official mode (users.official_mode) is the sender's "keep it on" switch:
+// while it is on, the composer arms every message instead of one at a time.
+// The client still sends highlight: true per message, so the server never
+// marks anything the sender did not ask for. Off unless the person turns it on.
 
 function ensureTable(db) {
   db.exec(`
@@ -15,6 +20,27 @@ function ensureTable(db) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  // Official mode, for databases from before it.
+  const hasMode = db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'official_mode');
+  if (!hasMode) db.exec('ALTER TABLE users ADD COLUMN official_mode INTEGER NOT NULL DEFAULT 0');
+}
+
+// What a client can rely on from this server, sent in session-info so apps
+// that talk to servers of different versions know what to show.
+const FEATURES = ['highlight_messages', 'official_mode'];
+
+function officialMode(db, userId) {
+  try {
+    const row = db.prepare('SELECT official_mode FROM users WHERE id = ?').get(userId);
+    return !!(row && row.official_mode);
+  } catch {
+    return false;
+  }
+}
+
+function setOfficialMode(db, userId, on) {
+  db.prepare('UPDATE users SET official_mode = ? WHERE id = ?').run(on ? 1 : 0, userId);
+  return !!on;
 }
 
 function lookup(db, messageIds) {
@@ -61,4 +87,4 @@ function unmark(db, messageId) {
   db.prepare('DELETE FROM message_highlights WHERE message_id = ?').run(messageId);
 }
 
-module.exports = { ensureTable, lookup, forMessage, mark, unmark };
+module.exports = { FEATURES, ensureTable, lookup, forMessage, mark, unmark, officialMode, setOfficialMode };
