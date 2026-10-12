@@ -128,7 +128,8 @@ _syncOfficialMode() {
 _officialStyle() {
   let style = null;
   try { style = localStorage.getItem('haven_official_style'); } catch { /* storage blocked: the default look */ }
-  return OFFICIAL_STYLES.includes(style) ? style : 'badge';
+  if (OFFICIAL_STYLES.includes(style)) return style;
+  try { return localStorage.getItem('haven_highlight_staff') === 'false' ? 'off' : 'text'; } catch { return 'text'; }
 },
 
 _applyOfficialStyle(style) {

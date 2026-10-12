@@ -1438,6 +1438,7 @@ function initDatabase() {
 
   // ── Migration: encrypted server list for cross-device sync ──────────
   addColumn('users', 'encrypted_servers', "TEXT DEFAULT NULL");
+  addColumn('users', 'official_mode', "INTEGER NOT NULL DEFAULT 1");
 
   // Bot accounts (src/botAccounts.js): a member account a program signs in
   // to with a token, never a password.
