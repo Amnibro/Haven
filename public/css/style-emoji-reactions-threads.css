@@ -305,6 +305,15 @@
   overflow: hidden;
 }
 
+/* Opened from the DM pop-out window: placed by the app next to its button,
+   above the pop-out (99999) and below dialogs (100001). */
+.gif-picker.gif-picker-floating {
+  position: fixed;
+  bottom: auto;
+  margin: 0;
+  z-index: 100000;
+}
+
 .gif-picker-tabs {
   display: flex;
   gap: 0.25rem;

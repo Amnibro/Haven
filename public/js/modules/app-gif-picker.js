@@ -23,19 +23,16 @@ _setupGifPicker() {
   this._gifDebounce = null;
   this._gifTab = 'search';
 
-  btn.addEventListener('click', () => {
-    if (picker.style.display === 'flex') {
-      picker.style.display = 'none';
-      return;
-    }
-    // Close emoji picker if open
-    document.getElementById('emoji-picker').style.display = 'none';
-    picker.style.display = 'flex';
-    searchInput.value = '';
-    searchInput.focus();
-    // Re-open on whichever tab was last used this session
-    this._switchGifTab(this._gifTab);
-  });
+  btn.addEventListener('click', () => this._toggleGifPicker('main', btn));
+  // The DM pop-out window has its own GIF button; the same picker opens
+  // above it and the GIF goes out from that window.
+  const pipBtn = document.getElementById('dm-pip-gif-btn');
+  if (pipBtn) {
+    pipBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._toggleGifPicker('dmpip', pipBtn);
+    });
+  }
 
   picker.querySelectorAll('.gif-tab').forEach(tab => {
     tab.addEventListener('click', () => this._switchGifTab(tab.dataset.gifTab));
@@ -44,8 +41,8 @@ _setupGifPicker() {
   // Close when clicking outside
   document.addEventListener('click', (e) => {
     if (picker.style.display !== 'none' &&
-        !picker.contains(e.target) && !btn.contains(e.target)) {
-      picker.style.display = 'none';
+        !picker.contains(e.target) && !e.target.closest('#gif-btn, #dm-pip-gif-btn')) {
+      this._closeGifPicker();
     }
   });
 
@@ -81,9 +78,71 @@ _setupGifPicker() {
     }
     const img = e.target.closest('img');
     if (!img || !img.dataset.full) return;
-    this._sendGifMessage(img.dataset.full);
-    picker.style.display = 'none';
+    const target = this._gifTarget;
+    this._closeGifPicker();
+    if (target === 'dmpip') this._sendGifToDMPiP(img.dataset.full);
+    else this._sendGifMessage(img.dataset.full);
   });
+},
+
+// Opens the picker for the main message box ('main') or the DM pop-out
+// ('dmpip'), or closes it when it is already open for that one. The pop-out
+// floats above the message box, so for it the picker moves to the page
+// itself while open and goes back afterwards.
+_toggleGifPicker(target, anchor) {
+  const picker = document.getElementById('gif-picker');
+  const searchInput = document.getElementById('gif-search-input');
+  if (!picker || !searchInput) return;
+  const wasOpen = picker.style.display === 'flex' && this._gifTarget === target;
+  this._closeGifPicker();
+  if (wasOpen) return;
+  document.getElementById('emoji-picker').style.display = 'none';
+  this._gifTarget = target;
+  if (target === 'dmpip') {
+    this._gifPickerHome = { parent: picker.parentNode, next: picker.nextSibling };
+    document.body.appendChild(picker);
+    picker.classList.add('gif-picker-floating');
+  }
+  picker.style.display = 'flex';
+  if (target === 'dmpip' && anchor) {
+    const r = anchor.getBoundingClientRect();
+    const w = picker.offsetWidth;
+    const h = picker.offsetHeight;
+    let top = r.top - h - 8;
+    if (top < 8) top = Math.max(8, Math.min(r.bottom + 8, window.innerHeight - h - 8));
+    picker.style.top = top + 'px';
+    picker.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+  }
+  searchInput.value = '';
+  searchInput.focus();
+  // Re-open on whichever tab was last used this session
+  this._switchGifTab(this._gifTab);
+},
+
+_closeGifPicker() {
+  const picker = document.getElementById('gif-picker');
+  if (!picker) return;
+  picker.style.display = 'none';
+  if (!picker.classList.contains('gif-picker-floating')) return;
+  picker.classList.remove('gif-picker-floating');
+  picker.style.top = '';
+  picker.style.left = '';
+  const home = this._gifPickerHome;
+  if (home && home.parent) home.parent.insertBefore(picker, home.next && home.next.parentNode === home.parent ? home.next : null);
+  this._gifPickerHome = null;
+},
+
+// A GIF from the pop-out goes through the pop-out's own send, so it is
+// encrypted like anything else typed there. Whatever was typed in that box
+// is put back afterwards.
+_sendGifToDMPiP(url) {
+  const input = document.getElementById('dm-pip-input');
+  if (!input || !url || !this._activeDMPip || typeof this._sendDMPiPMessage !== 'function') return;
+  const draft = input.value;
+  input.value = url;
+  this._sendDMPiPMessage();
+  input.value = draft;
+  if (draft) input.dispatchEvent(new Event('input', { bubbles: true }));
 },
 
 _switchGifTab(tab) {
