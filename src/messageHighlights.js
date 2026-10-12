@@ -33,7 +33,9 @@ function officialMode(db, userId) {
   try {
     const row = db.prepare('SELECT official_mode FROM users WHERE id = ?').get(userId);
     return !!(row && row.official_mode);
-  } catch {
+  } catch (err) {
+    // Read on load: a failure means plain messages until it works again.
+    console.warn('[highlight] reading official mode failed:', err.message);
     return false;
   }
 }

@@ -34,8 +34,12 @@ _setupMessageHighlights() {
   this.socket.on('roles-updated', (data) => {
     if (!data || !this.currentChannel) return;
     const ch = this.channels?.find(c => c.code === this.currentChannel);
+    // A button pressed for the next message stays pressed while it is still
+    // allowed; only losing the permission turns it off.
+    const armed = this._highlightArmed;
     this._updateHighlightButton(!!ch?.is_dm);
     this._syncOfficialMode();
+    if (armed && this._highlightAvailable) this._setHighlightArmed(true);
   });
   this.socket.on('official-mode-changed', (data) => {
     if (!data || typeof data.officialMode !== 'boolean') return;
