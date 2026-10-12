@@ -1400,7 +1400,10 @@
 
 .channel-ctx-menu {
   position: fixed;
-  z-index: 9999;
+  /* Above the thread panel (99996, PiP 99999), where a forum post opens,
+     so a channel or topic menu is not drawn behind it (#5762). Below the
+     modal overlay (100001). */
+  z-index: 100000;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
