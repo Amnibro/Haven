@@ -662,6 +662,12 @@ _renderChannels() {
       bell.className = 'channel-badge thread-mention-badge';
       bell.title = `${tmCount} mention${tmCount === 1 ? '' : 's'} in thread${tmCount === 1 ? '' : 's'}`;
       bell.textContent = `🔔${tmCount > 9 ? '9+' : tmCount}`;
+      // Opens the thread that mentioned you, at the reply (#5766).
+      bell.style.cursor = 'pointer';
+      bell.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._openThreadMentionFrom?.(ch.code);
+      });
       el.appendChild(bell);
     }
 

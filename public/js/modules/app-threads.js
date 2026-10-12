@@ -182,7 +182,28 @@ _openMostRecentThreadMention() {
   const list = this._threadMentions[this.currentChannel];
   if (!list || list.length === 0) return;
   const newest = list[list.length - 1];
+  this._threadJumpTarget = newest.messageId;
   this._openThread(newest.parentId);
+},
+
+// The bell on a channel in the sidebar (#5766): open that channel's newest
+// thread with a mention, at the reply itself. Opening a thread clears its
+// mentions, so the next click opens the next one.
+async _openThreadMentionFrom(code) {
+  if (code !== this.currentChannel) await this.switchChannel(code);
+  this._openMostRecentThreadMention();
+},
+
+// After a thread loads: bring the reply that mentioned you into view.
+_threadJumpToMention() {
+  const id = this._threadJumpTarget;
+  this._threadJumpTarget = null;
+  if (!id) return;
+  const el = document.querySelector(`#thread-messages [data-msg-id="${Number(id)}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: 'center' });
+  el.classList.add('highlight-flash');
+  setTimeout(() => el.classList.remove('highlight-flash'), 2000);
 },
 
 _openThread(parentId) {

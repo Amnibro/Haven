@@ -57,6 +57,7 @@ _listenFeatureEvents() {
       data.messages.forEach(msg => this._appendThreadMessage(msg));
     }
     this._forumBlogAfterLoad?.();
+    this._threadJumpToMention?.();
   });
 
   this.socket.on('new-thread-message', async (data) => {
