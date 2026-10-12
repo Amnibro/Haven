@@ -33,7 +33,7 @@ _forumBlogPrepareThread(data) {
   const container = document.getElementById('thread-messages');
   const panel = document.getElementById('thread-panel');
   const blog = !!(data && data.blog);
-  this._forumBlogThread = blog ? { parentId: data.parentId, authorId: data.parentUserId || null } : null;
+  this._forumBlogThread = blog ? { parentId: data.parentId, authorId: data.parentUserId || null, authorName: data.parentUsername || '' } : null;
   panel?.classList.toggle('thread-blog', blog);
   this._forumBlogComposerHint();
   if (!blog || !container) return;
@@ -54,6 +54,7 @@ _forumBlogPrepareThread(data) {
 // After the first load the post is what you see first, not the newest comment.
 _forumBlogAfterLoad() {
   if (!this._forumBlogThread) return;
+  this._forumBlogRecount();
   const container = document.getElementById('thread-messages');
   if (container) container.scrollTop = 0;
 },
@@ -64,7 +65,76 @@ _forumBlogTargetFor(msg) {
   if (!this._forumBlogThread) return null;
   const container = document.getElementById('thread-messages');
   if (!container) return null;
-  return container.querySelector(msg && msg.post_part === true ? '#blog-post-parts' : '#blog-comments');
+  if (msg && msg.post_part === true) return container.querySelector('#blog-post-parts');
+  // A comment on one picture of the post goes under that picture (#5753).
+  if (msg && msg.reply_to) {
+    const box = this._forumBlogPieceComments(msg.reply_to, true);
+    if (box) return box;
+  }
+  return container.querySelector('#blog-comments');
+},
+
+// ── Comments on one piece of the post (#5753) ──────────────
+// A piece is the opening post or one of the author's additions. A comment
+// that replies to a piece sits under it, behind a button with its count;
+// any other comment stays in the Comments section. Nothing new is stored:
+// it is the reply link every thread reply already has.
+
+_forumBlogPieceEl(id) {
+  const container = document.getElementById('thread-messages');
+  const b = this._forumBlogThread;
+  if (!container || !b) return null;
+  if (Number(id) === Number(b.parentId)) return container.querySelector('.thread-topic-body');
+  return container.querySelector(`#blog-post-parts > .thread-message[data-msg-id="${Number(id)}"]`);
+},
+
+_forumBlogPieceBar(id, piece) {
+  const holder = piece.parentElement;
+  let bar = holder.querySelector(`:scope > .blog-piece-bar[data-piece="${Number(id)}"]`);
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'blog-piece-bar';
+    bar.dataset.piece = String(Number(id));
+    bar.innerHTML = '<button type="button" class="blog-piece-btn" aria-expanded="false"></button>';
+    bar.querySelector('button').addEventListener('click', () => this._forumBlogTogglePiece(id));
+    piece.after(bar);
+  }
+  return bar;
+},
+
+_forumBlogPieceComments(id, create) {
+  const piece = this._forumBlogPieceEl(id);
+  if (!piece) return null;
+  const holder = piece.parentElement;
+  let box = holder.querySelector(`:scope > .blog-piece-comments[data-piece="${Number(id)}"]`);
+  if (!box && create) {
+    const bar = this._forumBlogPieceBar(id, piece);
+    box = document.createElement('div');
+    box.className = 'blog-piece-comments';
+    box.dataset.piece = String(Number(id));
+    box.hidden = true;
+    bar.after(box);
+  }
+  return box;
+},
+
+// Opens or closes a piece's comments. Opening one also points the reply box
+// at that piece, so what you write lands under it. The author's own replies
+// are always more of the post, so for them it only shows the comments.
+_forumBlogTogglePiece(id) {
+  const box = this._forumBlogPieceComments(id, true);
+  const b = this._forumBlogThread;
+  if (!box || !b) return;
+  box.hidden = !box.hidden;
+  const isAuthor = !!(this.user && b.authorId && b.authorId === this.user.id);
+  if (!box.hidden && !isAuthor) {
+    const piece = this._forumBlogPieceEl(id);
+    if (piece && !piece.dataset.username) piece.dataset.username = b.authorName || '';
+    if (piece) this._setThreadReply?.(piece, Number(id));
+  } else if (box.hidden && this._threadReplyingTo && this._threadReplyingTo.id === Number(id)) {
+    this._clearThreadReply?.();
+  }
+  this._forumBlogRecount();
 },
 
 _forumBlogIsPart(msg) {
@@ -77,6 +147,22 @@ _forumBlogRecount() {
   if (!head || !list) return;
   const n = list.querySelectorAll('.thread-message').length;
   head.textContent = n ? t('forum.blog_comments_count', { count: n }) : t('forum.blog_comments');
+  // Every piece gets its button, with the number of comments under it.
+  const container = document.getElementById('thread-messages');
+  const b = this._forumBlogThread;
+  if (!container || !b) return;
+  const pieces = [b.parentId, ...[...container.querySelectorAll('#blog-post-parts > .thread-message')].map(el => el.dataset.msgId)];
+  for (const id of pieces) {
+    const piece = this._forumBlogPieceEl(id);
+    if (!piece) continue;
+    const btn = this._forumBlogPieceBar(id, piece).querySelector('.blog-piece-btn');
+    const box = this._forumBlogPieceComments(id, false);
+    const count = box ? box.querySelectorAll('.thread-message').length : 0;
+    const open = !!(box && !box.hidden);
+    btn.textContent = `💬 ${count ? t('forum.blog_piece_comments', { count }) : t('forum.blog_piece_comment')}`;
+    btn.setAttribute('aria-expanded', String(open));
+    btn.classList.toggle('open', open);
+  }
 },
 
 // The thread box says what sending will do: the author adds to the post,

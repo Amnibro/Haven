@@ -4285,6 +4285,8 @@
     "blog_comment_other": "{{count}} comments",
     "blog_comment_cta": "Comment",
     "blog_comments": "Comments",
+    "blog_piece_comment": "Comment",
+    "blog_piece_comments": "Comments ({{count}})",
     "blog_comments_count": "Comments ({{count}})",
     "blog_no_comments": "No comments yet.",
     "blog_add_to_post": "Add to your post...",

@@ -3011,8 +3011,10 @@ module.exports = function register(socket, ctx) {
 
     let replyTo = isInt(data.replyTo) ? data.replyTo : null;
     if (replyTo) {
+      // A reply in the thread, or the topic's own opening post (a comment on
+      // the first picture of a blog post, #5753).
       const replyMsg = db.prepare('SELECT thread_id FROM messages WHERE id = ?').get(replyTo);
-      if (!replyMsg || replyMsg.thread_id !== parentId) replyTo = null;
+      if (!replyMsg || (replyMsg.thread_id !== parentId && replyTo !== parentId)) replyTo = null;
     }
 
     try {

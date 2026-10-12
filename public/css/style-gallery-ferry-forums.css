@@ -1037,6 +1037,12 @@
    then a Comments heading with everyone else's replies under it. */
 .thread-blog .thread-topic-body { border-bottom: none; margin-bottom: 0; }
 .blog-post-parts { padding-bottom: 0.5rem; }
+/* Comments on one picture of a blog post (#5753). */
+.blog-piece-bar { padding: 0.125rem 1rem 0.5rem; }
+.blog-piece-btn { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); font-size: 0.75rem; padding: 0.125rem 0.625rem; cursor: pointer; }
+.blog-piece-btn:hover, .blog-piece-btn.open { color: var(--text-primary); border-color: var(--accent); }
+.blog-piece-comments { margin: 0 1rem 0.75rem 2.25rem; padding-left: 0.5rem; border-left: 2px solid var(--border); }
+.blog-piece-comments .reply-banner { display: none; }
 .blog-post-parts .thread-msg-compact-spacer { visibility: hidden; }
 .blog-post-parts .thread-message:hover .thread-msg-compact-spacer { visibility: visible; }
 .blog-comments-head { margin: 0.25rem 0 0.5rem; padding: 0.6rem 1rem 0; border-top: 2px solid var(--border); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
