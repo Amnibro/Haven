@@ -848,6 +848,12 @@ _forumApplyThreadChrome(parentId) {
   if (!this._forumThreadResizeBound) {
     this._forumThreadResizeBound = true;
     window.addEventListener('resize', () => this._forumSyncThreadLeft());
+    // Dragging the sidebar wider or narrower moves the chat column without
+    // resizing the window, and left the open topic behind it (#5755).
+    const header = document.querySelector('.channel-header');
+    if (header && typeof ResizeObserver === 'function') {
+      new ResizeObserver(() => this._forumSyncThreadLeft()).observe(header);
+    }
   }
   this._forumSyncThreadLeft();
 

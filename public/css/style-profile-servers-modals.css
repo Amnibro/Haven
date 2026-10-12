@@ -1313,7 +1313,10 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 .thread-panel.drag-over {
   outline: 2px dashed var(--accent);
   outline-offset: -4px;
-  background: rgba(124, 92, 252, 0.04);
+  /* A tint over the panel's own colour, not in place of it: replacing the
+     colour left a forum post see-through while a file was dragged over it,
+     with the topic cards showing behind (#5755). */
+  background-image: linear-gradient(rgba(124, 92, 252, 0.04), rgba(124, 92, 252, 0.04));
 }
 
 
