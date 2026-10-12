@@ -45,4 +45,25 @@ module.exports = function register(socket, ctx) {
     }
     io.to(`channel:${msg.code}`).emit('message-highlight', { channelCode: msg.code, messageId, highlight });
   });
+
+  // Keep official mode on: saved on the account, so every device of theirs
+  // follows. Anyone may switch it; it only does something with Highlight
+  // Messages.
+  socket.on('set-official-mode', (data, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    if (!socket.user || !data || typeof data !== 'object' || typeof data.enabled !== 'boolean') {
+      return reply({ ok: false, error: 'Invalid request' });
+    }
+    let officialMode;
+    try {
+      officialMode = highlights.setOfficialMode(db, socket.user.id, data.enabled);
+    } catch (err) {
+      console.warn('[highlight] saving official mode failed:', err.message);
+      return reply({ ok: false, error: 'Failed to save the setting' });
+    }
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === socket.user.id) s.emit('official-mode-changed', { officialMode });
+    }
+    reply({ ok: true, officialMode });
+  });
 };

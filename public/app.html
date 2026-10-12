@@ -1856,6 +1856,22 @@
           <input type="checkbox" id="hover-profile-card" checked>
         </label>
         <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.hover_profile_card_hint">Hovering over a name or avatar shows a quick profile preview. Clicking opens the full card either way.</small>
+        <label class="select-row">
+          <span data-i18n="settings.chat_behavior.official_style">Official messages</span>
+          <select id="official-style-select" style="max-width:160px">
+            <option value="badge" data-i18n="settings.chat_behavior.official_style_badge">Badge</option>
+            <option value="text" data-i18n="settings.chat_behavior.official_style_text">Colored text</option>
+            <option value="off" data-i18n="settings.chat_behavior.official_style_off">Off</option>
+          </select>
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.official_style_hint">How messages posted as a role look to you. Badge: the role's name next to the message. Colored text: the text in the role's color, and a run of them reads as one block. Off: they look like any other message. Saved on this device.</small>
+        <div id="official-mode-setting" style="display:none">
+          <label class="toggle-row">
+            <span data-i18n="settings.chat_behavior.official_mode">Keep official mode on</span>
+            <input type="checkbox" id="official-mode-toggle">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.official_mode_hint">Every message you send where you can post as your role goes out official, until you turn this off. The megaphone then sends just the next message plain. Saved to your account, so it follows you to every device.</small>
+        </div>
       </div>
 
       <!-- Soundboard Sidebar Setting -->

@@ -165,6 +165,37 @@
   white-space: nowrap;
 }
 .btn-highlight.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+/* The reader's choice of look (app-message-highlights.js). Coloured text:
+   the text and a lighter wash in the role's colour, a thinner bar, no
+   badge, and a run of official messages from one person joined into one
+   block. The text colour is mixed with the theme's own, more of it on light
+   themes (--hl-text-mix), so a pale role colour stays readable. The text
+   colour is !important because many themes set message text that way. Off:
+   no mark at all. */
+:root[data-official-style] .msg-highlight-badge { display: none; }
+:root[data-official-style="off"] .message.message-highlighted,
+:root[data-official-style="off"] .message-compact.message-highlighted {
+  box-shadow: none;
+  background: none;
+}
+:root[data-official-style="text"] .message.message-highlighted,
+:root[data-official-style="text"] .message-compact.message-highlighted {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hl-color, var(--accent)) 75%, transparent);
+  background: color-mix(in srgb, var(--hl-color, var(--accent)) 7%, transparent);
+}
+:root[data-official-style="text"] .message-highlighted .message-content {
+  color: color-mix(in srgb, var(--hl-color, var(--accent)) var(--hl-text-mix, 60%), var(--text-primary)) !important;
+}
+:root[data-official-style="text"] .message-highlighted:has(+ .message-compact.message-highlighted) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+:root[data-official-style="text"] .message-highlighted + .message-compact.message-highlighted {
+  margin-top: -0.125rem;
+  padding-top: 0.1875rem;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
 
 .user-status-dot.away {
   background: #faa61a;
