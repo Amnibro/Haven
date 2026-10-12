@@ -1507,9 +1507,15 @@ module.exports = function register(socket, ctx) {
         attachmentTags: appliedTags.length ? appliedTags : undefined,
       };
       // Sent as an official message (src/messageHighlights.js), when allowed.
-      if (data.highlight === true && !channel.is_dm && !personaId &&
-          (socket.user.isAdmin || userHasPermission(socket.user.id, 'highlight_messages', channel.id))) {
-        message.highlight = highlights.mark(db, { messageId: message.id, userId: socket.user.id, channelId: channel.id, getUserHighestRole: ctx.getUserHighestRole });
+      // The message is stored by now, so a failure here only drops the mark.
+      if (data.highlight === true && !channel.is_dm && !personaId) {
+        try {
+          if (socket.user.isAdmin || userHasPermission(socket.user.id, 'highlight_messages', channel.id)) {
+            message.highlight = highlights.mark(db, { messageId: message.id, userId: socket.user.id, channelId: channel.id, getUserHighestRole: ctx.getUserHighestRole });
+          }
+        } catch (err) {
+          console.warn('[highlight] could not mark a new message:', err.message);
+        }
       }
 
       if (replyTo) {
