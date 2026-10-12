@@ -109,18 +109,24 @@ function withStyle(style, fn) {
   try { return fn(); } finally { global.localStorage = prev; }
 }
 
-test('the badge stays the default look, and unknown values fall back to it', () => {
-  assert.equal(withStyle(null, () => M._officialStyle()), 'badge');
-  assert.equal(withStyle('text', () => M._officialStyle()), 'text');
+test('colored text is the Amni default look, and the old staff highlight switch maps to Off', () => {
+  assert.equal(withStyle(null, () => M._officialStyle()), 'text');
+  assert.equal(withStyle('badge', () => M._officialStyle()), 'badge');
   assert.equal(withStyle('off', () => M._officialStyle()), 'off');
-  assert.equal(withStyle('sparkles', () => M._officialStyle()), 'badge');
+  assert.equal(withStyle('sparkles', () => M._officialStyle()), 'text');
+  const prev = global.localStorage;
+  global.localStorage = { getItem: (k) => (k === 'haven_highlight_staff' ? 'false' : null), setItem: () => {} };
+  try { assert.equal(M._officialStyle(), 'off'); } finally { global.localStorage = prev; }
+});
+test('official mode is on by default for Amni accounts', () => {
+  assert.match(read('src/database.js'), /addColumn\('users', 'official_mode', "INTEGER NOT NULL DEFAULT 1"\);/);
 });
 
 test('official runs group only with Colored text; the badge keeps every header', () => {
   const official = { highlight: { role: 'Mod' } };
   const plain = {};
-  // Badge (the default): an official message never groups, either way.
-  withStyle(null, () => {
+  // Badge: an official message never groups, either way.
+  withStyle('badge', () => {
     assert.equal(M._highlightGroups(official, official), false);
     assert.equal(M._highlightGroups(plain, official), false);
     assert.equal(M._highlightGroups(official, plain), false);
