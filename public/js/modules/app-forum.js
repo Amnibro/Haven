@@ -714,10 +714,48 @@ _openForumComposer(existing = null, draft = null) {
     const nsfw = !!overlay.querySelector('#forum-post-nsfw')?.checked;
     // Kept for a moment so a refusal can reopen the post as it was (#5742).
     this._forumPostDraft = { code, title, body, tags: [...picked], nsfw, at: Date.now() };
-    this.socket.emit('send-message', { code, content: body || title, title: title || undefined, tags: [...picked], nsfw });
+    // Blog mode: several pictures or files in one new post become one piece
+    // each, so every one can be tagged and commented on (#5763). The post
+    // keeps its text and the first file; the rest follow as the author's own
+    // additions once the post exists.
+    const { first, rest } = this._forumBlogOn?.(code) ? this._forumSplitAttachments(body) : { first: body, rest: [] };
+    if (rest.length) this._forumQueueBlogParts(code, rest);
+    this.socket.emit('send-message', { code, content: first || title, title: title || undefined, tags: [...picked], nsfw });
     this.notifications && this.notifications.play && this.notifications.play('sent');
     close();
   });
+},
+
+// A line that is only an uploaded file: a picture's link, or a file line.
+_forumSplitAttachments(body) {
+  const isFile = (line) => /^(\/uploads\/\S+|\[file:[^\]]*\]\(\/uploads\/[^)]+\))$/.test(line.trim());
+  const lines = String(body || '').split(/\r?\n/);
+  const keep = [];
+  const rest = [];
+  let seenFile = false;
+  for (const line of lines) {
+    if (isFile(line)) {
+      if (!seenFile) { seenFile = true; keep.push(line); } else rest.push(line.trim());
+    } else {
+      keep.push(line);
+    }
+  }
+  return { first: keep.join('\n').trim(), rest };
+},
+
+// Sends the extra pieces once this person's new post shows up in the forum.
+_forumQueueBlogParts(code, parts) {
+  const mine = this.user && this.user.id;
+  const onNew = (data) => {
+    const m = data && data.message;
+    if (!m || data.channelCode !== code || m.user_id !== mine || m.thread_id) return;
+    clearTimeout(timer);
+    this.socket.off('new-message', onNew);
+    // Replies are capped at 10 every 10 seconds, so past 8 they are spaced out.
+    parts.forEach((content, i) => setTimeout(() => this.socket.emit('send-thread-message', { parentId: m.id, content }), i < 8 ? 0 : (i - 7) * 1100));
+  };
+  const timer = setTimeout(() => this.socket.off('new-message', onNew), 15000);
+  this.socket.on('new-message', onNew);
 },
 
 // Upload files from the New Post or Edit post window and put each one in the
