@@ -963,12 +963,17 @@ async _openActivitiesModal() {
   if (hasFlashGames && !this._flashAllInstalled) {
     const banner = document.createElement('div');
     banner.className = 'flash-install-banner';
+    // Only an admin can install them, so everyone else gets a note instead
+    // of a button that always fails.
+    const canInstall = !!this.user?.isAdmin;
     banner.innerHTML = `
       <span>🎮 ${t('context.flash_not_installed')}</span>
-      <button class="btn-sm btn-accent" id="install-flash-btn">${t('context.flash_download_btn')}</button>
+      ${canInstall
+        ? `<button class="btn-sm btn-accent" id="install-flash-btn">${t('context.flash_download_btn')}</button>`
+        : `<span class="flash-install-note">${t('context.flash_ask_admin')}</span>`}
     `;
     grid.appendChild(banner);
-    banner.querySelector('#install-flash-btn').addEventListener('click', async (e) => {
+    banner.querySelector('#install-flash-btn')?.addEventListener('click', async (e) => {
       const btn = e.target;
       btn.disabled = true;
       btn.textContent = t('context.flash_downloading');

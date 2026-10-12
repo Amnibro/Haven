@@ -187,6 +187,7 @@
   color: var(--text-secondary);
 }
 .flash-install-banner .btn-sm { pointer-events: auto; flex-shrink: 0; }
+.flash-install-note { color: var(--text-muted); font-style: italic; flex-shrink: 0; }
 
 /* ── Iframe Game Overlay ──────────────────────────────── */
 .game-iframe-overlay {

@@ -1293,6 +1293,7 @@
     },
     "flash_not_installed": "Flash games not installed (~37 MB download)",
     "flash_download_btn": "Download Flash Games",
+    "flash_ask_admin": "Ask a server admin to install them",
     "flash_downloading": "Downloading…",
     "flash_download_failed": "Download failed",
     "flash_install_result": "Flash games: {{installed}} installed, {{already}} already had, {{errors}} failed",
