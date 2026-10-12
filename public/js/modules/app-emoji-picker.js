@@ -746,13 +746,38 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
       editor.style.bottom = 'auto';
     });
   } else {
-    requestAnimationFrame(() => {
-      const r = editor.getBoundingClientRect();
-      const container = msgEl.closest('#thread-messages, #messages, #dm-pip-messages');
-      const containerTop = container ? container.getBoundingClientRect().top : 0;
-      if (r.top < containerTop + 4) editor.classList.add('flip-below');
-    });
+    requestAnimationFrame(() => this._keepPopupInView(editor, msgEl));
   }
+},
+
+// Keeps a popup that hangs off a message (the quick reaction bar, the quick
+// emoji editor) inside the visible part of the message list. Above the
+// message comes first, then below it. A message taller than the view, like a
+// big image, gets the popup just under its hover toolbar, because below the
+// message would be off screen.
+_keepPopupInView(el, msgEl) {
+  const container = msgEl.closest('#thread-messages, #messages, #dm-pip-messages');
+  if (!container || !el.isConnected) return;
+  const view = container.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  if (r.top >= view.top + 4 && r.bottom <= view.bottom - 4) return;
+
+  const msg = msgEl.getBoundingClientRect();
+  const h = r.height;
+  let top;
+  if (msg.top - h - 6 >= view.top + 4) {
+    top = msg.top - h - 6;
+  } else if (msg.bottom + 6 + h <= view.bottom - 4) {
+    top = msg.bottom + 6;
+  } else {
+    const bar = msgEl.querySelector('.msg-toolbar');
+    const barBottom = bar && bar.offsetParent ? bar.getBoundingClientRect().bottom : msg.top;
+    top = Math.max(barBottom + 6, view.top + 4);
+  }
+  top = Math.max(view.top + 4, Math.min(top, view.bottom - h - 4));
+  el.classList.remove('flip-below');
+  el.style.top = (top - msg.top) + 'px';
+  el.style.bottom = 'auto';
 },
 
 _showReactionPicker(msgEl, msgId) {
@@ -881,15 +906,9 @@ _showReactionPicker(msgEl, msgId) {
     requestAnimationFrame(place);
   }
 
-  // Flip picker below the message if it would be clipped above
   requestAnimationFrame(() => {
     if (pipParent) return; // fixed-position branch handles placement
-    const pickerRect = picker.getBoundingClientRect();
-    const container = msgEl.closest('#thread-messages, #messages, #dm-pip-messages');
-    const containerTop = container ? container.getBoundingClientRect().top : 0;
-    if (pickerRect.top < containerTop + 4) {
-      picker.classList.add('flip-below');
-    }
+    this._keepPopupInView(picker, msgEl);
   });
 
   // Close on click outside
