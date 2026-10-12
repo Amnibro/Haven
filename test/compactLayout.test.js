@@ -284,9 +284,6 @@ function withBraidEnvironment(callback, opts = 'file:braid.theme.css') {
   };
   const options = typeof opts === 'string' ? { theme: opts } : (opts || {});
   const theme = options.theme !== undefined ? options.theme : 'file:braid.theme.css';
-  const braidEffect = options.braidEffect !== undefined
-    ? options.braidEffect
-    : (typeof theme === 'string' && /^file:braid/.test(theme));
   const storage = new Map();
   if (theme) storage.set('haven_theme', theme);
   global.localStorage = {
@@ -300,10 +297,7 @@ function withBraidEnvironment(callback, opts = 'file:braid.theme.css') {
   };
   global.requestAnimationFrame = () => 1;
   try {
-    withEnvironment(true, environment => {
-      global.window.isHavenEffectActive = (name) => name === 'braid' && braidEffect;
-      callback(environment);
-    });
+    withEnvironment(true, environment => callback(environment));
   } finally {
     global.localStorage = previous.localStorage;
     global.MutationObserver = previous.MutationObserver;
@@ -336,7 +330,7 @@ test('Compact Layout uses only public regions and scoped CSS', () => {
   assert.match(CompactLayout.CSS, /data-compact-layout-desktop/);
   assert.match(
     fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8'),
-    /id="compact-layout-toggle"/
+    /id="layout-picker"/
   );
   for (const region of Object.values(CompactLayout.REGIONS)) {
     assert.ok(publicRegions.has(region), `Compact Layout uses non-public region ${region}`);
@@ -629,40 +623,31 @@ test('Braid releases ownership for Mod Mode and resumes after editing finishes',
   });
 });
 
-test('Braid follows the Braid layout effect overlay', () => {
-  withBraidEnvironment(({ document, HavenApi }) => {
+test('Braid follows the layout picked in Settings, Layout', () => {
+  withBraidEnvironment(({ HavenApi, data }) => {
     const plugin = new BraidLayout();
     stubBraidVisuals(plugin);
     plugin.start();
     assert.equal(HavenApi.Layout.owner, 'BraidLayout');
-
-    global.window.isHavenEffectActive = () => false;
-    document.dispatchEvent({ type: 'haven:layout-effect', detail: { braid: false } });
-    assert.equal(plugin._engaged, false);
+    plugin._disengage();
     assert.equal(HavenApi.Layout.owner, null);
-    assert.equal(document.documentElement.hasAttribute('data-braid-layout'), false);
-
-    global.window.isHavenEffectActive = (name) => name === 'braid';
-    document.dispatchEvent({ type: 'haven:layout-effect', detail: { braid: true } });
-    assert.equal(plugin._engaged, true);
-    assert.equal(HavenApi.Layout.owner, 'BraidLayout');
+    assert.equal(data.get('BraidLayout:layoutOn'), '0');
     plugin.stop();
   });
 });
 
-test('Braid stays dormant until the Braid layout effect is on', () => {
-  withBraidEnvironment(({ document, HavenApi }) => {
+test('Braid stays dormant when Original or another layout was picked', () => {
+  withBraidEnvironment(({ HavenApi, data }) => {
+    data.set('BraidLayout:layoutOn', '0');
     const plugin = new BraidLayout();
     stubBraidVisuals(plugin);
     plugin.start();
     assert.equal(plugin._engaged, false);
     assert.equal(HavenApi.Layout.owner, null);
-
-    global.window.isHavenEffectActive = (name) => name === 'braid';
-    document.dispatchEvent({ type: 'haven:layout-effect', detail: { braid: true } });
+    plugin._engage();
     assert.equal(plugin._engaged, true);
     plugin.stop();
-  }, { theme: 'discord', braidEffect: false });
+  });
 });
 
 test('Braid rolls back ownership when engagement persistence fails', () => {
@@ -682,9 +667,9 @@ test('Braid rolls back ownership when engagement persistence fails', () => {
   });
 });
 
-test('Compact Layout stays off when Haven original layout is on', () => {
-  withEnvironment(true, ({ document }) => {
-    document.documentElement.setAttribute('data-haven-original-layout', '1');
+test('Compact Layout stays off when Original was picked', () => {
+  withEnvironment(true, ({ document, data }) => {
+    data.set('CompactLayout:layoutOn', '0');
     const plugin = new CompactLayout();
     plugin.start();
     assert.equal(plugin._engaged, false);
