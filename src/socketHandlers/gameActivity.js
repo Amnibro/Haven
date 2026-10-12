@@ -10,6 +10,13 @@ module.exports = function register(socket, ctx) {
   socket.on('set-game-activity', (data) => {
     if (!socket.user || !activity()) return;
     const game = data && typeof data.game === 'string' ? data.game : '';
+    if (!game) {
+      socket.havenGame = null;
+      // Another tab still playing keeps its game on show.
+      for (const [, s] of ctx.io.of('/').sockets) {
+        if (s.user && s.user.id === socket.user.id && s.havenGame) return void activity().setHavenGame(socket.user.id, s.havenGame);
+      }
+    }
     socket.havenGame = activity().setHavenGame(socket.user.id, game) ? game : null;
   });
 
