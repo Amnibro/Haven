@@ -228,7 +228,10 @@
 /* ── Retroactive tag editor popup (#tagging phase 3) ─── */
 .tag-editor-popup {
   position: fixed;
-  z-index: 1000;
+  /* Above the thread panel (99996, PiP 99999), where a forum post opens, so
+  Edit tags on a picture there is not hidden behind it (#5752). Below the
+  modal overlay (100001). */
+  z-index: 100000;
   width: 27rem;
   max-width: calc(100vw - 1.5rem);
   background: var(--bg-secondary);
