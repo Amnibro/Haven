@@ -2550,7 +2550,10 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (!ch) return;
         const summary = `🛡️ Blocked ${verdict.rule} from **${socket.user.displayName}**` +
           (verdict.host ? `: \`${verdict.host}\`` : '') +
-          ` (strike ${outcome.count}${outcome.action !== 'none' && outcome.action !== 'warn' ? `, ${outcome.action}` : ''})`;
+          // Blocks that are not strikes (an older account's link) say so.
+          (outcome.count
+            ? ` (strike ${outcome.count}${outcome.action !== 'none' && outcome.action !== 'warn' ? `, ${outcome.action}` : ''})`
+            : ' (not counted as a strike)');
         const result = db.prepare(
           'INSERT INTO messages (channel_id, user_id, content) VALUES (?, NULL, ?)'
         ).run(ch.id, summary);
