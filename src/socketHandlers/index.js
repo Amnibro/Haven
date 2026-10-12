@@ -611,7 +611,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         // topics separately for the sidebar dot.
         if (ch.is_forum) {
           try {
-            ch.forumUnread = forumUnread.count(db, userId, ch.id);
+            ch.forumUnread = forumUnread.countCached(db, userId, ch.id);
           } catch (err) {
             console.warn('[forum-unread] count failed:', err.message);
             ch.forumUnread = 0;

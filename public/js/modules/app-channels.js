@@ -1183,6 +1183,8 @@ _renderChannels() {
   this._setupChannelDragDrop();
   this._setupDmDragDrop();
   this._updateNestedIndicators();
+  // Forum dots are drawn apart from the counts above (app-forum-unread.js).
+  Object.keys(this.forumUnread || {}).forEach(code => this._updateForumDot?.(code));
 },
 
 // ── Keyboard Navigation ──────────────────────────────────

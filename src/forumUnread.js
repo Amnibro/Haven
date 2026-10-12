@@ -38,6 +38,33 @@ function count(db, userId, channelId) {
   return row ? row.n : 0;
 }
 
+// The count walks every topic in the forum, and it runs for every forum in
+// every channel list sent out. Most of the time nothing it depends on has
+// changed since the last count, so each person's result is kept against a
+// signature of the forum (its messages) and of what they have read and muted;
+// a new reply, a read or a mute changes the signature and the next ask
+// counts again.
+const cache = new Map();
+const CACHE_MAX = 20000;
+
+function signature(db, userId, channelId) {
+  const msgs = db.prepare('SELECT COALESCE(MAX(id), 0) AS m, COUNT(*) AS n FROM messages WHERE channel_id = ?').get(channelId);
+  const reads = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(last_read_reply_id), 0) AS s FROM thread_reads WHERE user_id = ?').get(userId);
+  const mutes = db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(topic_id), 0) AS s, COALESCE(SUM(topic_id * topic_id), 0) AS q FROM forum_topic_mutes WHERE user_id = ?').get(userId);
+  return `${msgs.m}:${msgs.n}:${reads.n}:${reads.s}:${mutes.n}:${mutes.s}:${mutes.q}`;
+}
+
+function countCached(db, userId, channelId) {
+  const key = `${userId}:${channelId}`;
+  const sig = signature(db, userId, channelId);
+  const hit = cache.get(key);
+  if (hit && hit.sig === sig) return hit.n;
+  const n = count(db, userId, channelId);
+  if (cache.size >= CACHE_MAX) cache.clear();
+  cache.set(key, { sig, n });
+  return n;
+}
+
 function mutedIn(db, userId, topicIds) {
   if (!topicIds || !topicIds.length) return new Set();
   const ph = topicIds.map(() => '?').join(',');
@@ -50,4 +77,4 @@ function setMute(db, userId, topicId, muted) {
   else db.prepare('DELETE FROM forum_topic_mutes WHERE user_id = ? AND topic_id = ?').run(userId, topicId);
 }
 
-module.exports = { ensureTable, count, mutedIn, setMute };
+module.exports = { ensureTable, count, countCached, mutedIn, setMute };

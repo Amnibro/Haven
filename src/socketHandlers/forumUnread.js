@@ -7,14 +7,25 @@ const forumUnread = require('../forumUnread');
 module.exports = function register(socket, ctx) {
   const { io, db } = ctx;
 
-  const isMember = (channelId) => !!(socket.user.isAdmin ||
-    db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id));
+  // A member whose role no longer opens a gated forum is out of it too.
+  // Any error denies.
+  const isMember = (channelId) => {
+    if (socket.user.isAdmin) return true;
+    try {
+      if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
+      const gate = db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId);
+      return !!(gate && ctx.roleGateAllows(socket.user.id, gate));
+    } catch (err) {
+      console.warn('[forum-unread] access check failed:', err.message);
+      return false;
+    }
+  };
 
   // Sent to every tab this person has open, so they all agree.
   const sendCount = (channel) => {
     let n = 0;
     try {
-      n = forumUnread.count(db, socket.user.id, channel.id);
+      n = forumUnread.countCached(db, socket.user.id, channel.id);
     } catch (err) {
       console.warn('[forum-unread] count failed:', err.message);
       return;

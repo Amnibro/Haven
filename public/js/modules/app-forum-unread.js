@@ -24,14 +24,18 @@ _setupForumUnread() {
     this._updateForumDot(data.channelCode);
   });
   // Someone else replied, or started a topic: ask for a fresh count.
+  // With the dot already showing, more activity cannot change that, so no
+  // recount: on a busy server this is most of the replies.
   this.socket.on('thread-updated', (data) => {
     if (!data || !isForum(data.channelCode)) return;
     if (data.thread && this.user && data.thread.senderId === this.user.id) return;
+    if ((this.forumUnread[data.channelCode] || 0) > 0) return;
     this._requestForumUnread(data.channelCode, true);
   });
   this.socket.on('new-message', (data) => {
     if (!data || !isForum(data.channelCode) || !data.message) return;
     if (this.user && data.message.user_id === this.user.id) return;
+    if ((this.forumUnread[data.channelCode] || 0) > 0) return;
     this._requestForumUnread(data.channelCode, true);
   });
   // Read somewhere: here, in another tab, or by opening a topic.
@@ -75,7 +79,7 @@ _updateForumDot(code, el = null) {
   } catch (err) {
     console.warn('[Forum] could not read muted channels', err);
   }
-  const hasCount = !!el.querySelector('.channel-badge:not(.channel-badge-bubble)');
+  const hasCount = !!el.querySelector('.channel-badge:not(.channel-badge-bubble):not(.thread-mention-badge)');
   const show = !muted && !hasCount && (this.forumUnread?.[code] || 0) > 0;
   let dot = el.querySelector('.channel-forum-dot');
   if (show && !dot) {
