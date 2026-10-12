@@ -440,7 +440,7 @@ async _importPickGuild(guild) {
       }
       const icon = typeIcons[ch.type] || '#';
       const tagHint = ch.tags && ch.tags.length
-        ? ` <span class="muted-text" style="font-size:0.625rem">(${ch.tags.map(t => t.name).join(', ')})</span>`
+        ? ` <span class="muted-text" style="font-size:0.625rem">(${this._escapeHtml(ch.tags.map(tg => tg.name).join(', '))})</span>`
         : '';
       const row = document.createElement('div');
       row.className = 'import-channel-row';
@@ -462,7 +462,7 @@ async _importPickGuild(guild) {
         const childThreads = data.threads.filter(t => t.parentId === ch.id);
         childThreads.forEach(t => {
           const tagStr = t.tags && t.tags.length
-            ? ` <span class="muted-text" style="font-size:0.625rem">[${t.tags.join(', ')}]</span>`
+            ? ` <span class="muted-text" style="font-size:0.625rem">[${this._escapeHtml(t.tags.join(', '))}]</span>`
             : '';
           const tRow = document.createElement('div');
           tRow.className = 'import-channel-row import-thread-row';
