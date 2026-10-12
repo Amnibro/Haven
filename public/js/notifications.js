@@ -22,7 +22,9 @@ class NotificationManager {
     this.joinVolume = this._loadPref('haven_notif_join_volume', 0.8);
     this.leaveVolume = this._loadPref('haven_notif_leave_volume', 0.8);
     this.sounds = {
-      message: this._loadPref('haven_notif_msg_sound', 'ping'),
+      // A pick saved before #5757 went under the 'message' key, which nothing
+      // read back; it still counts until a new pick is saved.
+      message: this._loadPref('haven_notif_msg_sound', this._loadPref('haven_notif_message_sound', 'ping')),
       sent: this._loadPref('haven_notif_sent_sound', 'swoosh'),
       mention: this._loadPref('haven_notif_mention_sound', 'bell'),
       reply: this._loadPref('haven_notif_reply_sound', 'chime'),
