@@ -6,6 +6,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.22.0] - 2026-10-12
+
+Official messages, an unread dot for forums, three new languages, and a round
+of fixes.
+
+### Added
+- Official messages: a role with the new Post Official Messages permission can post as that role. The message gets the role's color down its side and a badge with the role's name. A megaphone button next to the message box marks the next message, and the message menu marks or unmarks one already sent. New servers give it to Mod; existing servers can turn it on in the role editor.
+- Forums show a dot in the sidebar when they have topics you have not caught up on, and a single topic can be muted from its menu so its replies stop lighting the forum up.
+- Persian (فارسی), Japanese (日本語) and Korean (한국어). Each covers about two thirds of the app so far; the rest shows in English. Persian, Arabic or Hebrew messages now read right to left in their own line.
+- Haven's own games show as Playing in the member list: Shippy Container, the Flash games and .io Games.
+- A GIF button in the DM pop-out window.
+- Blog mode: each picture in a post has its own comments, behind a button with its count under the picture; other comments stay in the Comments section (#5753).
+- Category headers look like buttons, lit up while collapsed, and can have a short name or emoji to show while collapsed (right-click a category). Admins can show categories as a grid of tabs that wraps onto more rows (#5756).
+
+### Changed
+- Auto-Mod counts a blocked link as a strike only for accounts under a week old; older accounts still get the block, without moving toward a mute.
+- The sidebar layout picker moved from the theme menu to Settings, Layout.
+- "Apply once to everyone now" in Defaults for New Members reaches people who are online right away (#5754).
+- Tags can use + . & ' ! and ? (#5751).
+- Downloaded Flash games are kept in the server's data folder, so they survive updates and Docker image changes. The download runs in the background and says why when it fails, and members see "ask an admin" instead of a button that always failed.
+- The All Members list shows away and do not disturb, and invisible members read as offline.
+- Number boxes in Settings share one size with room before the value.
+
+### Fixed
+- Edit tags on a picture in an open forum post opened behind the post (#5752).
+- A forum post went see-through while a file was dragged over it, and did not follow the sidebar when it was resized (#5755).
+- The reaction bar on a message taller than the screen opened off screen.
+- "Joined the channel" repeated when someone entered a channel they were already in.
+- The mic level meter only moved in noise gate mode.
+- The message notification sound you picked was not remembered (#5757, thanks michues).
+
 ## [4.21.0] - 2026-10-10
 
 Blog mode for forums, a Channel Tabs layout, safer defaults for public
