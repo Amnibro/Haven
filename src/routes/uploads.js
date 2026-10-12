@@ -141,33 +141,79 @@ module.exports = function registerUploads(deps) {
     res.json({ allInstalled, roms: status });
   });
 
-  app.post('/api/install-flash-roms', async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  // The download runs in the background and the page asks how it is going.
+  // The five files are about 37 MB, and one request held open that long was
+  // cut off by reverse proxies in front of the server (Cloudflare gives up
+  // after 100 seconds), which only ever said "Download failed".
+  const flashInstall = { running: false, results: null };
 
-    // Only admins can trigger ROM downloads
-    const { getDb } = require('../database');
-    const adminRow = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
-    if (!adminRow || !adminRow.is_admin) return res.status(403).json({ error: 'Only admins can install flash games' });
+  // Why a step failed, in words an admin can search for: a failed fetch keeps
+  // the useful part (ENOTFOUND, ECONNREFUSED, a certificate error) in its cause.
+  const reasonOf = (err) => {
+    const code = err && (err.cause?.code || err.code);
+    const msg = (err && (err.cause?.message || err.message)) || 'unknown error';
+    return code && !msg.includes(code) ? `${msg} (${code})` : msg;
+  };
 
-    if (!fs.existsSync(ROMS_DIR)) fs.mkdirSync(ROMS_DIR, { recursive: true });
-
+  async function installFlashRoms() {
+    try {
+      fs.mkdirSync(ROMS_DIR, { recursive: true });
+    } catch (err) {
+      console.warn(`[flash] cannot create ${ROMS_DIR}: ${reasonOf(err)}`);
+      return FLASH_ROM_MANIFEST.map(rom => ({ file: rom.file, status: 'error', error: `cannot create the games folder: ${reasonOf(err)}` }));
+    }
     const results = [];
     for (const rom of FLASH_ROM_MANIFEST) {
       const dest = path.join(ROMS_DIR, rom.file);
       if (fs.existsSync(dest)) { results.push({ file: rom.file, status: 'already-installed' }); continue; }
       try {
-        const resp = await fetch(rom.url);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const resp = await fetch(rom.url, { signal: AbortSignal.timeout(5 * 60 * 1000) });
+        if (!resp.ok) throw new Error(`the download answered HTTP ${resp.status}`);
         const buffer = Buffer.from(await resp.arrayBuffer());
-        fs.writeFileSync(dest, buffer);
+        // Written under a temporary name first, so a write that fails part
+        // way never leaves a broken file that counts as installed.
+        const part = dest + '.part';
+        fs.writeFileSync(part, buffer);
+        fs.renameSync(part, dest);
         results.push({ file: rom.file, status: 'installed' });
       } catch (err) {
-        results.push({ file: rom.file, status: 'error', error: err.message });
+        console.warn(`[flash] ${rom.file} failed: ${reasonOf(err)}`);
+        results.push({ file: rom.file, status: 'error', error: reasonOf(err) });
       }
     }
-    res.json({ results });
+    return results;
+  }
+
+  // Only admins can download the games or see how the download went.
+  function flashAdmin(req, res) {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user) { res.status(401).json({ error: 'Unauthorized' }); return false; }
+    const { getDb } = require('../database');
+    const adminRow = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    if (!adminRow || !adminRow.is_admin) { res.status(403).json({ error: 'Only admins can install flash games' }); return false; }
+    return true;
+  }
+
+  app.post('/api/install-flash-roms', (req, res) => {
+    if (!flashAdmin(req, res)) return;
+    if (!flashInstall.running) {
+      flashInstall.running = true;
+      flashInstall.results = null;
+      installFlashRoms()
+        .then((results) => { flashInstall.results = results; })
+        .catch((err) => {
+          console.warn(`[flash] install stopped: ${reasonOf(err)}`);
+          flashInstall.results = [{ file: '', status: 'error', error: reasonOf(err) }];
+        })
+        .finally(() => { flashInstall.running = false; });
+    }
+    res.status(202).json({ running: true });
+  });
+
+  app.get('/api/install-flash-roms', (req, res) => {
+    if (!flashAdmin(req, res)) return;
+    res.json({ running: flashInstall.running, results: flashInstall.results });
   });
 
 };

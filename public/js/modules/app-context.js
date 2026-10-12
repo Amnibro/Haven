@@ -978,19 +978,33 @@ async _openActivitiesModal() {
       btn.disabled = true;
       btn.textContent = t('context.flash_downloading');
       try {
-        const res = await fetch('/api/install-flash-roms', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + this.token }
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || t('context.flash_download_failed'));
+        // The server downloads in the background; ask how it is going until
+        // it is done. A page in front of the server (a proxy's error page)
+        // is not JSON, so its HTTP status is what gets reported.
+        const auth = { Authorization: 'Bearer ' + this.token };
+        const ask = async (opts) => {
+          const res = await fetch('/api/install-flash-roms', { headers: auth, ...opts });
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data) throw new Error((data && data.error) || t('context.flash_download_http', { status: res.status }));
+          return data;
+        };
+        let state = await ask({ method: 'POST' });
+        const giveUpAt = Date.now() + 15 * 60 * 1000;
+        while (state.running) {
+          if (Date.now() > giveUpAt) throw new Error(t('context.flash_still_running'));
+          await new Promise(r => setTimeout(r, 3000));
+          state = await ask();
         }
-        const data = await res.json();
-        const installed = data.results.filter(r => r.status === 'installed').length;
-        const already = data.results.filter(r => r.status === 'already-installed').length;
-        const errors = data.results.filter(r => r.status === 'error');
-        this._showToast(t('context.flash_install_result', { installed, already, errors: errors.length }), installed > 0 ? 'success' : 'error');
+        const results = state.results || [];
+        const installed = results.filter(r => r.status === 'installed').length;
+        const already = results.filter(r => r.status === 'already-installed').length;
+        const errors = results.filter(r => r.status === 'error');
+        if (errors.length) {
+          console.warn('[Games] Flash download problems:', errors);
+          this._showToast(t('context.flash_install_failed', { installed, errors: errors.length, reason: errors[0].error || '' }), 'error');
+        } else {
+          this._showToast(t('context.flash_install_result', { installed, already, errors: 0 }), 'success');
+        }
         this._flashAllInstalled = errors.length === 0;
         // Refresh modal
         this._openActivitiesModal();
