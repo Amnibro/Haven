@@ -3,10 +3,11 @@
 /**
  * Haven: Rich presence / user activity
  *
- * Collects "what is this person doing right now" from four sources and hands
+ * Collects "what is this person doing right now" from five sources and hands
  * it to the presence broadcast in socketHandlers/index.js:
  *
  *   haven:    Haven's own voice-channel music player (no external calls)
+ *   haven-game: a game from Haven's Activities list (no external calls)
  *   steam:    Steam Web API GetPlayerSummaries (one batched call for everyone)
  *   lastfm:   Last.fm getRecentTracks (username + server API key, no OAuth)
  *   spotify:  Spotify Web API currently-playing (full OAuth, one call per user)
@@ -155,6 +156,18 @@ async function fetchJson(url, opts = {}, timeoutMs = 8000) {
  *                                    activity actually changed, so the caller
  *                                    can re-broadcast presence for them
  */
+// The games in Activities (public/js/modules/app-ui.js, _gamesRegistry), by
+// id. Presence shows these names only.
+const HAVEN_GAMES = {
+  flappy: 'Shippy Container',
+  flight: 'Flight',
+  'learn-to-fly-3': 'Learn to Fly 3',
+  'bubble-tanks-3': 'Bubble Tanks 3',
+  tanks: 'Tanks',
+  'super-smash-flash-2': 'Super Smash Flash 2',
+  'io-games': '.io Games',
+};
+
 function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }) {
   // userId -> { playing: Activity|null, listening: Activity|null }
   const activity = new Map();
@@ -303,6 +316,25 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
         setSlot(id, 'listening', null);
       }
     }
+  }
+
+  // ── Source 2: Haven's own games ─────────────────────────
+  /**
+   * A game from the Activities list is open (or closed, with ''). Returns
+   * true when the game is one Haven knows. A Steam game already showing is
+   * left alone: that is the bigger news.
+   */
+  function setHavenGame(userId, gameId) {
+    const name = Object.hasOwn(HAVEN_GAMES, gameId) ? HAVEN_GAMES[gameId] : null;
+    const entry = activity.get(userId);
+    const mine = entry && entry.playing && entry.playing.source === 'haven-game';
+    if (!name) {
+      if (mine) setSlot(userId, 'playing', null);
+      return false;
+    }
+    if (entry && entry.playing && !mine) return true;
+    setSlot(userId, 'playing', { type: 'playing', name, details: '', image: null, source: 'haven-game', startedAt: Date.now() });
+    return true;
   }
 
   // ── Connections ─────────────────────────────────────────
@@ -833,6 +865,7 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
     // write
     setHavenMusic,
     clearHavenMusic,
+    setHavenGame,
     clearUser,
     saveConnection,
     removeConnection,

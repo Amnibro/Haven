@@ -1057,6 +1057,7 @@ _launchGame(game) {
 
   // Request leaderboard for this game
   this.socket.emit('get-high-scores', { game: game.id });
+  this._setGameActivity(game.id);
 },
 
 _closeGameIframe() {
@@ -1066,6 +1067,25 @@ _closeGameIframe() {
   if (iframe) iframe.src = 'about:blank';
   this._currentGame = null;
   this._gameIframe = null;
+  if (!this._gameWindow || this._gameWindow.closed) this._setGameActivity('');
+},
+
+// "Playing Shippy Container" in the member list while a game is open. A game
+// in its own window is checked every few seconds, since a closed window sends
+// nothing back.
+_setGameActivity(gameId) {
+  clearInterval(this._gameWindowWatch);
+  this._gameWindowWatch = null;
+  this.socket?.emit('set-game-activity', { game: gameId });
+  if (!gameId || !this._gameWindow || this._gameWindow.closed) return;
+  const win = this._gameWindow;
+  this._gameWindowWatch = setInterval(() => {
+    if (!win.closed) return;
+    clearInterval(this._gameWindowWatch);
+    this._gameWindowWatch = null;
+    if (this._gameWindow === win) this._gameWindow = null;
+    if (!this._currentGame || !this._gameIframe) this._setGameActivity('');
+  }, 3000);
 },
 
 _popoutGame() {
@@ -1075,8 +1095,10 @@ _popoutGame() {
   const win = window.open(url, '_blank', 'width=740,height=860');
   // Only close the inline iframe if the popup actually opened
   if (win && !win.closed) {
+    const game = this._currentGame;
     this._gameWindow = win;
     this._closeGameIframe();
+    this._setGameActivity(game.id);
   } else {
     this._showToast?.(t('toasts.popup_blocked'), 'error');
   }
