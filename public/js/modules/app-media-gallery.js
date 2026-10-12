@@ -313,6 +313,7 @@ _applyMediaTileSize(px) {
     let shape = 'square';
     try { shape = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch { /* storage blocked (private mode): keep the default */ }
     modal.style.setProperty('--media-shape', this._tileShapes()[shape] || '1 / 1');
+    modal.classList.toggle('media-shape-fit', shape === 'square-fit');
   }
   const slider = document.getElementById('media-gallery-tile');
   if (slider && slider.value !== String(size)) slider.value = String(size);

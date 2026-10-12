@@ -61,13 +61,14 @@ _forumCanManage() {
   return !!(this.user?.isAdmin || (this._hasPerm && this._hasPerm('manage_channel_settings')));
 },
 // Tile shapes for the galleries: square, or a landscape/portrait pair at
-// 4:3, 3:2 and 16:9 (#5645). Shared with Files & Media.
+// 4:3, 3:2 and 16:9 (#5645). Shared with Files & Media. Square (fit) is a
+// square tile that shows the whole picture instead of cropping it (#5764).
 _tileShapes() {
-  return { square: '1 / 1', '4:3': '4 / 3', '3:4': '3 / 4', '3:2': '3 / 2', '2:3': '2 / 3', '16:9': '16 / 9', '9:16': '9 / 16' };
+  return { square: '1 / 1', 'square-fit': '1 / 1', '4:3': '4 / 3', '3:4': '3 / 4', '3:2': '3 / 2', '2:3': '2 / 3', '16:9': '16 / 9', '9:16': '9 / 16' };
 },
 _forumParseShape(v) { return Object.prototype.hasOwnProperty.call(this._tileShapes(), v) ? v : 'square'; },
 _tileShapeOptionsHtml(current) {
-  const labels = { square: t('forum.shape_square'), '4:3': t('forum.shape_wide', { ratio: '4:3' }), '3:4': t('forum.shape_tall', { ratio: '3:4' }), '3:2': t('forum.shape_wide', { ratio: '3:2' }), '2:3': t('forum.shape_tall', { ratio: '2:3' }), '16:9': t('forum.shape_wide', { ratio: '16:9' }), '9:16': t('forum.shape_tall', { ratio: '9:16' }) };
+  const labels = { square: t('forum.shape_square'), 'square-fit': t('forum.shape_square_fit'), '4:3': t('forum.shape_wide', { ratio: '4:3' }), '3:4': t('forum.shape_tall', { ratio: '3:4' }), '3:2': t('forum.shape_wide', { ratio: '3:2' }), '2:3': t('forum.shape_tall', { ratio: '2:3' }), '16:9': t('forum.shape_wide', { ratio: '16:9' }), '9:16': t('forum.shape_tall', { ratio: '9:16' }) };
   return Object.keys(this._tileShapes()).map(k => `<option value="${k}"${k === current ? ' selected' : ''}>${labels[k]}</option>`).join('');
 },
 _forumParseTile(v) {
@@ -83,6 +84,7 @@ _applyForumChrome(container, prefs) {
   el.classList.toggle('forum-feed', p.view === 'feed');
   el.style.setProperty('--forum-tile', `${p.tile}rem`);
   el.style.setProperty('--forum-shape', this._tileShapes()[p.shape] || '1 / 1');
+  el.classList.toggle('forum-shape-fit', p.shape === 'square-fit');
   el.dataset.forumTile = p.tile <= 9 ? 'small' : p.tile >= 20 ? 'large' : 'medium';
   document.querySelectorAll('#forum-toolbar .forum-tile-size').forEach(w => { w.hidden = p.view !== 'gallery'; });
   return p;

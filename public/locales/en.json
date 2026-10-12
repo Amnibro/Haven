@@ -4308,6 +4308,7 @@
     "tile_size": "Tile size",
     "shape": "Shape",
     "shape_square": "Square",
+    "shape_square_fit": "Square (fit)",
     "shape_wide": "{{ratio}} wide",
     "shape_tall": "{{ratio}} tall",
     "mark_all_read": "Mark all read",

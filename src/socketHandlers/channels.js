@@ -1041,7 +1041,7 @@ module.exports = function register(socket, ctx) {
     const view = ['list', 'gallery', 'feed'].includes(data.view) ? data.view : 'list';
     const tileN = Number(data.tile);
     const tile = Number.isFinite(tileN) ? Math.min(28, Math.max(7, Math.round(tileN * 2) / 2)) : 11;
-    const shapes = ['square', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'];
+    const shapes = ['square', 'square-fit', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'];
     const shape = shapes.includes(data.shape) ? data.shape : 'square';
     // Locked: only people who can change the channel's settings may switch
     // the view or shape; the size slider stays for everyone (#5656).
