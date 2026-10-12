@@ -1244,6 +1244,12 @@ html[data-braid-form="1"] .message-compact>.message-body:hover{background:color-
 html[data-braid-form="1"] .message-user-sep{border-top:0!important;padding-top:0!important}
 html[data-braid-form="1"] .message.system-message>.message-row>.message-body,
 html[data-braid-form="1"] .message.announcement>.message-row>.message-body{background:transparent;border:0;border-radius:0}
+html[data-braid-form="1"] .message.message-highlighted,
+html[data-braid-form="1"] .message-compact.message-highlighted{box-shadow:none;background:none}
+html[data-braid-form="1"]:not([data-official-style="off"]) .message.message-highlighted>.message-row>.message-body,
+html[data-braid-form="1"]:not([data-official-style="off"]) .message-compact.message-highlighted>.message-body{border-left:2px solid color-mix(in srgb,var(--hl-color,var(--accent)) 75%,transparent);background:color-mix(in srgb,var(--hl-color,var(--accent)) 8%,var(--braid-bub))}
+html[data-braid-form="1"]:not([data-official-style="off"]) .message.message-highlighted>.message-row>.message-body:hover,
+html[data-braid-form="1"]:not([data-official-style="off"]) .message-compact.message-highlighted>.message-body:hover{background:color-mix(in srgb,var(--hl-color,var(--accent)) 13%,var(--braid-bub))}
 html[data-braid-form="1"] .channel-item{position:relative;margin:0 .5rem!important;border:1px solid var(--braid-line)!important;border-top:0!important;border-radius:0!important;background:var(--braid-bub)}
 html[data-braid-form="1"] .channel-item[data-braid-run="start"],
 html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-top:1px solid var(--braid-line)!important;border-top-left-radius:.75rem!important;border-top-right-radius:.75rem!important;margin-top:var(--braid-chan-run)!important}
