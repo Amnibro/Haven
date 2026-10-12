@@ -936,6 +936,7 @@
 
 /* ── Forum channels: topic cards, list or gallery, toolbar ─────────────── */
 .messages.forum-view { display: flex; flex-direction: column; padding: 0.75rem 1rem 1.5rem; }
+.forum-topic-muted { margin-right: 0.375rem; font-size: 0.8em; opacity: 0.7; }
 .forum-toolbar { position: sticky; top: 0; z-index: 3; background: var(--bg-primary); padding: 0.25rem 0.25rem 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
 .forum-toolbar-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .forum-toolbar-row + .forum-toolbar-row { margin-top: 0.5rem; }

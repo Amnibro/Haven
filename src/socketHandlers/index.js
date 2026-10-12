@@ -62,6 +62,8 @@ const registerTags       = require('./tags');
 const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
 const registerMessageHighlights = require('./messageHighlights');
+const registerForumUnread = require('./forumUnread');
+const forumUnread = require('../forumUnread');
 const registerForumVotes = require('./forumVotes');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -604,6 +606,16 @@ function setupSocketHandlers(io, db, opts = {}) {
           ch.unreadCount = countRow ? countRow.cnt : 0;
         } else {
           ch.unreadCount = 0;
+        }
+        // A forum's replies are not counted above, so it reports its unread
+        // topics separately for the sidebar dot.
+        if (ch.is_forum) {
+          try {
+            ch.forumUnread = forumUnread.count(db, userId, ch.id);
+          } catch (err) {
+            console.warn('[forum-unread] count failed:', err.message);
+            ch.forumUnread = 0;
+          }
         }
 
         // Whether this viewer may post in a read-only channel, answered per
@@ -2704,6 +2716,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerMemberDefaults(socket, ctx);
     registerGameActivity(socket, ctx);
     registerMessageHighlights(socket, ctx);
+    registerForumUnread(socket, ctx);
     registerForumVotes(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────

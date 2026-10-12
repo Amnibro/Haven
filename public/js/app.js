@@ -32,7 +32,7 @@ import ContextMethods  from './modules/app-context.js?v=4.21.2';
 import ChannelMethods  from './modules/app-channels.js?v=4.21.1';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.21.0';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
-import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.21.0';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.21.1';
 import MessageMethods  from './modules/app-messages.js?v=4.21.1';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.21.0';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.21.1';
@@ -58,7 +58,7 @@ import ModerationMethods from './modules/app-moderation.js?v=4.21.1';
 import PlatformMethods from './modules/app-platform.js?v=4.21.0';
 import SearchMethods   from './modules/app-search.js?v=4.21.0';
 import FerryMethods    from './modules/app-ferry.js?v=4.17.0';
-import ForumMethods    from './modules/app-forum.js?v=4.21.1';
+import ForumMethods    from './modules/app-forum.js?v=4.21.2';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.20.1';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.19.11';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
@@ -69,6 +69,7 @@ import GroupMethods from './modules/app-groups.js?v=4.19.3';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.21.1';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.21.1';
+import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.1';
 
 class HavenApp {
   constructor() {
@@ -403,6 +404,7 @@ class HavenApp {
     // After the pickers above: the defaults apply through them (#5739).
     this._setupMemberDefaults();
     this._setupMessageHighlights();
+    this._setupForumUnread();
     this._setupDebugSection();
     this._setupLightbox();
     this._setupOnlineOverlay();
@@ -568,6 +570,7 @@ Object.assign(HavenApp.prototype,
   TemplateMethods,
   MemberDefaultsMethods,
   MessageHighlightMethods,
+  ForumUnreadMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

@@ -365,7 +365,7 @@ _createForumTopicEl(msg) {
     ${thumb ? `<div class="forum-topic-thumb"${cover}><img ${this._lazySrcAttr ? this._lazySrcAttr(this._imgSrcAttr(thumb)) : this._imgSrcAttr(thumb)} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"${cover}><span>⬡</span></div>`}
     <div class="forum-topic-body">
       <div class="forum-topic-tags">${msg.nsfw ? `<span class="forum-tag forum-tag-nsfw" title="${this._escapeHtml(t('forum.nsfw'))}">🔞</span>` : ''}${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
-      <div class="forum-topic-title">${unread ? `<span class="forum-unread-dot" title="${t('forum.unread')}"></span>` : ''}${this._escapeHtml(this._forumTitleOf(msg))}</div>
+      <div class="forum-topic-title">${unread ? `<span class="forum-unread-dot" title="${t('forum.unread')}"></span>` : ''}${msg.thread && msg.thread.muted ? `<span class="forum-topic-muted" title="${this._escapeHtml(t('forum.topic_muted_title'))}">🔕</span>` : ''}${this._escapeHtml(this._forumTitleOf(msg))}</div>
       <div class="forum-topic-snippet message-content">${this._escapeHtml(this._forumSnippetOf(msg))}</div>
       <div class="forum-topic-meta">
         <span class="message-author forum-topic-author">${this._escapeHtml(msg.username || '')}</span>
@@ -417,6 +417,7 @@ _showForumTopicContextMenu(e, msg) {
   const canDelete = !!(isOwn || this.user?.isAdmin || this._canModerate?.() || this._hasPerm('delete_message'));
   const item = (action, icon, label, cls = '') => `<button class="channel-ctx-item${cls}" data-action="${action}">${icon} <span>${label}</span></button>`;
   const items = [item('open', '🗂️', t('forum.open_topic'))];
+  items.push(msg.thread && msg.thread.muted ? item('unmute-topic', '🔔', t('forum.unmute_topic')) : item('mute-topic', '🔕', t('forum.mute_topic')));
   if (canEdit) items.push(item('edit', '✏️', t('forum.edit_post')));
   if (canPin) items.push(msg.pinned ? item('unpin', '📌', t('msg_toolbar.unpin')) : item('pin', '📌', t('msg_toolbar.pin')));
   if (canEdit) items.push(msg.closed ? item('reopen', '🔓', t('forum.reopen_topic')) : item('close', '✔', t('forum.close_topic')));
@@ -445,6 +446,8 @@ _showForumTopicContextMenu(e, msg) {
     this._hideMessageContextMenu();
     if (action === 'open') {
       this._openThread(msgId);
+    } else if (action === 'mute-topic' || action === 'unmute-topic') {
+      this.socket.emit('set-topic-mute', { topicId: msgId, muted: action === 'mute-topic' });
     } else if (action === 'edit') {
       this._forumEditTopicMeta(msgId);
     } else if (action === 'pin') {
@@ -539,7 +542,8 @@ _forumBump(parentId, thread) {
   const unread = thread ? (!mine && !watching) : !!(topic.thread && topic.thread.unread);
   // Seen live in the open panel: tell the server so it stays read after a reload.
   if (thread && watching && !mine) this.socket.emit('mark-thread-read', { parentId });
-  if (thread) topic.thread = { ...thread, unread };
+  const muted = !!(topic.thread && topic.thread.muted);
+  if (thread) topic.thread = { ...thread, unread, ...(muted ? { muted } : {}) };
   else topic.thread = { ...(topic.thread || {}), count: ((topic.thread && topic.thread.count) || 0) + 1, lastReplyAt: new Date().toISOString(), unread };
   const fresh = this._createForumTopicEl(topic);
   el.replaceWith(fresh);

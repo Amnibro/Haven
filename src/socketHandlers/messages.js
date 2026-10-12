@@ -10,6 +10,7 @@ const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extrac
 const { votesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
+const forumUnread = require('../forumUnread');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -387,6 +388,8 @@ module.exports = function register(socket, ctx) {
     }
     // Likes and dislikes on forum topics, with this reader's own vote (#5742).
     const topicVotes = channel.is_forum ? votesFor(db, socket.user.id, msgIds) : null;
+    // Topics this reader muted: they never light up the forum in the sidebar.
+    const mutedTopics = channel.is_forum ? forumUnread.mutedIn(db, socket.user.id, msgIds) : null;
     // Blog mode: each card counts only the comments, not the author's own
     // follow-ups (#5742).
     const blogComments = channel.is_forum && Number(channel.forum_blog) === 1 ? forumBlog.commentCounts(db, msgIds) : null;
@@ -417,6 +420,7 @@ module.exports = function register(socket, ctx) {
         const seen = threadReadMap.get(m.id);
         tinfo.unread = seen !== undefined ? lastId > seen : (m.user_id !== socket.user.id || lastId > 0);
         if (blogComments) tinfo.comments = blogComments.get(m.id) || 0;
+        if (mutedTopics.has(m.id)) tinfo.muted = true;
         obj.thread = tinfo;
         obj.votes = topicVotes.get(m.id) || { likes: 0, dislikes: 0, mine: 0 };
         delete obj.score;

@@ -300,6 +300,8 @@ _updateBadge(code) {
     } else if (badge) {
       badge.remove();
     }
+    // A forum's replies show as a dot of their own (app-forum-unread.js).
+    if (this.forumUnread && code in this.forumUnread) this._updateForumDot?.(code, el);
 
     // If this is a sub-channel whose parent is currently collapsed, bubble an unread
     // indicator up to the parent so the user knows to expand it.
