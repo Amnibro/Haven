@@ -6,7 +6,7 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.21.0';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.21.0';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.21.1';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.21.2';
 import UIBindMethods   from './modules/app-ui.js?v=4.21.0';
 import ComposerMethods from './modules/app-composer.js?v=4.21.0';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.21.0';
@@ -32,7 +32,7 @@ import ContextMethods  from './modules/app-context.js?v=4.21.2';
 import ChannelMethods  from './modules/app-channels.js?v=4.21.3';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.21.0';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
-import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.21.1';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.21.2';
 import MessageMethods  from './modules/app-messages.js?v=4.21.1';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.21.0';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.21.1';
@@ -59,7 +59,7 @@ import PlatformMethods from './modules/app-platform.js?v=4.21.0';
 import SearchMethods   from './modules/app-search.js?v=4.21.0';
 import FerryMethods    from './modules/app-ferry.js?v=4.17.0';
 import ForumMethods    from './modules/app-forum.js?v=4.21.2';
-import ForumBlogMethods from './modules/app-forum-blog.js?v=4.21.1';
+import ForumBlogMethods from './modules/app-forum-blog.js?v=4.21.2';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.19.11';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.21.1';
