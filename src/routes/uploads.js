@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { verifyToken } = require('../auth');
+const { GAMES_ROMS_DIR } = require('../paths');
 const ROOT = path.join(__dirname, '..', '..');
 
 module.exports = function registerUploads(deps) {
@@ -123,7 +124,11 @@ module.exports = function registerUploads(deps) {
   });
 
   // ── Flash ROM status & download ──────────────────────────
-  const ROMS_DIR = path.join(ROOT, 'public', 'games', 'roms');
+  // New downloads go to the data folder so they survive updates. Games
+  // installed before that, in the app's own folder, still count.
+  const ROMS_DIR = GAMES_ROMS_DIR;
+  const OLD_ROMS_DIR = path.join(ROOT, 'public', 'games', 'roms');
+  const romInstalled = (file) => fs.existsSync(path.join(ROMS_DIR, file)) || fs.existsSync(path.join(OLD_ROMS_DIR, file));
   const FLASH_ROM_MANIFEST = [
     { file: 'flight-759879f9.swf',    url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/flight-759879f9.swf',    size: 8570000 },
     { file: 'learn-to-fly-3.swf',     url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/learn-to-fly-3.swf',     size: 17340000 },
@@ -135,7 +140,7 @@ module.exports = function registerUploads(deps) {
   app.get('/api/flash-rom-status', (req, res) => {
     const status = FLASH_ROM_MANIFEST.map(rom => ({
       file: rom.file,
-      installed: fs.existsSync(path.join(ROMS_DIR, rom.file))
+      installed: romInstalled(rom.file)
     }));
     const allInstalled = status.every(r => r.installed);
     res.json({ allInstalled, roms: status });
@@ -165,7 +170,7 @@ module.exports = function registerUploads(deps) {
     const results = [];
     for (const rom of FLASH_ROM_MANIFEST) {
       const dest = path.join(ROMS_DIR, rom.file);
-      if (fs.existsSync(dest)) { results.push({ file: rom.file, status: 'already-installed' }); continue; }
+      if (romInstalled(rom.file)) { results.push({ file: rom.file, status: 'already-installed' }); continue; }
       try {
         const resp = await fetch(rom.url, { signal: AbortSignal.timeout(5 * 60 * 1000) });
         if (!resp.ok) throw new Error(`the download answered HTTP ${resp.status}`);

@@ -47,6 +47,9 @@ const CERTS_DIR    = path.join(DATA_DIR, 'certs');
 const UPLOADS_DIR  = path.join(DATA_DIR, 'uploads');
 
 const DELETED_ATTACHMENTS_DIR = path.join(UPLOADS_DIR, 'deleted-attachments');
+// Downloaded Flash games live with the rest of the server's data, so they
+// survive updates (in Docker the app folder is replaced on every update).
+const GAMES_ROMS_DIR = path.join(DATA_DIR, 'games', 'roms');
 
 // Ensure sub-directories exist
 fs.mkdirSync(CERTS_DIR,                { recursive: true });
@@ -98,4 +101,4 @@ migrateFile('.env',           ENV_PATH);
 migrateDir('certs',           CERTS_DIR);
 migrateDir('public/uploads',  UPLOADS_DIR);
 
-module.exports = { getDataDir, DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR };
+module.exports = { getDataDir, DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, GAMES_ROMS_DIR };

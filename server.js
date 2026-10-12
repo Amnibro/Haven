@@ -1,5 +1,5 @@
 ﻿// ── Resolve data directory BEFORE loading .env ────────────
-const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('./src/paths');
+const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, GAMES_ROMS_DIR } = require('./src/paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
 const { trimUploadsToLimit } = require('./src/uploadsTrim');
 
@@ -674,6 +674,11 @@ if (RUFFLE_DIR) {
     },
   }));
 }
+
+// Flash games downloaded from Activities, kept in the data folder. Games
+// installed before that sat in public/games/roms, which the static files
+// below still serve.
+app.use('/games/roms', express.static(GAMES_ROMS_DIR, { dotfiles: 'deny', maxAge: 0 }));
 
 // ── Static files with caching ────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {
