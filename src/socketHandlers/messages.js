@@ -3094,6 +3094,8 @@ module.exports = function register(socket, ctx) {
     }
 
     const messages = threadMessages(db, parentId);
+    const destructAtById = new Map(db.prepare('SELECT id, destruct_at FROM messages WHERE thread_id = ? AND destruct_at IS NOT NULL').all(parentId).map(r => [r.id, r.destruct_at]));
+    for (const m of messages) m.destruct_at = destructAtById.get(m.id) || null;
 
     // Enrich with reactions and reply context
     const msgIds = messages.map(m => m.id);
@@ -3238,12 +3240,34 @@ module.exports = function register(socket, ctx) {
     }
 
     const blogComment = forumBlog.authorComment(db, { parentId, userId: socket.user.id, replyTo, asComment: data.asComment });
-
+    const destructAt = selfDestruct.destructAtFromSeconds(data.destructSeconds);
+    if (destructAt && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'send_self_destruct', channel.id)) {
+      return socket.emit('error-msg', 'You don\'t have permission to send self-destructing messages');
+    }
+    if (destructAt && !socket.user.isAdmin) {
+      try {
+        const chain = getChannelRoleChain(channel.id);
+        const ph = chain.map(() => '?').join(',');
+        const deny = db.prepare(
+          `SELECT allowed FROM user_role_perms WHERE user_id = ? AND permission = 'delete_own_messages' AND (channel_id IS NULL OR channel_id IN (${ph})) ORDER BY allowed ASC LIMIT 1`
+        ).get(socket.user.id, ...chain);
+        if (deny && deny.allowed === 0) {
+          return socket.emit('error-msg', 'You don\'t have permission to send self-destructing messages');
+        }
+      } catch (err) {
+        console.error('send-thread-message: delete_own_messages check failed:', err.message);
+        return socket.emit('error-msg', 'Failed to send message');
+      }
+    }
     try {
       const result = insertThreadReply(db, {
         channelId: channel.id, userId: socket.user.id, content: safeContent, parentId, replyTo,
         silent: tSilent.silent ? 1 : 0, blogComment,
       });
+      if (destructAt) {
+        db.prepare('UPDATE messages SET destruct_at = ? WHERE id = ?').run(destructAt, result.lastInsertRowid);
+        selfDestruct.schedule(destructAt);
+      }
       // Your own reply is not news to you (#5641).
       advanceThreadRead(db, socket.user.id, parentId, result.lastInsertRowid);
 
@@ -3264,7 +3288,8 @@ module.exports = function register(socket, ctx) {
         reactions: [],
         edited_at: null,
         thread_id: parentId,
-        silent: tSilent.silent ? true : undefined
+        silent: tSilent.silent ? true : undefined,
+        destruct_at: destructAt || undefined
       };
       if (parts.any) {
         botComponents.record(db, message.id, parts);
