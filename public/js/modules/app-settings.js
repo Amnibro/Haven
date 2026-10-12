@@ -119,12 +119,20 @@ _bindSettings() {
 
   // ── Settings nav click-to-scroll ─────────────────────
   document.querySelectorAll('.settings-nav-item').forEach(item => {
+    // The rows are <div>s; make them reachable and usable from the keyboard.
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
+    item.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      item.click();
+    });
     item.addEventListener('click', () => {
       const targetId = item.dataset.target;
       const target = document.getElementById(targetId);
       if (!target) return;
       // Scroll into view within the settings body
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target.scrollIntoView({ behavior: this._scrollBehavior(), block: 'start' });
       // Update active state
       document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
       item.classList.add('active');

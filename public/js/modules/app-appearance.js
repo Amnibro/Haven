@@ -22,7 +22,13 @@ _viewerChatAnimPref() {
     const v = localStorage.getItem('haven_animate_chat');
     if (v === 'hover' || v === 'never') return v;
   } catch { /* localStorage unavailable */ }
-  return 'always';
+  // Reduce motion (Settings > Accessibility) turns 'always' into 'hover': a
+  // GIF or animated emoji stays still until it is hovered or tapped.
+  return this._motionReduced() ? 'hover' : 'always';
+},
+
+_motionReduced() {
+  return document.documentElement.classList.contains('reduce-motion');
 },
 
 _setViewerChatAnimPref(pref) {
@@ -41,7 +47,7 @@ _chatImgRealUrl(img) {
 
 _applyViewerChatAnimPref() {
   const pref = this._viewerChatAnimPref();
-  document.querySelectorAll('img.chat-image[data-chat-animated-src]').forEach((img) => {
+  document.querySelectorAll('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]').forEach((img) => {
     if (pref === 'always') {
       img.dataset.chatAnimPlaying = '1';
       if (img.getAttribute('src') !== img.dataset.chatAnimatedSrc) img.src = img.dataset.chatAnimatedSrc;
@@ -56,7 +62,7 @@ _applyViewerChatAnimPref() {
   });
   // Nothing is frozen yet on a fresh switch away from 'always', so sweep too.
   if (pref !== 'always') {
-    document.querySelectorAll('img.chat-image:not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
+    document.querySelectorAll('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
   }
 },
 
@@ -82,14 +88,14 @@ _setupChatAnimHover() {
   this._chatAnimHoverBound = true;
   const over = (e) => {
     const img = e.target;
-    if (!img || !img.matches || !img.matches('img.chat-image[data-chat-animated-src]')) return;
+    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]')) return;
     if (this._viewerChatAnimPref() !== 'hover') return;
     img.dataset.chatAnimPlaying = '1';
     img.src = img.dataset.chatAnimatedSrc;   // reassigning restarts from frame 1
   };
   const out = (e) => {
     const img = e.target;
-    if (!img || !img.matches || !img.matches('img.chat-image[data-chat-animated-src]')) return;
+    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]')) return;
     if (this._viewerChatAnimPref() !== 'hover') return;
     img.dataset.chatAnimPlaying = '';
     this._frozenFrame(img.dataset.chatAnimatedSrc).then((f) => {
@@ -102,7 +108,7 @@ _setupChatAnimHover() {
   // it on load as well as when it is inserted.
   document.addEventListener('load', (e) => {
     const img = e.target;
-    if (img && img.matches && img.matches('img.chat-image:not([data-chat-anim-done])')) this._freezeChatImg(img);
+    if (img && img.matches && img.matches('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])')) this._freezeChatImg(img);
   }, true);
 },
 
@@ -128,7 +134,8 @@ _setupChatAnimHover() {
 _viewerAnimPref() {
   try {
     const v = localStorage.getItem('haven_animate_pfp');
-    if (v === 'always' || v === 'never') return v;
+    if (v === 'never') return v;
+    if (v === 'always' && !this._motionReduced()) return v;   // reduce motion caps it at hover
   } catch { /* localStorage unavailable */ }
   return 'hover';
 },
@@ -399,7 +406,9 @@ _setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChang
     });
 
     picker.querySelectorAll('.density-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset[buttonDataKey] === value);
+      const on = btn.dataset[buttonDataKey] === value;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');   // screen readers hear which one is picked
     });
     if (notify) onChange?.(value);
   };
@@ -414,8 +423,10 @@ _setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChang
     const value = btn.dataset[buttonDataKey];
     if (!allowedValues.includes(value)) return;
 
+    // Saved before onChange runs, so a handler that reads the setting back
+    // gets the new value.
+    try { localStorage.setItem(storageKey, value); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     apply(value, true);
-    localStorage.setItem(storageKey, value);
   });
   return saved;
 },
@@ -512,33 +523,49 @@ _setupAnimateChatPicker() {
 _setupZoomSlider() {
   const slider = document.getElementById('ui-zoom-slider');
   if (!slider) return;
-  const label = document.getElementById('ui-zoom-value');
-  const outBtn = document.getElementById('zoom-out-btn');
-  const inBtn = document.getElementById('zoom-in-btn');
-
-  const MIN = parseInt(slider.min, 10) || 70;
-  const MAX = parseInt(slider.max, 10) || 150;
-  const STEP = parseInt(slider.step, 10) || 5;
-  const clamp = (n) => Math.min(MAX, Math.max(MIN, n));
 
   // Starting value: saved scale, else migrate the old 4-tier setting, else 100.
   const LEGACY = { small: 85, normal: 100, large: 118, 'x-large': 138 };
   let pct = parseInt(localStorage.getItem('haven-zoom'), 10);
   if (!pct) pct = LEGACY[localStorage.getItem('haven-fontsize')] || 100;
-  pct = clamp(pct);
 
-  const apply = (value, persist) => {
-    pct = clamp(value);
-    document.documentElement.style.setProperty('--ui-scale', pct + '%');
+  this._bindStepSlider({
+    slider,
+    label: document.getElementById('ui-zoom-value'),
+    outBtn: document.getElementById('zoom-out-btn'),
+    inBtn: document.getElementById('zoom-in-btn'),
+    value: pct,
+    apply: (value, persist) => {
+      document.documentElement.style.setProperty('--ui-scale', value + '%');
+      if (persist) localStorage.setItem('haven-zoom', value);
+    },
+  });
+},
+
+// A percentage slider with − / + steppers, a live readout and an optional
+// reset button: Zoom, and Message Text Size under Accessibility. The range
+// and step come from the <input>; apply(value, persist) does the work and is
+// called once at setup with persist false.
+_bindStepSlider({ slider, label, outBtn, inBtn, resetBtn, resetTo = 100, value, apply }) {
+  const MIN = parseInt(slider.min, 10) || 0;
+  const MAX = parseInt(slider.max, 10) || 100;
+  const STEP = parseInt(slider.step, 10) || 5;
+  const clamp = (n) => Math.min(MAX, Math.max(MIN, n));
+  let pct = clamp(value);
+
+  const set = (next, persist) => {
+    pct = clamp(next);
     slider.value = pct;
     if (label) label.textContent = pct + '%';
-    if (persist) localStorage.setItem('haven-zoom', pct);
+    if (resetBtn) resetBtn.disabled = pct === resetTo;
+    apply(pct, persist);
   };
 
-  apply(pct, false);
-  slider.addEventListener('input', () => apply(parseInt(slider.value, 10) || 100, true));
-  outBtn?.addEventListener('click', () => apply(pct - STEP, true));
-  inBtn?.addEventListener('click', () => apply(pct + STEP, true));
+  set(pct, false);
+  slider.addEventListener('input', () => set(parseInt(slider.value, 10) || resetTo, true));
+  outBtn?.addEventListener('click', () => set(pct - STEP, true));
+  inBtn?.addEventListener('click', () => set(pct + STEP, true));
+  resetBtn?.addEventListener('click', () => set(resetTo, true));
 },
 
 // ── Emoji Reaction Size Picker ──

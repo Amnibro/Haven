@@ -20,6 +20,7 @@
 @import url('/css/style-roles-layout-polls.css?v=4.21.0');
 @import url('/css/style-admin-panels.css?v=4.21.0');
 @import url('/css/style-gallery-ferry-forums.css?v=4.22.2');
+@import url('/css/style-accessibility.css?v=4.22.3');
 
 /* The rules themselves live in the files imported above, in this order. Later
    files win over earlier ones on equal specificity, as they did when this was

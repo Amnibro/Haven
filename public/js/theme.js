@@ -273,7 +273,8 @@ function startRgbCycle() {
 
   function tick(now) {
     _rgbRAF = requestAnimationFrame(tick);
-    if (document.hidden) {
+    // Reduce motion holds the current colors, the same way a hidden tab does.
+    if (document.hidden || _motionReduced()) {
       _rgbLastTick = now;
       lastFrameTs = now;
       return;
@@ -706,13 +707,24 @@ function _deactivateAllEffects() {
   [..._activeFx].forEach(_deactivateEffect);
 }
 
+// Settings > Accessibility > Reduce motion (or the OS asking for it) puts
+// .reduce-motion on <html>; see theme-init.js.
+function _motionReduced() {
+  return document.documentElement.classList.contains('reduce-motion');
+}
+
+let _lastEffectsArgs = null;
+
 function applyEffects(mode, themeOverride) {
+  _lastEffectsArgs = [mode, themeOverride];
   _deactivateAllEffects();
 
   // Always strip theme pseudo-element effects; JS manages all overlays now
   document.documentElement.setAttribute('data-fx-custom', '');
 
-  if (mode === 'none') return;
+  // Reduced motion runs no effects at all. The choice itself is untouched, so
+  // they come back as they were when motion is allowed again.
+  if (mode === 'none' || _motionReduced()) return;
 
   if (mode === 'auto') {
     const theme = themeOverride || localStorage.getItem('haven_theme') || 'haven';
@@ -724,6 +736,12 @@ function applyEffects(mode, themeOverride) {
   // Custom array of effects
   if (Array.isArray(mode)) mode.forEach(_activateEffect);
 }
+
+// Reduce motion can flip while the page is open (the setting, or the OS
+// setting it follows), so redo the last effects pass when it does.
+document.addEventListener('haven:reduce-motion-change', () => {
+  if (_lastEffectsArgs) applyEffects(..._lastEffectsArgs);
+});
 
 // ── Cyberpunk Text Scramble: decodes text with random chars ─
 const _SCRAMBLE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^';

@@ -215,7 +215,7 @@ _bindThreadAndDmPanels() {
         if (!replyMsgId) return;
         const target = dmPipMessages.querySelector(`[data-msg-id="${replyMsgId}"]`);
         if (target) {
-          target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          target.scrollIntoView({ block: 'center', behavior: this._scrollBehavior() });
           target.classList.add('highlight-flash');
           setTimeout(() => target.classList.remove('highlight-flash'), 1200);
         }

@@ -25,6 +25,7 @@ import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.18.1';
 import AttachmentMethods from './modules/app-attachments.js?v=4.21.1';
 import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.21.0';
 import AppearanceMethods from './modules/app-appearance.js?v=4.21.0';
+import AccessibilityMethods from './modules/app-accessibility.js?v=4.22.3';
 import SoundMethods from './modules/app-sounds.js?v=4.21.0';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.17.5';
@@ -395,6 +396,7 @@ class HavenApp {
     this._setupAnimatePfpPicker();
     this._setupAnimateChatPicker();
     this._setupZoomSlider();
+    this._setupAccessibility();
     this._setupEmojiSizePicker();
     this._setupImageModePicker();
     this._setupLazyMedia();
@@ -528,6 +530,7 @@ Object.assign(HavenApp.prototype,
   AttachmentMethods,
   AvatarEditorMethods,
   AppearanceMethods,
+  AccessibilityMethods,
   SoundMethods,
   EmojiStickerMethods,
   BotMethods,

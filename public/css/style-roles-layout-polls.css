@@ -113,9 +113,7 @@
 @keyframes role-shimmer {
   to { background-position: -200% 0; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .role-gradient.role-shimmer { animation: none; }
-}
+html.reduce-motion .role-gradient.role-shimmer { animation: none; }
 
 /* Role editor: the gradient switches and a sample name in the role's style. */
 .role-gradient-opts {

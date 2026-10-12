@@ -1,0 +1,240 @@
+/* ═══════════════════════════════════════════════════════════
+   ACCESSIBILITY (Settings > Accessibility)
+   theme-init.js puts each option on <html> before first paint:
+     data-text-size + --msg-text-scale   message text size (80 to 200%)
+     data-line-spacing                   normal | relaxed | loose
+     data-letter-spacing                 normal | wide
+     data-readable-font                  theme | system | hyperlegible | dyslexic
+     data-contrast                       normal | high
+     data-underline-links                on | off
+     data-large-targets                  on | off
+     html.reduce-motion                  the reduce-motion result
+   An option at its default changes nothing, so every theme looks exactly as
+   it did. Once someone picks one it outranks the theme (!important where a
+   theme might pin the same property): themes are free to choose sizes and
+   spacing, but a reader's accessibility choice has the last word.
+   This file loads last, after every other core stylesheet.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Readable fonts (both SIL Open Font License 1.1, see /fonts) ── */
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/atkinson-hyperlegible-latin-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/atkinson-hyperlegible-latin-ext-400.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/atkinson-hyperlegible-latin-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/atkinson-hyperlegible-latin-ext-700.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* OpenDyslexic ships unmodified (its license reserves the name for the
+   original files), so there is no subset: about 100 KB a weight, fetched
+   only once someone picks it. */
+@font-face {
+  font-family: 'OpenDyslexic';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/OpenDyslexic-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/OpenDyslexic-Bold.woff2') format('woff2');
+}
+
+/* The theme's font variables are swapped, so everything drawn in the main or
+   heading font follows. Monospace (code) is left alone. !important because a
+   custom theme may set these inline on <html>. */
+:root[data-readable-font="system"] {
+  --font-main: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif !important;
+  --font-heading: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif !important;
+}
+:root[data-readable-font="hyperlegible"] {
+  --font-main: 'Atkinson Hyperlegible', system-ui, sans-serif !important;
+  --font-heading: 'Atkinson Hyperlegible', system-ui, sans-serif !important;
+}
+:root[data-readable-font="dyslexic"] {
+  --font-main: 'OpenDyslexic', system-ui, sans-serif !important;
+  --font-heading: 'OpenDyslexic', system-ui, sans-serif !important;
+}
+/* Form controls do not inherit a font by default. */
+:root:is([data-readable-font="system"], [data-readable-font="hyperlegible"], [data-readable-font="dyslexic"]) :is(button, input, textarea, select) {
+  font-family: inherit;
+}
+
+/* ── Message text size ───────────────────────────────────
+   Separate from Zoom, which scales the whole interface: this is only where
+   people read and write messages. The base sizes are the ones the core
+   stylesheets give these elements, times --msg-text-scale (0.8 to 2). Later
+   rules here win ties, so the thread and forum ones come after
+   .message-content, which those elements also carry. Inline code is sized
+   in em and follows on its own. */
+:root[data-text-size]:not([data-text-size="100"]) .message-content { font-size: calc(0.875rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"]) .forum-topic-snippet { font-size: calc(0.82rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"]) .thread-topic-body { font-size: calc(0.95rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"]) .thread-panel:not(.thread-panel-forum) .thread-topic-body { font-size: calc(0.85rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"]) .thread-msg-content { font-size: calc(0.8125rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"]) .code-block pre { font-size: calc(0.8125rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"]) :is(.message-input-area textarea, .edit-textarea) { font-size: calc(0.875rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"]) .thread-input { font-size: calc(0.8125rem * var(--msg-text-scale, 1)) !important; }
+@media (max-width: 480px) {
+  /* Never under 1rem on phones, or iOS zooms the page in on focus. */
+  :root[data-text-size]:not([data-text-size="100"]) .message-input-area textarea { font-size: max(1rem, calc(0.875rem * var(--msg-text-scale, 1))) !important; }
+}
+@media (max-width: 360px) {
+  :root[data-text-size]:not([data-text-size="100"]) .message-content { font-size: calc(0.8125rem * var(--msg-text-scale, 1)) !important; }
+}
+
+/* ── Line and letter spacing ─────────────────────────────
+   The same places as the text size. The sidebar and toolbars keep their
+   spacing so labels still fit. */
+:root[data-line-spacing="relaxed"] { --a11y-line-height: 1.75; }
+:root[data-line-spacing="loose"] { --a11y-line-height: 2.05; }
+:root:is([data-line-spacing="relaxed"], [data-line-spacing="loose"]) :is(.message-content, .thread-msg-content, .thread-topic-body, .forum-topic-snippet, .code-block pre, .message-input-area textarea, .thread-input, .edit-textarea) {
+  line-height: var(--a11y-line-height) !important;
+}
+:root[data-letter-spacing="wide"] :is(.message-content, .thread-msg-content, .thread-topic-body, .forum-topic-snippet, .forum-topic-title, .message-input-area textarea, .thread-input, .edit-textarea) {
+  letter-spacing: 0.08em !important;
+  word-spacing: 0.16em !important;
+}
+
+/* ── Keyboard focus ──────────────────────────────────────
+   A visible ring on whatever the keyboard lands on. :focus-visible keeps it
+   off mouse clicks, so it only shows up for people who need it. Text boxes
+   already mark focus with their border, so they only get the ring in high
+   contrast. */
+:root :is(button, a[href], summary, select, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [tabindex]:not([tabindex="-1"]), input[type="checkbox"], input[type="radio"], input[type="range"]):focus-visible {
+  outline: 2px solid var(--a11y-focus, var(--accent));
+  outline-offset: 2px;
+}
+/* Rows that sit flush inside a scrolling list draw the ring inside
+   themselves, or the list would clip it. */
+:root :is(.settings-nav-item, .channel-item, .user-item, .density-btn):focus-visible {
+  outline-offset: -2px;
+}
+
+/* ── High contrast ───────────────────────────────────────
+   Secondary and muted text, and borders, are pulled toward the theme's own
+   main text color, so the result keeps the theme's character on any palette.
+   The theme sets these on <html>; :root plus the attribute outranks it and
+   !important outranks a custom theme's inline values. */
+:root[data-contrast="high"] {
+  --text-secondary: color-mix(in srgb, var(--text-primary) 88%, var(--bg-primary)) !important;
+  --text-muted: color-mix(in srgb, var(--text-primary) 76%, var(--bg-primary)) !important;
+  --border: color-mix(in srgb, var(--text-primary) 50%, var(--bg-primary)) !important;
+  --border-light: color-mix(in srgb, var(--text-primary) 58%, var(--bg-primary)) !important;
+  --border-color: color-mix(in srgb, var(--text-primary) 50%, var(--bg-primary)) !important;
+  --msg-glow: none !important;
+  --scanline: none !important;
+  --a11y-focus: var(--text-primary);
+}
+:root[data-contrast="high"] *:focus-visible {
+  outline: 3px solid var(--text-primary) !important;
+  outline-offset: 2px;
+}
+:root[data-contrast="high"] :is(.settings-nav-item, .channel-item, .user-item, .density-btn):focus-visible {
+  outline-offset: -3px;
+}
+:root[data-contrast="high"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select, .settings-select) {
+  border-color: var(--border-light);
+}
+/* Text that is only dimmed with opacity stays readable. Offline members
+   stay a little dimmer than online ones, so the two still read apart. */
+:root[data-contrast="high"] :is(.message-time, .msg-toolbar button, .thread-msg-time, .forum-topic-edit, .settings-hint) {
+  opacity: 1;
+}
+:root[data-contrast="high"] .user-item.offline { opacity: 0.8; }
+
+/* ── Underline links ─────────────────────────────────────
+   Message links are underlined already; this does the rest of the app.
+   Links dressed as buttons are left alone. */
+:root[data-underline-links="on"] a[href]:not([role="button"]):not([class*="btn"]):not(.server-icon) {
+  text-decoration: underline !important;
+  text-decoration-thickness: max(1px, 0.06em) !important;
+  text-underline-offset: 0.15em;
+}
+
+/* ── Reduce motion ───────────────────────────────────────
+   One switch for every animation and transition. Durations go to nearly
+   zero rather than "none" so code waiting on animationend / transitionend
+   still hears it, and an animation lands on its final frame. theme.js stops
+   the theme effects, and animated GIFs, emoji and avatars wait for hover or
+   tap (app-appearance.js). */
+html.reduce-motion,
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+/* ── Larger click targets ────────────────────────────────
+   Taller rows in the sidebars and settings, and bigger buttons in the
+   message box, the channel header and the message action bars. */
+:root[data-large-targets="on"] .channel-item { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+:root[data-large-targets="on"] .user-item { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; min-height: 2.75rem !important; }
+:root[data-large-targets="on"] .settings-nav-item { padding: 0.5625rem 0.75rem !important; }
+:root[data-large-targets="on"] .sidebar-bottom-btn { min-height: 2.5rem !important; }
+:root[data-large-targets="on"] .icon-btn { min-width: 2.5rem !important; min-height: 2.5rem !important; }
+:root[data-large-targets="on"] .msg-toolbar button { width: 2.5rem !important; height: 2.5rem !important; }
+:root[data-large-targets="on"] .msg-toolbar button svg { width: 1.125rem !important; height: 1.125rem !important; }
+:root[data-large-targets="on"] .thread-msg-toolbar button { width: 2.25rem !important; height: 2.25rem !important; font-size: 0.9375rem !important; }
+/* Phones already size the message box buttons for touch, and a row of
+   bigger ones there would push the text box off the screen. */
+@media (min-width: 481px) {
+  :root[data-large-targets="on"] :is(.input-actions-box > button, .btn-composer-plus) { min-width: 2.75rem !important; min-height: 2.75rem !important; }
+  :root[data-large-targets="on"] .btn-send { width: 3rem !important; height: 3rem !important; }
+}
+:root[data-large-targets="on"] .reaction-badge { padding: 0.3125rem 0.75rem !important; }
+:root[data-large-targets="on"] .density-btn { min-height: 2.75rem !important; }
+:root[data-large-targets="on"] .zoom-step { width: 2.5rem !important; height: 2.5rem !important; }
+
+/* ── The settings section itself ───────────────────────── */
+.a11y-text-preview {
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-primary);
+}
+.a11y-reset-btn {
+  flex-shrink: 0;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.a11y-reset-btn:hover { color: var(--text-primary); border-color: var(--accent); }
+.a11y-reset-btn:disabled { opacity: 0.5; cursor: default; }
