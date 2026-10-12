@@ -596,17 +596,22 @@ module.exports = function register(socket, ctx) {
     const activeCode = channel.code;
     socket.join(`channel:${activeCode}`);
 
-    io.to(`channel:${activeCode}`).emit('user-joined', {
-      channelCode: activeCode,
-      user: { id: socket.user.id, username: socket.user.displayName }
-    });
-
-    // Webhook event: member-joined (3.13.0)
-    try {
-      fireWebhookEvent?.(channel.id, activeCode, 'member-joined', {
+    // Only a new member is announced. Entering the code of a channel you are
+    // already in runs this handler too, and used to post "joined the channel"
+    // for everyone again each time.
+    if (!membership) {
+      io.to(`channel:${activeCode}`).emit('user-joined', {
+        channelCode: activeCode,
         user: { id: socket.user.id, username: socket.user.displayName }
       });
-    } catch { /* fireWebhookEvent catches and logs its own errors; this only guards the call */ }
+
+      // Webhook event: member-joined (3.13.0)
+      try {
+        fireWebhookEvent?.(channel.id, activeCode, 'member-joined', {
+          user: { id: socket.user.id, username: socket.user.displayName }
+        });
+      } catch { /* fireWebhookEvent catches and logs its own errors; this only guards the call */ }
+    }
 
     const isPrivateCode = channel.code_visibility === 'private' || channel.is_private;
     const joinerCanSeeCode = socket.user.isAdmin
