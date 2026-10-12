@@ -650,7 +650,7 @@
             <div id="slash-dropdown" class="slash-dropdown" style="display:none"></div>
             <div id="persona-dropdown" class="mention-dropdown" style="display:none"></div>
             <div id="ferry-dropdown" class="mention-dropdown" style="display:none"></div>
-            <textarea id="message-input" data-i18n-placeholder="header.message_placeholder_commands" placeholder="Type a message... (/ for commands)"
+            <textarea dir="auto" id="message-input" data-i18n-placeholder="header.message_placeholder_commands" placeholder="Type a message... (/ for commands)"
                       rows="1" maxlength="2000"></textarea>
             <button id="send-btn" class="btn-send" data-i18n-title="media.send_title" title="Send">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -958,7 +958,7 @@
       <input type="file" id="dm-pip-file-input" multiple style="display:none">
       <button id="dm-pip-emoji-btn" class="pip-input-emoji-btn" data-i18n-title="dm_runtime.emoji" title="Emoji"><span class="tb-icon tb-icon-emoji" aria-hidden="true">😀</span><span class="tb-icon tb-icon-mono" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg></span></button>
       <button id="dm-pip-gif-btn" class="pip-input-emoji-btn pip-input-gif-btn" data-i18n-title="app.input_bar.gif_btn" title="Search GIFs"><span data-i18n="app.input_bar.gif_label">GIF</span></button>
-      <textarea id="dm-pip-input" class="dm-pip-input" data-i18n-placeholder="dm_runtime.reply_placeholder" placeholder="Reply…" rows="1"></textarea>
+      <textarea dir="auto" id="dm-pip-input" class="dm-pip-input" data-i18n-placeholder="dm_runtime.reply_placeholder" placeholder="Reply…" rows="1"></textarea>
       <button id="dm-pip-send" class="dm-pip-send" data-i18n-title="dm_runtime.send" title="Send">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/>
@@ -992,7 +992,7 @@
     <div class="thread-input-area">
       <div class="pip-input-resizer" aria-hidden="true"></div>
       <button id="thread-emoji-btn" class="pip-input-emoji-btn" data-i18n-title="dm_runtime.emoji" title="Emoji"><span class="tb-icon tb-icon-emoji" aria-hidden="true">😀</span><span class="tb-icon tb-icon-mono" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg></span></button>
-      <textarea id="thread-input" class="thread-input" data-i18n-placeholder="thread_runtime.reply_placeholder" placeholder="Reply in thread..." rows="1"></textarea>
+      <textarea dir="auto" id="thread-input" class="thread-input" data-i18n-placeholder="thread_runtime.reply_placeholder" placeholder="Reply in thread..." rows="1"></textarea>
       <button id="thread-send-btn" class="thread-send-btn" data-i18n-title="dm_runtime.send" title="Send">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/>
@@ -1531,6 +1531,7 @@
             <option value="ru">Русский</option>
             <option value="zh">中文</option>
             <option value="pt">Português (Brasil)</option>
+            <option value="fa">فارسی</option>
           </select>
         </label>
         <small class="settings-hint" data-i18n="settings.language_section.hint">Changes apply immediately</small>
@@ -2606,6 +2607,7 @@
                 <option value="ru">Русский</option>
                 <option value="zh">中文</option>
                 <option value="pt">Português (Brasil)</option>
+                <option value="fa">فارسی</option>
               </select>
             </label>
             <small class="settings-hint" data-i18n="settings.admin.default_locale_hint">New users see Haven in this language on first visit. They can still pick their own.</small>

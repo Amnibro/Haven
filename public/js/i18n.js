@@ -18,7 +18,7 @@ const I18n = (() => {
   let _languageChangeBound = false;
 
   // Locales available: add entries here as you create new locale files
-  const SUPPORTED = ['en', 'fr', 'de', 'es', 'pl', 'ru', 'zh', 'pt'];
+  const SUPPORTED = ['en', 'fr', 'de', 'es', 'pl', 'ru', 'zh', 'pt', 'fa'];
   const DEFAULT   = 'en';
   const FLAGS = { en: 'gb', fr: 'fr', de: 'de', es: 'es', pl: 'pl', ru: 'ru', zh: 'cn', pt: 'br' };
 

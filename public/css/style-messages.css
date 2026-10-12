@@ -573,6 +573,16 @@ details.sound-section:not([open]) .sound-section-label::before {
 .message-author { font-weight: 600; font-size: 0.875rem; }
 .message-time { font-size: 0.6875rem; color: var(--text-muted); }
 
+/* A message in Persian, Arabic or Hebrew reads right to left on its own
+   line, so its punctuation lands on the right end; English is unaffected. */
+.message-content { unicode-bidi: plaintext; }
+/* With the interface in Persian every label does the same. The layout
+   itself stays left to right. */
+html[lang="fa"] body * { unicode-bidi: plaintext; }
+/* An empty box shows its Persian hint right to left; once something is
+   typed, the box follows the text (dir="auto" on the message boxes). */
+html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"], textarea):placeholder-shown { direction: rtl; }
+
 .message-content {
   font-size: 0.875rem;
   color: var(--text-primary);
