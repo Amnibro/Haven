@@ -817,6 +817,7 @@ async _setupDesktopAppPrefs() {
   const hiddenEl  = document.getElementById('pref-start-hidden');
   const hiddenRow = document.getElementById('pref-start-hidden-row');
   const trayEl    = document.getElementById('pref-minimize-to-tray');
+  const flashEl   = document.getElementById('pref-flash-taskbar');
   const sdrEl     = document.getElementById('pref-force-sdr');
   const menuBarEl = document.getElementById('pref-hide-menu-bar');
   const gpuVsyncEl     = document.getElementById('pref-disable-gpu-vsync');
@@ -829,6 +830,12 @@ async _setupDesktopAppPrefs() {
   if (hiddenEl) { hiddenEl.checked = !!prefs.startHidden; }
   if (hiddenRow) { hiddenRow.style.display = prefs.startOnLogin ? '' : 'none'; }
   if (trayEl)  { trayEl.checked  = !!prefs.minimizeToTray; }
+  // Desktop apps from before this switch do not have it, so it shows only
+  // where it works.
+  const canFlash = typeof window.havenDesktop.prefs.setFlashTaskbar === 'function';
+  const flashRow = document.getElementById('pref-flash-taskbar-row');
+  if (flashRow) flashRow.style.display = canFlash ? '' : 'none';
+  if (flashEl) { flashEl.checked = prefs.flashTaskbar !== false; }
   if (sdrEl)   { sdrEl.checked   = !!prefs.forceSDR; }
   if (menuBarEl) { menuBarEl.checked = !!prefs.hideMenuBar; }
   if (gpuVsyncEl)   { gpuVsyncEl.checked   = !!prefs.disableGpuVsync; }
@@ -859,6 +866,14 @@ async _setupDesktopAppPrefs() {
   trayEl?.addEventListener('change', async () => {
     try { await window.havenDesktop.prefs.setMinimizeToTray(trayEl.checked); }
     catch { trayEl.checked = !trayEl.checked; }
+  });
+
+  flashEl?.addEventListener('change', async () => {
+    try { await window.havenDesktop.prefs.setFlashTaskbar(flashEl.checked); }
+    catch (err) {
+      console.warn('[Desktop] could not save the taskbar flash setting', err);
+      flashEl.checked = !flashEl.checked;
+    }
   });
 
   sdrEl?.addEventListener('change', async () => {

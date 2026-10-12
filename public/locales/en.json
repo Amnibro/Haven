@@ -1954,6 +1954,8 @@
       "start_hidden_hint": "When launching on login, start minimized to the system tray instead of showing the window.",
       "minimize_to_tray": "Minimize to Tray on Close",
       "minimize_to_tray_hint": "Closing the window hides Haven to the system tray instead of quitting.",
+      "flash_taskbar": "Flash the Taskbar for Notifications",
+      "flash_taskbar_hint": "While Haven is in the background, a notification also lights up its taskbar button until you open Haven. Turn this off to keep the taskbar quiet; notifications still show.",
       "force_sdr": "Force SDR (sRGB) Color",
       "force_sdr_hint": "Fix washed-out or over-saturated colors on HDR monitors. Requires restart.",
       "hide_menu_bar": "Hide Menu Bar",

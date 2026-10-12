@@ -2381,6 +2381,14 @@
           <p class="settings-hint" data-i18n="settings.desktop_app_section.minimize_to_tray_hint">Closing the window hides Haven to the system tray instead of quitting.</p>
         </div>
 
+        <div class="desktop-pref-row" id="pref-flash-taskbar-row" style="display:none">
+          <label class="toggle-row">
+            <input type="checkbox" id="pref-flash-taskbar">
+            <span class="toggle-label" data-i18n="settings.desktop_app_section.flash_taskbar">Flash the Taskbar for Notifications</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.desktop_app_section.flash_taskbar_hint">While Haven is in the background, a notification also lights up its taskbar button until you open Haven. Turn this off to keep the taskbar quiet; notifications still show.</p>
+        </div>
+
         <div class="desktop-pref-row">
           <label class="toggle-row">
             <input type="checkbox" id="pref-hide-menu-bar">
@@ -5096,7 +5104,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
-  <script type="module" src="/js/app.js?v=4.22.5"></script>
+  <script type="module" src="/js/app.js?v=4.22.6"></script>
   <script src="/js/plugin-loader.js?v=4.21.0"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
