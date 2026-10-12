@@ -96,11 +96,15 @@ _setupChannelDragDrop() {
     edge.onDragOver(e.clientY);
     const tgt = e.target.closest('.channel-item:not(.temp-channel-create-btn), .category-label');
     if (!tgt || !isCompatible(dragSrc, tgt)) { indicator.remove(); return; }
+    // With category tabs (#5756) the headers sit in their own grid: only a
+    // header may be dropped among them, and the marker goes in that grid.
+    if (tgt.closest('.category-tabs') && !dragSrc.classList.contains('category-label')) { indicator.remove(); return; }
+    const holder = tgt.parentNode;
     const rect = tgt.getBoundingClientRect();
     if (e.clientY < rect.top + rect.height / 2) {
-      list.insertBefore(indicator, tgt);
+      holder.insertBefore(indicator, tgt);
     } else {
-      list.insertBefore(indicator, tgt.nextSibling);
+      holder.insertBefore(indicator, tgt.nextSibling);
     }
   });
 
@@ -185,10 +189,21 @@ _saveDragDropOrder(el) {
 
   // Parent channel was dragged: determine its new category from preceding category label
   let newCategory = '';
-  let prev = el.previousElementSibling;
-  while (prev) {
-    if (prev.classList.contains('category-label')) { newCategory = prev.dataset.category || ''; break; }
-    prev = prev.previousElementSibling;
+  if (list.querySelector(':scope > .category-tabs')) {
+    // Category tabs (#5756): the headers are not among the channels, so a
+    // channel takes the category of the channel it was dropped after (or
+    // before, at the top of the list).
+    const isCh = (n) => n && n.classList && n.classList.contains('channel-item') && !n.classList.contains('sub-channel-item') && n.dataset.code;
+    let near = el.previousElementSibling;
+    while (near && !isCh(near)) near = near.previousElementSibling;
+    if (!near) { near = el.nextElementSibling; while (near && !isCh(near)) near = near.nextElementSibling; }
+    newCategory = near ? (near.dataset.catGroup || '') : (this.channels.find(c => c.code === el.dataset.code)?.category || '');
+  } else {
+    let prev = el.previousElementSibling;
+    while (prev) {
+      if (prev.classList.contains('category-label')) { newCategory = prev.dataset.category || ''; break; }
+      prev = prev.previousElementSibling;
+    }
   }
 
   // If category changed, tell the server
