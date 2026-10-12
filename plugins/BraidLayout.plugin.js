@@ -40,35 +40,14 @@ class BraidLayout {
     };
     document.addEventListener('haven:layout-editing', editingChanged);
     this._permListeners.push([document, 'haven:layout-editing', editingChanged]);
-    const fxChanged = (event) => {
-      if (this._stopping) return;
-      this._syncFromEffect(event.detail?.braid);
-    };
-    document.addEventListener('haven:layout-effect', fxChanged);
-    this._permListeners.push([document, 'haven:layout-effect', fxChanged]);
-    this._syncFromEffect();
+    const layoutOn = this._wantsLayout();
+    if (layoutOn && !document.documentElement.hasAttribute('data-haven-layout-editing')) this._engage();
+    else if (layoutOn) console.log('[BraidLayout] Waiting for Mod Mode to finish');
+    else console.log('[BraidLayout] Started dormant: pick Braid in Settings, Layout');
   }
 
   _wantsLayout() {
-    try {
-      return typeof window !== 'undefined' && window.isHavenEffectActive?.('braid') === true;
-    } catch {
-      return false;
-    }
-  }
-
-  _syncFromEffect(want) {
-    const on = typeof want === 'boolean' ? want : this._wantsLayout();
-    if (on) {
-      if (document.documentElement.hasAttribute('data-haven-layout-editing')) {
-        console.log('[BraidLayout] Waiting for Mod Mode to finish');
-        return;
-      }
-      if (!this._engaged) this._engage();
-      return;
-    }
-    if (this._engaged) this._disengage(false);
-    else console.log('[BraidLayout] Dormant until the Braid layout effect is on');
+    return typeof window !== 'undefined' && typeof window.havenLayoutWanted === 'function' ? window.havenLayoutWanted('BraidLayout') : HavenApi.Data.load('BraidLayout', 'layoutOn', '1') !== '0';
   }
 
   // Everything visual lives between _engage and _disengage, so "back to
@@ -206,6 +185,7 @@ class BraidLayout {
       HavenApi.DOM.removeStyle('BraidFormOwn');
       HavenApi.DOM.removeStyle('BraidDensityCSS');
       this._suspended = false;
+      if (persist) HavenApi.Data.save('BraidLayout', 'layoutOn', '0');
       console.log('[BraidLayout] Disengaged: classic layout');
     } finally {
       HavenApi.Layout?.release('BraidLayout');
@@ -1373,6 +1353,7 @@ html[data-braid-layout="1"] .settings-nav-item.active svg{opacity:1}
 html[data-braid-layout="1"] .settings-tab svg{margin-right:.375rem;vertical-align:-.1875rem}
 html[data-braid-layout="1"] .settings-section{background:var(--bg-card)!important;border:1px solid var(--border)!important;border-top:1px solid var(--border)!important;border-radius:1rem!important;padding:1rem 1.125rem!important;margin:0 0 .75rem!important}
 html[data-braid-layout="1"] .settings-section-subtitle{font-weight:650!important;letter-spacing:-.015em!important}
+html[data-braid-layout="1"] .settings-body{padding:.75rem .875rem 0!important;box-sizing:border-box}
 html[data-braid-layout="1"] .settings-section select,
 html[data-braid-layout="1"] .settings-section input[type="text"],
 html[data-braid-layout="1"] .settings-section input[type="password"],

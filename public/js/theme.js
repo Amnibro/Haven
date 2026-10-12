@@ -192,6 +192,7 @@ function _cachePalette(palette) {
   if (_paletteCacheTimer) return;
   _paletteCacheTimer = setTimeout(() => {
     _paletteCacheTimer = null;
+    _syncColorScheme();
     try {
       const theme = localStorage.getItem('haven_theme');
       if (theme === 'custom' || theme === 'rgb') {
@@ -660,9 +661,7 @@ const THEME_DEFAULT_FX = {
   matrix: ['matrix','matrixbars'], fallout: ['fallout'], ffx: ['ffx'],
   ice: ['ice'], nord: ['nord'], darksouls: ['darksouls'], eldenring: ['eldenring'],
   bloodborne: ['bloodborne'], cyberpunk: ['cyberpunk'], lotr: ['lotr'], abyss: ['abyss'],
-  scripture: ['scripture'], chapel: ['chapel'], gospel: ['gospel'],
-  'file:braid.theme.css': ['braid'],
-  'file:braid-light.theme.css': ['braid']
+  scripture: ['scripture'], chapel: ['chapel'], gospel: ['gospel']
 };
 
 let _activeFx = new Set();
@@ -812,6 +811,15 @@ function _deactivateAllEffects() {
   [..._activeFx].forEach(_deactivateEffect);
 }
 
+function _isOriginalLayout() { return document.documentElement.hasAttribute('data-haven-original-layout'); }
+if (typeof window !== 'undefined') window.isHavenOriginalLayout = _isOriginalLayout;
+function _syncOriginalLayout(key) {
+  const on = !key, was = _isOriginalLayout();
+  try { localStorage.setItem('haven_original_layout', on ? '1' : '0'); } catch {}
+  document.documentElement.toggleAttribute('data-haven-original-layout', on);
+  on !== was && document.dispatchEvent(new CustomEvent('haven:original-layout', { detail: { original: on } }));
+}
+
 // Settings > Accessibility > Reduce motion (or the OS asking for it) puts
 // .reduce-motion on <html>; see theme-init.js.
 function _motionReduced() {
@@ -819,81 +827,6 @@ function _motionReduced() {
 }
 
 let _lastEffectsArgs = null;
-
-function _defaultEffectsForTheme(theme) {
-  const listed = [...(THEME_DEFAULT_FX[theme] || [])];
-  if (typeof theme === 'string' && theme.startsWith('file:')) {
-    const meta = window.HavenThemeCompat?.getCachedTheme?.(theme.slice(5));
-    if (meta?.layout === 'BraidLayout' && !listed.includes('braid')) listed.push('braid');
-  }
-  return listed;
-}
-
-function isHavenEffectActive(name) {
-  return _activeFx.has(name);
-}
-if (typeof window !== 'undefined') window.isHavenEffectActive = isHavenEffectActive;
-
-function _syncBraidToggle() {
-  const box = document.getElementById('braid-layout-toggle');
-  if (box) box.checked = _activeFx.has('braid');
-}
-
-function _syncCompactToggle() {
-  const box = document.getElementById('compact-layout-toggle');
-  if (box) box.checked = document.documentElement.hasAttribute('data-compact-layout');
-}
-
-function _isOriginalLayout() {
-  return document.documentElement.hasAttribute('data-haven-original-layout');
-}
-if (typeof window !== 'undefined') window.isHavenOriginalLayout = _isOriginalLayout;
-
-function _syncOriginalToggle() {
-  const box = document.getElementById('original-layout-toggle');
-  if (box) box.checked = _isOriginalLayout();
-}
-
-function _setOriginalLayout(on) {
-  try { localStorage.setItem('haven_original_layout', on ? '1' : '0'); } catch {}
-  if (on) document.documentElement.setAttribute('data-haven-original-layout', '1');
-  else document.documentElement.removeAttribute('data-haven-original-layout');
-  if (on) _setCompactLayout(false);
-  const container = document.getElementById('effect-selector');
-  const mode = _getStoredEffectMode();
-  applyEffects(mode);
-  if (container) _updateEffectButtons(container, mode);
-  _syncOriginalToggle();
-  _syncBraidToggle();
-  document.dispatchEvent(new CustomEvent('haven:original-layout', { detail: { original: !!on } }));
-}
-if (typeof window !== 'undefined') window.setHavenOriginalLayout = _setOriginalLayout;
-
-function _setCompactLayout(on) {
-  if (on && _isOriginalLayout()) _setOriginalLayout(false);
-  try {
-    window.HavenApi?.Data?.save('CompactLayout', 'layoutOn', on ? '1' : '0');
-  } catch {}
-  if (on) window.HavenPluginLoader?.enablePlugin?.('CompactLayout.plugin.js');
-  const inst = window.HavenPluginLoader?.loadedPlugins?.get('CompactLayout.plugin.js')?.instance;
-  if (on) inst?._engage?.();
-  else inst?._disengage?.();
-  document.dispatchEvent(new CustomEvent('haven:layout-effect', {
-    detail: { compact: !!on },
-  }));
-  _syncCompactToggle();
-}
-
-function _syncBraidLayout() {
-  _syncBraidToggle();
-  document.dispatchEvent(new CustomEvent('haven:layout-effect', {
-    detail: { braid: _activeFx.has('braid') },
-  }));
-}
-
-function _shouldActivateEffect(name) {
-  return !(name === 'braid' && _isOriginalLayout());
-}
 
 function applyEffects(mode, themeOverride) {
   _lastEffectsArgs = [mode, themeOverride];
@@ -904,27 +837,17 @@ function applyEffects(mode, themeOverride) {
 
   // Reduced motion runs no effects at all. The choice itself is untouched, so
   // they come back as they were when motion is allowed again.
-  if (mode === 'none' || _motionReduced()) {
-    _syncBraidLayout();
-    return;
-  }
+  if (mode === 'none' || _motionReduced()) return;
 
   if (mode === 'auto') {
     const theme = themeOverride || localStorage.getItem('haven_theme') || 'haven';
-    _defaultEffectsForTheme(theme).forEach((name) => {
-      if (_shouldActivateEffect(name)) _activateEffect(name);
-    });
-    _syncBraidLayout();
+    const defaults = THEME_DEFAULT_FX[theme];
+    if (defaults) defaults.forEach(_activateEffect);
     return;
   }
 
   // Custom array of effects
-  if (Array.isArray(mode)) {
-    mode.forEach((name) => {
-      if (_shouldActivateEffect(name)) _activateEffect(name);
-    });
-  }
-  _syncBraidLayout();
+  if (Array.isArray(mode)) mode.forEach(_activateEffect);
 }
 
 // Reduce motion can flip while the page is open (the setting, or the OS
@@ -1722,12 +1645,25 @@ function _activeLayoutKey() {
   const loaded = window.HavenPluginLoader?.loadedPlugins;
   for (const l of _layoutPluginFiles()) {
     if (!loaded?.get(l.file)?.enabled) continue;
-    let on = '0';
-    try { on = window.HavenApi?.Data?.load(l.key, 'layoutOn', '1'); }
-    catch (err) { console.warn('[Theme] could not read the layout choice', err); }
-    if (on !== '0') return l.key;
+    if (_layoutWanted(l.key)) return l.key;
   }
   return '';
+}
+
+function _layoutWanted(key) {
+  const fallback = key !== 'BraidLayout' || layoutIdFromTheme(localStorage.getItem('haven_theme') || '') === 'BraidLayout' ? '1' : '0';
+  try { return window.HavenApi?.Data?.load(key, 'layoutOn', fallback) !== '0'; }
+  catch (err) { console.warn('[Theme] could not read the layout choice', err); return fallback === '1'; }
+}
+if (typeof window !== 'undefined') window.havenLayoutWanted = _layoutWanted;
+function _settleLayouts() {
+  const key = _activeLayoutKey();
+  _layoutPluginFiles().filter(l => l.key !== key && window.HavenPluginLoader?.loadedPlugins?.get(l.file)?.enabled && _layoutWanted(l.key)).forEach(l => _setLayoutPlugin(l.file, false, l.key));
+  _renderLayoutPicker();
+}
+function _pickThemeLayout(theme, meta) {
+  const key = layoutIdFromTheme(theme, meta);
+  key && key !== _activeLayoutKey() && _layoutPluginFiles().some(l => l.key === key) && _setLayout(key);
 }
 
 function _setLayout(key) {
@@ -1759,6 +1695,7 @@ function _renderLayoutPicker() {
     b.setAttribute('aria-checked', String(on));
   });
   if (original && !original.isConnected) picker.prepend(original);
+  window.HavenPluginLoader?.isReady && _syncOriginalLayout(active);
 }
 
 function initEffectSelector() {
@@ -1783,7 +1720,8 @@ function initEffectSelector() {
     // A layout switched some other way (Braid's Ctrl+Shift+B, its own menu,
     // Mod Mode) and plugins finishing loading both update the picker.
     document.addEventListener('haven:layout-owner-change', _renderLayoutPicker);
-    document.addEventListener('haven:plugins-loaded', _renderLayoutPicker);
+    document.addEventListener('haven:plugins-loaded', _settleLayouts);
+    window.HavenPluginLoader?.isReady && _settleLayouts();
   }
 
   container.querySelectorAll('.effect-btn').forEach(btn => {
@@ -2005,6 +1943,19 @@ function dispatchHavenThemeChange(theme, meta) {
   document.dispatchEvent(new CustomEvent('haven:theme-change', {
     detail: { theme: value, file, layout },
   }));
+  _syncColorScheme();
+}
+function _syncColorScheme() {
+  const probe = _syncColorScheme.el || (_syncColorScheme.el = Object.assign(document.createElement('i'), { hidden: true }));
+  if (!document.body) return;
+  probe.isConnected || document.body.appendChild(probe);
+  probe.style.color = 'var(--bg-primary, #000)';
+  const [r, g, b] = (getComputedStyle(probe).color.match(/[\d.]+/g) || [0, 0, 0]).map(Number);
+  document.documentElement.style.colorScheme = 0.2126 * r + 0.7152 * g + 0.0722 * b > 140 ? 'light' : 'dark';
+}
+if (typeof window !== 'undefined' && typeof MutationObserver === 'function' && typeof document !== 'undefined') {
+  new MutationObserver(_syncColorScheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-haven-theme-loaded', 'class'] });
+  document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', _syncColorScheme, { once: true }) : _syncColorScheme();
 }
 if (typeof window !== 'undefined') {
   window.layoutIdFromTheme = layoutIdFromTheme;
@@ -2275,6 +2226,7 @@ function injectPublishedThemeBar(container, themes, onPick) {
     btn.appendChild(icon);
     btn.addEventListener('click', () => {
       const applied = applyPublishedThemeBase(theme.file, true, theme);
+      applied && typeof _pickThemeLayout === 'function' && _pickThemeLayout(`file:${theme.file}`, theme);
       if (applied && typeof onPick === 'function') onPick(theme);
     });
     el.appendChild(btn);
