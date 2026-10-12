@@ -797,7 +797,9 @@ function _collectScrambleTargets() {
   //    For section labels that contain a .section-label-text span, scramble that;
   //    otherwise fall back to the label itself (safe for simple labels).
   document.querySelectorAll('.section-label').forEach(el => {
-    const textSpan = el.querySelector('.section-label-text');
+    // A category header keeps its name in .cat-name, which changes between
+    // the full and the short name as it opens and closes (#5761).
+    const textSpan = el.querySelector('.section-label-text, .cat-name');
     addTarget(textSpan || el);
   });
 

@@ -44,6 +44,12 @@ _decorateCategoryLabel(label, cat, collapsed) {
   if (!nameEl) return;
   nameEl.classList.add('cat-name');
   const short = this._categoryShortNames()[cat.toLowerCase()];
+  // The glitch effect remembers the text it scrambles; a new name replaces
+  // that memory so the effect does not bring the other name back (#5761).
+  if (nameEl._scrambleInterval) { clearInterval(nameEl._scrambleInterval); nameEl._scrambleInterval = null; }
+  nameEl._scrambling = false;
+  nameEl.classList.remove('scrambling');
+  delete nameEl.dataset.originalText;
   nameEl.textContent = collapsed && short ? short : cat;
   label.title = collapsed && short ? cat : '';
   if (!label.dataset.shortNameMenu && (this.user?.isAdmin || this._hasPerm?.('manage_server'))) {
