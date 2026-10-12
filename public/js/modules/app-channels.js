@@ -781,13 +781,17 @@ _renderChannels() {
       arrow.textContent = '▾';
       catLabel.appendChild(arrow);
       const catText = document.createElement('span');
+      catText.className = 'cat-name';
       catText.textContent = cat;
       catLabel.appendChild(catText);
-      list.appendChild(catLabel);
+      // Look, short name and tab grid: app-channel-categories.js (#5756).
+      this._decorateCategoryLabel?.(catLabel, cat, catCollapsed);
+      (this._categoryHeaderHolder?.(list) || list).appendChild(catLabel);
 
       catLabel.addEventListener('click', () => {
         const nowCollapsed = arrow.classList.toggle('collapsed');
         localStorage.setItem(`haven_cat_collapsed_${cat.toLowerCase()}`, nowCollapsed);
+        this._decorateCategoryLabel?.(catLabel, cat, nowCollapsed);
         list.querySelectorAll(`[data-cat-group="${CSS.escape(cat)}"]`).forEach(el => {
           el.style.display = nowCollapsed ? 'none' : '';
         });

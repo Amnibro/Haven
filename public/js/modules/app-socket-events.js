@@ -883,7 +883,7 @@ _listenAdminAndPrefs() {
     if (data.key.startsWith('auto_away_')) this._refreshIdleTimeout?.();
     this._applyServerSettings();
     if (data.key === 'channel_templates') this._renderChannelTemplates();
-    if (data.key === 'hide_disabled_channel_badges') this._renderChannels?.();
+    if (data.key === 'hide_disabled_channel_badges' || data.key === 'category_layout' || data.key === 'category_short_names') this._renderChannels?.();
   });
 
   // ── Webhooks list ──────────────────────────────────

@@ -131,6 +131,7 @@ module.exports = function register(socket, ctx) {
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
       'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'hide_disabled_channel_badges',
+      'category_layout', 'category_short_names', // (#5756) category tabs and short names
       'allow_self_purge', // (#5686) members may delete every message they wrote
       'default_theme', 'published_themes', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code', 'default_locale',
@@ -291,6 +292,22 @@ module.exports = function register(socket, ctx) {
     if (key === 'update_banner_admin_only' && !['true', 'false'].includes(value)) return;
     if (key === 'allow_self_purge' && !['true', 'false'].includes(value)) return;
     if (key === 'hide_disabled_channel_badges' && !['true', 'false'].includes(value)) return;
+    if (key === 'category_layout' && !['list', 'tabs'].includes(value)) return;
+    if (key === 'category_short_names') {
+      // Lowercase category name to a short name or emoji, both plain text.
+      try {
+        const obj = JSON.parse(value);
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
+        const clean = {};
+        for (const [k, v] of Object.entries(obj).slice(0, 200)) {
+          if (typeof k !== 'string' || typeof v !== 'string') return;
+          const name = k.trim().toLowerCase().slice(0, 64);
+          const short = v.trim().slice(0, 12);
+          if (name && short) clean[name] = short;
+        }
+        value = JSON.stringify(clean);
+      } catch { return; } // not JSON: refused like any other bad value
+    }
     if (key === 'admin_password_reset_enabled' && !['true', 'false'].includes(value)) return;
     // (#12) OIDC. The issuer must be an absolute https URL; anything else is
     // either a typo or an attempt to point discovery somewhere it shouldn't go.

@@ -517,6 +517,8 @@ _applyServerSettings() {
     if (selfPurgeBlock) selfPurgeBlock.style.display = (this.serverSettings.allow_self_purge === 'true' && !this.user?.isGuest) ? '' : 'none';
     const hideDisabledBadges = document.getElementById('hide-disabled-badges');
     if (hideDisabledBadges) hideDisabledBadges.checked = this.serverSettings.hide_disabled_channel_badges === 'true';
+    const categoryTabs = document.getElementById('category-layout-tabs');
+    if (categoryTabs) categoryTabs.checked = this.serverSettings.category_layout === 'tabs';
     const defaultTheme = document.getElementById('default-theme-select');
     if (defaultTheme) {
       defaultTheme.value = this.serverSettings.default_theme || '';
@@ -913,6 +915,7 @@ _snapshotAdminSettings() {
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
     allow_self_purge: this.serverSettings.allow_self_purge || 'false',
     hide_disabled_channel_badges: this.serverSettings.hide_disabled_channel_badges || 'false',
+    category_layout: this.serverSettings.category_layout || 'list',
     admin_password_reset_enabled: this.serverSettings.admin_password_reset_enabled || 'false',
     unicode_emoji_auto_update: this.serverSettings.unicode_emoji_auto_update || 'false',
     registration_captcha_enabled: this.serverSettings.registration_captcha_enabled || 'false',
@@ -1146,6 +1149,11 @@ _saveAdminSettings() {
   const hideDisabledBadges = document.getElementById('hide-disabled-badges')?.checked ? 'true' : 'false';
   if (hideDisabledBadges !== (snap.hide_disabled_channel_badges || 'false')) {
     this.socket.emit('update-server-setting', { key: 'hide_disabled_channel_badges', value: hideDisabledBadges });
+    changed = true;
+  }
+  const categoryLayout = document.getElementById('category-layout-tabs')?.checked ? 'tabs' : 'list';
+  if (categoryLayout !== (snap.category_layout || 'list')) {
+    this.socket.emit('update-server-setting', { key: 'category_layout', value: categoryLayout });
     changed = true;
   }
 
