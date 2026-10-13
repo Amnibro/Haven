@@ -63,6 +63,14 @@ _setPermView(view) {
   const usersPane = document.getElementById('perm-users-pane');
   if (rolesPane) rolesPane.hidden = view !== 'roles';
   if (usersPane) usersPane.hidden = view !== 'users';
+  // Draw the pane being shown: the members are listed straight away, not
+  // only once something is typed in the search box.
+  if (view === 'users') {
+    this._renderPermUsersList();
+    this._renderPermUserDetail();
+  } else {
+    this._renderPermMatrix();
+  }
 },
 
 _applyPermPanel({ roles, users } = {}) {
@@ -70,7 +78,9 @@ _applyPermPanel({ roles, users } = {}) {
     this._permPanel.roles = roles.filter(r => (r.scope || 'server') === 'server' && Number(r.level) > 0);
   }
   if (Array.isArray(users)) {
-    this._permPanel.users = users;
+    // Alphabetical by the name people see, ignoring case.
+    const nameOf = (u) => u.displayName || u.username || '';
+    this._permPanel.users = [...users].sort((a, b) => nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: 'base' }));
     const stillThere = this._permPanel.users.some(u => u.id === this._permPanel.userId);
     if (!this._permPanel.userId || !stillThere) {
       const pick = this._permPanel.users.find(u => !u.isAdmin && u.id !== this.user?.id)
