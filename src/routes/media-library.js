@@ -11,10 +11,9 @@ const { auditHttp } = require('../httpAudit');
 const { DATA_DIR, STAGING_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const { sanitizeSoundName } = require('../socketHandlers');
-const ROOT = path.join(__dirname, '..', '..');
 
 module.exports = function registerMediaLibrary(deps) {
-  const { uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter } = deps;
+  const { uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter, builtinStickers } = deps;
   // ── Built-in sounds (bundled with Haven, always available) ────
   const BUILTIN_SOUNDS = [
     { name: 'AOL - Door Open',       url: '/sounds/aol_door_open.mp3',   builtin: true },
@@ -422,49 +421,11 @@ module.exports = function registerMediaLibrary(deps) {
   // them by URL prefix and render at sticker dimensions.
   const STICKERS_DIR = path.join(uploadDir, 'stickers');
 
-  // (#5335) Seed a small starter pack on first run so the picker isn't empty
-  // out of the box. Files in public/starter-stickers/ are copied into
-  // uploads/stickers/ and registered in the `stickers` table under the
-  // "Starter" pack, but only if there are zero stickers in the DB. Once
-  // any sticker exists we leave things alone so admin uploads or deletions
-  // aren't trampled on next restart.
-  async function seedStarterStickers() {
-    try {
-      const { getDb } = require('../database');
-      const db = getDb();
-      const existing = db.prepare('SELECT COUNT(*) as c FROM stickers').get();
-      if (existing && existing.c > 0) return;
-      const seedDir = path.join(ROOT, 'public', 'starter-stickers');
-      if (!fs.existsSync(seedDir)) return;
-      const files = fs.readdirSync(seedDir).filter(f => /\.(svg|png|gif|webp|jpg|jpeg)$/i.test(f));
-      const insert = db.prepare(
-        'INSERT OR IGNORE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, NULL)'
-      );
-      let seeded = 0;
-      for (const file of files) {
-        try {
-          const ext = path.extname(file).toLowerCase();
-          const baseName = path.basename(file, ext).toLowerCase().replace(/[^a-z0-9_-]/g, '');
-          if (!baseName) continue;
-          const destName = `starter-${baseName}${ext}`;
-          const rel = `stickers/${destName}`;
-          if (!(await storage.head(rel))) {
-            const staged = path.join(STAGING_DIR, destName);
-            fs.copyFileSync(path.join(seedDir, file), staged);
-            await storage.admit(rel, staged);
-          }
-          insert.run(baseName, 'Starter', destName);
-          seeded++;
-        } catch (err) {
-          console.warn(`[stickers] Could not seed starter sticker ${file}:`, err.message);
-        }
-      }
-      if (seeded > 0) console.log(`[stickers] Seeded ${seeded} starter sticker(s) into the "Starter" pack.`);
-    } catch (err) {
-      // Non-fatal: the server runs fine without the starter pack.
-      console.warn('[stickers] Could not seed starter pack:', err?.message || err);
-    }
-  }
+  // Built-in packs (src/builtinStickers.js) are seeded and upgraded by
+  // builtinStickers.sync() once the database is ready. They replace the
+  // first-run "Starter" pack (#5335) and reach servers that already have
+  // stickers too.
+  const canManageStickers = (user) => verifyAdminFromDb(user) || userHasPermission(user.id, 'manage_stickers') || userHasPermission(user.id, 'manage_emojis');
   const stickerStorage = privacyPass.diskStorage({
     destination: STICKERS_DIR,
     filename: (req, file, cb) => {
@@ -563,8 +524,29 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     const { getDb } = require('../database');
     try {
-      const rows = getDb().prepare('SELECT id, name, pack_name, filename FROM stickers ORDER BY pack_name COLLATE NOCASE, name COLLATE NOCASE').all();
-      res.json({ stickers: rows.map(r => ({ id: r.id, name: r.name, pack_name: r.pack_name, url: `/uploads/stickers/${r.filename}` })) });
+      const rows = getDb().prepare('SELECT id, name, pack_name, filename, builtin_id FROM stickers ORDER BY pack_name COLLATE NOCASE, name COLLATE NOCASE').all();
+      // Built-in packs an admin switched off are left out; their files stay
+      // so messages that already show them still render.
+      const off = builtinStickers ? builtinStickers.disabledPacks() : new Set();
+      const listed = [];
+      for (const r of rows) {
+        const b = builtinStickers ? builtinStickers.describe(r, off) : { visible: true, extra: {}, order: Infinity };
+        if (b.visible) listed.push({ order: b.order, sticker: { id: r.id, name: r.name, pack_name: r.pack_name, url: `/uploads/stickers/${r.filename}`, ...b.extra } });
+      }
+      // Built-in packs come first in their own order (apps that show one flat
+      // list open on Reactions), then uploaded packs by name. Within a pack,
+      // built-ins keep the order they were drawn in, ahead of anything
+      // uploaded into the same pack. The sort is stable, so ties keep the SQL
+      // order.
+      const builtinPackNames = builtinStickers ? builtinStickers.packs.map(p => p.name.toLowerCase()) : [];
+      const packOf = (x) => (x.sticker.pack_name || '').toLowerCase();
+      const packRank = (x) => { const i = builtinPackNames.indexOf(packOf(x)); return i === -1 ? builtinPackNames.length : i; };
+      listed.sort((a, b) => packRank(a) - packRank(b) || (packOf(a) < packOf(b) ? -1 : packOf(a) > packOf(b) ? 1 : 0) || (a.order ?? Infinity) - (b.order ?? Infinity) || 0);
+      const stickers = listed.map(x => x.sticker);
+      // Built-in packs in their own order, with the sticker that stands for
+      // each on the picker's pack tabs. Older clients ignore this.
+      const packs = builtinStickers ? builtinStickers.packStates().filter(p => p.enabled && p.count).map(p => ({ id: p.id, name: p.name, icon: p.icon, builtin: true })) : [];
+      res.json({ stickers, packs });
     } catch { res.json({ stickers: [] }); }
   });
 
@@ -576,9 +558,14 @@ module.exports = function registerMediaLibrary(deps) {
     const name = req.params.name;
     const { getDb } = require('../database');
     try {
-      const row = getDb().prepare('SELECT filename FROM stickers WHERE name = ?').get(name);
+      const row = getDb().prepare('SELECT filename, builtin_id FROM stickers WHERE name = ?').get(name);
       if (row) {
-        await storage.remove(`stickers/${row.filename}`);
+        // A deleted built-in is remembered so it is not added back on the
+        // next start, and its small file stays for messages that show it.
+        const builtin = builtinStickers ? builtinStickers.noteDeleted(row) : false;
+        if (!builtin) {
+          await storage.remove(`stickers/${row.filename}`);
+        }
         getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
         auditHttp(user, 'sticker_delete', { target_name: name });
       }
@@ -587,5 +574,40 @@ module.exports = function registerMediaLibrary(deps) {
     } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
   });
 
-  return { BUILTIN_SOUNDS, seedStarterStickers };
+  // ── Built-in sticker packs: list, switch on/off, restore deleted ones ──
+  function stickerManager(req, res) {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user) { res.status(401).json({ error: 'Unauthorized' }); return null; }
+    if (!canManageStickers(user)) { res.status(403).json({ error: 'Requires admin or Manage Stickers permission' }); return null; }
+    if (!builtinStickers) { res.status(404).json({ error: 'Built-in stickers are not available' }); return null; }
+    return user;
+  }
+
+  app.get('/api/sticker-packs', (req, res) => {
+    if (!stickerManager(req, res)) return;
+    try { res.json({ packs: builtinStickers.packStates() }); } catch { res.status(500).json({ error: 'Failed to load sticker packs' }); }
+  });
+
+  app.put('/api/sticker-packs/:id', (req, res) => {
+    if (!stickerManager(req, res)) return;
+    if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be true or false' });
+    try {
+      if (!builtinStickers.setPackEnabled(req.params.id, req.body.enabled)) return res.status(404).json({ error: 'Unknown sticker pack' });
+      broadcastLibraryUpdate(req, 'stickers');
+      res.json({ packs: builtinStickers.packStates() });
+    } catch { res.status(500).json({ error: 'Failed to update sticker pack' }); }
+  });
+
+  app.post('/api/sticker-packs/:id/restore', (req, res) => {
+    if (!stickerManager(req, res)) return;
+    try {
+      const added = builtinStickers.restorePack(req.params.id);
+      if (added === null) return res.status(404).json({ error: 'Unknown sticker pack' });
+      if (added.length) broadcastLibraryUpdate(req, 'stickers');
+      res.json({ restored: added, packs: builtinStickers.packStates() });
+    } catch { res.status(500).json({ error: 'Failed to restore sticker pack' }); }
+  });
+
+  return { BUILTIN_SOUNDS };
 };
