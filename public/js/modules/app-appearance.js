@@ -183,12 +183,20 @@ _animAttr(mode) {
 
 // Only these formats can carry animation; skip the rest (e.g. jpeg) entirely.
 _animCanAnimate(url) {
-  return /\.(gif|apng|png|webp)(\?|#|$)/i.test(url || '');
+  return /\.(gif|apng|png|webp)(\?|#|$)/i.test(url || '') || this._isStickerSvg(url);
+},
+
+// A server sticker drawn as SVG. Its resting frame is the same file with
+// #still on the end (built-in stickers stop their CSS animation there), so
+// freezing one needs no canvas.
+_isStickerSvg(url) {
+  return /^\/uploads\/stickers\/[\w.-]+\.svg$/i.test(String(url || '').split('#')[0]);
 },
 
 // One frozen-frame data URL per unique image URL, deduped across every render.
 // Returns a Promise resolving to the data URL, or null if capture is blocked.
 _frozenFrame(url) {
+  if (this._isStickerSvg(url)) return Promise.resolve(`${String(url).split('#')[0]}#still`);
   if (!this._frozenFrames) this._frozenFrames = new Map();
   const cached = this._frozenFrames.get(url);
   if (cached) return cached;
