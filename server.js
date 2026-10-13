@@ -767,6 +767,11 @@ app.use('/uploads', (req, res, next) => {
   }
   return next();
 });
+// Built-in stickers answer here first: each also ships as a PNG for apps that
+// cannot draw SVG (src/builtinStickers.js).
+const builtinStickers = require('./src/builtinStickers').createBuiltinStickers({ stickersDir: path.join(UPLOADS_DIR, 'stickers') });
+app.use('/uploads/stickers', builtinStickers.serve);
+
 // ── Serve uploads from external data directory ──────────
 app.use('/uploads', express.static(UPLOADS_DIR, {
   dotfiles: 'deny',
@@ -1560,7 +1565,7 @@ require('./src/routes/uploads')({ uploadDiskGuard, app, recordUploadOwnership, u
 // (duplicate avatar handler removed; handled above at /api/upload-avatar)
 
 // ── Sounds, custom emoji and stickers: src/routes/media-library.js ──
-const { BUILTIN_SOUNDS, seedStarterStickers } = require('./src/routes/media-library')({ uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter });
+const { BUILTIN_SOUNDS } = require('./src/routes/media-library')({ uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter, builtinStickers });
 // Profile badge icons (#5632): src/routes/badges.js
 require('./src/routes/badges')({ app, verifyAdminFromDb, userHasPermission, uploadDir, uploadLimiter, uploadDiskGuard });
 
@@ -3226,8 +3231,8 @@ const io = new Server(server, {
 // Initialize
 const db = initDatabase();
 
-// (#5335) Seed starter stickers now that the DB is ready.
-seedStarterStickers();   // catches and logs its own errors
+// Add and upgrade the built-in sticker packs now that the DB is ready.
+builtinStickers.syncAndLog();   // catches and logs its own errors
 
 // Download / refresh the Unicode emoji list (non-blocking, best-effort).
 // Opt-in: off unless the admin enables it or UNICODE_EMOJI_AUTO_UPDATE forces it.

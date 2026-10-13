@@ -238,7 +238,7 @@ function exportTemplate(db, opts = {}) {
   const libraryName = (v, max) => String(v || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '').slice(0, max);
   const emojis = cap(db.prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all().filter((e) => libraryName(e.name, 30)), LIMITS.emojis, 'custom emojis')
     .map((e) => ({ name: libraryName(e.name, 30), asset: addAsset(`/uploads/${e.filename}`) })).filter((e) => e.asset);
-  const stickers = cap(db.prepare("SELECT name, pack_name, filename FROM stickers WHERE NOT (uploaded_by IS NULL AND filename LIKE 'starter-%') ORDER BY pack_name, name").all().filter((s) => libraryName(s.name, 40)), LIMITS.stickers, 'stickers')
+  const stickers = cap(db.prepare("SELECT name, pack_name, filename FROM stickers WHERE builtin_id IS NULL AND NOT (uploaded_by IS NULL AND filename LIKE 'starter-%') ORDER BY pack_name, name").all().filter((s) => libraryName(s.name, 40)), LIMITS.stickers, 'stickers')
     .map((s) => ({ name: libraryName(s.name, 40), pack: tidy(s.pack_name, 40, 'General'), asset: addAsset(`/uploads/stickers/${s.filename}`, 'sticker') })).filter((s) => s.asset);
   const ids = (list) => (Array.isArray(list) ? list.map((id) => chRef.get(Number(id))).filter(Boolean) : null);
   const creator = rows.get('channel_creator_role');

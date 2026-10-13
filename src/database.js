@@ -755,6 +755,27 @@ function initDatabase() {
     );
   `);
 
+  // ── Migration: built-in sticker packs (public/stickers/) ──
+  // A built-in sticker is an ordinary row in `stickers` that also carries
+  // its built-in id. builtin_stickers remembers every built-in this server
+  // has seen: the hash of the file Haven last wrote (so an upgrade only
+  // replaces a copy nobody edited) and whether an admin deleted it (so it is
+  // never added back). builtin_sticker_packs holds the per-pack switch.
+  addColumn('stickers', 'builtin_id', 'TEXT');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS builtin_stickers (
+      builtin_id TEXT PRIMARY KEY NOT NULL,
+      pack_id TEXT NOT NULL,
+      sha256 TEXT,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS builtin_sticker_packs (
+      pack_id TEXT PRIMARY KEY NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+
   // ── Migration: channel topic column ─────────────────────
   addColumn('channels', 'topic', "TEXT DEFAULT ''");
 
