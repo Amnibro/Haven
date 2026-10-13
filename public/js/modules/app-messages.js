@@ -213,6 +213,8 @@ async _sendMessage() {
   if (this.replyingTo) {
     payload.replyTo = this.replyingTo.id;
   }
+  const quoteOf = this._takePendingQuote('_pendingQuote', this.currentChannel, content);
+  if (quoteOf) payload.quoteOf = quoteOf;
   // Official message: one message per press of the button, or every
   // message while official mode is kept on (the button goes back to where
   // it rests).
@@ -375,6 +377,26 @@ async _sendMessage() {
     if (hasImages) this._flushImageQueue(!!content, personaPrefix, imageReplyTo);
     if (hasFiles) this._flushFileQueue?.();
   }
+},
+
+// The message a quote in this box came from, if the quote is still there:
+// it goes out with the message so the quote leads back (src/messageQuotes.js).
+// Used once, then forgotten.
+_takePendingQuote(key, code, content) {
+  const pending = this[key];
+  this[key] = null;
+  if (!pending || pending.code !== code) return null;
+  return /^> @.+$/m.test(content || '') ? pending.id : null;
+},
+
+// A click on a quote that leads back to its message: that message's id.
+// Links and @mentions inside the quote keep doing their own thing.
+_quoteJumpId(target) {
+  if (!target || !target.closest || target.closest('a, .mention')) return null;
+  const quote = target.closest('.chat-blockquote');
+  if (!quote || !quote.querySelector('.chat-blockquote-author')) return null;
+  const id = parseInt(quote.closest('[data-quote-of]')?.dataset.quoteOf || '', 10);
+  return id > 0 ? id : null;
 },
 
 _jumpToMessage(msgId) {
@@ -1136,6 +1158,7 @@ _createMessageEl(msg, prevMsg) {
     el.dataset.timeShort = this._fmtTime(msg.created_at);
     if (Number.isInteger(msg.id) && msg.id > 0) el.dataset.msgId = msg.id;
     el.dataset.rawContent = msg.content;
+    if (Number.isInteger(msg.quoteOf)) el.dataset.quoteOf = msg.quoteOf;
     if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
     if (msg.persona_username) el.dataset.personaUsername = msg.persona_username;
     if (msg.break_chain) el.dataset.breakChain = '1';
@@ -1268,6 +1291,7 @@ _createMessageEl(msg, prevMsg) {
   el.dataset.timeShort = this._fmtTime(msg.created_at);
   if (Number.isInteger(msg.id) && msg.id > 0) el.dataset.msgId = msg.id;
   el.dataset.rawContent = msg.content;
+  if (Number.isInteger(msg.quoteOf)) el.dataset.quoteOf = msg.quoteOf;
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
   if (msg.persona_username) el.dataset.personaUsername = msg.persona_username;
   if (msg.break_chain) el.dataset.breakChain = '1';

@@ -243,6 +243,7 @@ _bindAppChrome() {
     if ((e.ctrlKey || e.metaKey) && e.key === 'e' && this.currentChannel) {
       e.preventDefault();
       this._emojiPickerContext = 'main';
+      this._aimEmojiAtComposer();
       this._toggleEmojiPicker();
     }
     // Alt+ArrowUp/Down = navigate channels

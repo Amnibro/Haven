@@ -419,6 +419,13 @@ _showMessageContextMenu(e, msgEl) {
   // uses, and each action is gated on the same permission, so the two menus
   // stay behaviourally identical.
   const items = [];
+  // Right-clicking a link: its address first, as the browser's menu would.
+  const link = e.target?.closest?.('a[href]');
+  const linkHref = link && /^https?:/i.test(link.href) ? link.href : null;
+  if (linkHref) {
+    items.push(`<button class="channel-ctx-item" data-action="copy-href">🔗 <span>${t('msg_toolbar.copy_link_address')}</span></button>`);
+    items.push('<hr class="channel-ctx-sep">');
+  }
   // First group (as originally defined)
   if (isOwn) items.push(`<button class="channel-ctx-item" data-action="edit">✏️ <span>${t('msg_toolbar.edit')}</span></button>`);
   items.push(`<button class="channel-ctx-item" data-action="reply">↩️ <span>${t('msg_toolbar.reply')}</span></button>`);
@@ -490,6 +497,13 @@ _showMessageContextMenu(e, msgEl) {
         this._showToast?.(t('thread_list.unavailable_in_dm'), 'info');
       } else {
         this._openThread(msgId);
+      }
+    } else if (action === 'copy-href') {
+      const onCopied = () => this._showToast(t('toasts.link_address_copied'), 'success');
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(linkHref).then(onCopied).catch(() => this._copyTextFallback(linkHref, onCopied));
+      } else {
+        this._copyTextFallback(linkHref, onCopied);
       }
     } else if (action === 'copy-link') {
       this._copyChannelLink(this.currentChannel, msgId);

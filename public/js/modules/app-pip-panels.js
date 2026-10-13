@@ -210,6 +210,18 @@ _bindThreadAndDmPanels() {
         }
         return;
       }
+      // A quote that leads back to its message: show that message, when it
+      // is loaded in the PiP.
+      const quoteId = this._quoteJumpId(e.target);
+      if (quoteId) {
+        const quoted = dmPipMessages.querySelector(`[data-msg-id="${quoteId}"]`);
+        if (quoted) {
+          quoted.scrollIntoView({ block: 'center' });
+          quoted.classList.add('highlight-flash');
+          setTimeout(() => quoted.classList.remove('highlight-flash'), 1200);
+        }
+        return;
+      }
       // Reply banner click → jump to original (within the PiP if present)
       const replyBanner = e.target.closest('.reply-banner');
       if (replyBanner) {
@@ -817,6 +829,8 @@ _quoteDMPiPMessage(msgEl) {
   const quoteText = `${t('thread_runtime.wrote', { author })}\n${quotedLines}\n`;
   const input = document.getElementById('dm-pip-input');
   if (!input) return;
+  const quotedId = parseInt(msgEl.dataset.msgId, 10);
+  this._dmPipPendingQuote = quotedId ? { id: quotedId, code: this._activeDMPip } : null;
   input.value = input.value ? `${input.value}\n${quoteText}` : quoteText;
   input.focus();
 },
@@ -915,6 +929,8 @@ _sendDMPiPMessage() {
 
     const payload = { code, content };
     if (replyTo) payload.replyTo = replyTo;
+    const quoteOf = this._takePendingQuote('_dmPipPendingQuote', code, typed);
+    if (quoteOf) payload.quoteOf = quoteOf;
     if (content) {
       if (partner) {
         try {

@@ -126,8 +126,14 @@ _bindMessageClicks() {
     this._showExternalLinkWarning(link.textContent, link.href);
   });
 
-  // Reply banner click: scroll to the original message
+  // Reply banner click: scroll to the original message. A quote that leads
+  // back to its message does the same.
   document.getElementById('messages').addEventListener('click', (e) => {
+    const quoteId = this._quoteJumpId(e.target);
+    if (quoteId) {
+      this._jumpToMessage(quoteId);
+      return;
+    }
     const banner = e.target.closest('.reply-banner');
     if (!banner) return;
     const replyMsgId = banner.dataset.replyMsgId;

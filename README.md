@@ -139,6 +139,24 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 Issues and PRs are welcome, including translations and themes. If you are reporting
 a bug, the version number from `https://your-server:3000/api/version` helps.
 
+## AI usage
+
+Haven is built with AI. I'm not a professional programmer. I came up with Haven, I
+decide what goes in, and I test it and run it with my own community. Most of the
+code, the server logic included, was written by AI coding tools (mainly Claude Code)
+working from my direction, and most code review is AI-assisted too. Commits don't
+carry a per-commit AI label, so assume any part of the code may have been written by
+AI. Contributors sometimes use AI as well, and pull requests are welcome either way.
+
+What keeps it in check:
+
+- An automated test suite (over 650 tests) runs before every push.
+- Every pull request is read in full and checked for security problems before it's
+  merged.
+- Logins, permissions, encryption and uploads have had dedicated security reviews,
+  and the fixes ship in public releases.
+- Bugs are reported and fixed in the open, here on GitHub.
+
 ## License
 
 AGPL-3.0. Free to use, modify and share. If you deploy a modified version as a

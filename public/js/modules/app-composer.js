@@ -212,6 +212,7 @@ _bindComposerPickers() {
   // Emoji picker toggle
   document.getElementById('emoji-btn').addEventListener('click', () => {
     this._emojiPickerContext = 'main';
+    this._aimEmojiAtComposer();
     this._toggleEmojiPicker();
   });
 
@@ -607,7 +608,7 @@ _commandGuideHtml() {
 // markdown pair, or drop a sample in when nothing is selected. Block-level
 // syntax starts on its own line.
 _wrapComposerSelection(before, after, sample = '', block = false) {
-  const input = this._activeEditTextarea || document.getElementById('message-input');
+  const input = this._emojiInsertTarget();
   if (!input) return;
   const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
   const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
