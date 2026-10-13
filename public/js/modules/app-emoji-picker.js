@@ -103,6 +103,7 @@ _toggleEmojiPicker(anchorEl) {
   picker.innerHTML = '';
   this._emojiActiveCategory = this._emojiActiveCategory || Object.keys(this.emojiCategories)[0];
   this._emojiPickerSection = this._emojiPickerSection || 'emoji';
+  picker.classList.toggle('sticker-mode', this._emojiPickerSection === 'sticker');
 
   // Section toggle (Emoji | Sticker)
   const sectionRow = document.createElement('div');
@@ -133,91 +134,7 @@ _toggleEmojiPicker(anchorEl) {
 
   // ── Sticker section ──
   if (this._emojiPickerSection === 'sticker') {
-    const stickerSearchRow = document.createElement('div');
-    stickerSearchRow.className = 'emoji-search-row';
-    const stickerSearch = document.createElement('input');
-    stickerSearch.type = 'text';
-    stickerSearch.className = 'emoji-search-input';
-    stickerSearch.placeholder = t('emoji.sticker_search_placeholder');
-    stickerSearch.maxLength = 30;
-    stickerSearchRow.appendChild(stickerSearch);
-    picker.appendChild(stickerSearchRow);
-
-    const stickers = Array.isArray(this.stickers) ? this.stickers : [];
-    const packs = [...new Set(stickers.map(s => s.pack_name || 'General'))].sort((a, b) => a.localeCompare(b));
-    this._activeStickerPack = this._activeStickerPack && packs.includes(this._activeStickerPack)
-      ? this._activeStickerPack
-      : (packs[0] || null);
-
-    if (packs.length > 1) {
-      const packRow = document.createElement('div');
-      packRow.className = 'sticker-pack-row';
-      packs.forEach(pack => {
-        const tab = document.createElement('button');
-        tab.className = 'sticker-pack-btn' + (pack === this._activeStickerPack ? ' active' : '');
-        tab.textContent = pack;
-        tab.title = pack;
-        tab.addEventListener('click', () => {
-          this._activeStickerPack = pack;
-          stickerSearch.value = '';
-          renderStickers();
-          packRow.querySelectorAll('.sticker-pack-btn').forEach(t => t.classList.remove('active'));
-          tab.classList.add('active');
-        });
-        packRow.appendChild(tab);
-      });
-      picker.appendChild(packRow);
-    }
-
-    const grid = document.createElement('div');
-    grid.className = 'sticker-grid';
-    picker.appendChild(grid);
-
-    const self = this;
-    function renderStickers(filter) {
-      grid.innerHTML = '';
-      let list = stickers;
-      if (filter) {
-        const q = filter.toLowerCase();
-        list = stickers.filter(s =>
-          (s.name || '').toLowerCase().includes(q) ||
-          (s.pack_name || '').toLowerCase().includes(q)
-        );
-      } else if (self._activeStickerPack) {
-        list = stickers.filter(s => (s.pack_name || 'General') === self._activeStickerPack);
-      }
-      if (list.length === 0) {
-        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:0.75rem;width:100%;text-align:center">${
-          stickers.length === 0
-            ? t('emoji.no_stickers')
-            : t('emoji.no_results')
-        }</p>`;
-        return;
-      }
-      list.forEach(sticker => {
-        const btn = document.createElement('button');
-        btn.className = 'sticker-picker-item';
-        btn.title = `:${sticker.name}:`;
-        btn.innerHTML = `<img src="${self._escapeHtml(sticker.url)}" alt=":${self._escapeHtml(sticker.name)}:" class="sticker-picker-thumb">`;
-        btn.addEventListener('click', () => {
-          self._sendStickerMessage(sticker.url);
-          picker.style.display = 'none';
-          if (picker._havenOrigParent) {
-            picker._havenOrigParent.appendChild(picker);
-            picker._havenOrigParent = null;
-            ['position', 'top', 'left', 'bottom', 'right', 'z-index'].forEach(p => picker.style.removeProperty(p));
-          }
-        });
-        grid.appendChild(btn);
-      });
-    }
-
-    stickerSearch.addEventListener('input', () => {
-      const q = stickerSearch.value.trim();
-      renderStickers(q || null);
-    });
-
-    renderStickers();
+    this._renderStickerSection(picker);
 
     // Anchor positioning + display reused below, so fall through to common code.
     if (anchorEl) {
@@ -227,7 +144,7 @@ _toggleEmojiPicker(anchorEl) {
       }
       const r = anchorEl.getBoundingClientRect();
       const pickerW = 340;
-      const pickerH = 368;
+      const pickerH = 424; // .emoji-picker.sticker-mode max-height (26.5rem)
       const top = Math.max(4, r.top - pickerH - 4);
       const left = Math.max(4, Math.min(r.left, window.innerWidth - pickerW - 4));
       picker.style.cssText += '; position:fixed; top:' + top + 'px; left:' + left + 'px; bottom:auto; right:auto; z-index:100030;';
@@ -538,6 +455,182 @@ _toggleEmojiPicker(anchorEl) {
 // Emoji wrap into rows of varying counts across category sections, so this walks
 // by geometry rather than a fixed column count: nearest row wins first, then the
 // closest horizontal neighbour in that row.
+// The sticker side of the picker: a search box, a strip of pack tabs (Recent
+// first), the grid, and a preview strip that names whatever is under the
+// mouse or keyboard. Arrow keys move through the grid, Enter sends.
+_renderStickerSection(picker) {
+  const self = this;
+  const stickers = Array.isArray(this.stickers) ? this.stickers : [];
+  const tabs = this._stickerPackTabs(stickers, this.stickerPacks);
+  const recent = this._recentStickers(stickers);
+  if (recent.length) tabs.unshift({ name: t('emoji.sticker_recent'), recent: true, stickers: recent });
+  const closePicker = () => {
+    picker.style.display = 'none';
+    if (picker._havenOrigParent) {
+      picker._havenOrigParent.appendChild(picker);
+      picker._havenOrigParent = null;
+      ['position', 'top', 'left', 'bottom', 'right', 'z-index'].forEach(p => picker.style.removeProperty(p));
+    }
+  };
+  const send = (sticker) => {
+    this._sendStickerMessage(sticker.url);
+    closePicker();
+  };
+
+  const searchRow = document.createElement('div');
+  searchRow.className = 'emoji-search-row';
+  const search = document.createElement('input');
+  search.type = 'text';
+  search.className = 'emoji-search-input';
+  search.placeholder = t('emoji.sticker_search_placeholder');
+  search.maxLength = 30;
+  search.setAttribute('aria-label', t('emoji.sticker_search_placeholder'));
+  searchRow.appendChild(search);
+  picker.appendChild(searchRow);
+
+  // Remember the last pack across openings; fall back to Recent, then the first.
+  const tabKey = (tab) => (tab.recent ? '\u0000recent' : tab.name);
+  if (!tabs.some(tab => tabKey(tab) === this._activeStickerPack)) this._activeStickerPack = tabs[0] ? tabKey(tabs[0]) : null;
+
+  const packRow = document.createElement('div');
+  packRow.className = 'sticker-pack-row';
+  packRow.setAttribute('role', 'tablist');
+  const tabButtons = new Map();
+  tabs.forEach(tab => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sticker-pack-btn' + (tabKey(tab) === this._activeStickerPack ? ' active' : '');
+    b.title = tab.name;
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-label', tab.name);
+    b.innerHTML = tab.recent ? '<span class="sticker-pack-glyph" aria-hidden="true">🕘</span>'
+      : `<img src="${self._escapeHtml(tab.icon + (/\.svg$/i.test(tab.icon) ? '#still' : ''))}" alt="" class="sticker-pack-icon" loading="lazy">`;
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      this._activeStickerPack = tabKey(tab);
+      search.value = '';
+      tabButtons.forEach((btn, key) => btn.classList.toggle('active', key === this._activeStickerPack));
+      render();
+    });
+    tabButtons.set(tabKey(tab), b);
+    packRow.appendChild(b);
+  });
+  if (tabs.length > 1) picker.appendChild(packRow);
+
+  const title = document.createElement('div');
+  title.className = 'sticker-pack-title';
+  picker.appendChild(title);
+
+  const grid = document.createElement('div');
+  grid.className = 'sticker-grid';
+  grid.setAttribute('role', 'listbox');
+  picker.appendChild(grid);
+
+  const preview = document.createElement('div');
+  preview.className = 'sticker-preview';
+  preview.setAttribute('aria-live', 'polite');
+  picker.appendChild(preview);
+  const showPreview = (sticker) => {
+    if (!sticker) {
+      preview.innerHTML = `<span class="sticker-preview-hint">${self._escapeHtml(t('emoji.sticker_preview_hint'))}</span>`;
+      return;
+    }
+    preview.innerHTML = `<img src="${self._escapeHtml(sticker.url)}" alt="" class="sticker-preview-img">`
+      + `<span class="sticker-preview-text"><span class="sticker-preview-name">:${self._escapeHtml(sticker.name)}:</span>`
+      + `<span class="sticker-preview-pack">${self._escapeHtml(sticker.pack_name || t('media_runtime.sticker.general_pack'))}</span></span>`;
+  };
+
+  // Play a resting sticker while it is pointed at, then let it rest again.
+  const wake = (btn, on) => {
+    const img = btn.querySelector('img');
+    if (!img || !img.dataset.still) return;
+    img.src = on ? img.dataset.live : img.dataset.still;
+  };
+  const setActive = (btn) => {
+    grid.querySelectorAll('.sticker-picker-item.kb-active').forEach(el => { el.classList.remove('kb-active'); el.setAttribute('aria-selected', 'false'); wake(el, false); });
+    if (!btn) { showPreview(null); return; }
+    btn.classList.add('kb-active');
+    btn.setAttribute('aria-selected', 'true');
+    btn.scrollIntoView({ block: 'nearest' });
+    wake(btn, true);
+    showPreview(btn._sticker);
+  };
+
+  function render() {
+    grid.innerHTML = '';
+    const q = search.value.trim();
+    let list;
+    if (q) {
+      list = self._stickerSearch(stickers, q);
+      title.textContent = t('emoji.sticker_results');
+    } else {
+      const tab = tabs.find(x => tabKey(x) === self._activeStickerPack);
+      list = tab ? tab.stickers : stickers;
+      title.textContent = tab ? tab.name : '';
+    }
+    title.style.display = title.textContent ? '' : 'none';
+    if (list.length === 0) {
+      grid.innerHTML = `<p class="muted-text sticker-grid-empty">${stickers.length === 0 ? t('emoji.no_stickers') : t('emoji.no_results')}</p>`;
+      showPreview(null);
+      return;
+    }
+    list.forEach(sticker => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sticker-picker-item';
+      btn.title = `:${sticker.name}:`;
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', 'false');
+      btn.setAttribute('aria-label', sticker.name);
+      btn._sticker = sticker;
+      const src = self._stickerThumbSrc(sticker);
+      const still = src !== sticker.url ? ` data-still="${self._escapeHtml(src)}" data-live="${self._escapeHtml(sticker.url)}"` : '';
+      btn.innerHTML = `<img src="${self._escapeHtml(src)}"${still} alt="" class="sticker-picker-thumb" loading="lazy" decoding="async">`;
+      btn.addEventListener('click', () => send(sticker));
+      btn.addEventListener('mouseenter', () => setActive(btn));
+      btn.addEventListener('focus', () => setActive(btn));
+      grid.appendChild(btn);
+    });
+    showPreview(null);
+    if (q) setActive(grid.querySelector('.sticker-picker-item'));
+  }
+
+  search.addEventListener('input', () => {
+    render();
+    if (!search.value.trim()) tabButtons.forEach((btn, key) => btn.classList.toggle('active', key === self._activeStickerPack));
+    else tabButtons.forEach(btn => btn.classList.remove('active'));
+  });
+  grid.addEventListener('mouseleave', () => setActive(null));
+
+  // Arrows move through the grid from the search box or the grid itself;
+  // Enter sends the highlighted sticker. Bound to elements rebuilt on every
+  // opening, so nothing stacks up.
+  const onKey = (e) => {
+    const items = [...grid.querySelectorAll('.sticker-picker-item')];
+    if (!items.length) return;
+    const active = grid.querySelector('.sticker-picker-item.kb-active');
+    const idx = active ? items.indexOf(active) : -1;
+    if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      if (e.target === search && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && idx === -1) return; // caret moves in the box
+      e.preventDefault();
+      e.stopPropagation();
+      if (idx === -1) return setActive(items[0]);
+      if (e.key === 'ArrowRight') setActive(items[Math.min(idx + 1, items.length - 1)]);
+      else if (e.key === 'ArrowLeft') setActive(items[Math.max(idx - 1, 0)]);
+      else setActive(this._emojiGridVerticalNav(items, idx, e.key === 'ArrowDown' ? 1 : -1));
+    } else if (e.key === 'Enter' && active) {
+      e.preventDefault();
+      e.stopPropagation();
+      send(active._sticker);
+    }
+  };
+  search.addEventListener('keydown', onKey);
+  grid.addEventListener('keydown', onKey);
+
+  render();
+  if (window.matchMedia?.('(pointer: fine)').matches) setTimeout(() => search.focus(), 0);
+},
+
 _emojiGridVerticalNav(items, idx, dir) {
   const cur = items[idx].getBoundingClientRect();
   const curX = cur.left + cur.width / 2;

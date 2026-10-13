@@ -431,6 +431,7 @@ _sendGifMessage(url) {
 // surrounding scope, replies, and E2E encryption that each composer applies.
 _sendStickerMessage(url) {
   if (!url) return;
+  this._rememberSticker?.(url);
   const ctx = this._emojiPickerContext || 'main';
   if (ctx === 'thread') {
     if (!this._activeThreadParent) return;
