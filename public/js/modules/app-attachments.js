@@ -534,13 +534,14 @@ async _flushImageQueue(bundled = false, personaPrefix = '', replyTo = null) {
   const files = [...this._imageQueue];
   this._clearImageQueue();
   this._uploadsCancelled = false;
+  // When text and images are sent together, the text message carries the
+  // reply relation. The bundled image is a separate message and must not
+  // repeat the same reply banner. Several images on their own: the first
+  // one carries it, the rest follow without the banner.
+  let reply = bundled ? null : replyTo;
   for (const file of files) {
-    // When text and images are sent together, the text message carries the
-    // reply relation. The bundled image is a separate message and must not
-    // repeat the same reply banner.
-    await this._uploadImage(file, undefined, bundled, personaPrefix, false, {
-      replyTo: bundled ? null : replyTo
-    });
+    await this._uploadImage(file, undefined, bundled, personaPrefix, false, { replyTo: reply });
+    reply = null;
     if (this._uploadsCancelled) break;   // × on the progress bar stops the batch
   }
 },
