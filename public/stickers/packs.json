@@ -1,0 +1,633 @@
+{
+ "version": 1,
+ "packs": [
+  {
+   "id": "reactions",
+   "name": "Reactions",
+   "icon": "heart",
+   "stickers": [
+    {
+     "id": "thumbs-up",
+     "name": "thumbs-up",
+     "keywords": [
+      "like",
+      "yes",
+      "approve",
+      "good",
+      "agree",
+      "+1"
+     ],
+     "animated": false,
+     "legacy": [
+      "thumbs-up"
+     ],
+     "sha256": "44fe52f1c64b1bcb3c7d24ce93fd21528cf35089dc3b4c47cd5b9e1202709a65"
+    },
+    {
+     "id": "thumbs-down",
+     "name": "thumbs-down",
+     "keywords": [
+      "dislike",
+      "no",
+      "disagree",
+      "bad",
+      "-1"
+     ],
+     "animated": false,
+     "sha256": "c46493a8b9fee2024dd3e27c8c8acf3e2838b970ebe8a9bc1f5d0441494eff9a"
+    },
+    {
+     "id": "heart",
+     "name": "heart",
+     "keywords": [
+      "love",
+      "like",
+      "favorite"
+     ],
+     "animated": true,
+     "legacy": [
+      "heart"
+     ],
+     "sha256": "49d0b43beae3b43554135a9222e4948bd4bcd01c865c8a79bf1ec298ca4f8e64"
+    },
+    {
+     "id": "fire",
+     "name": "fire",
+     "keywords": [
+      "lit",
+      "hot",
+      "flame",
+      "awesome"
+     ],
+     "animated": true,
+     "legacy": [
+      "fire"
+     ],
+     "sha256": "f3736b28843738ed1d2f08fa087c67094fe68b4953199b0c651b6ec09e80dba2"
+    },
+    {
+     "id": "100",
+     "name": "100",
+     "keywords": [
+      "hundred",
+      "perfect",
+      "keep",
+      "it",
+      "real"
+     ],
+     "animated": false,
+     "sha256": "642a10306c8838d0698046fd92e75cbea400eefdc6fbab89ab7de40b30baf284"
+    },
+    {
+     "id": "check",
+     "name": "check",
+     "keywords": [
+      "done",
+      "yes",
+      "correct",
+      "tick",
+      "ok"
+     ],
+     "animated": false,
+     "legacy": [
+      "check"
+     ],
+     "sha256": "12b9d55ae83f1c83076b26220846fbfc3c99b392a5135e1f05ce265309f85122"
+    },
+    {
+     "id": "nope",
+     "name": "nope",
+     "keywords": [
+      "no",
+      "cross",
+      "wrong",
+      "x",
+      "cancel"
+     ],
+     "animated": false,
+     "legacy": [
+      "nope"
+     ],
+     "sha256": "b82cb48e1b03748a623c9df7dd894de978e794f92e5d3bdd9ba8f62d8ab2ac96"
+    },
+    {
+     "id": "ok",
+     "name": "ok",
+     "keywords": [
+      "okay",
+      "fine",
+      "alright",
+      "got",
+      "it"
+     ],
+     "animated": false,
+     "sha256": "248fa00bc6d641d4cf4ff10456d2649e6e89545e3feacb568a66c7bae595e053"
+    },
+    {
+     "id": "eyes",
+     "name": "eyes",
+     "keywords": [
+      "look",
+      "see",
+      "watching",
+      "sus"
+     ],
+     "animated": false,
+     "legacy": [
+      "eyes"
+     ],
+     "sha256": "142039c26b70d72e2b5e13e889ac1cf0ffb505c72e2ad9cdb12347b123a2848e"
+    },
+    {
+     "id": "laugh",
+     "name": "laugh",
+     "keywords": [
+      "lol",
+      "haha",
+      "joy",
+      "funny",
+      "lmao"
+     ],
+     "animated": true,
+     "legacy": [
+      "laugh"
+     ],
+     "sha256": "35ac3359aa6e6b00794d1423d66772f93126dbaaaa1132c9039a285004772f58"
+    },
+    {
+     "id": "cry",
+     "name": "cry",
+     "keywords": [
+      "sad",
+      "tears",
+      "sob",
+      "upset"
+     ],
+     "animated": false,
+     "sha256": "b43175d0effbe102281d121bf1f85b93f8a3a4756cdd759475d702f0513aa496"
+    },
+    {
+     "id": "mind-blown",
+     "name": "mind-blown",
+     "keywords": [
+      "wow",
+      "shocked",
+      "omg",
+      "boom",
+      "explode"
+     ],
+     "animated": false,
+     "sha256": "d075b2f9bb9713e3b0ff99f5414b93cd5840b69c55da78ec9ba91b51e5f5e0a4"
+    },
+    {
+     "id": "party",
+     "name": "party",
+     "keywords": [
+      "celebrate",
+      "tada",
+      "hooray",
+      "congrats"
+     ],
+     "animated": true,
+     "legacy": [
+      "party"
+     ],
+     "sha256": "f95e7f9cd9d0e29801eb776b1c6a557cc26839e47379a3f291911f60a5880b4d"
+    },
+    {
+     "id": "clap",
+     "name": "clap",
+     "keywords": [
+      "applause",
+      "bravo",
+      "well",
+      "done"
+     ],
+     "animated": true,
+     "sha256": "09f2a1a1680ed78122f2d85e503930b3583fff067453bd58108063b8b57303a7"
+    },
+    {
+     "id": "thinking",
+     "name": "thinking",
+     "keywords": [
+      "hmm",
+      "think",
+      "wonder",
+      "ponder"
+     ],
+     "animated": false,
+     "sha256": "794b72e809ac0500ad38a42ab6bd7d7f6904646a29efbd899f4f1a8a7f4ec84a"
+    },
+    {
+     "id": "facepalm",
+     "name": "facepalm",
+     "keywords": [
+      "ugh",
+      "doh",
+      "embarrassed",
+      "smh"
+     ],
+     "animated": false,
+     "sha256": "b796e7b23d3e0f46fb589972e60974cd3fe4cad7a4270d866260a8c1631b41de"
+    },
+    {
+     "id": "salute",
+     "name": "salute",
+     "keywords": [
+      "respect",
+      "yes",
+      "sir",
+      "o7",
+      "aye"
+     ],
+     "animated": false,
+     "sha256": "0f7cbd9e380772592d83990b499669c5f6f012c24ad22bcdf796684acf8997f3"
+    },
+    {
+     "id": "shrug",
+     "name": "shrug",
+     "keywords": [
+      "dunno",
+      "whatever",
+      "idk",
+      "meh"
+     ],
+     "animated": false,
+     "sha256": "60afc7f30af9a4cb0b111df67838cde15c85a1b55b981b19e6ae03427b94710a"
+    },
+    {
+     "id": "wave",
+     "name": "wave",
+     "keywords": [
+      "hi",
+      "hello",
+      "bye",
+      "wave"
+     ],
+     "animated": true,
+     "sha256": "26c3d236679bcd7cd004efa473e8d9822befc53a28e87b51f93d53aade29588d"
+    },
+    {
+     "id": "pray",
+     "name": "pray",
+     "keywords": [
+      "please",
+      "thanks",
+      "hope",
+      "fingers",
+      "crossed"
+     ],
+     "animated": false,
+     "sha256": "cf5bb75635b21582c780868e27fdc2efc289dd894c7145317338553730153cdf"
+    },
+    {
+     "id": "sleepy",
+     "name": "sleepy",
+     "keywords": [
+      "tired",
+      "sleep",
+      "zzz",
+      "bored"
+     ],
+     "animated": true,
+     "sha256": "370658f9c800325a3148137df2f8f466b6255ee11e74febcb6581360916a1a35"
+    },
+    {
+     "id": "rage",
+     "name": "rage",
+     "keywords": [
+      "angry",
+      "mad",
+      "furious",
+      "grr"
+     ],
+     "animated": true,
+     "sha256": "71a117aae3fddbaf9f5aa78c5aaf24c9e5716e304620ba49d12531fb81e61558"
+    },
+    {
+     "id": "love",
+     "name": "love",
+     "keywords": [
+      "heart",
+      "eyes",
+      "crush",
+      "adore"
+     ],
+     "animated": false,
+     "sha256": "f8dab4e60683fb0c77e2c7f6134d11993df004dc69838b0f3659cc0f424784ff"
+    },
+    {
+     "id": "cool",
+     "name": "cool",
+     "keywords": [
+      "sunglasses",
+      "chill",
+      "nice"
+     ],
+     "animated": false,
+     "sha256": "a9704ba421ad43e6f70b7aaf28a213be3fdfc7d63224c8d374e48e6a40ba8d6e"
+    },
+    {
+     "id": "skull",
+     "name": "skull",
+     "keywords": [
+      "dead",
+      "dying",
+      "lmao",
+      "rip"
+     ],
+     "animated": false,
+     "sha256": "d0d9f55d9e06fc62865c2e2010bf6e39fcdf21cdebb6607f339a443c24e2cc9e"
+    }
+   ]
+  },
+  {
+   "id": "haven",
+   "name": "Haven",
+   "icon": "hello",
+   "stickers": [
+    {
+     "id": "hello",
+     "name": "hello",
+     "keywords": [
+      "hi",
+      "hey",
+      "wave",
+      "mascot",
+      "hex"
+     ],
+     "animated": true,
+     "sha256": "e0bd4f3cb38d528152b89ec90fe444a6dc833bde8ef1bfdbb9b8b50702985f0f"
+    },
+    {
+     "id": "welcome",
+     "name": "welcome",
+     "keywords": [
+      "welcome",
+      "join",
+      "hi",
+      "mascot",
+      "hex"
+     ],
+     "animated": false,
+     "sha256": "1c6cb104d63d4b011eb5ed811a561a5444f96c5f691e0abf0afdef0d5818b75c"
+    },
+    {
+     "id": "brb",
+     "name": "brb",
+     "keywords": [
+      "be",
+      "right",
+      "back",
+      "away",
+      "mascot"
+     ],
+     "animated": false,
+     "sha256": "59f7bce787de98787af1f78b8cd3fae81c69185c2d7b9ee266b22ee0b83870a8"
+    },
+    {
+     "id": "afk",
+     "name": "afk",
+     "keywords": [
+      "away",
+      "sleep",
+      "idle",
+      "mascot"
+     ],
+     "animated": true,
+     "sha256": "1e7ee201b791aa30ededc3e40ffdab67399e8ec07994e1e2564ab6e73344d0a2"
+    },
+    {
+     "id": "gg",
+     "name": "gg",
+     "keywords": [
+      "good",
+      "game",
+      "win",
+      "well",
+      "played",
+      "mascot"
+     ],
+     "animated": false,
+     "sha256": "1aa7365eb55d87860b5bc9f54ffd75ec5e71b0e4ee978c6c384cc25106a2cab4"
+    },
+    {
+     "id": "ty",
+     "name": "ty",
+     "keywords": [
+      "thanks",
+      "thank",
+      "you",
+      "heart",
+      "mascot"
+     ],
+     "animated": false,
+     "sha256": "5dc391c0a97b58007784208bdde66b2d45acb9b35127ba2ed0046394ead02df4"
+    },
+    {
+     "id": "lol",
+     "name": "lol",
+     "keywords": [
+      "laugh",
+      "haha",
+      "funny",
+      "mascot"
+     ],
+     "animated": false,
+     "sha256": "a9c4b9a985c68a2b711c321a7c16fa3adb80734ee3510b7a2c730bf7a5264d22"
+    },
+    {
+     "id": "ping",
+     "name": "ping",
+     "keywords": [
+      "mention",
+      "notify",
+      "at",
+      "alert",
+      "mascot"
+     ],
+     "animated": true,
+     "sha256": "5cd14cedac9babe3990c0b2101cb3fc43298e5ca150336950c3bc5a433f1a805"
+    },
+    {
+     "id": "banhammer",
+     "name": "banhammer",
+     "keywords": [
+      "ban",
+      "mod",
+      "hammer",
+      "moderator",
+      "kick"
+     ],
+     "animated": true,
+     "sha256": "ecef44df6948bacf903fdb804d22548cce77167ce366a5151b43e0cdbae7c184"
+    },
+    {
+     "id": "locked",
+     "name": "locked",
+     "keywords": [
+      "encrypted",
+      "e2e",
+      "private",
+      "secure",
+      "lock"
+     ],
+     "animated": false,
+     "sha256": "fe31ba022cda856cedb49eac8ca905b43b75dbbd7535e913eb5e677fb1968275"
+    }
+   ]
+  },
+  {
+   "id": "gaming",
+   "name": "Gaming",
+   "icon": "controller",
+   "stickers": [
+    {
+     "id": "controller",
+     "name": "controller",
+     "keywords": [
+      "game",
+      "play",
+      "gamepad",
+      "gaming"
+     ],
+     "animated": false,
+     "sha256": "ef1f3b27810929b7e6220da5c333d1165289bbb37c905e7fbd15d782e5cfa357"
+    },
+    {
+     "id": "trophy",
+     "name": "trophy",
+     "keywords": [
+      "win",
+      "winner",
+      "champion",
+      "cup"
+     ],
+     "animated": false,
+     "sha256": "a807c3eff0b4a76aa8ea31af08979a6fe541d949a85fb7530c53226b7f925b28"
+    },
+    {
+     "id": "crown",
+     "name": "crown",
+     "keywords": [
+      "king",
+      "queen",
+      "best",
+      "royal"
+     ],
+     "animated": false,
+     "sha256": "999000d7ebc01b32cbb4aaf950166baed3da0e93c571cd998a1abb56142651fb"
+    },
+    {
+     "id": "level-up",
+     "name": "level-up",
+     "keywords": [
+      "lvl",
+      "up",
+      "upgrade",
+      "progress",
+      "arrow"
+     ],
+     "animated": false,
+     "sha256": "bfcad487ad87dc4c986f9b40619735084a38ea59b30649d48c3a5e13ecd42e42"
+    },
+    {
+     "id": "star",
+     "name": "star",
+     "keywords": [
+      "favorite",
+      "shine",
+      "gold",
+      "great"
+     ],
+     "animated": true,
+     "sha256": "e36b8e80833ae03f1767abd024a6279c8719e915a98bd24811ae7d39605954dd"
+    },
+    {
+     "id": "gem",
+     "name": "gem",
+     "keywords": [
+      "diamond",
+      "rare",
+      "loot",
+      "shiny"
+     ],
+     "animated": false,
+     "sha256": "c3b3cd5069969ae60730f2070a2a7fd61d0919d8a55bee1cf73c0b0a23ec6c4c"
+    },
+    {
+     "id": "potion",
+     "name": "potion",
+     "keywords": [
+      "heal",
+      "hp",
+      "mana",
+      "flask"
+     ],
+     "animated": false,
+     "sha256": "72ac93606b1eca0fb2a1306baedf6b67ea47e615db3b7bb9fad2965b8be53e69"
+    },
+    {
+     "id": "rip",
+     "name": "rip",
+     "keywords": [
+      "dead",
+      "tombstone",
+      "grave",
+      "gg"
+     ],
+     "animated": false,
+     "sha256": "e93d72d97bd8e4039d3ed1d163fd15276b1201b31e278a3a1af095af8d32a31b"
+    },
+    {
+     "id": "rocket",
+     "name": "rocket",
+     "keywords": [
+      "launch",
+      "fast",
+      "ship",
+      "it",
+      "moon"
+     ],
+     "animated": true,
+     "sha256": "053aed4fdfdbd86df337a9ee67a2902bacbe004a277d65caef8039dade25ab74"
+    },
+    {
+     "id": "coffee",
+     "name": "coffee",
+     "keywords": [
+      "caffeine",
+      "mug",
+      "morning",
+      "brew"
+     ],
+     "animated": false,
+     "sha256": "3513c00797cce1d8e4ef2ff74427592bf42080ddcb1ff7c68a1801317e66fd0a"
+    },
+    {
+     "id": "pizza",
+     "name": "pizza",
+     "keywords": [
+      "food",
+      "snack",
+      "slice"
+     ],
+     "animated": false,
+     "sha256": "7da3a16b23058ea6a9e50290d62d8bd925de106ee119eeaf2454a36208ea6b8f"
+    },
+    {
+     "id": "loot",
+     "name": "loot",
+     "keywords": [
+      "chest",
+      "treasure",
+      "reward",
+      "gold"
+     ],
+     "animated": false,
+     "sha256": "8c97cd3316812b3b2e2487f2d8be8bd0d753cb468171ca75e9ea1f88e8f91db9"
+    }
+   ]
+  }
+ ]
+}
