@@ -6,7 +6,7 @@ process.env.HAVEN_DATA_DIR = process.env.HAVEN_DATA_DIR || path.join(os.homedir(
 const { initDatabase } = require('../src/database');
 const { MEMBER_PERMS } = require('../src/roleDefaults');
 const TAG = 'amni-testing', BETA = 'https://amni-scient.com/beta.html', GROUP = 'https://groups.google.com/g/amni-scient-testers', PLAY = 'https://play.google.com/apps/testing/', TF = 'https://testflight.apple.com/join/';
-const APPS = { 'Amni-Chat': { android: `APK on ${BETA} while Play review finishes`, ios: `${TF}PUQxysvc` }, 'Amni-Crypt': { android: `${PLAY}com.amnicrypt` }, 'Amni-Type': { android: `${PLAY}ai.amni.type`, ios: `${TF}yTvRRNSE` }, 'Amni-Map': { android: `APK on ${BETA} while Play review finishes` }, 'Amni-Learn': { android: `${PLAY}com.amnilearn.mobile`, ios: `${TF}gnWxJTFg` }, ContAIgion: { android: `${PLAY}com.amni.contaigion` }, HumAInity: { android: `${PLAY}com.amni.humainity` } };
+const APPS = { 'Amni-Chat': { android: `APK on ${BETA} while Play review finishes`, ios: `${TF}PUQxysvc` }, 'Amni-Crypt': { android: `${PLAY}com.amnicrypt` }, 'Amni-Type': { android: `${PLAY}com.amniscient.type`, ios: `${TF}yTvRRNSE` }, 'Amni-Map': { android: `APK on ${BETA} while Play review finishes` }, 'Amni-Learn': { android: `${PLAY}com.amnilearn.mobile`, ios: `${TF}gnWxJTFg` }, ContAIgion: { android: `${PLAY}com.amni.contaigion` }, HumAInity: { android: `${PLAY}com.amni.humainity` } };
 const GROUPS = [
   { role: 'Comms Tester', emoji: '💬', color: '#5BA4E6', channel: 'test-comms', title: 'Talk & Privacy', apps: ['Amni-Chat', 'Amni-Crypt'] },
   { role: 'Tools Tester', emoji: '🧭', color: '#6FBF8A', channel: 'test-tools', title: 'Everyday Tools', apps: ['Amni-Type', 'Amni-Map'] },
