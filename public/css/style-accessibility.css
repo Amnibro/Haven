@@ -102,6 +102,13 @@
 :root[data-text-size]:not([data-text-size="100"]) .code-block pre { font-size: calc(0.8125rem * var(--msg-text-scale, 1)) !important; }
 :root[data-text-size]:not([data-text-size="100"]) :is(.message-input-area textarea, .edit-textarea) { font-size: calc(0.875rem * var(--msg-text-scale, 1)) !important; }
 :root[data-text-size]:not([data-text-size="100"]) .thread-input { font-size: calc(0.8125rem * var(--msg-text-scale, 1)) !important; }
+/* Compact and Spacious density, and the pop-out DM, start from their own
+   message size, so a picked size keeps them as much smaller or bigger as
+   they were. The pop-out DM comes last: it is small in every density. */
+:root[data-text-size]:not([data-text-size="100"])[data-density="compact"] .message-content { font-size: calc(0.8125rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"])[data-density="spacious"] .message-content { font-size: calc(0.9375rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"]) .dm-pip-messages .message-content { font-size: calc(0.8125rem * var(--msg-text-scale, 1)) !important; }
+:root[data-text-size]:not([data-text-size="100"]) .dm-pip-input { font-size: calc(0.8125rem * var(--msg-text-scale, 1)) !important; }
 @media (max-width: 480px) {
   /* Never under 1rem on phones, or iOS zooms the page in on focus. */
   :root[data-text-size]:not([data-text-size="100"]) .message-input-area textarea { font-size: max(1rem, calc(0.875rem * var(--msg-text-scale, 1))) !important; }

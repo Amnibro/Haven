@@ -184,6 +184,21 @@ test('message text, the message boxes and code blocks scale, and only once a siz
   assert.match(css, /font-size: max\(1rem, calc\(0\.875rem \* var\(--msg-text-scale, 1\)\)\) !important;/);
 });
 
+test('density and the pop-out DM keep their own message size under a picked text size', () => {
+  const css = read('public/css/style-accessibility.css');
+  for (const [selector, base] of [
+    ['[data-density="compact"] .message-content', '0.8125'],
+    ['[data-density="spacious"] .message-content', '0.9375'],
+    [' .dm-pip-messages .message-content', '0.8125'],
+    [' .dm-pip-input', '0.8125'],
+  ]) {
+    assert.ok(css.includes(`:root[data-text-size]:not([data-text-size="100"])${selector} { font-size: calc(${base}rem * var(--msg-text-scale, 1)) !important; }`), `${selector.trim()} scales from ${base}rem`);
+  }
+  // Each comes after the plain message rule, so it wins where both match.
+  assert.ok(css.indexOf('.dm-pip-messages .message-content {') > css.indexOf('[data-density="spacious"] .message-content {'));
+  assert.ok(css.indexOf('[data-density="compact"] .message-content {') > css.indexOf(') .message-content {'));
+});
+
 test('the readable fonts are self-hosted with their licenses', () => {
   const css = read('public/css/style-accessibility.css');
   const files = [...css.matchAll(/url\('\/fonts\/([^']+)'\)/g)].map((m) => m[1]);
