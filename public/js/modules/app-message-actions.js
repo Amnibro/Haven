@@ -189,6 +189,8 @@ _bindMessageActions() {
     // These targets have their own click/keyboard behavior and should not
     // unexpectedly start a reply when activated twice.
     if (e.target.closest('button, a, input, textarea, select, [contenteditable="true"], .msg-toolbar, .msg-dots-btn, .reply-banner, .thread-preview, .reaction-badge, .chat-image, .spoiler')) return;
+    // A double-click on a word selects it to copy; that is not a reply.
+    if (window.getSelection?.()?.toString().trim()) return;
     const msgId = parseInt(msgEl.dataset.msgId, 10);
     if (!msgId) return;
     e.preventDefault();
