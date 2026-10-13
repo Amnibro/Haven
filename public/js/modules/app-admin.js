@@ -741,7 +741,9 @@ _syncSettingsNav() {
     // _hasAnyAdminSettingsAccess in app.js, which gates the Admin tab switch.
     'section-moderation':   ['view_audit_log', 'ban_user', 'kick_user', 'view_all_members'],
     'section-security':     [],
-    'section-automod':      [],
+    // The server lets Manage Server holders change Auto-mod
+    // (_canManageAutomod in socketHandlers/admin.js), so they see it too.
+    'section-automod':      ['manage_server'],
     'section-whitelist':    ['manage_server'],
     'section-invite':       {'manage_server': '*', 'invite_users': ['invite-links-block']}, // invite_users only have access to the id="invite-links-block" section within id="section-invite"
     'section-guests':       [],
