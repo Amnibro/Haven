@@ -615,7 +615,7 @@ html[lang="fa"] body * { unicode-bidi: plaintext; }
 html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"], textarea):placeholder-shown { direction: rtl; }
 
 .message-content {
-  font-size: 0.875rem;
+  font-size: calc(0.875rem * var(--chat-text-scale, 1));
   color: var(--text-primary);
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -718,7 +718,7 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: calc(0.875rem * var(--chat-text-scale, 1));
   resize: none;
   max-height: 7.5rem;
   line-height: 1.4;

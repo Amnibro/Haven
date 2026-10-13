@@ -43,6 +43,7 @@ const SETTINGS = {
   layout: { scope: 'device', check: (v) => typeof v === 'string' && /^(?:[A-Za-z][A-Za-z0-9_-]{0,40}Layout)?$/.test(v) },
   density: { scope: 'device', check: oneOf('compact', 'cozy', 'spacious') },
   zoom: { scope: 'device', check: (v) => Number.isInteger(v) && v >= 70 && v <= 150 },
+  text_size: { scope: 'device', check: (v) => Number.isInteger(v) && v >= 80 && v <= 150 },
   reaction_size: { scope: 'device', check: oneOf('small', 'normal', 'large', 'x-large') },
   interface_icons: { scope: 'device', check: oneOf('mono', 'emoji', 'glyphs') },
   role_display: { scope: 'device', check: oneOf('colored-name', 'dot') },

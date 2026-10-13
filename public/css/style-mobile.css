@@ -558,7 +558,7 @@
   .user-avatar-wrapper { width: 1.25rem; height: 1.25rem; }
   .user-status-dot { width: 0.5rem; height: 0.5rem; bottom: -2px; right: -2px; }
   .message-author { font-size: 0.8125rem; }
-  .message-content { font-size: 0.875rem; line-height: 1.45; word-break: break-word; overflow-wrap: break-word; }
+  .message-content { font-size: calc(0.875rem * var(--chat-text-scale, 1)); line-height: 1.45; word-break: break-word; overflow-wrap: break-word; }
   .message-time { font-size: 0.625rem; }
   .message-header { flex-wrap: wrap; }
 
@@ -616,7 +616,7 @@
   /* Textarea fills remaining space inline */
   .message-input-area textarea {
     padding: 0.375rem 0.625rem;
-    font-size: 1rem; /* prevents iOS zoom on focus */
+    font-size: max(1rem, calc(1rem * var(--chat-text-scale, 1))); /* prevents iOS zoom on focus */
     border-radius: 20px;
     min-height: 2.125rem;
     flex: 1 1 0;
@@ -736,7 +736,7 @@
   .user-item-avatar, .user-item-avatar-img { width: 1.125rem; height: 1.125rem; font-size: 0.5rem; }
   .user-avatar-wrapper { width: 1.125rem; height: 1.125rem; }
   .user-status-dot { width: 0.4375rem; height: 0.4375rem; bottom: -2px; right: -2px; }
-  .message-content { font-size: 0.8125rem; }
+  .message-content { font-size: calc(0.8125rem * var(--chat-text-scale, 1)); }
   .chat-image { max-width: min(90%, 15rem); }
 
   /* Hide non-critical status items */

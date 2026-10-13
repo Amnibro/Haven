@@ -66,6 +66,13 @@
     document.documentElement.style.setProperty('--ui-scale', _z + '%');
   } catch (e) { /* storage blocked: keep the 100% scale */ }
 
+  // Chat text size, on top of the zoom (the slider is in app-appearance.js).
+  try {
+    var _ts = parseInt(localStorage.getItem('haven-text-size'), 10) || 100;
+    _ts = Math.min(150, Math.max(80, _ts));
+    document.documentElement.style.setProperty('--chat-text-scale', String(_ts / 100));
+  } catch (e) { /* storage blocked: chat text at its normal size */ }
+
   var _themeCompat = window.HavenThemeCompat;
   var _safeMode = _themeCompat ? _themeCompat.isSafeMode(window.location) : false;
   var _resetPending = _themeCompat ? _themeCompat.isResetPending() : false;

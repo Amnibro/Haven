@@ -113,6 +113,19 @@ const SETTINGS = [
     show: (v) => `${v}%`,
   },
   {
+    key: 'text_size', scope: 'device', dflt: 100,
+    label: () => t('settings.text_size.title'),
+    read: () => Math.min(150, Math.max(80, parseInt(lsGet('haven-text-size'), 10) || 100)),
+    apply: (v) => {
+      const slider = document.getElementById('text-size-slider');
+      if (!slider) return false;
+      slider.value = String(v);
+      slider.dispatchEvent(new Event('input'));
+      return true;
+    },
+    show: (v) => `${v}%`,
+  },
+  {
     key: 'reaction_size', scope: 'device', dflt: 'normal',
     label: () => t('settings.reaction_size.title'),
     read: () => oneOf(lsGet('haven-emojisize'), ['small', 'normal', 'large', 'x-large'], 'normal'),

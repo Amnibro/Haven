@@ -10,9 +10,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.22.3">
+  <link rel="stylesheet" href="/css/style.css?v=4.22.4">
   <script src="/js/theme-compat.js?v=4.18.3"></script>
-  <script src="/js/theme-init.js?v=4.21.0"></script>
+  <script src="/js/theme-init.js?v=4.22.1"></script>
 </head>
 <body data-haven-page="app">
 
@@ -1441,6 +1441,7 @@
           <div class="settings-nav-item active" data-target="section-language">🗣️ <span data-i18n="settings.nav.localization">Localization</span></div>
           <div class="settings-nav-item" data-target="section-layout">📐 <span data-i18n="settings.nav.layout">Layout &amp; Density</span></div>
           <div class="settings-nav-item" data-target="section-zoom">🔍 <span data-i18n="settings.nav.zoom">Zoom</span></div>
+          <div class="settings-nav-item" data-target="section-text-size">🔤 <span data-i18n="settings.nav.text_size">Text Size</span></div>
           <div class="settings-nav-item" data-target="section-reaction-size">😀 <span data-i18n="settings.nav.reaction_size">Reaction Size</span></div>
           <div class="settings-nav-item" data-target="section-role-display">🎨 <span data-i18n="settings.nav.role_display">Role Display</span></div>
           <div class="settings-nav-item" data-target="section-toolbar-icons">🧰 <span data-i18n="settings.nav.toolbar_icons">Interface Icons</span></div>
@@ -1623,6 +1624,18 @@
           <output class="zoom-value" id="ui-zoom-value" for="ui-zoom-slider">100%</output>
         </div>
         <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.zoom.hint">Scales the whole interface. Drag for the exact size you want.</small>
+      </div>
+
+      <!-- Chat Text Size -->
+      <div class="settings-section" id="section-text-size" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🔤 <span data-i18n="settings.text_size.title">Chat Text Size</span></h5>
+        <div class="zoom-control" id="text-size-control">
+          <button type="button" class="zoom-step" id="text-size-down-btn" title="Smaller text" aria-label="Smaller text" data-i18n-title="settings.text_size.smaller" data-i18n-aria-label="settings.text_size.smaller">−</button>
+          <input type="range" class="zoom-slider" id="text-size-slider" min="80" max="150" step="5" value="100" aria-label="Chat text size" data-i18n-aria-label="settings.text_size.slider_label">
+          <button type="button" class="zoom-step" id="text-size-up-btn" title="Larger text" aria-label="Larger text" data-i18n-title="settings.text_size.larger" data-i18n-aria-label="settings.text_size.larger">+</button>
+          <output class="zoom-value" id="text-size-value" for="text-size-slider">100%</output>
+        </div>
+        <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.text_size.hint">Makes the text of messages, and what you type, bigger or smaller. The rest of Haven stays at the size Zoom sets.</small>
       </div>
 
       <!-- Emoji Reaction Size -->
@@ -5104,7 +5117,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
-  <script type="module" src="/js/app.js?v=4.22.6"></script>
+  <script type="module" src="/js/app.js?v=4.22.7"></script>
   <script src="/js/plugin-loader.js?v=4.21.0"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

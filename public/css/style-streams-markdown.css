@@ -1022,7 +1022,7 @@ video:-webkit-full-screen {
   margin: 0;
   padding: 0.625rem 0.75rem;
   overflow-x: auto;
-  font-size: 0.8125rem;
+  font-size: calc(0.8125rem * var(--chat-text-scale, 1));
   line-height: 1.5;
 }
 

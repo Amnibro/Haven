@@ -1518,7 +1518,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   background: var(--bg-secondary);
   color: var(--text-primary);
   padding: 0.5rem 0.75rem;
-  font-size: 0.8125rem;
+  font-size: calc(0.8125rem * var(--chat-text-scale, 1));
   font-family: inherit;
   min-height: 2.25rem;
   max-height: 12.5rem;

@@ -1481,6 +1481,7 @@
       "group_maintenance": "Maintenance",
       "group_appearance": "Appearance",
       "zoom": "Zoom",
+      "text_size": "Text Size",
       "reaction_size": "Reaction Size",
       "role_display": "Role Display",
       "toolbar_icons": "Interface Icons",
@@ -1575,6 +1576,13 @@
       "in": "Zoom in",
       "slider_label": "Interface zoom",
       "hint": "Scales the whole interface. Drag for the exact size you want."
+    },
+    "text_size": {
+      "title": "Chat Text Size",
+      "smaller": "Smaller text",
+      "larger": "Larger text",
+      "slider_label": "Chat text size",
+      "hint": "Makes the text of messages, and what you type, bigger or smaller. The rest of Haven stays at the size Zoom sets."
     },
     "reaction_size": {
       "title": "Reaction Size",

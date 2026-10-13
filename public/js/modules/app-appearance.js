@@ -541,6 +541,38 @@ _setupZoomSlider() {
   inBtn?.addEventListener('click', () => apply(pct + STEP, true));
 },
 
+// ── Chat Text Size slider ──
+// Scales only the text of messages and the message boxes (channels, DMs,
+// threads, PiP) through --chat-text-scale. Separate from Zoom: Zoom sizes the
+// whole interface, this sizes the reading text inside it.
+_setupTextSizeSlider() {
+  const slider = document.getElementById('text-size-slider');
+  if (!slider) return;
+  const label = document.getElementById('text-size-value');
+  const MIN = parseInt(slider.min, 10) || 80;
+  const MAX = parseInt(slider.max, 10) || 150;
+  const STEP = parseInt(slider.step, 10) || 5;
+  const clamp = (n) => Math.min(MAX, Math.max(MIN, n));
+
+  let pct = 100;
+  try { pct = clamp(parseInt(localStorage.getItem('haven-text-size'), 10) || 100); } catch { /* storage blocked: normal size */ }
+
+  const apply = (value, persist) => {
+    pct = clamp(value);
+    document.documentElement.style.setProperty('--chat-text-scale', String(pct / 100));
+    slider.value = pct;
+    if (label) label.textContent = pct + '%';
+    if (persist) {
+      try { localStorage.setItem('haven-text-size', pct); } catch { /* storage blocked: the size lasts until reload */ }
+    }
+  };
+
+  apply(pct, false);
+  slider.addEventListener('input', () => apply(parseInt(slider.value, 10) || 100, true));
+  document.getElementById('text-size-down-btn')?.addEventListener('click', () => apply(pct - STEP, true));
+  document.getElementById('text-size-up-btn')?.addEventListener('click', () => apply(pct + STEP, true));
+},
+
 // ── Emoji Reaction Size Picker ──
 _setupEmojiSizePicker() {
   const pickerId = 'emoji-size-picker';
