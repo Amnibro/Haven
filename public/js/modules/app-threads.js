@@ -324,7 +324,7 @@ _sendThreadMessage() {
   const hasPending = !!(this._threadPending && this._threadPending.length);
   // Nothing to send: no text and no held attachments.
   if (!content && !hasPending) return;
-  const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
+  const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : (this._forumBlogDefaultReply?.() || null);
 
   if (content) {
     // Kept so a reply refused as too long comes back to the box (#5691).

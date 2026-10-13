@@ -1035,6 +1035,12 @@
 .thread-forum-meta .forum-votes { margin-left: 0.6rem; }
 /* Blog mode (#5742): the post and the author's additions read as one piece,
    then a Comments heading with everyone else's replies under it. */
+/* Comments on pictures only (#5765): no general Comments section, and no
+   reply box until a picture's comments are open (the author keeps theirs). */
+.thread-blog-pics-only #blog-comments-head,
+.thread-blog-pics-only #blog-comments,
+.blog-reply-locked .thread-input-area,
+.blog-reply-locked #thread-reply-bar { display: none !important; }
 .thread-blog .thread-topic-body { border-bottom: none; margin-bottom: 0; }
 .blog-post-parts { padding-bottom: 0.5rem; }
 /* Comments on one picture of a blog post (#5753). */

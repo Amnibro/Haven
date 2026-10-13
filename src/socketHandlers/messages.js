@@ -2955,6 +2955,7 @@ module.exports = function register(socket, ctx) {
       // Blog mode (#5742): the client shows the post_part replies with the
       // post and the rest under Comments.
       blog: !!blogParts,
+      blogPicsOnly: !!blogParts && forumBlog.picsOnly(db, channel.id),
       parentContent: parent.content,
       parentUserId: parent.user_id || null,
       parentUsername: parent.username || '[Deleted User]',
@@ -3030,6 +3031,9 @@ module.exports = function register(socket, ctx) {
       // the first picture of a blog post, #5753).
       const replyMsg = db.prepare('SELECT thread_id FROM messages WHERE id = ?').get(replyTo);
       if (!replyMsg || (replyMsg.thread_id !== parentId && replyTo !== parentId)) replyTo = null;
+    }
+    if (!forumBlog.commentAllowed(db, { channelId: channel.id, parentId, userId: socket.user.id, replyTo })) {
+      return socket.emit('error-msg', 'In this blog, comments go on a picture: open its comments and write there');
     }
 
     try {

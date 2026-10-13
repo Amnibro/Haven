@@ -25,6 +25,9 @@
 
 function migrateForumBlog(addColumn) {
   addColumn('channels', 'forum_blog', 'INTEGER DEFAULT 0');
+  // Comments on pictures only (#5765): no general Comments section, so a
+  // comment has to be on one piece of the post.
+  addColumn('channels', 'forum_blog_pics_only', 'INTEGER DEFAULT 0');
 }
 
 // t is the reply, p the topic. True for a part of the post, and never NULL
@@ -35,6 +38,30 @@ const PART_SQL = '(p.user_id IS NOT NULL AND t.user_id IS p.user_id AND COALESCE
 function blogOn(db, channelId) {
   const row = db.prepare('SELECT is_forum, is_dm, forum_blog FROM channels WHERE id = ?').get(channelId);
   return !!(row && row.is_forum && !row.is_dm && Number(row.forum_blog) === 1);
+}
+
+// Is "comments on pictures only" on for this blog forum?
+function picsOnly(db, channelId) {
+  if (!blogOn(db, channelId)) return false;
+  const row = db.prepare('SELECT forum_blog_pics_only FROM channels WHERE id = ?').get(channelId);
+  return !!(row && Number(row.forum_blog_pics_only) === 1);
+}
+
+// With comments on pictures only, a reply from anyone but the author has to
+// answer a piece of the post (the opening post or one of the author's
+// additions), or a comment that is itself on a piece. The author's own
+// replies are more of the post and always go through.
+function commentAllowed(db, { channelId, parentId, userId, replyTo }) {
+  if (!picsOnly(db, channelId)) return true;
+  const parent = db.prepare('SELECT user_id FROM messages WHERE id = ?').get(parentId);
+  if (parent && parent.user_id != null && parent.user_id === userId) return true;
+  if (!replyTo) return false;
+  if (replyTo === parentId) return true;
+  const target = db.prepare('SELECT thread_id, reply_to FROM messages WHERE id = ?').get(replyTo);
+  if (!target || target.thread_id !== parentId) return false;
+  if (isPart(db, replyTo)) return true;
+  const onPiece = target.reply_to === parentId || (target.reply_to && isPart(db, target.reply_to));
+  return !!onPiece;
 }
 
 // The ids in one topic's thread that are part of the post.
@@ -67,4 +94,4 @@ function threadExtras(db, channelId, parentId) {
   return { comments: commentCounts(db, [parentId]).get(parentId) || 0 };
 }
 
-module.exports = { migrateForumBlog, blogOn, partIdsOf, isPart, commentCounts, threadExtras };
+module.exports = { migrateForumBlog, blogOn, picsOnly, commentAllowed, partIdsOf, isPart, commentCounts, threadExtras };

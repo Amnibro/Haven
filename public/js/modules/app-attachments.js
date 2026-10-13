@@ -755,7 +755,10 @@ async _flushThreadPending(parentId) {
         const sizeStr = this._formatFileSize(data.fileSize);
         content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
       }
-      this.socket.emit('send-thread-message', { parentId, content });
+      // A picture dropped while replying (or in a picture's open comments,
+      // #5765) answers what the text would.
+      const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : (this._forumBlogDefaultReply?.() || null);
+      this.socket.emit('send-thread-message', replyTo ? { parentId, content, replyTo } : { parentId, content });
     } catch (err) {
       if (err?.aborted) break;
       this._showToast(err.message || t('media.upload_failed'), 'error');

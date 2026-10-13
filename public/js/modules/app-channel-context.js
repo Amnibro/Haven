@@ -370,6 +370,11 @@ _updateChannelFunctionsPanel(ch) {
     if (blogRow) blogRow.style.display = ch.is_forum ? '' : 'none';
     const blogOn = Number(ch.forum_blog) === 1;
     this._setCfnBadge('forum-blog', blogOn, t(blogOn ? 'channel_functions.on' : 'channel_functions.off'));
+    // Comments on pictures only (#5765): a blog forum's own setting.
+    const picsRow = _cfnPanel?.querySelector('.cfn-row[data-fn="forum-blog-pics-only"]');
+    if (picsRow) picsRow.style.display = ch.is_forum && blogOn ? '' : 'none';
+    const picsOn = Number(ch.forum_blog_pics_only) === 1;
+    this._setCfnBadge('forum-blog-pics-only', picsOn, t(picsOn ? 'channel_functions.on' : 'channel_functions.off'));
   }
   this._setCfnBadge('private', isPrivate, t(isPrivate ? 'channel_functions.on' : 'channel_functions.off'));
   const gateBadge = this._roleGateBadge(ch);

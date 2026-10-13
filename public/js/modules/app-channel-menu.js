@@ -291,6 +291,10 @@ _bindChannelMenu() {
       const newVal = ch && Number(ch.forum_blog) === 1 ? 0 : 1;
       optimistic({ forum_blog: newVal });
       this.socket.emit('toggle-channel-permission', { code, permission: 'forum_blog' });
+    } else if (fn === 'forum-blog-pics-only') {
+      const newVal = ch && Number(ch.forum_blog_pics_only) === 1 ? 0 : 1;
+      optimistic({ forum_blog_pics_only: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'forum_blog_pics_only' });
     } else if (fn === 'forum-votes') {
       document.getElementById('channel-functions-panel').style.display = 'none';
       this._forumVotesEdit?.(code);

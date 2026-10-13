@@ -36,9 +36,12 @@ _forumBlogPrepareThread(data) {
   const container = document.getElementById('thread-messages');
   const panel = document.getElementById('thread-panel');
   const blog = !!(data && data.blog);
-  this._forumBlogThread = blog ? { parentId: data.parentId, authorId: data.parentUserId || null, authorName: data.parentUsername || '' } : null;
+  const picsOnly = blog && !!data.blogPicsOnly;
+  this._forumBlogThread = blog ? { parentId: data.parentId, authorId: data.parentUserId || null, authorName: data.parentUsername || '', picsOnly, openPiece: null } : null;
   panel?.classList.toggle('thread-blog', blog);
+  panel?.classList.toggle('thread-blog-pics-only', picsOnly);
   this._forumBlogComposerHint();
+  this._forumBlogComposerState();
   if (!blog || !container) return;
   const parts = document.createElement('div');
   parts.className = 'blog-post-parts';
@@ -73,6 +76,9 @@ _forumBlogTargetFor(msg) {
   if (msg && msg.reply_to) {
     const box = this._forumBlogPieceComments(msg.reply_to, true);
     if (box) return box;
+    // An answer to a comment on a picture stays with that picture.
+    const answered = container.querySelector(`.blog-piece-comments .thread-message[data-msg-id="${Number(msg.reply_to)}"]`);
+    if (answered) return answered.closest('.blog-piece-comments');
   }
   return container.querySelector('#blog-comments');
 },
@@ -148,10 +154,31 @@ _forumBlogTogglePiece(id) {
     const piece = this._forumBlogPieceEl(id);
     if (piece && !piece.dataset.username) piece.dataset.username = b.authorName || '';
     if (piece) this._setThreadReply?.(piece, Number(id));
-  } else if (box.hidden && this._threadReplyingTo && this._threadReplyingTo.id === Number(id)) {
-    this._clearThreadReply?.();
+    b.openPiece = Number(id);
+  } else if (box.hidden) {
+    if (this._threadReplyingTo && this._threadReplyingTo.id === Number(id)) this._clearThreadReply?.();
+    if (b.openPiece === Number(id)) b.openPiece = null;
   }
   this._forumBlogRecount();
+  this._forumBlogComposerState();
+},
+
+// Comments on pictures only (#5765): someone other than the author gets the
+// reply box once a picture's comments are open, and what they send goes to
+// that picture even if they dropped the reply marker.
+_forumBlogComposerState() {
+  const panel = document.getElementById('thread-panel');
+  if (!panel) return;
+  const b = this._forumBlogThread;
+  const isAuthor = !!(b && this.user && b.authorId && b.authorId === this.user.id);
+  panel.classList.toggle('blog-reply-locked', !!(b && b.picsOnly && !isAuthor && !b.openPiece));
+},
+
+_forumBlogDefaultReply() {
+  const b = this._forumBlogThread;
+  if (!b || !b.picsOnly || !b.openPiece) return null;
+  const isAuthor = !!(this.user && b.authorId && b.authorId === this.user.id);
+  return isAuthor ? null : b.openPiece;
 },
 
 _forumBlogIsPart(msg) {
@@ -197,7 +224,7 @@ _forumBlogComposerHint() {
 
 _forumBlogClose() {
   this._forumBlogThread = null;
-  document.getElementById('thread-panel')?.classList.remove('thread-blog');
+  document.getElementById('thread-panel')?.classList.remove('thread-blog', 'thread-blog-pics-only', 'blog-reply-locked');
   this._forumBlogComposerHint();
 },
 
@@ -205,9 +232,9 @@ _listenForumBlog() {
   // Turned on or off in Channel Functions: redraw the forum and any topic
   // open in it, so everyone viewing sees the change at once.
   this.socket.on('channel-permission-updated', (data) => {
-    if (!data || data.permission !== 'forum_blog') return;
+    if (!data || (data.permission !== 'forum_blog' && data.permission !== 'forum_blog_pics_only')) return;
     const ch = this.channels && this.channels.find(c => c.code === data.code);
-    if (ch) ch.forum_blog = data.enabled ? 1 : 0;
+    if (ch) ch[data.permission] = data.enabled ? 1 : 0;
     if (data.code !== this.currentChannel) return;
     if (this._forumActive) this._forumReload?.();
     if (this._activeThreadParent) this.socket.emit('get-thread-messages', { parentId: this._activeThreadParent });
