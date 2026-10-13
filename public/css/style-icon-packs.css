@@ -1,0 +1,96 @@
+/* ═══════════════════════════════════════════════════════════
+   ICON PACKS (Settings > Appearance > Icons)
+   icon-packs.js sets data-icon-pack on <html> to the active pack and swaps
+   interface emoji for <i class="haven-icon" data-glyph="…">. The character
+   is the same in every pack font; only the family changes, so a pack switch
+   is just the selector below. A font downloads only when its pack is used.
+   Icons take the text color around them, so every theme tints them.
+   Fonts: subsets of Font Awesome Free (OFL, renamed), Lucide (ISC) and
+   Material Symbols (Apache 2.0); see /fonts/NOTICE.txt.
+   ═══════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'HavenIconsGlyphs';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/haven-icons-glyphs.woff2?v=4.22.15') format('woff2');
+}
+@font-face {
+  font-family: 'HavenIconsLine';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/haven-icons-line.woff2?v=4.22.15') format('woff2');
+}
+@font-face {
+  font-family: 'HavenIconsNative';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/haven-icons-native.woff2?v=4.22.15') format('woff2');
+}
+
+.haven-icon {
+  font-style: normal;
+  font-weight: 400;
+  font-variant: normal;
+  line-height: 1;
+  text-indent: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  text-rendering: auto;
+  display: inline-block;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+}
+.haven-icon::before { content: attr(data-glyph); }
+html[data-icon-pack="glyphs"] .haven-icon { font-family: 'HavenIconsGlyphs'; }
+html[data-icon-pack="line"] .haven-icon { font-family: 'HavenIconsLine'; }
+html[data-icon-pack="native"] .haven-icon { font-family: 'HavenIconsNative'; }
+
+.user-action-btn > .haven-icon { color: var(--text-secondary); }
+.user-action-btn:hover > .haven-icon { color: var(--text-primary); }
+.haven-icon-spin { animation: haven-icon-spin 2s linear infinite; }
+html.reduce-motion .haven-icon-spin { animation: none; }
+@keyframes haven-icon-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Live preview under the picker */
+.icon-pack-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 10px 0 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+}
+.icon-pack-preview-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.6em;
+}
+.icon-pack-preview-sep {
+  width: 1px;
+  height: 1.2em;
+  margin: 0 4px;
+  background: var(--border-light);
+}
+.icon-pack-preview .tb-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+}
+.icon-pack-preview-caption {
+  display: block;
+  width: 100%;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
