@@ -498,7 +498,10 @@ _formatContent(str) {
   // (unicode and :name:) render naturally inside cells. (#5286)
   const tablePlaceholders = [];
   const splitRow = (line) => line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
-  const tableRe = /(^|\n)((?:\|[^\n]*\|\s*\n)+)\|\s*:?-{2,}:?(?:\s*\|\s*:?-{2,}:?)+\s*\|\s*(?:\n((?:\|[^\n]*\|\s*(?:\n|$))*))?/g;
+  // Spaces only ([ \t]) around the pipes: \s would also swallow the line
+  // break after the |---| row, and every row below the header then came out
+  // as plain text.
+  const tableRe = /(^|\n)((?:\|[^\n]*\|[ \t]*\n)+)\|[ \t]*:?-{2,}:?(?:[ \t]*\|[ \t]*:?-{2,}:?)+[ \t]*\|[ \t]*(?:\n((?:\|[^\n]*\|[ \t]*(?:\n|$))*))?/g;
   html = html.replace(tableRe, (full, pre, headBlock, bodyBlock) => {
     // headBlock holds 1+ leading rows; the last one is the header (the rest
     // would only happen with malformed input, so drop them safely by taking
