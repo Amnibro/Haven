@@ -63,6 +63,8 @@ const registerTags       = require('./tags');
 const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
 const registerMessageHighlights = require('./messageHighlights');
+const registerModCases = require('./modCases');
+const modCases = require('../modCases');
 const registerForumUnread = require('./forumUnread');
 const forumUnread = require('../forumUnread');
 const registerForumVotes = require('./forumVotes');
@@ -799,6 +801,14 @@ function setupSocketHandlers(io, db, opts = {}) {
         try { details = JSON.stringify(entry.details).slice(0, 4000); } catch { details = null; }
       }
       _auditInsert.run(actorId, actorUsername, action, targetType, targetId, targetName, details);
+      // Kicks, mutes and bans also go on the member's moderation history.
+      if (targetType === 'user') {
+        try {
+          modCases.fromAudit(db, { action, actorId, actorName: actorUsername, targetId, details: entry.details });
+        } catch (err) {
+          console.warn('[mod-cases] history record failed:', err.message);
+        }
+      }
     } catch (err) {
       console.warn('[audit] log failed:', err.message);
     }
@@ -2725,6 +2735,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerMemberDefaults(socket, ctx);
     registerGameActivity(socket, ctx);
     registerMessageHighlights(socket, ctx);
+    registerModCases(socket, ctx);
     registerForumUnread(socket, ctx);
     registerForumVotes(socket, ctx);
 

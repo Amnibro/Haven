@@ -70,6 +70,7 @@ import GroupMethods from './modules/app-groups.js?v=4.19.3';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.22.9';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
+import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
 
@@ -407,6 +408,7 @@ class HavenApp {
     // After the pickers above: the defaults apply through them (#5739).
     this._setupMemberDefaults();
     this._setupMessageHighlights();
+    this._setupModCases();
     this._setupForumUnread();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
@@ -575,6 +577,7 @@ Object.assign(HavenApp.prototype,
   TemplateMethods,
   MemberDefaultsMethods,
   MessageHighlightMethods,
+  ModCaseMethods,
   ForumUnreadMethods,
   ChannelCategoryMethods,
 );

@@ -170,6 +170,16 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
       this._hideUserContextMenu();
       this.socket.emit('unmute-user', { userId: targetUserId });
     });
+    // Moderation history (#5759): a warning with a reason, notes, and the
+    // record of everything done to this member.
+    if ((canMod || canBan) && targetUserId !== this.user?.id) addBtn(`⚠️ ${t('mod_cases.warn')}`, () => {
+      this._hideUserContextMenu();
+      this._openWarnDialog(targetUserId, targetName);
+    });
+    if ((canMod || canBan || this._hasPerm('view_audit_log')) && targetUserId !== this.user?.id) addBtn(`📋 ${t('mod_cases.history')}`, () => {
+      this._hideUserContextMenu();
+      this._openModHistory(targetUserId, targetName);
+    });
     if (canBan) addBtn(`⛔ ${t('users.gear_menu.ban')}`, () => {
       this._hideUserContextMenu();
       this._showAdminActionModal('ban', targetUserId, targetName);

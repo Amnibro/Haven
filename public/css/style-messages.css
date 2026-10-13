@@ -710,6 +710,23 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   background: var(--bg-secondary);
 }
 
+/* Moderation history and warnings (#5759). */
+.mod-cases-modal { max-width: 34rem; width: 100%; }
+.mod-case-reason { margin: 0; padding: 0.5rem 0.75rem; border-left: 3px solid var(--warning, #f0a020); background: var(--bg-tertiary); border-radius: var(--radius-sm); white-space: pre-wrap; }
+.mod-case-input { width: 100%; box-sizing: border-box; resize: vertical; }
+.mod-case-severity { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.8125rem; }
+.mod-case-summary { margin-bottom: 0.5rem; font-size: 0.8125rem; }
+.mod-case-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.375rem; margin-bottom: 0.5rem; }
+.mod-case-row { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.375rem 0.5rem; border-radius: var(--radius-sm); background: var(--bg-tertiary); }
+.mod-case-row.is-revoked { opacity: 0.6; }
+.mod-case-row.is-revoked .mod-case-text { text-decoration: line-through; }
+.mod-case-body { flex: 1; min-width: 0; }
+.mod-case-meta { font-size: 0.75rem; color: var(--text-muted); }
+.mod-case-text { font-size: 0.875rem; white-space: pre-wrap; word-break: break-word; }
+.mod-case-revoked { font-style: italic; }
+.mod-case-note { display: flex; gap: 0.5rem; align-items: flex-end; }
+.mod-case-note[hidden] { display: none; }
+
 /* Above the message box in a read-only channel, for those who may post. */
 .read-only-note {
   padding: 0.25rem 1rem 0;
