@@ -2999,7 +2999,7 @@
         <!-- Role Management (Admin only) -->
         <div class="admin-settings" id="section-roles" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">👑 <span data-i18n="settings.admin.roles_title">Role Management</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.roles_hint">Create and manage roles. Assign roles to users from the user list context menu.</small>
+          <small class="settings-hint" data-i18n="settings.admin.roles_hint">Roles decide who can do what. Open Permissions to set what each role can do, or to give someone a role.</small>
           <div style="margin-top:8px;display:flex;gap:6px">
             <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Permissions</span></button>
             <button class="btn-sm" id="post-role-menu-btn" data-i18n-title="settings.admin.role_menu.hint" title="Post a message people react to, or click, to give themselves a role">🎭 <span data-i18n="settings.admin.role_menu.post">Post a role menu</span></button>
@@ -3837,7 +3837,7 @@
           <button type="button" class="perm-view-btn" id="perm-view-users" data-i18n="settings.admin.perm_matrix.view_users">Users</button>
         </div>
       </div>
-      <p class="muted-text perm-matrix-lead" data-i18n="settings.admin.perm_matrix.lead">New servers start with Member, Mod, and Admin (you). Members can use every public channel. Mods can kick, ban, and run channels. Admin can do everything.</p>
+      <p class="muted-text perm-matrix-lead" id="perm-matrix-lead" data-i18n="settings.admin.perm_matrix.lead_roles">Set what each role can do. Everyone who holds a role gets what is ticked in its column.</p>
       <div id="perm-roles-pane">
         <div class="perm-matrix-toolbar">
           <button type="button" class="btn-sm btn-accent" id="perm-add-role-btn">+ <span data-i18n="settings.admin.perm_matrix.add_role">Add role</span></button>

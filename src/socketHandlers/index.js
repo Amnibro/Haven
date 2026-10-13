@@ -64,6 +64,7 @@ const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
 const registerMessageHighlights = require('./messageHighlights');
 const registerModCases = require('./modCases');
+const registerPermExceptions = require('./permExceptions');
 const modCases = require('../modCases');
 const registerForumUnread = require('./forumUnread');
 const forumUnread = require('../forumUnread');
@@ -2728,6 +2729,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerUsers(socket, ctx);
     registerModeration(socket, ctx);
     registerRoles(socket, ctx);
+    registerPermExceptions(socket, ctx);
     registerAdmin(socket, ctx);
     registerFerry(socket, ctx);
     registerGroupE2E(socket, ctx);

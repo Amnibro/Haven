@@ -1362,6 +1362,23 @@
   letter-spacing: 0.04em;
   color: var(--text-secondary);
 }
+.perm-user-reset { margin-top: 0.5rem; }
+/* A box on the Users tab that differs from what the person's roles give. */
+.perm-user-exception {
+  margin-left: auto;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.6875rem;
+  background: rgba(240, 160, 32, 0.15);
+  color: var(--warning, #f0a020);
+  white-space: nowrap;
+}
+.perm-matrix-level,
+.perm-user-chip-level {
+  font-size: 0.6875rem;
+  opacity: 0.7;
+  white-space: nowrap;
+}
 .perm-user-perm {
   display: flex;
   align-items: center;

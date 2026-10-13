@@ -2453,7 +2453,6 @@
       "roles_hint": "Crie e gerencie cargos. Atribua cargos aos usuários pelo menu de contexto da lista de usuários.",
       "perm_matrix": {
         "title": "Permissões",
-        "lead": "Servidores novos começam com Membro, Mod e Admin (você). Membros podem usar todos os canais públicos. Mods podem expulsar, banir e gerenciar canais. Admin pode tudo.",
         "view_roles": "Cargos",
         "view_users": "Usuários",
         "permission": "Permissão",

@@ -1766,7 +1766,6 @@
       },
       "perm_matrix": {
         "title": "Berechtigungen",
-        "lead": "Neue Server beginnen mit den Rollen Mitglied, Mod und Admin (du). Mitglieder können alle öffentlichen Kanäle nutzen. Mods können kicken, bannen und Kanäle verwalten. Admins können alles.",
         "view_roles": "Rollen",
         "view_users": "Benutzer",
         "permission": "Berechtigung",

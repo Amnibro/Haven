@@ -63,6 +63,8 @@ _setPermView(view) {
   const usersPane = document.getElementById('perm-users-pane');
   if (rolesPane) rolesPane.hidden = view !== 'roles';
   if (usersPane) usersPane.hidden = view !== 'users';
+  const lead = document.getElementById('perm-matrix-lead');
+  if (lead) lead.textContent = t(view === 'users' ? 'settings.admin.perm_matrix.lead_users' : 'settings.admin.perm_matrix.lead_roles');
   // Draw the pane being shown: the members are listed straight away, not
   // only once something is typed in the search box.
   if (view === 'users') {
@@ -162,6 +164,7 @@ _renderPermMatrix() {
       <div class="perm-matrix-role-top">
         <span class="perm-matrix-swatch" style="background:${esc(role.color || '#888')}"></span>
         <span class="perm-matrix-role-name">${esc(role.name)}</span>
+        <span class="perm-matrix-level" title="${esc(t('settings.admin.perm_matrix.level_hint'))}">${esc(t('settings.admin.perm_matrix.level', { level: role.level }))}</span>
         <button type="button" class="perm-matrix-remove" data-remove-role="${role.id}" title="${esc(t('settings.admin.perm_matrix.remove_role'))}">−</button>
       </div>
       <label class="perm-matrix-auto">
@@ -328,17 +331,24 @@ _renderPermUserDetail() {
 
   const chips = roles.map(r => {
     const on = (user.roleIds || []).includes(r.id);
-    return `<button type="button" class="perm-user-chip${on ? ' is-on' : ''}" data-set-role="${r.id}" ${locked ? 'disabled' : ''}>${esc(r.name)}</button>`;
+    return `<button type="button" class="perm-user-chip${on ? ' is-on' : ''}" data-set-role="${r.id}" ${locked ? 'disabled' : ''}>${esc(r.name)} <span class="perm-user-chip-level">${esc(t('settings.admin.perm_matrix.level', { level: r.level }))}</span></button>`;
   }).join('');
+  // Exceptions made for this one person (the server works them out), so a
+  // box that disagrees with their roles says why.
+  const exceptions = user.exceptions || {};
 
   let rows = '';
   for (const group of PERM_GROUPS) {
     rows += `<div class="perm-user-group">${esc(t(`settings.admin.perm_matrix.group_${group.key}`))}</div>`;
     for (const perm of this._sortedGroupPerms(group)) {
       const on = allOn || perms.includes(perm);
-      rows += `<label class="perm-user-perm">
+      const exception = !locked && Object.prototype.hasOwnProperty.call(exceptions, perm);
+      const tag = exception
+        ? `<span class="perm-user-exception" title="${esc(t('settings.admin.perm_matrix.exception_hint'))}">${esc(t(exceptions[perm] ? 'settings.admin.perm_matrix.exception_added' : 'settings.admin.perm_matrix.exception_removed'))}</span>`
+        : '';
+      rows += `<label class="perm-user-perm${exception ? ' is-exception' : ''}">
         <input type="checkbox" data-user-perm="${perm}" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''}>
-        <span>${esc(t(`permissions.${perm}`))}</span>
+        <span>${esc(t(`permissions.${perm}`))}</span>${tag}
       </label>`;
     }
   }
@@ -347,19 +357,22 @@ _renderPermUserDetail() {
     ? t('settings.admin.perm_matrix.user_is_host')
     : (self ? t('settings.admin.perm_matrix.user_is_you') : t('settings.admin.perm_matrix.user_hint'));
 
+  const hasExceptions = !locked && Object.keys(exceptions).length > 0;
   box.innerHTML = `
     <div class="perm-user-head">
       <h4>${esc(user.displayName)}</h4>
       <p class="muted-text">${esc(note)}</p>
       <div class="perm-user-chips">${chips}</div>
+      ${hasExceptions ? `<button type="button" class="btn-sm perm-user-reset" data-reset-user>${esc(t('settings.admin.perm_matrix.reset_to_roles'))}</button>` : ''}
     </div>
     <div class="perm-user-perms">${rows}</div>`;
+  box.querySelector('[data-reset-user]')?.addEventListener('click', () => this._resetUserPerms(user));
 
   box.querySelectorAll('[data-set-role]').forEach(btn => {
     btn.addEventListener('click', () => this._setUserRole(user.id, parseInt(btn.dataset.setRole, 10)));
   });
   box.querySelectorAll('[data-user-perm]').forEach(boxEl => {
-    boxEl.addEventListener('change', () => this._saveUserPerms(user, box));
+    boxEl.addEventListener('change', () => this._saveUserPerm(user, boxEl));
   });
 },
 
@@ -378,6 +391,34 @@ _setUserRole(userId, roleId) {
   });
 },
 
+// One box saves only its own permission. The server keeps it as an
+// exception only while it differs from what the person's roles give.
+_saveUserPerm(user, boxEl) {
+  const permission = boxEl.dataset.userPerm;
+  const allowed = boxEl.checked;
+  this._roleEmit('set-user-server-perm', { userId: user.id, permission, allowed }, (res) => {
+    if (res?.error) {
+      boxEl.checked = !allowed;
+      this._showToast(res.error, 'error');
+      return;
+    }
+    this._loadPermPanel();
+  });
+},
+
+async _resetUserPerms(user) {
+  const ok = await this._showConfirmModal(
+    t('settings.admin.perm_matrix.reset_confirm', { name: user.displayName }), '',
+    { confirmLabel: t('settings.admin.perm_matrix.reset_to_roles') }
+  );
+  if (!ok) return;
+  this._roleEmit('reset-user-server-perms', { userId: user.id }, (res) => {
+    if (res?.error) { this._showToast(res.error, 'error'); return; }
+    this._showToast(t('settings.admin.perm_matrix.reset_done', { name: user.displayName }), 'success');
+    this._loadPermPanel();
+  });
+},
+
 _saveUserPerms(user, detailRoot) {
   const boxes = detailRoot.querySelectorAll('[data-user-perm]');
   const permissions = [];
@@ -392,6 +433,8 @@ _saveUserPerms(user, detailRoot) {
     }
     user.permissions = res.permissions || permissions;
     if (res.roleIds) user.roleIds = res.roleIds;
+    // Fetched again so the exception marks follow the change.
+    this._loadPermPanel();
   });
 },
 

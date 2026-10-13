@@ -661,6 +661,9 @@ module.exports = function register(socket, ctx) {
       details: null });
   });
 
+  // Shared with socketHandlers/permExceptions.js (per-person exceptions).
+  ctx.permPanel = { canManagePermPanel, primaryServerRole, refreshUserRoles };
+
   function canManagePermPanel(socket) {
     return !!(socket.user && (socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_roles')));
   }
@@ -714,6 +717,20 @@ module.exports = function register(socket, ctx) {
           if (!byUser[a.user_id]) byUser[a.user_id] = [];
           byUser[a.user_id].push(a.role_id);
         });
+        // Exceptions made for one person: a server-wide override that says
+        // something different from the role it is attached to. The Users
+        // tab marks these, so a box that disagrees with the role says why.
+        const exceptions = {};
+        db.prepare(`
+          SELECT urp.user_id, urp.permission, urp.allowed,
+                 EXISTS(SELECT 1 FROM role_permissions rp WHERE rp.role_id = urp.role_id
+                        AND rp.permission = urp.permission AND rp.allowed = 1) AS role_has
+          FROM user_role_perms urp WHERE urp.channel_id IS NULL
+        `).all().forEach(o => {
+          if (!!o.allowed === !!o.role_has) return;
+          if (!exceptions[o.user_id]) exceptions[o.user_id] = {};
+          exceptions[o.user_id][o.permission] = !!o.allowed;
+        });
         users = rows.map(u => ({
           id: u.id,
           username: u.username,
@@ -723,6 +740,7 @@ module.exports = function register(socket, ctx) {
           isAdmin: !!u.is_admin,
           roleIds: byUser[u.id] || [],
           permissions: getUserGlobalPermissions(u.id),
+          exceptions: exceptions[u.id] || {},
         }));
       } catch (userErr) {
         console.error('get-perm-panel users error:', userErr);
