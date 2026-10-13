@@ -448,6 +448,8 @@ async _importPickGuild(guild) {
       row.dataset.channelName = ch.name;
       row.dataset.channelTopic = ch.topic || '';
       row.dataset.channelCategory = ch.category || '';
+      row.dataset.kind = ch.type || 'text';
+      row.dataset.tags = JSON.stringify((ch.tags || []).map(tg => tg.name));
       row.innerHTML = `
         <label>
           <input type="checkbox" checked>
@@ -470,6 +472,9 @@ async _importPickGuild(guild) {
           tRow.dataset.channelName = t.name;
           tRow.dataset.channelTopic = '';
           tRow.dataset.channelCategory = ch.category || '';
+          tRow.dataset.kind = 'thread';
+          tRow.dataset.parentId = t.parentId || '';
+          tRow.dataset.tags = JSON.stringify(t.tags || []);
           tRow.innerHTML = `
             <label>
               <input type="checkbox" checked>
@@ -498,6 +503,9 @@ async _importPickGuild(guild) {
           tRow.dataset.channelName = t.name;
           tRow.dataset.channelTopic = '';
           tRow.dataset.channelCategory = t.category || '';
+          tRow.dataset.kind = 'thread';
+          tRow.dataset.parentId = t.parentId || '';
+          tRow.dataset.tags = JSON.stringify(t.tags || []);
           tRow.innerHTML = `
             <label>
               <input type="checkbox" checked>
@@ -531,11 +539,18 @@ async _importConnectFetch() {
   cList.querySelectorAll('.import-channel-row').forEach(row => {
     const cb = row.querySelector('input[type="checkbox"]');
     if (!cb?.checked) return;
+    let tags = [];
+    try { tags = JSON.parse(row.dataset.tags || '[]'); } catch { tags = []; } // a row without tags
     selected.push({
       id: row.dataset.channelId,
       name: row.dataset.channelName,
       topic: row.dataset.channelTopic,
-      category: row.dataset.channelCategory
+      category: row.dataset.channelCategory,
+      // A thread lands in its parent channel, and a forum's posts become
+      // topics, when the parent comes along too (#5772).
+      kind: row.dataset.kind || 'text',
+      parentId: row.dataset.parentId || undefined,
+      tags,
     });
   });
   if (!selected.length) { this._showToast(t('settings.admin.select_channel_warning'), 'error'); return; }

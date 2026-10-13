@@ -167,12 +167,22 @@ module.exports = function registerImport(deps) {
         if (active.threads) threads.push(...active.threads);
       } catch { /* bot may lack access to active threads; list the channels without them */ }
 
-      // Archived threads per text/forum/announcement channel (up to 100 per channel)
+      // Archived threads per text/forum/announcement channel, a page of 100 at
+      // a time (#5772), up to 2,000 per channel.
       for (const ch of channelsList) {
-        try {
-          const archived = await discordApiFetch(`/channels/${ch.id}/threads/archived/public?limit=100`, auth);
-          if (archived.threads) threads.push(...archived.threads);
-        } catch { /* channels the bot cannot read have no archived threads to list */ }
+        let before = null;
+        for (let page = 0; page < 20; page++) {
+          try {
+            const q = before ? `&before=${encodeURIComponent(before)}` : '';
+            const archived = await discordApiFetch(`/channels/${ch.id}/threads/archived/public?limit=100${q}`, auth);
+            const list = Array.isArray(archived.threads) ? archived.threads : [];
+            threads.push(...list);
+            const last = list[list.length - 1];
+            before = last && last.thread_metadata && last.thread_metadata.archive_timestamp;
+            if (!archived.has_more || !before) break;
+          } catch { break; /* channels the bot cannot read have no archived threads to list */ }
+          await new Promise(r => setTimeout(r, 200));
+        }
         await new Promise(r => setTimeout(r, 200));
       }
 
@@ -253,9 +263,17 @@ module.exports = function registerImport(deps) {
         const ch = selected[idx];
         const messages = [];
         let before = null, batch;
+        // What the entry is (#5772): a thread goes into its parent channel, and
+        // a forum becomes a Haven forum whose posts are its topics.
+        const kind = ['text', 'announcement', 'forum', 'media', 'thread'].includes(ch.kind) ? ch.kind : 'text';
+        const parentId = typeof ch.parentId === 'string' && DISCORD_ID.test(ch.parentId) ? ch.parentId : null;
+        const tags = Array.isArray(ch.tags)
+          ? ch.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 20)
+          : [];
+        const isForum = kind === 'forum' || kind === 'media';
 
         try {
-          do {
+          if (!isForum) do {
             let ep = `/channels/${ch.id}/messages?limit=100`;
             if (before) ep += `&before=${before}`;
             batch = await discordApiFetch(ep, auth);
@@ -315,6 +333,9 @@ module.exports = function registerImport(deps) {
           name: ch.name,
           topic: ch.topic || '',
           category: ch.category || null,
+          kind,
+          parentId,
+          tags,
           messageCount: messages.length,
           messages
         };
