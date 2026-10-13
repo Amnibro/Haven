@@ -70,6 +70,25 @@ _toneEmoji(emoji) {
   return this._applySkinTone(emoji, this._getEmojiSkinTone());
 },
 
+// Where a picked emoji (or a formatting insert) goes: the box being edited,
+// or the thread / DM PiP box whose button opened the picker, else the main
+// message box. A target that has left the page or is hidden (a closed thread
+// or PiP, an edit wiped by a re-render) no longer counts, or every pick would
+// vanish into it until a reload.
+_emojiInsertTarget() {
+  const t = this._activeEditTextarea;
+  if (t && t.isConnected && t.getClientRects().length) return t;
+  this._activeEditTextarea = null;
+  return document.getElementById('message-input');
+},
+
+// The main box's own picker buttons send to the main box, not to a thread or
+// PiP box that opened the picker earlier. An edit in progress keeps its box.
+_aimEmojiAtComposer() {
+  const t = this._activeEditTextarea;
+  if (t && (t.id === 'thread-input' || t.id === 'dm-pip-input')) this._activeEditTextarea = null;
+},
+
 _toggleEmojiPicker(anchorEl) {
   const picker = document.getElementById('emoji-picker');
   if (picker.style.display === 'flex') {
@@ -335,8 +354,8 @@ _toggleEmojiPicker(anchorEl) {
       btn.title = names ? names.split(/\s+/)[0] : emoji;
     }
     btn.addEventListener('click', () => {
-      // Insert into the active edit textarea if editing, otherwise the main input
-      const input = self._activeEditTextarea || document.getElementById('message-input');
+      const input = self._emojiInsertTarget();
+      if (!input) return;
       const start = input.selectionStart;
       const end = input.selectionEnd;
       input.value = input.value.substring(0, start) + value + input.value.substring(end);
