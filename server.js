@@ -692,6 +692,10 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // The internal folders are refused first; see src/storage/serve.js.
 const { blockInternalUploads, serveUploads } = require('./src/storage/serve');
 app.use('/uploads', blockInternalUploads);
+// Built-in stickers answer here first: each also ships as a PNG for apps that
+// cannot draw SVG (src/builtinStickers.js).
+const builtinStickers = require('./src/builtinStickers').createBuiltinStickers({ stickersDir: path.join(UPLOADS_DIR, 'stickers') });
+app.use('/uploads/stickers', builtinStickers.serve);
 app.use('/uploads', serveUploads(storage));
 
 // ── Plugin & Theme file serving ─────────────────────────
@@ -1446,7 +1450,7 @@ require('./src/routes/uploads')({ uploadDiskGuard, app, recordUploadOwnership, u
 // (duplicate avatar handler removed; handled above at /api/upload-avatar)
 
 // ── Sounds, custom emoji and stickers: src/routes/media-library.js ──
-const { BUILTIN_SOUNDS, seedStarterStickers } = require('./src/routes/media-library')({ uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter });
+const { BUILTIN_SOUNDS } = require('./src/routes/media-library')({ uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter, builtinStickers });
 // Profile badge icons (#5632): src/routes/badges.js
 require('./src/routes/badges')({ app, verifyAdminFromDb, userHasPermission, uploadDir, uploadLimiter, uploadDiskGuard });
 
@@ -3115,7 +3119,6 @@ const io = new Server(server, {
 // Initialize
 const db = initDatabase();
 
-// (#5335) Seed starter stickers now that the DB is ready.
 
 // Download / refresh the Unicode emoji list (non-blocking, best-effort).
 // Opt-in: off unless the admin enables it or UNICODE_EMOJI_AUTO_UPDATE forces it.
@@ -3630,7 +3633,7 @@ ${row('Admin:', process.env.ADMIN_USERNAME || 'admin')}
 // stops the server here instead of leaving it up with no media; the explicit
 // exit matters, because the rejection handler above keeps the process alive.
 storage.prepare(db).then(() => {
-  seedStarterStickers();   // catches and logs its own errors
+  builtinStickers.syncAndLog();   // catches and logs its own errors
   server.listen(PORT, HOST, onListening);
   storage.keepIndexed(db);
 }, (err) => {
