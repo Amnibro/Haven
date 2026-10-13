@@ -47,7 +47,7 @@ _chatImgRealUrl(img) {
 
 _applyViewerChatAnimPref() {
   const pref = this._viewerChatAnimPref();
-  document.querySelectorAll('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]').forEach((img) => {
+  document.querySelectorAll('img:is(.chat-image, .custom-emoji, .sticker-img)[data-chat-animated-src]').forEach((img) => {
     if (pref === 'always') {
       img.dataset.chatAnimPlaying = '1';
       if (img.getAttribute('src') !== img.dataset.chatAnimatedSrc) img.src = img.dataset.chatAnimatedSrc;
@@ -62,7 +62,7 @@ _applyViewerChatAnimPref() {
   });
   // Nothing is frozen yet on a fresh switch away from 'always', so sweep too.
   if (pref !== 'always') {
-    document.querySelectorAll('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
+    document.querySelectorAll('img:is(.chat-image, .custom-emoji, .sticker-img):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
   }
 },
 
@@ -88,14 +88,14 @@ _setupChatAnimHover() {
   this._chatAnimHoverBound = true;
   const over = (e) => {
     const img = e.target;
-    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]')) return;
+    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji, .sticker-img)[data-chat-animated-src]')) return;
     if (this._viewerChatAnimPref() !== 'hover') return;
     img.dataset.chatAnimPlaying = '1';
     img.src = img.dataset.chatAnimatedSrc;   // reassigning restarts from frame 1
   };
   const out = (e) => {
     const img = e.target;
-    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]')) return;
+    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji, .sticker-img)[data-chat-animated-src]')) return;
     if (this._viewerChatAnimPref() !== 'hover') return;
     img.dataset.chatAnimPlaying = '';
     this._frozenFrame(img.dataset.chatAnimatedSrc).then((f) => {
@@ -108,7 +108,7 @@ _setupChatAnimHover() {
   // it on load as well as when it is inserted.
   document.addEventListener('load', (e) => {
     const img = e.target;
-    if (img && img.matches && img.matches('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])')) this._freezeChatImg(img);
+    if (img && img.matches && img.matches('img:is(.chat-image, .custom-emoji, .sticker-img):not([data-chat-anim-done])')) this._freezeChatImg(img);
   }, true);
 },
 
@@ -180,12 +180,20 @@ _animAttr(mode) {
 
 // Only these formats can carry animation; skip the rest (e.g. jpeg) entirely.
 _animCanAnimate(url) {
-  return /\.(gif|apng|png|webp)(\?|#|$)/i.test(url || '');
+  return /\.(gif|apng|png|webp)(\?|#|$)/i.test(url || '') || this._isStickerSvg(url);
+},
+
+// A server sticker drawn as SVG. Its resting frame is the same file with
+// #still on the end (built-in stickers stop their CSS animation there), so
+// freezing one needs no canvas.
+_isStickerSvg(url) {
+  return /^\/uploads\/stickers\/[\w.-]+\.svg$/i.test(String(url || '').split('#')[0]);
 },
 
 // One frozen-frame data URL per unique image URL, deduped across every render.
 // Returns a Promise resolving to the data URL, or null if capture is blocked.
 _frozenFrame(url) {
+  if (this._isStickerSvg(url)) return Promise.resolve(`${String(url).split('#')[0]}#still`);
   if (!this._frozenFrames) this._frozenFrames = new Map();
   const cached = this._frozenFrames.get(url);
   if (cached) return cached;
