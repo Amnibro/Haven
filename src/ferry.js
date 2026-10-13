@@ -746,6 +746,9 @@ function relayToHaven(msg) {
         username: author,
         avatarUrl: avatar,
         content,
+        // Kept on the Haven copy (#5773): a later history import skips it,
+        // and a Discord thread started from it hangs from it.
+        discordMessageId: msg.id,
       });
       if (havenId) targets.push({ havenMessageId: havenId, channelCode: link.channel_code });
       touchLink(link.id, null);
@@ -893,7 +896,40 @@ function relayForumMessage(msg) {
   if (!parentPaired) return false;
 
   if (isStarter) relayForumStarter(msg, thread);
+  else relayChatThreadReply(msg, thread);
   return true;
+}
+
+// A reply in a thread of a paired Discord chat channel (#5773). It goes into
+// the matching Haven thread: under the Haven copy of the message the thread
+// was started from, or under a line naming the thread when there is none.
+// Forum pairings are left alone here; their posts are handled above.
+function relayChatThreadReply(msg, thread) {
+  if (typeof deps.findOrCreateThreadRoot !== 'function') return;
+  const links = deps.db.prepare(`
+    SELECT f.id, f.channel_id, c.code AS channel_code, c.is_forum
+    FROM ferry_links f JOIN channels c ON f.channel_id = c.id
+    WHERE f.discord_channel_id = ? AND f.is_active = 1 AND f.direction IN ('both','to_haven')
+  `).all(String(thread.parentId)).filter(l => !l.is_forum);
+  if (!links.length) return;
+  const content = buildHavenContent(msg);
+  if (!content) return;
+  const username = discordAuthorName(msg);
+  const avatarUrl = discordAvatarUrl(msg.author);
+  const targets = [];
+  for (const link of links) {
+    const parentId = deps.findOrCreateThreadRoot({
+      channelId: link.channel_id, channelCode: link.channel_code,
+      discordThreadId: thread.id, name: thread.name, username, avatarUrl,
+    });
+    if (!parentId) continue;
+    const id = deps.insertHavenThreadReply({
+      channelId: link.channel_id, channelCode: link.channel_code, parentId, username, avatarUrl, content,
+    });
+    if (id) targets.push({ havenMessageId: id, channelCode: link.channel_code });
+    touchLink(link.id, null);
+  }
+  if (targets.length) rememberRelay(msg.id, content, targets);
 }
 
 function stashStarter(msg) {
@@ -1018,6 +1054,7 @@ function relayForumStarter(msg, thread) {
         username, avatarUrl, content,
         title,
         tags: tags.length ? tags : null,
+        discordMessageId: msg.id,
       });
       if (!topicId) continue;
       remember.run(topicId, link.channel_id, thread.guildId || link.guild_id, thread.parentId, thread.id);

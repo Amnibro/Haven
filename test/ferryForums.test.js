@@ -397,6 +397,43 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     assert.strictEqual(topics.length, 0, 'the reply did not bring the topic back');
   });
 
+  // #5773: replies in a thread of a paired Discord chat channel land in a
+  // Haven thread, under the copy of the message the thread started from.
+  await t.test('a thread in a paired chat channel becomes a Haven thread', async () => {
+    const cfg = next(A, 'ferry:config', (c) => c.links.some((l) => l.discord_channel_id === TEXT_ID));
+    A.emit('ferry:create-link', { channelCode: chat.code, guildId: GUILD_ID, discordChannelId: TEXT_ID, direction: 'both' });
+    assert.ok(await cfg, 'the chat pairing was made');
+
+    const START = discord.newId();
+    discord.dispatch('MESSAGE_CREATE', discordMessage(START, TEXT_ID, ALICE, 'Anyone tried the new build?'));
+    const copy = await until(async () => (await history(A, chat.code)).messages.find((m) => m.content === 'Anyone tried the new build?'));
+    assert.ok(copy, 'the chat line came across');
+
+    discord.dispatch('THREAD_CREATE', { id: START, guild_id: GUILD_ID, parent_id: TEXT_ID, type: 11, name: 'New build',
+      thread_metadata: { archived: false, locked: false } });
+    await wait(200);
+    discord.dispatch('MESSAGE_CREATE', discordMessage(discord.newId(), START, BOB, 'Works for me'));
+    const reply = await until(async () => (await threadOf(A, copy.id)).messages.find((m) => m.content === 'Works for me'));
+    assert.ok(reply, 'the thread reply hangs from the message the thread started from');
+    const chatAfter = (await history(A, chat.code)).messages;
+    assert.ok(!chatAfter.some((m) => m.content === 'Works for me'), 'the reply is not a chat line');
+
+    // A thread started on its own gets a line with its name to hang from.
+    const LONE = discord.newId();
+    discord.dispatch('THREAD_CREATE', { id: LONE, guild_id: GUILD_ID, parent_id: TEXT_ID, type: 11, name: 'Side chat',
+      thread_metadata: { archived: false, locked: false } });
+    await wait(200);
+    discord.dispatch('MESSAGE_CREATE', discordMessage(discord.newId(), LONE, ALICE, 'first in the side chat'));
+    const root = await until(async () => (await history(A, chat.code)).messages.find((m) => m.content === '🧵 Side chat'));
+    assert.ok(root, 'a line names the thread');
+    const sideReply = await until(async () => (await threadOf(A, root.id)).messages.find((m) => m.content === 'first in the side chat'));
+    assert.ok(sideReply, 'the reply is in that thread');
+    discord.dispatch('MESSAGE_CREATE', discordMessage(discord.newId(), LONE, BOB, 'second'));
+    await until(async () => (await threadOf(A, root.id)).messages.some((m) => m.content === 'second'));
+    const roots = (await history(A, chat.code)).messages.filter((m) => m.content === '🧵 Side chat');
+    assert.strictEqual(roots.length, 1, 'the next reply reuses the same line');
+  });
+
   assert.deepStrictEqual(errors.filter((e) => !/forum/i.test(e)), [], 'no unexpected errors');
   A.close();
 });

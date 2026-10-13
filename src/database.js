@@ -1239,9 +1239,13 @@ function initDatabase() {
   // Stores the original Discord snowflake ID so re-importing the same export
   // (or overlapping exports) is idempotent: duplicate snowflakes are skipped.
   addColumn('messages', 'discord_message_id', "TEXT DEFAULT NULL");
+  // Unique per channel (#5773): Ferry can carry one Discord message into
+  // several Haven channels, and each copy keeps its Discord id so a later
+  // import of the same history skips it instead of adding it twice.
   db.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_discord_id
-      ON messages(discord_message_id)
+    DROP INDEX IF EXISTS idx_messages_discord_id;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_discord_chan_id
+      ON messages(channel_id, discord_message_id)
       WHERE discord_message_id IS NOT NULL;
   `);
 

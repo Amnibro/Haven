@@ -3314,14 +3314,21 @@ initFerry({
   sanitizeText,
   // A Discord forum post arrives through here too, with a title and tags, and
   // becomes a forum topic.
-  insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content, title = null, tags = null }) => {
+  insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content, title = null, tags = null, discordMessageId = null }) => {
     // Topic titles get the same clean-up as titles typed in Haven.
     title = typeof title === 'string' && title ? (sanitizeText(title) || null) : null;
+    // The Discord id is kept (#5773), so importing the same history later
+    // skips what Ferry already brought over instead of adding it twice.
+    const discordId = /^\d{5,25}$/.test(String(discordMessageId || '')) ? String(discordMessageId) : null;
+    if (discordId) {
+      const already = db.prepare('SELECT id FROM messages WHERE channel_id = ? AND discord_message_id = ?').get(channelId, discordId);
+      if (already) return already.id;
+    }
     try {
       const tagList = Array.isArray(tags) && tags.length ? tags : null;
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, title, tags) VALUES (?, ?, ?, 1, ?, ?, ?, ?)'
-      ).run(channelId, null, content, username, avatarUrl || null, title || null, tagList ? JSON.stringify(tagList) : null);
+        'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, title, tags, discord_message_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)'
+      ).run(channelId, null, content, username, avatarUrl || null, title || null, tagList ? JSON.stringify(tagList) : null, discordId);
 
       io.to(`channel:${channelCode}`).emit('new-message', {
         channelCode,
@@ -3374,6 +3381,21 @@ initFerry({
   // A message inside a Discord forum post becomes a reply in its Haven topic.
   // Same events a Haven reply sends, so an open thread panel shows it and the
   // topic's reply count and bump follow.
+  // The Haven message a Discord thread hangs from (#5773): the copy of the
+  // message it was started from, or, for a thread started on its own (or
+  // whose first message never came across), a line with its name.
+  findOrCreateThreadRoot({ channelId, channelCode, discordThreadId, name, username, avatarUrl }) {
+    const found = db.prepare(
+      'SELECT id FROM messages WHERE channel_id = ? AND discord_message_id = ? AND thread_id IS NULL'
+    ).get(channelId, String(discordThreadId));
+    if (found) return found.id;
+    return this.insertHavenMessage({
+      channelId, channelCode, username, avatarUrl,
+      content: `🧵 ${sanitizeText(String(name || '').slice(0, 100)) || 'Thread'}`,
+      discordMessageId: discordThreadId,
+    });
+  },
+
   insertHavenThreadReply: ({ channelId, channelCode, parentId, username, avatarUrl, content }) => {
     try {
       const result = db.prepare(
