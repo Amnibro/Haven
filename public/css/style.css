@@ -8,7 +8,7 @@
 @import url('/css/style-themes-win95-light.css?v=4.21.0');
 @import url('/css/style-status-effects.css?v=4.21.0');
 @import url('/css/style-sidebar.css?v=4.22.9');
-@import url('/css/style-messages.css?v=4.22.9');
+@import url('/css/style-messages.css?v=4.22.14');
 @import url('/css/style-profile-servers-modals.css?v=4.21.1');
 @import url('/css/style-emoji-reactions-threads.css?v=4.22.9');
 @import url('/css/style-tags-uploads-search.css?v=4.21.1');
@@ -19,7 +19,7 @@
 @import url('/css/style-presence-connections.css?v=4.22.12');
 @import url('/css/style-roles-layout-polls.css?v=4.22.12');
 @import url('/css/style-admin-panels.css?v=4.21.0');
-@import url('/css/style-gallery-ferry-forums.css?v=4.22.9');
+@import url('/css/style-gallery-ferry-forums.css?v=4.22.14');
 @import url('/css/style-accessibility.css?v=4.22.13');
 
 /* The rules themselves live in the files imported above, in this order. Later
