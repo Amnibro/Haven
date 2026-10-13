@@ -3082,8 +3082,10 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
             ts = msg.timestamp;
           }
 
+          // No Haven account: the Discord author's name and avatar carry it
+          // (#5771, src/importAuthors.js).
           const result = insertMsg.run(
-            channelId, user.id, content, ts, msg.author || 'Unknown', msg.authorAvatar || null, replyTo, msg.discordId || null
+            channelId, null, content, ts, msg.author || 'Unknown', msg.authorAvatar || null, replyTo, msg.discordId || null
           );
 
           if (result.changes === 0) {

@@ -605,7 +605,10 @@ function setupSocketHandlers(io, db, opts = {}) {
             // Counting stops at 1000: badges show 99+ past 99 anyway, and an
             // uncapped count walked every unread message of a long-idle member
             // on every channel-list refresh.
-            'SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND user_id != ? AND thread_id IS NULL LIMIT 1000)'
+            // (user_id IS NULL OR ...): imported and relayed messages belong
+            // to no account, and NULL != ? is never true, so they never
+            // counted (#5771).
+            'SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL LIMIT 1000)'
           ).get(ch.id, lastRead, userId);
           ch.unreadCount = countRow ? countRow.cnt : 0;
         } else {

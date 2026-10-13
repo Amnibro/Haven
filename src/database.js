@@ -9,6 +9,7 @@ const { applyDefaultUpdates } = require('./settingDefaults');
 const messageHighlights = require('./messageHighlights');
 const messageQuotes = require('./messageQuotes');
 const modCases = require('./modCases');
+const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
@@ -1690,6 +1691,7 @@ function initDatabase() {
   messageHighlights.ensureTable(db);
   messageQuotes.ensureTable(db);
   modCases.ensureTable(db);
+  migrateImportedAuthors(db);
   forumUnread.ensureTable(db);
 
   // ── Rich presence: linked external accounts ─────────────

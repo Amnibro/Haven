@@ -9,7 +9,8 @@
 // token goes to nobody, admins included: its settings screen only ever
 // shows a masked hint. The rest go to admins only, here and in every live
 // update below, and the audit log records that they changed, not the value.
-const NEVER_SENT_SETTINGS = new Set(['ferry_bot_token']);
+// import_authors_cleared is a marker the server keeps for itself (src/importAuthors.js).
+const NEVER_SENT_SETTINGS = new Set(['ferry_bot_token', 'import_authors_cleared']);
 const ADMIN_ONLY_SETTINGS = new Set([
   'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'server_code', 'registration_token',
   'turn_password', 'turnstile_secret_key',
