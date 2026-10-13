@@ -1344,7 +1344,12 @@
       "uploading_one": "Uploading {{count}} sticker…",
       "uploading_other": "Uploading {{count}} stickers…",
       "uploaded_one": "{{count}} sticker uploaded",
-      "uploaded_other": "{{count}} stickers uploaded"
+      "uploaded_other": "{{count}} stickers uploaded",
+      "pack_on": "{{name}} stickers are back in the picker",
+      "pack_off": "{{name}} stickers are hidden from the picker",
+      "pack_failed": "Could not change the sticker pack",
+      "restored_one": "Restored {{count}} sticker",
+      "restored_other": "Restored {{count}} stickers"
     },
     "bot": {
       "hidden": "Hidden - bot owner or admin only",
@@ -3732,7 +3737,12 @@
       "pack_placeholder": "Pack name (optional)",
       "upload_btn": "Upload",
       "no_stickers": "No stickers uploaded",
-      "bulk_title": "Select multiple images (names auto-generated from filenames; optional pack applies to all)"
+      "bulk_title": "Select multiple images (names auto-generated from filenames; optional pack applies to all)",
+      "builtin_title": "Built-in packs",
+      "builtin_hint": "Sticker packs that come with Haven. Switch one off to hide it from the picker; messages that already show its stickers keep them.",
+      "builtin_count": "{{count}} of {{total}} stickers",
+      "builtin_restore": "Restore {{count}} deleted",
+      "builtin_show": "Show"
     },
     "emoji_crop": {
       "title": "Crop Emoji",
@@ -4453,6 +4463,9 @@
     "section_emoji": "Emoji",
     "section_sticker": "Stickers",
     "sticker_search_placeholder": "Search stickers",
+    "sticker_recent": "Recently used",
+    "sticker_results": "Results",
+    "sticker_preview_hint": "Point at a sticker to preview it. Type :name: in a message to send one.",
     "no_stickers": "No stickers yet. An admin can upload some from the Manage Stickers panel",
     "all_emojis_title": "All emojis",
     "customize_quick_title": "Customize Quick Reactions",
