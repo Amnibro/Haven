@@ -147,6 +147,7 @@ async switchChannel(code) {
   // send was then refused. (#5468)
   const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
   if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+  this._updateReadOnlyNote(channel);
   // Text-only elements
   const _msgInput = document.getElementById('message-input');
   const _sendBtn = document.getElementById('send-btn');

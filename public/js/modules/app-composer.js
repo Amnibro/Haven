@@ -208,6 +208,18 @@ _bindComposer() {
   });
 },
 
+// A read-only channel shows the message box only to those who may still
+// post (admins, Read-Only Override). For them a note sits above the box, so
+// they don't forget that nobody else can answer there.
+_updateReadOnlyNote(channel) {
+  const note = document.getElementById('read-only-note');
+  if (!note) return;
+  const canPostOverReadOnly = !!(channel && channel.read_only === 1 && !channel.is_dm &&
+    (this.user?.isAdmin || channel.canOverrideReadOnly));
+  const textOff = channel && channel.text_enabled === 0 && channel.media_enabled === 0;
+  note.style.display = canPostOverReadOnly && !textOff ? '' : 'none';
+},
+
 _bindComposerPickers() {
   // Emoji picker toggle
   document.getElementById('emoji-btn').addEventListener('click', () => {

@@ -288,6 +288,7 @@
       "placeholder": "Type a message...",
       "placeholder_short": "Message...",
       "placeholder_forum": "Start a new topic... (/ for commands)",
+      "read_only_note": "Read-only channel. Others can't post here, but you can.",
       "forum_empty_hint": "This is a forum. Every message you send here starts a topic. Reply inside a topic and it moves back to the newest end of the channel, so nothing gets buried.",
       "via_persona": "Sent via {{name}}",
       "spoiler": "Spoiler",

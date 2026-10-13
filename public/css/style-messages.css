@@ -710,6 +710,13 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   background: var(--bg-secondary);
 }
 
+/* Above the message box in a read-only channel, for those who may post. */
+.read-only-note {
+  padding: 0.25rem 1rem 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .message-input-area textarea {
   flex: 1;
   min-width: 11rem;
