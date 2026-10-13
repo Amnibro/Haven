@@ -1,0 +1,8 @@
+The built-in sticker artwork in this directory is original work drawn for
+Haven. Every sticker is generated from tools/stickers/art.js with the
+shapes in tools/stickers/kit.js: no third-party images, icon sets or emoji
+fonts are used, and the lettering is hand-drawn strokes rather than a font.
+Hex, the hexagon character, is based on Haven's own logo.
+
+It is distributed under the same license as the rest of Haven (AGPL-3.0,
+see LICENSE at the top of the repository).
