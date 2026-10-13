@@ -10,6 +10,7 @@ const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extrac
 const { votesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
+const quotes = require('../messageQuotes');
 const forumUnread = require('../forumUnread');
 
 // The length limit is on what people type. An encrypted DM reaches the
@@ -285,6 +286,7 @@ module.exports = function register(socket, ctx) {
     const attachmentTagMap = new Map();
     let pinnedSet = null;
     let highlightMap = new Map();
+    let quoteMap = new Map();
     if (msgIds.length > 0) {
       const ph = msgIds.map(() => '?').join(',');
       db.prepare(`
@@ -301,6 +303,7 @@ module.exports = function register(socket, ctx) {
           .all(...msgIds).map(r => r.message_id)
       );
       highlightMap = highlights.lookup(db, msgIds);
+      quoteMap = quotes.lookup(db, msgIds);
 
       db.prepare(`SELECT message_id, title, data FROM role_menus WHERE message_id IN (${ph})`).all(...msgIds)
         .forEach(r => { const menu = ctx.buildRoleMenu?.(r, socket.user.id); if (menu) roleMenuMap.set(r.message_id, menu); });
@@ -411,6 +414,7 @@ module.exports = function register(socket, ctx) {
       obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
       obj.is_archived = !!m.is_archived;
       if (highlightMap.has(m.id)) obj.highlight = highlightMap.get(m.id);
+      if (quoteMap.has(m.id)) obj.quoteOf = quoteMap.get(m.id);
       obj.thread = threadMap.get(m.id) || null;
       // A forum topic is unread until you open it (your own topics start
       // read), and again whenever a reply lands after the last one you saw.
@@ -1515,6 +1519,17 @@ module.exports = function register(socket, ctx) {
           }
         } catch (err) {
           console.warn('[highlight] could not mark a new message:', err.message);
+        }
+      }
+
+      // Sent from the Quote action: the quote leads back to its message
+      // (src/messageQuotes.js). The message is stored either way.
+      if (isInt(data.quoteOf)) {
+        try {
+          const quoteOf = quotes.record(db, { messageId: message.id, quoteOf: data.quoteOf, channelId: channel.id });
+          if (quoteOf) message.quoteOf = quoteOf;
+        } catch (err) {
+          console.warn('[quote] could not link a quote to its message:', err.message);
         }
       }
 

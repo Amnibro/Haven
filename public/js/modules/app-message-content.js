@@ -463,7 +463,9 @@ _formatContent(str) {
     if (block.split('\n').every(line => /^&gt;\s*$/.test(line))) return full;
     const lines = block.trim().split('\n').map(line => line.replace(/^&gt;\s?/, ''));
     let authorHtml = '';
-    if (lines[0] && /^@[^\s].+ wrote:$/.test(lines[0])) {
+    // The name may already be a highlighted mention by now, so the tags are
+    // set aside for the test (they stay in what is shown).
+    if (lines[0] && /^@[^\s].+ wrote:$/.test(lines[0].replace(/<[^>]*>/g, ''))) {
       authorHtml = `<div class="chat-blockquote-author">${lines.shift()}</div>`;
     }
     const textHtml = lines.join('<br>');
@@ -897,6 +899,10 @@ _quoteMessage(msgEl) {
   // Build the blockquote text: each line prefixed with >
   const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
   const quoteText = `${t('thread_runtime.wrote', { author })}\n${quotedLines}\n`;
+
+  // Sent along with the message, so the quote can lead back here.
+  const quotedId = parseInt(msgEl.dataset.msgId, 10);
+  this._pendingQuote = quotedId ? { id: quotedId, code: this.currentChannel } : null;
 
   const input = document.getElementById('message-input');
   // If there's already text, add a newline before the quote

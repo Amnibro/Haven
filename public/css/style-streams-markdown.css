@@ -1097,6 +1097,8 @@ video:-webkit-full-screen {
 }
 .chat-table tbody tr:hover { background: rgba(255,255,255,0.02); }
 .chat-table .custom-emoji { width: 1.1em; height: 1.1em; vertical-align: -0.15em; }
+[data-quote-of] .chat-blockquote:has(.chat-blockquote-author) { cursor: pointer; }
+[data-quote-of] .chat-blockquote:has(.chat-blockquote-author):hover { filter: brightness(1.12); }
 .chat-blockquote-author {
   font-style: normal;
   font-weight: 600;
