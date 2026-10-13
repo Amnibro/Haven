@@ -1,11 +1,31 @@
-Font Awesome Free 6.7.2
+Haven icon packs (haven-icons-*.woff2)
 
-The fa-solid-900.woff2 file is from Font Awesome Free by Fonticons, Inc.
-The font is licensed under the SIL Open Font License 1.1.
-The included icons are licensed under CC BY 4.0.
+The haven-icons-glyphs, haven-icons-line and haven-icons-native fonts are
+subsets of the fonts below, holding only the interface icons Haven uses. The
+glyphs were rescaled to one shared icon box and re-encoded so the same icon
+has the same Private Use Area character in all three. They are built by
+tools/iconpacks/build.py in the Amni-Haven mobile repository from the icon
+registry the web, Android and iOS clients share.
+
+haven-icons-glyphs.woff2: Font Awesome Free 6.7.2 Solid by Fonticons, Inc.
+(https://fontawesome.com). The font is licensed under the SIL Open Font
+License 1.1 and the icons under CC BY 4.0. "Font Awesome" is a Reserved Font
+Name, so this modified version is named HavenIconsGlyphs. Full license text
+in LICENSE-FontAwesome-Free.txt.
+
+haven-icons-line.woff2: Lucide 1.48.0 (https://lucide.dev), Copyright (c)
+Lucide Icons and Contributors, ISC License; some icons are derived from
+Feather, Copyright (c) 2013-2023 Cole Bemis, MIT License. Full license text
+in LICENSE-Lucide.txt.
+
+haven-icons-native.woff2: Material Symbols Outlined (material-symbols
+0.47.5, https://fonts.google.com/icons), Copyright Google LLC, Apache License
+2.0, instanced at weight 400, fill 0, grade 0, optical size 24. Full license
+text in LICENSE-MaterialSymbols.txt.
 
 SIL Open Font License: https://scripts.sil.org/OFL
 Creative Commons Attribution 4.0: https://creativecommons.org/licenses/by/4.0/
+Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
 
 Archivo
 
