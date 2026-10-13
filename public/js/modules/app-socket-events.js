@@ -252,7 +252,7 @@ _listenFeatureEvents() {
     this._openDMPiP?.(data.code);
     // Scroll the DM channel into view in the sidebar
     const dmEl = document.querySelector(`.channel-item[data-code="${data.code}"]`);
-    if (dmEl) dmEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (dmEl) dmEl.scrollIntoView({ behavior: this._scrollBehavior(), block: 'nearest' });
     // Re-enable any disabled DM buttons
     document.querySelectorAll('.user-dm-btn[disabled]').forEach(b => { b.disabled = false; b.style.opacity = ''; });
   });

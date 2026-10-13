@@ -1483,7 +1483,7 @@
       "group_maintenance": "Maintenance",
       "group_appearance": "Appearance",
       "zoom": "Zoom",
-      "text_size": "Text Size",
+      "accessibility": "Accessibility",
       "reaction_size": "Reaction Size",
       "role_display": "Role Display",
       "toolbar_icons": "Interface Icons",
@@ -1579,12 +1579,53 @@
       "slider_label": "Interface zoom",
       "hint": "Scales the whole interface. Drag for the exact size you want."
     },
-    "text_size": {
-      "title": "Chat Text Size",
-      "smaller": "Smaller text",
-      "larger": "Larger text",
-      "slider_label": "Chat text size",
-      "hint": "Makes the text of messages, and what you type, bigger or smaller. The rest of Haven stays at the size Zoom sets."
+    "accessibility": {
+      "title": "Accessibility",
+      "hint": "Saved on this device. Each change applies right away.",
+      "reset": "Reset",
+      "text_size": {
+        "title": "Message Text Size",
+        "smaller": "Smaller text",
+        "larger": "Larger text",
+        "slider_label": "Message text size",
+        "preview": "The quick brown fox jumps over the lazy dog.",
+        "hint": "Messages, threads, forum posts and the message box, on top of Zoom. The rest of the interface stays as it is."
+      },
+      "line_spacing": {
+        "title": "Line Spacing",
+        "normal": "Normal",
+        "relaxed": "Relaxed",
+        "loose": "Loose"
+      },
+      "letter_spacing": {
+        "title": "Letter Spacing",
+        "normal": "Normal",
+        "wide": "Wide"
+      },
+      "spacing_hint": "Applies where you read and write messages.",
+      "font": {
+        "title": "Font",
+        "theme": "Theme font",
+        "system": "System font",
+        "hyperlegible": "Atkinson Hyperlegible",
+        "dyslexic": "OpenDyslexic",
+        "hint": "Replaces the theme's font across the app. Atkinson Hyperlegible keeps similar letters apart; OpenDyslexic weights the bottom of each letter. Code keeps its monospace font."
+      },
+      "motion": {
+        "title": "Reduce Motion",
+        "system": "Follow system",
+        "on": "On",
+        "off": "Off",
+        "hint": "Stops animations, theme effects, shimmering role colors and smooth scrolling. GIFs, animated emoji and profile pictures play only while you hover or tap them."
+      },
+      "display": {
+        "title": "Display",
+        "high_contrast": "High contrast",
+        "high_contrast_hint": "Brighter secondary text, stronger borders and a thick focus ring, on any theme.",
+        "underline_links": "Underline links",
+        "large_targets": "Larger click targets",
+        "large_targets_hint": "Bigger buttons and taller rows in the sidebars, the message box and the message actions."
+      }
     },
     "reaction_size": {
       "title": "Reaction Size",

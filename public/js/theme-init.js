@@ -66,12 +66,81 @@
     document.documentElement.style.setProperty('--ui-scale', _z + '%');
   } catch (e) { /* storage blocked: keep the 100% scale */ }
 
-  // Chat text size, on top of the zoom (the slider is in app-appearance.js).
-  try {
-    var _ts = parseInt(localStorage.getItem('haven-text-size'), 10) || 100;
-    _ts = Math.min(150, Math.max(80, _ts));
-    document.documentElement.style.setProperty('--chat-text-scale', String(_ts / 100));
-  } catch (e) { /* storage blocked: chat text at its normal size */ }
+  // Accessibility options (Settings > Accessibility). Applied here, before
+  // first paint, for the same reason as the zoom above: bigger text or a
+  // calmer screen has to be there on the first frame, not arrive once
+  // app.js has loaded. The settings page reads and applies through the same
+  // two functions (window.HavenA11y), so there is one copy of the rules.
+  //
+  // Each option is a data- attribute on <html> that the CSS keys off. Reduce
+  // motion is the exception: its pick (system / on / off) is an attribute,
+  // and the result, after asking the OS when the pick is "system", is the
+  // one class every motion rule checks, html.reduce-motion.
+  var A11Y_CHOICES = {
+    lineSpacing: ['normal', 'relaxed', 'loose'],
+    letterSpacing: ['normal', 'wide'],
+    font: ['theme', 'system', 'hyperlegible', 'dyslexic'],
+    motion: ['system', 'on', 'off']
+  };
+  function _a11yPick(value, list) { return list.indexOf(value) >= 0 ? value : list[0]; }
+  function _readA11y(storage) {
+    var get = function(key) {
+      try { return storage ? storage.getItem(key) : null; } catch (e) { return null; }
+    };
+    var size = parseInt(get('haven-text-size'), 10);
+    return {
+      textSize: size ? Math.min(200, Math.max(80, size)) : 100,
+      lineSpacing: _a11yPick(get('haven-line-spacing'), A11Y_CHOICES.lineSpacing),
+      letterSpacing: _a11yPick(get('haven-letter-spacing'), A11Y_CHOICES.letterSpacing),
+      font: _a11yPick(get('haven-readable-font'), A11Y_CHOICES.font),
+      highContrast: get('haven-contrast') === 'high',
+      motion: _a11yPick(get('haven-reduce-motion'), A11Y_CHOICES.motion),
+      underlineLinks: get('haven-underline-links') === '1',
+      largeTargets: get('haven-large-targets') === '1'
+    };
+  }
+  var _motionQuery = null;
+  try { _motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null; } catch (e) { /* no media queries: treat the OS as not asking */ }
+  var _a11yState = null;
+  function _applyA11y(prefs) {
+    var root = document.documentElement;
+    root.style.setProperty('--msg-text-scale', String(prefs.textSize / 100));
+    root.setAttribute('data-text-size', String(prefs.textSize));
+    root.setAttribute('data-line-spacing', prefs.lineSpacing);
+    root.setAttribute('data-letter-spacing', prefs.letterSpacing);
+    root.setAttribute('data-readable-font', prefs.font);
+    root.setAttribute('data-contrast', prefs.highContrast ? 'high' : 'normal');
+    root.setAttribute('data-reduce-motion', prefs.motion);
+    root.setAttribute('data-underline-links', prefs.underlineLinks ? 'on' : 'off');
+    root.setAttribute('data-large-targets', prefs.largeTargets ? 'on' : 'off');
+    var reduce = prefs.motion === 'on' || (prefs.motion === 'system' && !!(_motionQuery && _motionQuery.matches));
+    var was = _a11yState ? _a11yState.reduce : null;
+    if (reduce) root.classList.add('reduce-motion');
+    else if (root.classList.remove) root.classList.remove('reduce-motion');
+    _a11yState = { prefs: prefs, reduce: reduce };
+    // Theme effects, animated pictures and the like are JavaScript, so they
+    // hear about a change instead of reading the class on their own schedule.
+    if (was !== null && was !== reduce && typeof CustomEvent === 'function') {
+      document.dispatchEvent(new CustomEvent('haven:reduce-motion-change', { detail: { reduce: reduce } }));
+    }
+    return reduce;
+  }
+  window.HavenA11y = {
+    read: function() {
+      var storage = null;
+      try { storage = typeof localStorage !== 'undefined' ? localStorage : null; } catch (e) { /* blocked: every option at its default */ }
+      return _readA11y(storage);
+    },
+    apply: _applyA11y,
+    reducedMotion: function() { return !!(_a11yState && _a11yState.reduce); }
+  };
+  try { _applyA11y(window.HavenA11y.read()); } catch (e) { /* the page still renders with the theme's own settings */ }
+  // "Follow system" keeps following it while the page is open.
+  if (_motionQuery) {
+    var _onMotionQuery = function() { if (_a11yState) _applyA11y(_a11yState.prefs); };
+    if (_motionQuery.addEventListener) _motionQuery.addEventListener('change', _onMotionQuery);
+    else if (_motionQuery.addListener) _motionQuery.addListener(_onMotionQuery);
+  }
 
   var _themeCompat = window.HavenThemeCompat;
   var _safeMode = _themeCompat ? _themeCompat.isSafeMode(window.location) : false;
@@ -180,7 +249,8 @@
     var defaults = {matrix:1,fallout:1,ffx:1,ice:1,nord:1,darksouls:1,bloodborne:1,cyberpunk:1,lotr:1,abyss:1,scripture:1,chapel:1,gospel:1};
     if (defaults[t]) fxList = [t];
   }
-  if (fxList.indexOf('crt') >= 0) document.documentElement.classList.add('fx-crt');
+  // Reduced motion runs no theme effects (theme.js applyEffects), CRT included.
+  if (fxList.indexOf('crt') >= 0 && !(_a11yState && _a11yState.reduce)) document.documentElement.classList.add('fx-crt');
   // Custom and RGB: paint the last palette theme.js showed, light or dark,
   // so the first frame already has the right colors (#5726). Without one
   // (the first load after updating), custom is worked out below.

@@ -114,8 +114,8 @@ const SETTINGS = [
   },
   {
     key: 'text_size', scope: 'device', dflt: 100,
-    label: () => t('settings.text_size.title'),
-    read: () => Math.min(150, Math.max(80, parseInt(lsGet('haven-text-size'), 10) || 100)),
+    label: () => t('settings.accessibility.text_size.title'),
+    read: () => Math.min(200, Math.max(80, parseInt(lsGet('haven-text-size'), 10) || 100)),
     apply: (v) => {
       const slider = document.getElementById('text-size-slider');
       if (!slider) return false;

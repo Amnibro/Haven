@@ -22,3 +22,22 @@ twemoji-colr-font package by Tilman Vatteroth
 Twitter, Inc and other contributors (https://github.com/twitter/twemoji).
 The font is licensed under the SIL Open Font License 1.1.
 The emoji graphics are licensed under CC BY 4.0.
+
+Atkinson Hyperlegible
+
+The atkinson-hyperlegible-*.woff2 files are Atkinson Hyperlegible by the
+Braille Institute of America, as subset for the web by Google Fonts.
+The font is licensed under the SIL Open Font License 1.1; the full license
+is in OFL-AtkinsonHyperlegible.txt.
+
+SIL Open Font License: https://scripts.sil.org/OFL
+
+OpenDyslexic
+
+The OpenDyslexic-Regular.woff2 and OpenDyslexic-Bold.woff2 files are
+OpenDyslexic 0.990 by Abbie Gonzalez (https://github.com/antijingoist/opendyslexic),
+included unmodified. Reserved Font Name: OpenDyslexic.
+The font is licensed under the SIL Open Font License 1.1; the full license
+is in OFL-OpenDyslexic.txt.
+
+SIL Open Font License: https://scripts.sil.org/OFL

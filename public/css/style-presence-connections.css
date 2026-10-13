@@ -499,9 +499,9 @@
 @keyframes pa-marquee-scroll {
   to { transform: translateX(-50%); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .pa-marquee-track { animation: none; }
-}
+/* html.reduce-motion follows the OS setting unless the viewer overrides it
+   (Settings > Accessibility; see theme-init.js). */
+html.reduce-motion .pa-marquee-track { animation: none; }
 
 /* Playback progress: a line with a dot playhead, plus elapsed/total times. */
 .profile-activity-progress {

@@ -343,5 +343,6 @@ test('chat names follow the role display setting', () => {
 test('shimmer is CSS only and stops for reduced motion', () => {
   const css = require('./coreCss').readCoreCss();
   assert.match(css, /\.role-gradient\.role-shimmer \{[^}]*animation: role-shimmer/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.role-gradient\.role-shimmer \{ animation: none; \}/);
+  // html.reduce-motion is the OS setting or the Accessibility override (theme-init.js).
+  assert.match(css, /html\.reduce-motion \.role-gradient\.role-shimmer \{ animation: none; \}/);
 });

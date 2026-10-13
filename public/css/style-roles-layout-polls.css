@@ -113,9 +113,7 @@
 @keyframes role-shimmer {
   to { background-position: -200% 0; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .role-gradient.role-shimmer { animation: none; }
-}
+html.reduce-motion .role-gradient.role-shimmer { animation: none; }
 
 /* Role editor: the gradient switches and a sample name in the role's style. */
 .role-gradient-opts {
@@ -492,7 +490,7 @@
   font-size: 0.5625rem;       /* 9px */
 }
 [data-density="compact"] .message-content {
-  font-size: calc(0.8125rem * var(--chat-text-scale, 1));       /* 13px */
+  font-size: 0.8125rem;       /* 13px */
 }
 [data-density="compact"] .message-author {
   font-size: 0.75rem;         /* 12px */
@@ -513,7 +511,7 @@
   font-size: 1.0625rem;       /* 17px */
 }
 [data-density="spacious"] .message-content {
-  font-size: calc(0.9375rem * var(--chat-text-scale, 1));       /* 15px */
+  font-size: 0.9375rem;       /* 15px */
   line-height: 1.5;
 }
 [data-density="spacious"] .message-author {

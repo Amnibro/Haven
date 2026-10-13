@@ -6,16 +6,16 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.21.0';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.21.0';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.22.2';
-import UIBindMethods   from './modules/app-ui.js?v=4.22.10';
-import ComposerMethods from './modules/app-composer.js?v=4.22.10';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.22.12';
+import UIBindMethods   from './modules/app-ui.js?v=4.22.12';
+import ComposerMethods from './modules/app-composer.js?v=4.22.12';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.21.0';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.21.0';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.22.2';
-import MessageActionMethods from './modules/app-message-actions.js?v=4.22.11';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.22.11';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.22.12';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.22.12';
 import PeopleMethods from './modules/app-people.js?v=4.21.0';
-import SettingsMethods from './modules/app-settings.js?v=4.21.0';
+import SettingsMethods from './modules/app-settings.js?v=4.22.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.21.0';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.21.0';
@@ -23,8 +23,9 @@ import MobileMethods from './modules/app-mobile.js?v=4.21.0';
 import MediaMethods    from './modules/app-media.js?v=4.21.0';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.18.1';
 import AttachmentMethods from './modules/app-attachments.js?v=4.21.1';
-import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.21.0';
-import AppearanceMethods from './modules/app-appearance.js?v=4.22.1';
+import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.22.9';
+import AppearanceMethods from './modules/app-appearance.js?v=4.22.9';
+import AccessibilityMethods from './modules/app-accessibility.js?v=4.22.3';
 import SoundMethods from './modules/app-sounds.js?v=4.21.0';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.17.5';
@@ -33,7 +34,7 @@ import ChannelMethods  from './modules/app-channels.js?v=4.22.2';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.21.0';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.21.2';
-import MessageMethods  from './modules/app-messages.js?v=4.22.11';
+import MessageMethods  from './modules/app-messages.js?v=4.22.12';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.21.0';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.22.11';
 import UserMethods     from './modules/app-users.js?v=4.21.0';
@@ -67,7 +68,7 @@ import CallMethods from './modules/app-calls.js?v=4.17.1';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 import GroupMethods from './modules/app-groups.js?v=4.19.3';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
-import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.22.1';
+import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.22.9';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
@@ -395,7 +396,7 @@ class HavenApp {
     this._setupAnimatePfpPicker();
     this._setupAnimateChatPicker();
     this._setupZoomSlider();
-    this._setupTextSizeSlider();
+    this._setupAccessibility();
     this._setupEmojiSizePicker();
     this._setupImageModePicker();
     this._setupLazyMedia();
@@ -529,6 +530,7 @@ Object.assign(HavenApp.prototype,
   AttachmentMethods,
   AvatarEditorMethods,
   AppearanceMethods,
+  AccessibilityMethods,
   SoundMethods,
   EmojiStickerMethods,
   BotMethods,
