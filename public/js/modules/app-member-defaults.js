@@ -48,7 +48,7 @@ const yesNo = (v) => (v ? t('settings.admin.member_defaults.on') : t('settings.a
 
 // The curated list. Nothing here touches security, privacy, notifications,
 // audio devices, keys or the account. `late` settings need the plugins
-// (layouts, Haven Glyphs) to be loaded before they can be applied.
+// (layouts) to be loaded before they can be applied.
 const SETTINGS = [
   {
     key: 'theme', scope: 'account',
@@ -135,17 +135,17 @@ const SETTINGS = [
   {
     key: 'interface_icons', scope: 'device', dflt: 'mono',
     label: () => t('settings.toolbar_icons.title'),
+    // The saved pick only: a theme's suggested pack is not a choice, so a
+    // server default still reaches someone who never picked.
     read: () => {
       const raw = lsGet('haven-toolbar-icons');
-      return oneOf(raw === 'color' ? 'emoji' : raw, ['mono', 'emoji', 'glyphs'], 'mono');
+      return oneOf(raw === 'color' ? 'emoji' : raw, ['mono', 'emoji', 'glyphs', 'line', 'native'], 'mono');
     },
-    // Glyphs is a plugin, so it waits for the plugins; the other two do not.
-    lateFor: (v) => v === 'glyphs',
-    apply: (v) => {
-      if (v === 'glyphs' && !window.HavenPluginLoader?.loadedPlugins?.get?.('HavenGlyphs.plugin.js')?.instance) return false;
-      return pressPicker('toolbar-icon-picker', 'data-toolbaricons', v);
-    },
-    show: (v) => ({ mono: t('settings.toolbar_icons.monochrome'), emoji: t('settings.toolbar_icons.colorful'), glyphs: t('settings.toolbar_icons.glyphs') })[v] || v,
+    apply: (v) => pressPicker('toolbar-icon-picker', 'data-toolbaricons', v),
+    show: (v) => ({
+      mono: t('settings.toolbar_icons.monochrome'), emoji: t('settings.toolbar_icons.colorful'),
+      glyphs: t('settings.toolbar_icons.glyphs'), line: t('settings.toolbar_icons.line'), native: t('settings.toolbar_icons.native'),
+    })[v] || v,
   },
   {
     key: 'role_display', scope: 'device', dflt: 'colored-name',
