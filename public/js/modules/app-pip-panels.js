@@ -2,6 +2,8 @@
 // and dropping files, message actions, resizing and dragging, and the pop-out
 // DM itself (opening, history, replies, quoting and sending).
 
+const PIP_AVATAR_SHAPES = ['circle', 'rounded', 'squircle', 'hex', 'diamond', 'square'];
+
 export default {
 
 _bindThreadAndDmPanels() {
@@ -541,10 +543,13 @@ _refreshDMPipHeader(ch, partnerName) {
         || null)
       : null;
     const avatarUrl = (onlinePartner && onlinePartner.avatar) || (ch.dm_target && ch.dm_target.avatar);
-    const shape = (onlinePartner && onlinePartner.avatarShape)
-      || (ch.dm_target && ch.dm_target.avatarShape)
-      || 'circle';
-    avatarWrap.className = `dm-pip-avatar-wrap avatar-${shape}`;
+    const rawShape = (onlinePartner && onlinePartner.avatarShape)
+      || (ch.dm_target && ch.dm_target.avatarShape);
+    const shape = PIP_AVATAR_SHAPES.includes(rawShape) ? rawShape : 'circle';
+    // The shape goes on the picture, not the wrap: the hexagon and diamond
+    // are cut with clip-path, which would cut the status dot off too.
+    avatarWrap.className = 'dm-pip-avatar-wrap';
+    avatarWrap.style.backgroundColor = '';
     // Determine status: 'online' / 'away' / 'dnd' / 'invisible' / 'offline'
     // (matches the sidebar `.user-status-dot` modifier classes: empty
     // class = online green; 'away'/'dnd'/'invisible' for explicit states;
@@ -569,13 +574,11 @@ _refreshDMPipHeader(ch, partnerName) {
     // A group has no single partner whose status the dot could show.
     const statusDot = ch.is_group ? '' : `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
     if (avatarUrl) {
-      avatarWrap.style.backgroundColor = '';
-      avatarWrap.innerHTML = `<img src="${this._escapeHtml(avatarUrl)}" alt="">${statusDot}`;
+      avatarWrap.innerHTML = `<span class="dm-pip-avatar-face avatar-${shape}"><img src="${this._escapeHtml(avatarUrl)}" alt=""></span>${statusDot}`;
     } else {
       const initial = (partnerName || '?').charAt(0).toUpperCase();
       const color = this._getUserColor(partnerName || '');
-      avatarWrap.style.backgroundColor = color;
-      avatarWrap.innerHTML = `<span class="dm-pip-avatar-initial">${this._escapeHtml(initial)}</span>${statusDot}`;
+      avatarWrap.innerHTML = `<span class="dm-pip-avatar-face avatar-${shape}" style="background-color:${this._escapeHtml(color)}"><span class="dm-pip-avatar-initial">${this._escapeHtml(initial)}</span></span>${statusDot}`;
     }
   }
 },
