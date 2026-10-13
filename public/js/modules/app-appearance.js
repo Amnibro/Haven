@@ -705,20 +705,19 @@ _setupToolbarIconPicker() {
     }
   };
 
-  // Glyphs is the Haven Glyphs plugin, switched on and off from here so it
-  // sits with the other two icon looks instead of on the plugin page. The
-  // plugin replaces emoji text, so the toolbars show their emoji twins under
-  // it and the plugin turns those into glyphs (#5673).
-  const GLYPHS_PLUGIN = 'HavenGlyphs.plugin.js';
-  const applyIconMode = (mode) => {
-    document.documentElement.dataset.toolbaricons = mode === 'glyphs' ? 'emoji' : mode;
+  // Icon packs live in icon-packs.js (window.HavenIcons), which has already
+  // applied the saved pack, or the theme's suggestion, before this runs. The
+  // picker only shows the pack in use and saves a new pick.
+  const icons = window.HavenIcons;
+  const markIconMode = (mode) => {
     picker.querySelectorAll('[data-toolbaricons]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.toolbaricons === mode);
+      const on = btn.dataset.toolbaricons === mode;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   };
-  const savedMode = localStorage.getItem('haven-toolbar-icons') || 'mono';
-  const normalizedMode = savedMode === 'color' ? 'emoji' : savedMode;
-  applyIconMode(normalizedMode);
+  markIconMode(icons ? icons.current() : (localStorage.getItem('haven-toolbar-icons') || 'mono'));
+  document.addEventListener('haven:icon-pack-change', (e) => markIconMode(e.detail.mode));
 
   let savedSlots = parseInt(localStorage.getItem('haven-toolbar-visible-slots') || '3', 10);
   if (!Number.isFinite(savedSlots)) savedSlots = 3;
@@ -755,24 +754,23 @@ _setupToolbarIconPicker() {
 
   renderOrderList();
 
+  // The Haven Glyphs plugin used to draw the Glyphs pick; it is a stub now
+  // that selects Glyphs when enabled. Picking anything else switches it off
+  // so it cannot put Glyphs back on the next load.
+  const GLYPHS_PLUGIN = 'HavenGlyphs.plugin.js';
   picker.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-toolbaricons]');
     if (!btn) return;
-    let mode = btn.dataset.toolbaricons;
+    const mode = icons ? icons.choose(btn.dataset.toolbaricons) : btn.dataset.toolbaricons;
+    if (!icons) {
+      localStorage.setItem('haven-toolbar-icons', mode);
+      document.documentElement.dataset.toolbaricons = mode;
+      markIconMode(mode);
+    }
     const loader = window.HavenPluginLoader;
-    if (mode === 'glyphs') {
-      const plugin = loader?.loadedPlugins?.get?.(GLYPHS_PLUGIN);
-      if (!plugin || !plugin.instance) {
-        this._showToast(t('settings.toolbar_icons.glyphs_missing'), 'error');
-        mode = 'emoji';
-      } else {
-        loader.enablePlugin(GLYPHS_PLUGIN);
-      }
-    } else if (loader?.loadedPlugins?.get?.(GLYPHS_PLUGIN)?.enabled) {
+    if (mode !== 'glyphs' && loader?.loadedPlugins?.get?.(GLYPHS_PLUGIN)?.enabled) {
       loader.disablePlugin(GLYPHS_PLUGIN);
     }
-    localStorage.setItem('haven-toolbar-icons', mode);
-    applyIconMode(mode);
     refreshCurrentMessages();
   });
 

@@ -45,7 +45,7 @@ const SETTINGS = {
   zoom: { scope: 'device', check: (v) => Number.isInteger(v) && v >= 70 && v <= 150 },
   text_size: { scope: 'device', check: (v) => Number.isInteger(v) && v >= 80 && v <= 200 },
   reaction_size: { scope: 'device', check: oneOf('small', 'normal', 'large', 'x-large') },
-  interface_icons: { scope: 'device', check: oneOf('mono', 'emoji', 'glyphs') },
+  interface_icons: { scope: 'device', check: oneOf('mono', 'emoji', 'glyphs', 'line', 'native') },
   role_display: { scope: 'device', check: oneOf('colored-name', 'dot') },
   image_mode: { scope: 'device', check: oneOf('thumbnail', 'full') },
   embed_size: { scope: 'device', check: oneOf('off', 'small', 'medium', 'full') },
