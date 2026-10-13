@@ -420,8 +420,7 @@ Haven also ships optional extras that are **installed but switched off by defaul
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
 | `plugins/ChannelTabsLayout.plugin.js` | Channels and DMs tabs above the sidebar list, with a Join or create button |
 | `plugins/MessageTimestamps.plugin.js` | Adds timestamps to messages |
-| `plugins/HavenGlyphs.plugin.js` | Reversible contextual interface icons using the bundled local Font Awesome font |
-| `public/fonts/fa-solid-900.woff2` | Local Font Awesome Solid font used by Haven Glyphs |
+| `plugins/HavenGlyphs.plugin.js` | Kept for installs that enabled it: selects the built-in Glyphs icon pack |
 
 To make a bundled theme available to everyone, publish it. The quickest way is the theme picker itself: admins (and anyone with Manage Server) see an **Available to publish** section there with every theme nobody has published yet, and each theme file's card has a **Publish** switch. **Settings → Admin → 🏠 Branding → Custom Themes** does the same. Until a theme is published, members do not see it in their picker or in **Settings → Plugins & Themes** and cannot switch to it, even though the file is present, which is the usual reason a theme "looks missing" after an update. Someone who was already using a theme when it was unpublished keeps it until they pick another.
 
@@ -443,10 +442,18 @@ versa. The **Sidebar Layout** picker in **Settings → Layout** switches between
 (Haven's own layout), then every layout plugin on the server. A new layout
 plugin appears there by itself; see [Appearing in the Layout picker](docs/theme-authoring.md#appearing-in-the-layout-picker).
 
-Haven Glyphs is optional per browser under **Settings → Plugins & Themes**. It
-uses the bundled local Font Awesome font for interface affordances. Message
-bodies, reactions, emoji/GIF pickers, soundboard names, user content, and form
-fields stay unchanged. It can be disabled from the same settings screen.
+Interface icons are a per-browser choice under **Settings → Icons**:
+Monochrome (the default) and Colorful Emoji change the message toolbars, while
+**Glyphs** (Font Awesome Free Solid), **Line** (Lucide) and **Native** (Material
+Symbols) redraw the icons across the whole interface in the theme's colors.
+Message bodies, reactions, emoji/GIF pickers, soundboard names, user content
+and form fields stay unchanged. Some built-in themes suggest a pack until you
+pick one (CRT, Matrix, Fallout, Tron and Cyberpunk suggest Line, Win95 suggests
+Glyphs), and an admin can set a server-wide starting pack under Defaults for New
+Members. The fonts are small local subsets in `public/fonts`; their licenses are
+in `public/fonts/NOTICE.txt`. The icon list is shared with the Haven Android and
+iOS apps, so the same pack looks the same everywhere. Haven Glyphs used to be a
+plugin; enabling that plugin now simply selects the Glyphs pack.
 
 Theme authors who need stable CSS variables and semantic layout selectors should use the [Theme API v1 authoring reference](docs/theme-authoring.md) instead of depending on Haven's internal classes and IDs.
 
