@@ -422,8 +422,87 @@ async _loadStickers() {
     if (!res.ok) return;
     const data = await res.json();
     this.stickers = data.stickers || [];
+    this.stickerPacks = Array.isArray(data.packs) ? data.packs : [];
     this._renderStickerList(this.stickers);
   } catch (err) { console.warn('[Stickers] could not load stickers', err); }
+},
+
+// Pack tabs for the picker: the built-in packs in the server's order, then
+// uploaded packs by name. A tab's picture is the pack's own icon sticker, or
+// its first sticker.
+_stickerPackTabs(stickers, builtinPacks) {
+  const byPack = new Map();
+  for (const s of stickers || []) {
+    const name = s.pack_name || 'General';
+    if (!byPack.has(name)) byPack.set(name, []);
+    byPack.get(name).push(s);
+  }
+  const tabs = [];
+  for (const p of builtinPacks || []) {
+    if (!byPack.has(p.name) || tabs.some(t => t.name === p.name)) continue;
+    tabs.push({ name: p.name, icon: p.icon || byPack.get(p.name)[0].url, builtin: true, stickers: byPack.get(p.name) });
+  }
+  [...byPack.keys()].filter(n => !tabs.some(t => t.name === n)).sort((a, b) => a.localeCompare(b)).forEach(name => {
+    tabs.push({ name, icon: byPack.get(name)[0].url, builtin: false, stickers: byPack.get(name) });
+  });
+  return tabs;
+},
+
+// Stickers matching a search, best first: the name itself, then names that
+// start with it, then keywords and pack names. Every word typed has to match
+// somewhere ("happy cat" finds a sticker named cat with the keyword happy).
+_stickerSearch(stickers, query) {
+  const words = String(query || '').toLowerCase().split(/[\s:]+/).filter(Boolean);
+  if (!words.length) return [];
+  const scored = [];
+  (stickers || []).forEach((s, i) => {
+    const name = (s.name || '').toLowerCase();
+    const parts = name.split(/[-_]/);
+    const keys = (Array.isArray(s.keywords) ? s.keywords : []).map(k => String(k).toLowerCase());
+    const pack = (s.pack_name || '').toLowerCase();
+    let total = 0;
+    for (const w of words) {
+      const score = name === w ? 0
+        : name.startsWith(w) ? 1
+        : parts.some(p => p.startsWith(w)) ? 2
+        : keys.some(k => k === w) ? 3
+        : keys.some(k => k.startsWith(w)) ? 4
+        : name.includes(w) ? 5
+        : pack.startsWith(w) ? 6
+        : -1;
+      if (score < 0) return;
+      total += score;
+    }
+    scored.push({ s, total, i });
+  });
+  return scored.sort((a, b) => a.total - b.total || a.i - b.i).map(x => x.s);
+},
+
+// Recently sent stickers, newest first, kept per device by URL.
+_recentStickerUrls() {
+  try {
+    const list = JSON.parse(localStorage.getItem('haven_recent_stickers') || '[]');
+    return Array.isArray(list) ? list.filter(u => typeof u === 'string') : [];
+  } catch { return []; }
+},
+
+_rememberSticker(url) {
+  if (!url) return;
+  const list = [url, ...this._recentStickerUrls().filter(u => u !== url)].slice(0, 16);
+  try { localStorage.setItem('haven_recent_stickers', JSON.stringify(list)); } catch { /* storage blocked (private mode): no recents, nothing else breaks */ }
+},
+
+// Recents that still exist on this server, in the order they were sent.
+_recentStickers(stickers) {
+  const byUrl = new Map((stickers || []).map(s => [s.url, s]));
+  return this._recentStickerUrls().map(u => byUrl.get(u)).filter(Boolean);
+},
+
+// The address to show a sticker at: a moving built-in waits on its resting
+// frame (sticker.svg#still) when the viewer wants less motion.
+_stickerThumbSrc(sticker) {
+  const still = sticker.animated && /\.svg$/i.test(sticker.url) && this._viewerChatAnimPref?.() !== 'always';
+  return still ? `${sticker.url}#still` : sticker.url;
 },
 
 _renderStickerList(stickers) {
@@ -439,16 +518,21 @@ _renderStickerList(stickers) {
     const p = s.pack_name || t('media_runtime.sticker.general_pack');
     (packs[p] = packs[p] || []).push(s);
   });
-  list.innerHTML = Object.keys(packs).sort().map(pack => `
-    <div class="sticker-pack-group" style="margin-top:8px">
-      <div style="font-size:0.75rem;font-weight:600;margin-bottom:4px;color:var(--text-secondary)">${this._escapeHtml(pack)}</div>
+  // Built-in packs first in their own order, then uploaded packs by name.
+  const order = (this.stickerPacks || []).map(p => p.name);
+  const rank = (name) => (order.includes(name) ? order.indexOf(name) : order.length);
+  list.innerHTML = Object.keys(packs).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)).map(pack => `
+    <div class="sticker-pack-group" style="margin-top:10px">
+      <div style="font-size:0.75rem;font-weight:600;margin-bottom:4px;color:var(--text-secondary)">${this._escapeHtml(pack)} <span class="muted-text" style="font-weight:400">· ${packs[pack].length}</span></div>
+      <div class="sticker-admin-grid">
       ${packs[pack].map(s => `
-        <div class="custom-sound-item">
-          <img src="${this._escapeHtml(s.url)}" alt=":${this._escapeHtml(s.name)}:" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;object-fit:contain;border-radius:4px;background:var(--bg-secondary)">
-          <span class="custom-sound-name">:${this._escapeHtml(s.name)}:</span>
-          <button class="btn-xs sticker-delete-btn" data-name="${this._escapeHtml(s.name)}" title="${t('media_runtime.delete')}">&#x1F5D1;</button>
+        <div class="sticker-admin-tile" title=":${this._escapeHtml(s.name)}:">
+          <img src="${this._escapeHtml(this._stickerThumbSrc(s))}" alt=":${this._escapeHtml(s.name)}:" loading="lazy">
+          <span class="sticker-admin-name">${this._escapeHtml(s.name)}</span>
+          <button class="btn-xs sticker-delete-btn" data-name="${this._escapeHtml(s.name)}" title="${t('media_runtime.delete')}" aria-label="${this._escapeHtml(t('media_runtime.delete') + ' :' + s.name + ':')}">&#x1F5D1;</button>
         </div>
       `).join('')}
+      </div>
     </div>
   `).join('');
 
@@ -463,11 +547,82 @@ _renderStickerList(stickers) {
         if (res.ok) {
           this._showToast(t('media_runtime.sticker.deleted', { name }), 'success');
           this._loadStickers();
+          this._loadStickerPacks();
         } else {
           this._showToast(t('media_runtime.delete_failed'), 'error');
         }
       } catch {
         this._showToast(t('media_runtime.delete_failed'), 'error');
+      }
+    });
+  });
+},
+
+// Built-in packs in Sticker Management: a switch per pack, and a way to bring
+// back stickers of the pack that were deleted.
+async _loadStickerPacks() {
+  const box = document.getElementById('sticker-packs-admin');
+  const list = document.getElementById('sticker-packs-list');
+  if (!box || !list) return;
+  try {
+    const res = await fetch('/api/sticker-packs', { headers: { 'Authorization': `Bearer ${this.token}` } });
+    if (!res.ok) { box.style.display = 'none'; return; }
+    this._renderStickerPacks((await res.json()).packs || []);
+  } catch { box.style.display = 'none'; }
+},
+
+_renderStickerPacks(packs) {
+  const box = document.getElementById('sticker-packs-admin');
+  const list = document.getElementById('sticker-packs-list');
+  if (!box || !list) return;
+  box.style.display = packs.length ? '' : 'none';
+  list.innerHTML = packs.map(p => `
+    <div class="sticker-pack-admin-row${p.enabled ? '' : ' off'}">
+      ${p.icon ? `<img src="${this._escapeHtml(p.icon)}#still" alt="">` : '<span style="width:2.25rem"></span>'}
+      <span class="sticker-pack-admin-text">
+        <span class="sticker-pack-admin-name">${this._escapeHtml(p.name)}</span>
+        <span class="sticker-pack-admin-count">${this._escapeHtml(t('modals.sticker_mgmt.builtin_count', { count: p.count, total: p.total }))}</span>
+      </span>
+      ${p.missing ? `<button class="btn-xs sticker-pack-restore" data-pack="${this._escapeHtml(p.id)}">${this._escapeHtml(t('modals.sticker_mgmt.builtin_restore', { count: p.missing }))}</button>` : ''}
+      <label class="checkbox-row" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.75rem">
+        <input type="checkbox" class="sticker-pack-toggle" data-pack="${this._escapeHtml(p.id)}" data-name="${this._escapeHtml(p.name)}"${p.enabled ? ' checked' : ''}>
+        <span>${this._escapeHtml(t('modals.sticker_mgmt.builtin_show'))}</span>
+      </label>
+    </div>`).join('');
+  list.querySelectorAll('.sticker-pack-toggle').forEach(box => {
+    box.addEventListener('change', async () => {
+      const enabled = box.checked;
+      try {
+        const res = await fetch(`/api/sticker-packs/${encodeURIComponent(box.dataset.pack)}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        this._renderStickerPacks((await res.json()).packs || []);
+        this._showToast(t(enabled ? 'media_runtime.sticker.pack_on' : 'media_runtime.sticker.pack_off', { name: box.dataset.name }), 'success');
+        this._loadStickers();
+      } catch {
+        box.checked = !enabled;
+        this._showToast(t('media_runtime.sticker.pack_failed'), 'error');
+      }
+    });
+  });
+  list.querySelectorAll('.sticker-pack-restore').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        const res = await fetch(`/api/sticker-packs/${encodeURIComponent(btn.dataset.pack)}/restore`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${this.token}` }
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        this._renderStickerPacks(data.packs || []);
+        const count = (data.restored || []).length;
+        this._showToast(t(count === 1 ? 'media_runtime.sticker.restored_one' : 'media_runtime.sticker.restored_other', { count }), 'success');
+        this._loadStickers();
+      } catch {
+        this._showToast(t('media_runtime.sticker.pack_failed'), 'error');
       }
     });
   });
@@ -487,6 +642,7 @@ _setupStickerManagement() {
     openBtn.addEventListener('click', () => {
       modal.style.display = 'flex';
       this._loadStickers();
+      this._loadStickerPacks();
     });
   }
   if (closeBtn && modal) {
