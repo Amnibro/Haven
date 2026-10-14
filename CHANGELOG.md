@@ -6,6 +6,59 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.23.0] - 2026-10-14
+
+Server mute and Mute for me, Timeout for moderators, an Accessibility
+section, moderation history, your own channel order, better Discord imports,
+and a long list of fixes.
+
+### Added
+- Mute a server from Settings, Sounds, or by right-clicking its icon: Mute all, or Mute except @mentions. DMs always come through. It is saved on your account, so it holds on every device and quiets push notifications too. In Haven Desktop any server in the bar can be muted, and muted servers show a 🔕 mark.
+- Mute for me: right-click someone to stop their messages making sounds, pop-ups or push notifications for you, mentions and DMs included. Only you are affected.
+- Arrange my channels: the ⇅ button lets you drag channels and categories into your own order. Only you see it, and it is kept on your account (#5779).
+- Settings, Accessibility: text size that works separately from Zoom, plus spacing, fonts, contrast and motion options (#5775, thanks Amnibro).
+- Moderation history: warn someone, keep notes on them, and see every action taken on an account in one place. A warning is shown to its member the next time they open Haven (#5759).
+- Blog forums: a Comments on pictures only option (#5765).
+- Group DMs show who was invited, who joined and who left, and the invite list shows who is already in the group or already invited.
+- Lists in the message box: start a line with - or 1., Shift+Enter continues the list, Tab and Shift+Tab nest it, and an empty item ends it.
+- Right-clicking a link in a message offers Copy Link Address.
+- Quotes lead back to the quoted message, like replies do.
+- Double-click a message to reply to it (#5777, thanks michues).
+- A note above the message box when you can post in a read-only channel.
+- A GIF button in the thread reply box.
+- Each person can show categories as a list or as tabs (#5767).
+- Official messages: choose how they look, and official mode stays on until you turn it off (#5758, thanks Amnibro).
+- Haven Desktop: a switch in Settings for the taskbar flash on notifications.
+- Debug: a "Recover streams that freeze" toggle, for screen shares that freeze until you leave and rejoin. Try it if this happens to you and let us know.
+- README: an AI usage section (#5778).
+
+### Changed
+- The moderator Mute is now called Timeout, so it is not confused with muting someone for yourself.
+- Discord import: threads land in their channel and forum posts in a forum channel (#5772). Imported messages belong to no Haven account, so they show as unread for everyone, the importing admin included (#5771). Ferry keeps Discord ids and carries replies from chat threads (#5773). Long fetches no longer get cut off, and channels are read at the same time (#5769, thanks PabloW).
+- Permissions: each tab says what it does, per-person exceptions are marked, a person can be reset to their roles, and Users lists every member alphabetically as soon as it opens.
+- Settings shows Auto-mod to members with Manage Server, as the server already allowed.
+- Closed forum topics take replies only from moderators and admins.
+- Staff see invisible members in All Members again, with a hollow dot.
+- Blog mode: a post with several files becomes one piece per file (#5763).
+- The Square (fit) tile shape shows the whole picture (#5764).
+- The homepage has a favicon at a real address, so search results can show it.
+- Finding each channel's latest message is faster (#5770, thanks PabloW).
+
+### Fixed
+- Jumping to a reply's original message stopped partway; it now arrives in one click.
+- Listen Together lost shared play and pause after the player was popped out.
+- Markdown tables showed as plain text in some messages.
+- The emoji picker could keep typing into a closed thread or DM box.
+- Only the first of several images sent together carries the reply (#5776, thanks michues).
+- Double-clicking a word to select it no longer starts a reply (#5777).
+- The status dot was cut off on hexagon and diamond avatars in the DM pop-out.
+- The thread mention bell opens the reply that mentioned you (#5766).
+- Channel and topic menus open above an open forum post (#5762).
+- The glitch effect scrambles a category's name, not the whole header (#5761).
+- "t is not a function" in the Discord import channel picker, and forum tag names show as text there (#5768, thanks PabloW).
+- A reaction on a message at the bottom of the chat stays on screen.
+- The reaction picker closes on any outside click and on Escape.
+
 ## [4.22.0] - 2026-10-12
 
 Official messages, an unread dot for forums, three new languages, and a round
