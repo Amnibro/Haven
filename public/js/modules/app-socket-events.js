@@ -81,7 +81,9 @@ _listenFeatureEvents() {
         if (!_quietThread) this.notifications.play('mention', { isMention: true });
         if (document.hidden && !_quietThread) {
           this._fireNativeNotification(
-            { ...msg, content: `[thread] ${msg.content || ''}` },
+            // Flattened before the prefix: a table needs its first line to
+            // itself to be read as one.
+            { ...msg, content: `[thread] ${window.HavenNotifyPreview ? HavenNotifyPreview.preview(msg.content || '') : (msg.content || '')}` },
             data.channelCode,
             { isMention: true }
           );

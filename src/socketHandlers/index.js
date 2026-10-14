@@ -13,6 +13,7 @@ const HAVEN_VERSION = require('../../package.json').version;
 const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline, toReplyContext } = require('./helpers');
 const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
+const { pushBody } = require('../pushBody');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
 const { diskStatus } = require('../diskGuard');
@@ -1472,14 +1473,9 @@ function setupSocketHandlers(io, db, opts = {}) {
         throttledWarn('push personal mute lookup failed', err);
       }
 
-      // Detect E2E encrypted envelope; don't leak ciphertext in notifications
-      let displayContent = messageContent;
-      try {
-        const parsed = JSON.parse(messageContent);
-        if (parsed && parsed.v && parsed.ct) displayContent = 'Sent a message';
-      } catch { /* not JSON, use as-is */ }
-
-      const body = displayContent.length > 120 ? displayContent.slice(0, 117) + '...' : displayContent;
+      // Plain-text body: E2E envelopes hidden, markdown and tables flattened
+      // (src/pushBody.js).
+      const body = pushBody(messageContent);
       const title = `${senderUsername} in #${channelName}`;
       const payload = JSON.stringify({
         title, body, channelCode,
