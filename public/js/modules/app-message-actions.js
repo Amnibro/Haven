@@ -175,7 +175,7 @@ _bindMessageClicks() {
     const preview = e.target.closest('.thread-preview');
     if (!preview) return;
     const parentId = parseInt(preview.dataset.threadParent);
-    if (parentId) this._openThread(parentId);
+    if (parentId) this._toggleThread(parentId);
   });
 },
 
@@ -256,7 +256,7 @@ _bindMessageActions() {
         this._showToast?.(t('thread_list.unavailable_in_dm'), 'info');
         return;
       }
-      this._openThread(msgId);
+      this._toggleThread(msgId);
     } else if (action === 'quote') {
       this._quoteMessage(msgEl);
     } else if (action === 'edit') {

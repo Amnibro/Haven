@@ -206,6 +206,14 @@ _threadJumpToMention() {
   setTimeout(() => el.classList.remove('highlight-flash'), 2000);
 },
 
+// Clicking the thread that is already open closes it.
+_toggleThread(parentId) {
+  const panel = document.getElementById('thread-panel');
+  const open = panel && panel.style.display !== 'none' && String(this._activeThreadParent) === String(parentId);
+  if (open) this._closeThread();
+  else this._openThread(parentId);
+},
+
 _openThread(parentId) {
   this._activeThreadParent = parentId;
   // Clear any pending thread mentions for this thread/channel

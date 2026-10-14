@@ -496,7 +496,7 @@ _showMessageContextMenu(e, msgEl) {
       if (this.channels?.find(c => c.code === this.currentChannel)?.is_dm) {
         this._showToast?.(t('thread_list.unavailable_in_dm'), 'info');
       } else {
-        this._openThread(msgId);
+        this._toggleThread(msgId);
       }
     } else if (action === 'copy-href') {
       const onCopied = () => this._showToast(t('toasts.link_address_copied'), 'success');
