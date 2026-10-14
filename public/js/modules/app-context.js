@@ -152,6 +152,15 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
     });
   }
 
+  // Mute for me: their messages stop notifying you (app-server-mute.js).
+  if (targetUserId !== this.user?.id) {
+    const _mutedForMe = this._mutedUserIds?.().has(Number(targetUserId));
+    addBtn(`${_mutedForMe ? '🔔' : '🔕'} ${t(_mutedForMe ? 'mute.unmute_member' : 'mute.mute_member')}`, () => {
+      this._hideUserContextMenu();
+      this._toggleUserMute(targetUserId, targetName);
+    });
+  }
+
   // ── Section 3: moderation (kick / mute / ban / delete / transfer) ──
   // Admin password reset stays opt-in: hidden unless the server setting is on
   // and the target isn't yourself (#5300).
@@ -352,13 +361,7 @@ _setupNotifications() {
   const mentionsToggle = document.getElementById('notif-mentions-enabled');
   const repliesToggle = document.getElementById('notif-replies-enabled');
   const dmToggle = document.getElementById('notif-dm-enabled');
-  const serverMutedToggle = document.getElementById('notif-server-muted');
-  if (serverMutedToggle) {
-    serverMutedToggle.checked = localStorage.getItem('haven_server_muted') === '1';
-    serverMutedToggle.addEventListener('change', () => {
-      localStorage.setItem('haven_server_muted', serverMutedToggle.checked ? '1' : '0');
-    });
-  }
+  // Mute this server: app-server-mute.js wires the choice.
   if (mentionsToggle) { mentionsToggle.checked = this.notifications.mentionsEnabled; mentionsToggle.addEventListener('change', () => { this.notifications.mentionsEnabled = mentionsToggle.checked; this.notifications._savePref('haven_notif_mentions_enabled', mentionsToggle.checked); }); }
   const roleMentionsToggle = document.getElementById('notif-role-mentions-enabled');
   if (roleMentionsToggle) { roleMentionsToggle.checked = this.notifications.roleMentionsEnabled !== false; roleMentionsToggle.addEventListener('change', () => { this.notifications.roleMentionsEnabled = roleMentionsToggle.checked; this.notifications._savePref('haven_notif_role_mentions_enabled', roleMentionsToggle.checked); }); }

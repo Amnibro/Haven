@@ -639,14 +639,24 @@ module.exports = function register(socket, ctx) {
       'timezone', 'time_format',
       // Your own sidebar order (#5779, app-channel-personal-order.js).
       'channel_order',
+      // Muting, for yourself (app-server-mute.js): this server ('all' or
+      // 'mentions') and members muted for you (a JSON list of user ids).
+      'server_mute', 'muted_users',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
-    const maxLen = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : 50;
+    const maxLen = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : 50;
     if (!allowedKeys.includes(key) || !value || value.length > maxLen) return;
     let stored = value;
     if (key === 'channel_order') {
       stored = cleanChannelOrder(value);
       if (!stored) return;
+    }
+    if (key === 'server_mute' && value !== 'all' && value !== 'mentions') return;
+    if (key === 'muted_users') {
+      let ids;
+      try { ids = JSON.parse(value); } catch { return; } // not JSON: refused
+      if (!Array.isArray(ids)) return;
+      stored = JSON.stringify([...new Set(ids.map(Number).filter(n => Number.isInteger(n) && n > 0 && n !== socket.user.id))].slice(0, 500));
     }
 
     db.prepare(
@@ -673,7 +683,7 @@ module.exports = function register(socket, ctx) {
   socket.on('delete-preference', (data) => {
     if (!data || typeof data !== 'object') return;
     const key = typeof data.key === 'string' ? data.key.trim() : '';
-    const deletableKeys = ['timezone', 'time_format', 'channel_order'];
+    const deletableKeys = ['timezone', 'time_format', 'channel_order', 'server_mute', 'muted_users'];
     if (!deletableKeys.includes(key)) return;
     db.prepare('DELETE FROM user_preferences WHERE user_id = ? AND key = ?').run(socket.user.id, key);
     socket.emit('preference-deleted', { key });

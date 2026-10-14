@@ -5,8 +5,8 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.21.0';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.22.14';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.22.23';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.22.24';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.22.24';
 import UIBindMethods   from './modules/app-ui.js?v=4.22.12';
 import ComposerMethods from './modules/app-composer.js?v=4.22.22';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
@@ -19,7 +19,7 @@ import PeopleMethods from './modules/app-people.js?v=4.21.0';
 import SettingsMethods from './modules/app-settings.js?v=4.22.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.21.0';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
-import ServerBarMethods from './modules/app-server-bar.js?v=4.21.0';
+import ServerBarMethods from './modules/app-server-bar.js?v=4.22.24';
 import MobileMethods from './modules/app-mobile.js?v=4.21.0';
 import MediaMethods    from './modules/app-media.js?v=4.22.21';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.22.18';
@@ -30,11 +30,11 @@ import AccessibilityMethods from './modules/app-accessibility.js?v=4.22.3';
 import SoundMethods from './modules/app-sounds.js?v=4.21.0';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.17.5';
-import ContextMethods  from './modules/app-context.js?v=4.22.14';
+import ContextMethods  from './modules/app-context.js?v=4.22.24';
 import ChannelMethods  from './modules/app-channels.js?v=4.22.23';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.22.14';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
-import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.21.2';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.22.24';
 import MessageMethods  from './modules/app-messages.js?v=4.22.18';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.21.0';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.22.11';
@@ -65,13 +65,14 @@ import ForumBlogMethods from './modules/app-forum-blog.js?v=4.22.14';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.19.11';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.22.15';
-import CallMethods from './modules/app-calls.js?v=4.17.1';
+import CallMethods from './modules/app-calls.js?v=4.22.24';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 import GroupMethods from './modules/app-groups.js?v=4.19.3';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.22.9';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
+import ServerMuteMethods from './modules/app-server-mute.js?v=4.22.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
@@ -411,6 +412,7 @@ class HavenApp {
     this._setupMemberDefaults();
     this._setupMessageHighlights();
     this._setupModCases();
+    this._setupServerMute();
     this._setupForumUnread();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
@@ -581,6 +583,7 @@ Object.assign(HavenApp.prototype,
   MemberDefaultsMethods,
   MessageHighlightMethods,
   ModCaseMethods,
+  ServerMuteMethods,
   ForumUnreadMethods,
   ChannelCategoryMethods,
   ChannelPersonalOrderMethods,

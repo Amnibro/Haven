@@ -76,8 +76,10 @@ _listenFeatureEvents() {
       const _isReplyToMe = msg.replyContext && msg.replyContext.user_id === this.user.id;
       if ((_isMention || _isReplyToMe) && !_isMuted) {
         this._recordThreadMention(data.channelCode, data.parentId, msg);
-        if (!_isMuted) this.notifications.play('mention', { isMention: true });
-        if (document.hidden) {
+        // A muted server (Mute all) or a member muted for you stays quiet.
+        const _quietThread = this._notifyBlockedByMutes?.({ senderId: msg.user_id, isDm: false, isMention: true });
+        if (!_quietThread) this.notifications.play('mention', { isMention: true });
+        if (document.hidden && !_quietThread) {
           this._fireNativeNotification(
             { ...msg, content: `[thread] ${msg.content || ''}` },
             data.channelCode,

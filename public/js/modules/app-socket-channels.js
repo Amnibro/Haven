@@ -475,7 +475,9 @@ _listenChannelsAndMessages() {
       }
       if (data.message.user_id !== this.user.id) {
         const _mutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-        const _isMuted = _mutedChs.includes(data.channelCode) || localStorage.getItem('haven_server_muted') === '1';
+        // Server mute and members muted for you are decided below, once it is
+        // known whether this is a DM or mentions you (app-server-mute.js).
+        const _isMuted = _mutedChs.includes(data.channelCode);
         if (!_isMuted) {
           // Check if message contains @mention of current user.
           // Escape regex chars and use non-word lookahead so usernames
@@ -489,7 +491,10 @@ _listenChannelsAndMessages() {
           const _isDm = _notifCh && _notifCh.is_dm;
           const _isMention = mentionRegex.test(data.message.content) || everyoneRegex.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
           const _notifOpts = _isMention ? { isMention: true } : _isReplyToMe ? { isReply: true } : _isDm ? { isDm: true } : null;
-          if (_isMention) {
+          const _quiet = this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm, isMention: !!_isMention });
+          if (_quiet) {
+            // Muted server or member: no sound and no pop-up.
+          } else if (_isMention) {
             this.notifications.play('mention', { isMention: true });
           } else if (_isReplyToMe) {
             this.notifications.play('reply', { isReply: true });
@@ -499,7 +504,7 @@ _listenChannelsAndMessages() {
             this.notifications.play(_isAnnouncement ? 'announcement' : 'message');
           }
           // Fire native OS notification if tab is hidden (alt-tabbed, minimised, etc.)
-          if (!isActivelyViewing) {
+          if (!isActivelyViewing && !_quiet) {
             this._fireNativeNotification(data.message, data.channelCode, _notifOpts);
           }
         }
@@ -510,7 +515,9 @@ _listenChannelsAndMessages() {
       }
     } else {
       const _mutedChs2 = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-      const _isMuted2 = _mutedChs2.includes(data.channelCode) || localStorage.getItem('haven_server_muted') === '1';
+      // Muting the server quiets notifications, not the unread counts in your
+      // own sidebar; that is decided below (app-server-mute.js).
+      const _isMuted2 = _mutedChs2.includes(data.channelCode);
       // If this message is for the active DM PiP and the user is actively
       // viewing the app, treat it as read instead of bumping the unread
       // badge. The message is already visible in the floating PiP panel.
@@ -552,7 +559,10 @@ _listenChannelsAndMessages() {
         const _isDm2 = _notifCh2 && _notifCh2.is_dm;
         const _isMention2 = mentionRegex.test(data.message.content) || everyoneRegex2.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
         const _notifOpts2 = _isMention2 ? { isMention: true } : _isReplyToMe2 ? { isReply: true } : _isDm2 ? { isDm: true } : null;
-        if (_isMention2) {
+        const _quiet2 = this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm2, isMention: !!_isMention2 });
+        if (_quiet2) {
+          // Muted server or member: no sound and no pop-up.
+        } else if (_isMention2) {
           this.notifications.play('mention', { isMention: true });
         } else if (_isReplyToMe2) {
           this.notifications.play('reply', { isReply: true });
@@ -562,7 +572,7 @@ _listenChannelsAndMessages() {
           this.notifications.play(_isAnnouncement2 ? 'announcement' : 'message');
         }
         // Fire native OS notification when tab/window is not visible
-        this._fireNativeNotification(data.message, data.channelCode, _notifOpts2);
+        if (!_quiet2) this._fireNativeNotification(data.message, data.channelCode, _notifOpts2);
       }
     }
 

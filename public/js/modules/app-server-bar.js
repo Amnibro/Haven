@@ -783,10 +783,10 @@ _renderServerBar() {
         window.open(el.dataset.url, '_blank', 'noopener');
       }
     });
-    // Right-click to edit
+    // Right-click: edit, and on the desktop app mute (app-server-mute.js).
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      this._editServer(el.dataset.url);
+      this._showServerMuteMenu(e, { url: el.dataset.url });
     });
   });
 
@@ -806,6 +806,7 @@ _renderServerBar() {
   // previously lit dots are destroyed. Reapply immediately from the last
   // known badge state so dots don't vanish until the next IPC event. (#5300)
   if (this._lastServerBadges) this._updateServerBadgeDots(this._lastServerBadges);
+  this._applyServerMuteMarks?.();
 },
 
 };

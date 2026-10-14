@@ -1403,6 +1403,19 @@
 }
 .channel-more-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
+/* A muted server's icon (app-server-mute.js). */
+.server-icon.server-muted::after {
+  content: '🔕';
+  position: absolute;
+  left: -2px;
+  bottom: -2px;
+  font-size: 0.625rem;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px var(--bg-primary));
+}
+.server-icon.server-muted { opacity: 0.75; }
+
 /* Arranging your own channel order (#5779, app-channel-personal-order.js). */
 .arrange-channels-btn.active { opacity: 1 !important; color: var(--accent); }
 .arrange-bar {

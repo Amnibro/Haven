@@ -24,8 +24,10 @@ _callNotify(title, body, code) {
 },
 _ringIncomingCall(c) {
   if (!c?.code || this._callRings.has(c.code) || (this.voice?.inVoice && this.voice.currentChannel === c.code)) return;
-  let muted = localStorage.getItem('haven_server_muted') === '1';
-  try { muted = muted || JSON.parse(localStorage.getItem('haven_muted_channels') || '[]').includes(c.code); } catch { /* corrupt mute list: only the server-wide mute counts */ }
+  // Calls are DMs, which still come through a muted server; a caller you
+  // muted for yourself, or a muted conversation, rings quietly.
+  let muted = this._mutedUserIds?.().has(Number(c.callerId)) || false;
+  try { muted = muted || JSON.parse(localStorage.getItem('haven_muted_channels') || '[]').includes(c.code); } catch { /* corrupt mute list: only a muted caller counts */ }
   const caller = this._getNickname(c.callerId, c.callerName);
   const el = document.createElement('div');
   el.className = 'call-ring';

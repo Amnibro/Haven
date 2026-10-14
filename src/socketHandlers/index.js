@@ -66,6 +66,7 @@ const registerMessageHighlights = require('./messageHighlights');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
 const modCases = require('../modCases');
+const { quietRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const forumUnread = require('../forumUnread');
 const registerForumVotes = require('./forumVotes');
@@ -1459,6 +1460,17 @@ function setupSocketHandlers(io, db, opts = {}) {
         throttledWarn('push mute lookup failed', err);
       }
 
+      // Muting, for yourself (app-server-mute.js): a muted server sends no
+      // push except for DMs (and, with "except @mentions", mentions of you),
+      // and a member you muted sends you none at all.
+      let quietFor = new Set();
+      try {
+        quietFor = quietRecipients(db, { channelId, senderUserId, messageContent });
+      } catch (err) {
+        // Pushes still go out, but muted people get them too, so say so.
+        throttledWarn('push personal mute lookup failed', err);
+      }
+
       // Detect E2E encrypted envelope; don't leak ciphertext in notifications
       let displayContent = messageContent;
       try {
@@ -1476,6 +1488,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       for (const sub of subs) {
         if (activeUserIds.has(sub.user_id)) continue;
         if (mutedUserIds.has(sub.user_id)) continue;
+        if (quietFor.has(sub.user_id)) continue;
         queuePush(sub, channelCode, payload);
       }
 
@@ -1489,6 +1502,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         `).all(channelId, senderUserId)
           .filter(m => !activeUserIds.has(m.user_id))
           .filter(m => !mutedUserIds.has(m.user_id))
+          .filter(m => !quietFor.has(m.user_id))
           .map(m => m.user_id);
 
         if (inactiveMembers.length) {

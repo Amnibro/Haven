@@ -1802,7 +1802,7 @@
       "sound_manager_hint": "Browse sounds, assign to events, set hotkeys",
       "notifications_hint": "General message sounds (off by default). @Mentions, replies, and DMs always notify.",
       "mute_server": "Mute this server",
-      "mute_server_hint": "Suppress all notifications, sounds, and taskbar badge from this server.",
+      "mute_server_hint": "Silences sounds, pop-ups, push notifications and the taskbar badge from this server. DMs still come through. Saved on your account, so it applies on every device. You can also right-click the server's icon.",
       "direct_messages": "Direct Messages",
       "popup_limit": "Limit pop-up notifications",
       "popup_off": "Off (show every one)",
@@ -4469,5 +4469,20 @@
     "type_unmute": "Unmute",
     "type_ban": "Ban",
     "type_unban": "Unban"
+  },
+  "mute": {
+    "mode_off": "Off",
+    "mode_all": "Mute all",
+    "mode_mentions": "Mute except @mentions",
+    "mute_server": "Mute server",
+    "mute_except_mentions": "Mute except @mentions",
+    "unmute_server": "Unmute server",
+    "edit_server": "Edit server",
+    "server_muted_all": "Muted",
+    "server_muted_mentions": "Muted except @mentions",
+    "mute_member": "Mute for me",
+    "unmute_member": "Unmute for me",
+    "muted_member": "{{name}} is muted for you",
+    "unmuted_member": "{{name}} is no longer muted for you"
   }
 }

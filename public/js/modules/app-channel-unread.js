@@ -496,13 +496,8 @@ _updateTabTitle() {
 },
 
 _updateDesktopBadge() {
-  // If the user has muted this server entirely, always report no-badge so this
-  // instance never adds to the taskbar overlay icon.
-  if (localStorage.getItem('haven_server_muted') === '1') {
-    this._lastDesktopBadge = false;
-    window.havenDesktop?.setUnreadBadge?.(false);
-    return;
-  }
+  // A muted server lights the taskbar only for unread DMs (app-server-mute.js).
+  const _serverMute = this._serverMuteMode?.() || 'off';
   // Exclude muted channels from the desktop total. The channels-list
   // snapshot from the server doesn't know about local mutes (they live in
   // localStorage), so a muted channel with new messages was lighting up
@@ -513,9 +508,11 @@ _updateDesktopBadge() {
     mutedSet = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
   } catch { mutedSet = new Set(); }
   const validCodes = new Set((this.channels || []).map(c => c.code));
+  const dmCodes = _serverMute === 'off' ? null : new Set((this.channels || []).filter(c => c.is_dm).map(c => c.code));
   const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => {
     if (!validCodes.has(k)) return s;
     if (mutedSet.has(k)) return s;
+    if (dmCodes && !dmCodes.has(k)) return s;
     return s + v;
   }, 0);
   // Track last-pushed value so visibility-driven re-syncs (below) can detect
@@ -571,8 +568,10 @@ _resyncDesktopBadgeOnFocus() {
  *          to avoid duplicate notifications (server-side push handles the rest).
  */
 _fireNativeNotification(message, channelCode, opts) {
-  // Server-level mute: suppress all notifications from this server instance.
-  if (localStorage.getItem('haven_server_muted') === '1') return;
+  // Server mute and members muted for you (app-server-mute.js). DMs still
+  // come through a muted server, and with "except @mentions" so do those.
+  const _muteCh = this.channels?.find(c => c.code === channelCode);
+  if (this._notifyBlockedByMutes({ senderId: message.user_id, isDm: !!(_muteCh?.is_dm || opts?.isDm), isMention: !!opts?.isMention })) return;
   // Per-channel mute: client-side muted channels list (defense-in-depth; callers
   // should also check, but bots / webhooks have user_id=null which can slip through
   // edge cases such as channels-list re-seeding or future notification paths).

@@ -1801,9 +1801,13 @@ console.log(haven);</code></pre></div></div>
             <input type="checkbox" id="notif-enabled">
           </label>
           <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.sounds_section.notifications_hint">General message sounds (off by default). @Mentions, replies, and DMs always notify.</small>
-          <label class="toggle-row">
+          <label class="select-row">
             <span data-i18n="settings.sounds_section.mute_server">Mute this server</span>
-            <input type="checkbox" id="notif-server-muted">
+            <select id="notif-server-mute-mode" class="settings-select">
+              <option value="off" data-i18n="mute.mode_off">Off</option>
+              <option value="all" data-i18n="mute.mode_all">Mute all</option>
+              <option value="mentions" data-i18n="mute.mode_mentions">Mute except @mentions</option>
+            </select>
           </label>
           <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.sounds_section.mute_server_hint">Suppress all notifications, sounds, and taskbar badge from this server.</small>
           <label class="toggle-row">
