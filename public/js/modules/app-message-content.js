@@ -948,7 +948,7 @@ _setReply(msgEl, msgId) {
   const forumCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
   if (forumCh && forumCh.is_forum && msgEl && msgEl.closest && msgEl.closest('#messages')) {
     this._clearReply();
-    this._openThread(msgId);
+    this._toggleThread(msgId);
     return;
   }
   // Opening a forum topic's thread (above) stays allowed, as from the
