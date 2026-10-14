@@ -364,7 +364,7 @@ module.exports = function register(socket, ctx) {
         const threadIds = [...threadMap.keys()];
         const tph = threadIds.map(() => '?').join(',');
         db.prepare(`
-          SELECT tm.thread_id, COALESCE(u.display_name, u.username) as username, u.avatar
+          SELECT tm.thread_id, COALESCE(u.display_name, u.username) as username, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
           FROM (
             SELECT thread_id, user_id, MAX(created_at) as latest
             FROM messages WHERE thread_id IN (${tph})
@@ -374,7 +374,7 @@ module.exports = function register(socket, ctx) {
         `).all(...threadIds).forEach(p => {
           const info = threadMap.get(p.thread_id);
           if (info && info.participants.length < 5) {
-            info.participants.push({ username: p.username, avatar: p.avatar });
+            info.participants.push({ username: p.username, avatar: p.avatar, avatarShape: p.avatar_shape });
           }
         });
       }
@@ -3100,7 +3100,7 @@ module.exports = function register(socket, ctx) {
 
       // Get up to 5 unique participants
       const participants = db.prepare(`
-        SELECT DISTINCT COALESCE(u.display_name, u.username) as username, u.avatar
+        SELECT DISTINCT COALESCE(u.display_name, u.username) as username, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m JOIN users u ON m.user_id = u.id
         WHERE m.thread_id = ? ORDER BY m.created_at DESC LIMIT 5
       `).all(parentId);
@@ -3114,7 +3114,7 @@ module.exports = function register(socket, ctx) {
           lastReplyId: lastMsg ? lastMsg.id : null,
           // Lets forum cards light up for everyone but the person who replied (#5641).
           senderId: socket.user.id,
-          participants: participants.map(p => ({ username: p.username, avatar: p.avatar })),
+          participants: participants.map(p => ({ username: p.username, avatar: p.avatar, avatarShape: p.avatar_shape })),
           ...(blogMode ? forumBlog.threadExtras(db, channel.id, parentId) : {})
         }
       });

@@ -21,12 +21,13 @@ _renderThreadPreview(parentId, thread, opts = {}) {
   `;
   }
   const participantAvatars = (thread.participants || []).map(p => {
+    const shape = this._threadAvatarShape(p.avatarShape);
     if (p.avatar) {
-      return `<img class="thread-participant-avatar" src="${this._escapeHtml(p.avatar)}" alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
+      return `<img class="thread-participant-avatar${shape}" src="${this._escapeHtml(p.avatar)}" alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
     }
     const color = this._getUserColor(p.username);
     const initial = p.username.charAt(0).toUpperCase();
-    return `<div class="thread-participant-avatar thread-participant-initial" style="background:${color}" title="${this._escapeHtml(p.username)}">${initial}</div>`;
+    return `<div class="thread-participant-avatar thread-participant-initial${shape}" style="background:${color}" title="${this._escapeHtml(p.username)}">${initial}</div>`;
   }).join('');
 
   const timeAgo = this._relativeTime(thread.lastReplyAt);
@@ -64,8 +65,7 @@ _setThreadParentHeader(meta = {}) {
   const username = meta.userId != null
     ? (this._getNickname?.(meta.userId, baseUsername) || baseUsername)
     : baseUsername;
-  const shape = (meta.avatarShape || 'circle') === 'square' ? 'square' : 'circle';
-  const shapeClass = shape === 'square' ? ' thread-parent-avatar-square' : '';
+  const shapeClass = meta.avatarShape === 'square' ? ' thread-parent-avatar-square' : this._threadAvatarShape(meta.avatarShape);
   // The starter's id lets their name and avatar open the profile card.
   const uid = meta.userId != null ? String(meta.userId) : '';
   wrap.dataset.userId = uid;
@@ -210,12 +210,9 @@ _threadJumpToMention() {
   setTimeout(() => el.classList.remove('highlight-flash'), 2000);
 },
 
-// Clicking the thread that is already open closes it.
-_toggleThread(parentId) {
-  const panel = document.getElementById('thread-panel');
-  const open = panel && panel.style.display !== 'none' && String(this._activeThreadParent) === String(parentId);
-  if (open) this._closeThread();
-  else this._openThread(parentId);
+// The avatar shape class for a sender's own shape, as the channel uses it.
+_threadAvatarShape(shape) {
+  return ['circle', 'rounded', 'squircle', 'hex', 'diamond', 'square'].includes(shape) ? ` avatar-${shape}` : ' avatar-circle';
 },
 
 // Clicking the thread that is already open closes it.
@@ -252,7 +249,7 @@ _openThread(parentId) {
   const avatarImg = msgEl?.querySelector('.message-avatar-img');
   let avatar = null;
   if (avatarImg && avatarImg.getAttribute('src')) avatar = avatarImg.getAttribute('src');
-  const avatarShape = (avatarImg && avatarImg.classList.contains('avatar-square')) ? 'square' : 'circle';
+  const avatarShape = msgEl?.dataset?.avatarShape || 'circle';
   const parentUserIdRaw = msgEl?.dataset?.userId;
   const parentUserId = parentUserIdRaw ? parseInt(parentUserIdRaw, 10) : null;
   this._setThreadParentHeader({ userId: parentUserId, username: author, avatar, avatarShape });
@@ -394,11 +391,12 @@ _appendThreadMessage(msg) {
   // Author name in role colors, as in the channel itself.
   const authorRole = this._chatNameRole(msg.user_id);
   const authorColor = authorRole ? this._roleLook(authorRole).c1 : color;
+  const shape = this._threadAvatarShape(msg.avatar_shape);
   let avatarHtml;
   if (msg.avatar) {
-    avatarHtml = `<img class="thread-msg-avatar" src="${this._escapeHtml(msg.avatar)}" alt="${initial}">`;
+    avatarHtml = `<img class="thread-msg-avatar${shape}" src="${this._escapeHtml(msg.avatar)}" alt="${initial}">`;
   } else {
-    avatarHtml = `<div class="thread-msg-avatar thread-msg-avatar-initial" style="background:${color}">${initial}</div>`;
+    avatarHtml = `<div class="thread-msg-avatar thread-msg-avatar-initial${shape}" style="background:${color}">${initial}</div>`;
   }
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
@@ -453,6 +451,7 @@ _appendThreadMessage(msg) {
   // `.thread-msg-author` element.
   el.dataset.username = msg.username || '';
   if (msg.avatar) el.dataset.avatar = msg.avatar;
+  if (msg.avatar_shape) el.dataset.avatarShape = msg.avatar_shape;
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
   if (threadCompact) {
     const shortTime = this._fmtTime(msg.created_at);
@@ -524,9 +523,10 @@ _promoteThreadCompactToFull(compactEl) {
   // Avatar: stored at render time, else the online/member list, else initial.
   const onlineUser = this._memberById(userId);
   const avatar = compactEl.dataset.avatar || (onlineUser && onlineUser.avatar) || null;
+  const shape = this._threadAvatarShape(compactEl.dataset.avatarShape || (onlineUser && onlineUser.avatarShape));
   const avatarHtml = avatar
-    ? `<img class="thread-msg-avatar" src="${this._escapeHtml(avatar)}" alt="${initial}">`
-    : `<div class="thread-msg-avatar thread-msg-avatar-initial" style="background:${color}">${initial}</div>`;
+    ? `<img class="thread-msg-avatar${shape}" src="${this._escapeHtml(avatar)}" alt="${initial}">`
+    : `<div class="thread-msg-avatar thread-msg-avatar-initial${shape}" style="background:${color}">${initial}</div>`;
 
   compactEl.classList.remove('thread-compact');
   compactEl.innerHTML = `
