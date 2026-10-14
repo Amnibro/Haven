@@ -16,6 +16,40 @@
 
 export default {
 
+// Brings a message to the middle of its list: a reply's original, a quote's
+// source. The jump is instant. A smooth scroll was cancelled the moment the
+// feed corrected for a picture or preview growing above it on the way, so
+// it stopped partway and took two or three clicks to arrive. Afterwards the
+// message is kept in the middle while what is around it finishes loading,
+// until the reader scrolls themselves.
+_scrollToMessage(el) {
+  if (!el || !el.isConnected) return;
+  const sc = el.closest('#messages, #thread-messages, #dm-pip-messages') || el.parentElement;
+  el.scrollIntoView({ block: 'center' });
+  if (!sc) return;
+  if (this._jumpSettle) this._jumpSettle();
+  const until = performance.now() + 1500;
+  let done = false;
+  const stop = () => {
+    if (done) return;
+    done = true;
+    for (const ev of ['wheel', 'touchstart', 'keydown', 'mousedown']) sc.removeEventListener(ev, stop, true);
+    if (this._jumpSettle === stop) this._jumpSettle = null;
+  };
+  for (const ev of ['wheel', 'touchstart', 'keydown', 'mousedown']) sc.addEventListener(ev, stop, { capture: true, passive: true });
+  this._jumpSettle = stop;
+  const tick = (now) => {
+    if (done) return;
+    if (!el.isConnected || now > until) { stop(); return; }
+    const r = el.getBoundingClientRect();
+    const box = sc.getBoundingClientRect();
+    const off = (r.top + r.height / 2) - (box.top + box.height / 2);
+    if (Math.abs(off) > box.height * 0.25) el.scrollIntoView({ block: 'center' });
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+},
+
 _setupFeedAnchor() {
   const sc = document.getElementById('messages');
   if (!sc || this._feedAnchor || typeof ResizeObserver !== 'function' || typeof MutationObserver !== 'function') return;

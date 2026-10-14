@@ -402,7 +402,8 @@ _quoteJumpId(target) {
 _jumpToMessage(msgId) {
   const existing = document.querySelector(`#messages [data-msg-id="${msgId}"]`);
   if (existing) {
-    existing.scrollIntoView({ behavior: this._scrollBehavior(), block: 'center' });
+    this._coupledToBottom = false;
+    this._scrollToMessage(existing);
     existing.classList.add('highlight-flash');
     setTimeout(() => existing.classList.remove('highlight-flash'), 2000);
     return;

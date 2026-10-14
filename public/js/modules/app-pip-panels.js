@@ -216,7 +216,7 @@ _bindThreadAndDmPanels() {
       if (quoteId) {
         const quoted = dmPipMessages.querySelector(`[data-msg-id="${quoteId}"]`);
         if (quoted) {
-          quoted.scrollIntoView({ block: 'center' });
+          this._scrollToMessage(quoted);
           quoted.classList.add('highlight-flash');
           setTimeout(() => quoted.classList.remove('highlight-flash'), 1200);
         }
@@ -229,7 +229,7 @@ _bindThreadAndDmPanels() {
         if (!replyMsgId) return;
         const target = dmPipMessages.querySelector(`[data-msg-id="${replyMsgId}"]`);
         if (target) {
-          target.scrollIntoView({ block: 'center', behavior: this._scrollBehavior() });
+          this._scrollToMessage(target);
           target.classList.add('highlight-flash');
           setTimeout(() => target.classList.remove('highlight-flash'), 1200);
         }

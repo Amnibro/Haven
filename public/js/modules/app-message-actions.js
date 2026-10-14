@@ -332,7 +332,7 @@ _bindMessageActions() {
         if (!replyMsgId) return;
         const target = threadMessages.querySelector(`[data-msg-id="${replyMsgId}"]`);
         if (target) {
-          target.scrollIntoView({ block: 'center', behavior: this._scrollBehavior() });
+          this._scrollToMessage(target);
           target.classList.add('thread-highlight');
           setTimeout(() => target.classList.remove('thread-highlight'), 1200);
         }
