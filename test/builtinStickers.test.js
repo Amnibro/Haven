@@ -26,8 +26,8 @@ initDatabase().exec(`VACUUM INTO '${pristine.replace(/'/g, "''")}'`);
 
 // A server of its own: a fresh copy of the schema and an empty sticker folder.
 let n = 0;
-function server(assetsDir) {
-  const dir = path.join(ROOT, `s${++n}`);
+function server(assetsDir, under = '') {
+  const dir = path.join(ROOT, under, `s${++n}`);
   fs.mkdirSync(path.join(dir, 'stickers'), { recursive: true });
   fs.copyFileSync(pristine, path.join(dir, 'haven.db'));
   const db = new Database(path.join(dir, 'haven.db'));
@@ -246,4 +246,19 @@ test('the uploads route serves SVG or PNG for built-ins and leaves other files a
   fs.appendFileSync(path.join(s.stickersDir, 'starter-heart.svg'), '<!-- edited -->');
   s.b.refreshServed();
   assert.equal((await get('/uploads/stickers/starter-heart.svg', 'image/*')).status, 299);
+});
+
+test('built-ins are served when the data folder sits under a dot folder', async (t) => {
+  // Real installs keep their data in places like ~/.local/share/haven.
+  const s = server(undefined, '.local/share');
+  s.b.sync();
+  const heart = row(s.db, 'heart');
+  const app = express();
+  app.use('/uploads/stickers', s.b.serve);
+  const srv = app.listen(0);
+  t.after(() => srv.close());
+  const status = await new Promise((resolve, reject) => {
+    http.get({ port: srv.address().port, path: `/uploads/stickers/${heart.filename}`, headers: { accept: 'image/svg+xml,image/*' } }, (res) => { res.resume(); resolve(res.statusCode); }).on('error', reject);
+  });
+  assert.equal(status, 200);
 });
