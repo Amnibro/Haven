@@ -560,7 +560,7 @@ _createForumTopicEl(msg) {
     // the rest of the card open the topic as usual.
     if (msg.nsfw && !el.classList.contains('revealed') && e.target.closest('.forum-topic-thumb, .forum-topic-snippet')) { e.stopPropagation(); el.classList.add('revealed'); return; }
     if (e.target.closest('a')) return;
-    this._openThread(msg.id);
+    this._toggleThread(msg.id);
   });
   // The thumbnail is part of the card: a click opens the topic, and a
   // right-click on it gets the image menu with a View entry, so the picture
