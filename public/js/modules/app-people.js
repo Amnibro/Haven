@@ -9,6 +9,18 @@ _bindPeople() {
     this._openRenameModal();
   });
 
+  // A name or avatar in the thread panel: a reply's, or the starter's in the
+  // header. Webhook and imported replies have no account, so no card.
+  const threadCardTrigger = (e) => {
+    if (e.target.closest('.thread-msg-toolbar')) return null;
+    const head = e.target.closest('#thread-parent-avatar-wrap, #thread-parent-name');
+    if (head) return head.dataset.userId ? { el: head, userId: parseInt(head.dataset.userId, 10) } : null;
+    const el = e.target.closest('.thread-msg-author, .thread-msg-avatar:not(.thread-msg-compact-spacer)');
+    const msgEl = el && el.closest('.thread-message');
+    if (!msgEl || !msgEl.dataset.userId) return null;
+    return { el, userId: parseInt(msgEl.dataset.userId, 10) };
+  };
+
   // ── Profile popup: click on message author name or avatar ──
   document.getElementById('messages').addEventListener('click', (e) => {
     const author = e.target.closest('.message-author');
@@ -41,6 +53,29 @@ _bindPeople() {
       this._profilePopupAnchor = e.target;
       this.socket.emit('get-user-profile', { userId });
     }
+  });
+
+  // ── Profile popup: click on a name or avatar in an open thread ──
+  document.getElementById('thread-panel')?.addEventListener('click', (e) => {
+    const trigger = threadCardTrigger(e);
+    if (!trigger || isNaN(trigger.userId)) return;
+    clearTimeout(this._hoverProfileTimer);
+    clearTimeout(this._hoverCloseTimer);
+    clearTimeout(this._hoverAutoCloseTimer);
+    clearTimeout(this._hoverFadeTimeout);
+    const existingPopup = document.getElementById('profile-popup');
+    if (existingPopup && this._isHoverPopup) {
+      this._promoteHoverPopup(existingPopup);
+      return;
+    }
+    if (this._openProfileUserId === trigger.userId && existingPopup) {
+      this._closeProfilePopup();
+      return;
+    }
+    this._isHoverPopup = false;
+    this._hoverTarget = null;
+    this._profilePopupAnchor = trigger.el;
+    this.socket.emit('get-user-profile', { userId: trigger.userId });
   });
 
   // ── Profile popup: click on user item in sidebar ──
@@ -161,6 +196,9 @@ _bindPeople() {
     if (!msgEl) return null;
     return { el: author || avatar, userId: parseInt(msgEl.dataset.userId) };
   });
+
+  const threadPanel = document.getElementById('thread-panel');
+  if (threadPanel) setupHoverProfile(threadPanel, threadCardTrigger);
 
   setupHoverProfile(document.getElementById('online-users'), (e) => {
     if (e.target.closest('.user-action-btn') || e.target.closest('.user-admin-actions')) return null;

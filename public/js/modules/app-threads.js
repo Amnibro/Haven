@@ -66,6 +66,10 @@ _setThreadParentHeader(meta = {}) {
     : baseUsername;
   const shape = (meta.avatarShape || 'circle') === 'square' ? 'square' : 'circle';
   const shapeClass = shape === 'square' ? ' thread-parent-avatar-square' : '';
+  // The starter's id lets their name and avatar open the profile card.
+  const uid = meta.userId != null ? String(meta.userId) : '';
+  wrap.dataset.userId = uid;
+  nameEl.dataset.userId = uid;
 
   if (meta.avatar) {
     wrap.innerHTML = `<img class="thread-parent-avatar${shapeClass}" src="${this._escapeHtml(meta.avatar)}" alt="${this._escapeHtml(username)}">`;
@@ -204,6 +208,14 @@ _threadJumpToMention() {
   el.scrollIntoView({ block: 'center' });
   el.classList.add('highlight-flash');
   setTimeout(() => el.classList.remove('highlight-flash'), 2000);
+},
+
+// Clicking the thread that is already open closes it.
+_toggleThread(parentId) {
+  const panel = document.getElementById('thread-panel');
+  const open = panel && panel.style.display !== 'none' && String(this._activeThreadParent) === String(parentId);
+  if (open) this._closeThread();
+  else this._openThread(parentId);
 },
 
 // Clicking the thread that is already open closes it.
