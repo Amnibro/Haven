@@ -34,6 +34,7 @@ _bindThreadAndDmPanels() {
   if (dmPipInput) dmPipInput.addEventListener('keydown', (e) => {
     // Autocomplete navigation/insert hijacks first. (#5296)
     if (this._handleAutocompleteKeydown(e)) return;
+    if (this._composerListKey(e, dmPipInput)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       this._sendDMPiPMessage?.();
@@ -256,6 +257,7 @@ _bindThreadAndDmPanels() {
     threadInput.addEventListener('keydown', (e) => {
       // Autocomplete navigation/insert hijacks first. (#5296)
       if (this._handleAutocompleteKeydown(e)) return;
+      if (this._composerListKey(e, threadInput)) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         this._sendThreadMessage();

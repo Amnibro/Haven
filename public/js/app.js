@@ -8,12 +8,13 @@ import SocketMethods   from './modules/app-socket.js?v=4.21.0';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.22.14';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.22.20';
 import UIBindMethods   from './modules/app-ui.js?v=4.22.12';
-import ComposerMethods from './modules/app-composer.js?v=4.22.14';
+import ComposerMethods from './modules/app-composer.js?v=4.22.22';
+import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.22.14';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.21.0';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.22.2';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.22.18';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.22.18';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.22.22';
 import PeopleMethods from './modules/app-people.js?v=4.21.0';
 import SettingsMethods from './modules/app-settings.js?v=4.22.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.21.0';
@@ -43,7 +44,7 @@ import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.22.21';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.21.0';
 import MusicMethods from './modules/app-music.js?v=4.22.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.21.0';
-import MessageContentMethods from './modules/app-message-content.js?v=4.22.16';
+import MessageContentMethods from './modules/app-message-content.js?v=4.22.22';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.22.10';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.22.1';
 import ThreadMethods from './modules/app-threads.js?v=4.22.20';
@@ -516,6 +517,7 @@ Object.assign(HavenApp.prototype,
   SocketEventMethods,
   UIBindMethods,
   ComposerMethods,
+  ComposerListMethods,
   ChannelMenuMethods,
   VoiceControlMethods,
   MediaGalleryMethods,

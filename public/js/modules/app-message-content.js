@@ -1081,6 +1081,7 @@ _startEditMessage(msgEl, msgId) {
       e.preventDefault();
       return;
     }
+    if (this._composerListKey(e, textarea)) return;
 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();

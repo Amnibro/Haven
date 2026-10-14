@@ -119,6 +119,9 @@ _bindComposer() {
       if (e.key === 'Escape') { this._hideFerryDropdown(); return; }
     }
 
+    // Lists: Shift+Enter continues one, Tab nests (app-composer-lists.js).
+    if (this._composerListKey(e, msgInput)) return;
+
     // Ctrl + Enter opens scheduled send modal
     // Just Enter sends the message
     if (e.key === 'Enter' && !e.shiftKey) {
