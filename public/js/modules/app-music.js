@@ -1045,7 +1045,7 @@ _popOutMusicPlayer() {
       // Remove the click-blocking overlay so user can interact directly in PiP
       const overlay = embedWrapper.querySelector('.music-embed-overlay');
       if (overlay) overlay.style.display = 'none';
-      document.getElementById('music-pip-embed').appendChild(embedWrapper);
+      this._moveMusicEmbed(embedWrapper, document.getElementById('music-pip-embed'));
     }
 
     // Hide the original panel
@@ -1110,6 +1110,39 @@ _popOutMusicPlayer() {
   });
 },
 
+// Moves the player between the panel and the pop-out. moveBefore keeps the
+// embed running as it is; appendChild reloads it, and a reloaded YouTube or
+// SoundCloud player stops reporting play and pause, so pausing in the player
+// itself (or with the keyboard's media keys) was no longer shared with
+// everyone. Where moveBefore is missing, the player is connected again once
+// it has reloaded.
+_moveMusicEmbed(wrapper, target) {
+  if (!wrapper || !target) return;
+  if (typeof target.moveBefore === 'function') {
+    try {
+      target.moveBefore(wrapper, null);
+      return;
+    } catch (err) {
+      // A move the browser refuses (across documents, say): fall back below.
+      console.warn('[music] moveBefore failed, reloading the player instead:', err.message);
+    }
+  }
+  target.appendChild(wrapper);
+  const iframe = wrapper.querySelector('#music-iframe');
+  if (!iframe) return;
+  iframe.addEventListener('load', () => {
+    const vol = parseInt(document.getElementById('music-volume-slider')?.value ?? '80', 10);
+    const src = iframe.src || '';
+    if (/youtube(-nocookie)?\.com|youtu\.be/.test(src)) {
+      this._musicYTPlayer = null;
+      this._initYouTubePlayer(iframe, vol);
+    } else if (/soundcloud\.com/.test(src)) {
+      this._musicSCWidget = null;
+      this._initSoundCloudWidget(iframe, vol);
+    }
+  }, { once: true });
+},
+
 _popInMusicPlayer() {
   const pip = this._musicPip;
   if (!pip) return;
@@ -1124,7 +1157,7 @@ _popInMusicPlayer() {
       // Re-add the click-blocking overlay
       const overlay = embedWrapper.querySelector('.music-embed-overlay');
       if (overlay) overlay.style.display = '';
-      container.appendChild(embedWrapper);
+      this._moveMusicEmbed(embedWrapper, container);
     }
 
     pip.remove();
