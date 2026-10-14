@@ -72,6 +72,7 @@ import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.22.9';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
+import MasterVolumeMethods from './modules/app-master-volume.js?v=4.23.6';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.22.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
@@ -367,6 +368,7 @@ class HavenApp {
     this._setupServerBar();
     this._applyGuestMode(); // (#5381) hide DM UI / lock down features for guests
     this._setupNotifications();
+    this._setupMasterVolume();
     this._setupPushNotifications();
     this._resyncDesktopBadgeOnFocus?.();
     this._setupImageUpload();
@@ -584,6 +586,7 @@ Object.assign(HavenApp.prototype,
   MessageHighlightMethods,
   ModCaseMethods,
   ServerMuteMethods,
+  MasterVolumeMethods,
   ForumUnreadMethods,
   ChannelCategoryMethods,
   ChannelPersonalOrderMethods,
