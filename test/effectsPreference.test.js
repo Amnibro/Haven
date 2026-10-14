@@ -15,7 +15,7 @@ const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 test('the server accepts an effects preference and allows a JSON array in it', () => {
   const src = read('src/socketHandlers/users.js');
   assert.match(src, /'effects',/);
-  assert.match(src, /key === 'effects' \? 400 : 50/);
+  assert.match(src, /key === 'effects' \? 400 : /);
 });
 
 test('every effects write in the picker goes through _persistEffects', () => {

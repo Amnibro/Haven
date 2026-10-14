@@ -6,6 +6,26 @@ const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDis
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 
+// A personal sidebar order (#5779): category keys and, per category, channel
+// codes. Only that shape is kept, within limits, so the value cannot carry
+// anything else.
+function cleanChannelOrder(raw) {
+  let o;
+  try { o = JSON.parse(raw); } catch { return null; } // not JSON: refused
+  if (!o || typeof o !== 'object') return null;
+  const key = (k) => typeof k === 'string' && k.length <= 60 ? k : null;
+  const cats = Array.isArray(o.cats) ? o.cats.map(key).filter(Boolean).slice(0, 200) : [];
+  const ch = {};
+  if (o.ch && typeof o.ch === 'object') {
+    for (const [k, list] of Object.entries(o.ch).slice(0, 200)) {
+      if (!key(k) || !Array.isArray(list)) continue;
+      ch[k] = list.filter(c => typeof c === 'string' && /^[a-f0-9]{8}$/i.test(c)).slice(0, 500);
+    }
+  }
+  const out = JSON.stringify({ cats, ch });
+  return out.length <= 20000 ? out : null;
+}
+
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission, getUserEffectiveLevel,
           emitOnlineUsers, emitDmPresence, broadcastVoiceUsers, generateToken,
@@ -617,16 +637,23 @@ module.exports = function register(socket, ctx) {
       // "America/New_York") so DST is resolved per-instant by Intl, never a
       // frozen offset. time_format is '12' or '24'.
       'timezone', 'time_format',
+      // Your own sidebar order (#5779, app-channel-personal-order.js).
+      'channel_order',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
-    const maxLen = key === 'effects' ? 400 : 50;
+    const maxLen = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : 50;
     if (!allowedKeys.includes(key) || !value || value.length > maxLen) return;
+    let stored = value;
+    if (key === 'channel_order') {
+      stored = cleanChannelOrder(value);
+      if (!stored) return;
+    }
 
     db.prepare(
       'INSERT OR REPLACE INTO user_preferences (user_id, key, value) VALUES (?, ?, ?)'
-    ).run(socket.user.id, key, value);
+    ).run(socket.user.id, key, stored);
 
-    socket.emit('preference-saved', { key, value });
+    socket.emit('preference-saved', { key, value: stored });
 
     // When the score-badge visibility changes, re-broadcast the online-users
     // list for the user's current channel so every connected client immediately
@@ -646,7 +673,7 @@ module.exports = function register(socket, ctx) {
   socket.on('delete-preference', (data) => {
     if (!data || typeof data !== 'object') return;
     const key = typeof data.key === 'string' ? data.key.trim() : '';
-    const deletableKeys = ['timezone', 'time_format'];
+    const deletableKeys = ['timezone', 'time_format', 'channel_order'];
     if (!deletableKeys.includes(key)) return;
     db.prepare('DELETE FROM user_preferences WHERE user_id = ? AND key = ?').run(socket.user.id, key);
     socket.emit('preference-deleted', { key });

@@ -911,6 +911,8 @@ _listenAdminAndPrefs() {
   this.socket.on('preferences', (prefs) => {
     this._userPrefs = prefs || {};
     this._prefsReceived = true;
+    // Your own channel order may arrive after the sidebar was drawn (#5779).
+    if (this._userPrefs.channel_order && Array.isArray(this.channels) && this.channels.length) this._renderChannels();
     // The top-bar Android banner waits for this record before it shows (#5594).
     this._syncAndroidBanner?.();
     // Effects come back from the server like the theme does; restore them

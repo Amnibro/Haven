@@ -574,6 +574,9 @@ _renderChannels() {
   } else {
     parentChannels.sort((a, b) => serverSortByMode(a, b, serverSortMode));
   }
+  // Your own order, where you have arranged one (app-channel-personal-order.js).
+  const _personal = this._applyPersonalChannelOrder(parentChannels);
+  parentChannels.splice(0, parentChannels.length, ..._personal);
 
   const renderChannelItem = (ch, isSub) => {
     const el = document.createElement('div');
@@ -708,6 +711,7 @@ _renderChannels() {
     document.getElementById('channels-toggle')?.addEventListener('click', (e) => {
       // Ignore clicks on the organize button or sub-panel button inside the header
       if (e.target.closest('#organize-channels-btn')) return;
+      if (e.target.closest('#arrange-channels-btn')) return;
       if (e.target.closest('#sub-channel-panel-btn')) return;
       const nowCollapsed = list.style.display !== 'none';
       list.style.display = nowCollapsed ? 'none' : '';
@@ -758,7 +762,7 @@ _renderChannels() {
     categories.get(cat).push(ch);
   });
 
-  const sortedCats = [...categories.keys()].sort((a, b) => {
+  const sortedCats = this._applyPersonalCategoryOrder([...categories.keys()].sort((a, b) => {
     const keyA = a || '__untagged__';
     const keyB = b || '__untagged__';
     if (serverCatSort === 'manual') {
@@ -772,7 +776,7 @@ _renderChannels() {
     if (!a) return -1; if (!b) return 1;
     if (serverCatSort === 'za') return b.localeCompare(a);
     return a.localeCompare(b);
-  });
+  }));
 
   for (const cat of sortedCats) {
     const catKey = cat || '';
@@ -1193,6 +1197,8 @@ _renderChannels() {
   // Set up drag-and-drop reordering
   this._setupChannelDragDrop();
   this._setupDmDragDrop();
+  this._setupPersonalChannelOrder();
+  this._decorateArrangeMode();
   this._updateNestedIndicators();
   // Forum dots are drawn apart from the counts above (app-forum-unread.js).
   Object.keys(this.forumUnread || {}).forEach(code => this._updateForumDot?.(code));

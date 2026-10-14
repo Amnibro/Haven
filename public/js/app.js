@@ -6,7 +6,7 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.21.0';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.22.14';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.22.20';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.22.23';
 import UIBindMethods   from './modules/app-ui.js?v=4.22.12';
 import ComposerMethods from './modules/app-composer.js?v=4.22.22';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
@@ -31,7 +31,7 @@ import SoundMethods from './modules/app-sounds.js?v=4.21.0';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.17.5';
 import ContextMethods  from './modules/app-context.js?v=4.22.14';
-import ChannelMethods  from './modules/app-channels.js?v=4.22.14';
+import ChannelMethods  from './modules/app-channels.js?v=4.22.23';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.22.14';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.21.2';
@@ -74,6 +74,7 @@ import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
+import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 
 class HavenApp {
   constructor() {
@@ -582,6 +583,7 @@ Object.assign(HavenApp.prototype,
   ModCaseMethods,
   ForumUnreadMethods,
   ChannelCategoryMethods,
+  ChannelPersonalOrderMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

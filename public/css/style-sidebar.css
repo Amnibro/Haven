@@ -1403,6 +1403,19 @@
 }
 .channel-more-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
+/* Arranging your own channel order (#5779, app-channel-personal-order.js). */
+.arrange-channels-btn.active { opacity: 1 !important; color: var(--accent); }
+.arrange-bar {
+  margin: 4px 8px 6px;
+  padding: 6px 8px;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.arrange-bar-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; }
+.channel-list.arranging .channel-item:not(.sub-channel-item),
+.channel-list.arranging .category-label { cursor: grab; }
 .channel-ctx-menu {
   position: fixed;
   /* Above the thread panel (99996, PiP 99999), where a forum post opens,
