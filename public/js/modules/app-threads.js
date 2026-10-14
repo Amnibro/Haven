@@ -299,6 +299,19 @@ _toggleThreadPiP() {
   this._setThreadPiPEnabled(!panel.classList.contains('pip'));
 },
 
+// A closed forum topic takes no replies, except from moderators and admins
+// (the server checks the same). Everyone sees why; those who may still reply
+// keep the box.
+_applyThreadClosed(closed) {
+  const panel = document.getElementById('thread-panel');
+  const note = document.getElementById('thread-closed-note');
+  const text = document.getElementById('thread-closed-text');
+  const canReply = !!(this.user?.isAdmin || this._hasPerm?.('delete_message'));
+  panel?.classList.toggle('thread-locked', !!closed && !canReply);
+  if (note) note.style.display = closed ? '' : 'none';
+  if (text) text.textContent = closed ? t(canReply ? 'forum.closed_you_can_reply' : 'forum.closed_no_replies') : '';
+},
+
 _closeThread() {
   this._activeThreadParent = null;
   this._clearThreadReply();

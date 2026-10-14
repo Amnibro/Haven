@@ -4411,6 +4411,8 @@
     "close_topic": "Close topic",
     "reopen_topic": "Reopen topic",
     "closed": "Closed",
+"closed_no_replies": "This topic is closed. Only moderators can reply.",
+"closed_you_can_reply": "This topic is closed. Members can no longer reply, but moderators still can.",
     "mark_closed": "Closed: grey it out and keep it below the open topics",
     "image_topic": "Image",
     "load_more": "Load more topics",

@@ -2834,7 +2834,7 @@ module.exports = function register(socket, ctx) {
     // switches, and a stale currentChannel would silently empty the thread
     // (issue: web users seeing 28 replies but no messages, mobile fine).
     const parentRow = db.prepare(
-      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, c.code as channel_code, c.is_dm as is_dm, m.is_webhook, m.webhook_username, m.imported_from,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
+      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, m.closed, c.is_forum, c.code as channel_code, c.is_dm as is_dm, m.is_webhook, m.webhook_username, m.imported_from,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
     ).get(parentId);
     if (!parentRow) return;
     if (parentRow.is_dm) return; // Threads are not available in DMs
@@ -2956,6 +2956,8 @@ module.exports = function register(socket, ctx) {
       // post and the rest under Comments.
       blog: !!blogParts,
       blogPicsOnly: !!blogParts && forumBlog.picsOnly(db, channel.id),
+      // A closed forum topic: only moderators and admins may still reply.
+      closed: !!(parent.is_forum && parent.closed),
       parentContent: parent.content,
       parentUserId: parent.user_id || null,
       parentUsername: parent.username || '[Deleted User]',
@@ -2979,7 +2981,7 @@ module.exports = function register(socket, ctx) {
     // sending from a thread panel still works after the user has navigated
     // away from the parent's channel. (#thread-blank-web)
     const parent = db.prepare(
-      'SELECT m.id, m.thread_id, m.channel_id, c.code as code, c.is_dm FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+      'SELECT m.id, m.thread_id, m.channel_id, m.closed, c.code as code, c.is_dm, c.is_forum FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
     ).get(parentId);
     if (!parent || parent.thread_id) return; // Can't create sub-threads
     if (parent.is_dm) return socket.emit('error-msg', 'Threads are not available in DMs');
@@ -2993,6 +2995,13 @@ module.exports = function register(socket, ctx) {
     if (!tMember && !socket.user.isAdmin) return;
     // A role gate on the channel covers its threads too (#5597).
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
+
+    // A closed forum topic takes no more replies, except from moderators
+    // (delete_message, the same people who may close it) and admins.
+    if (parent.is_forum && parent.closed && !socket.user.isAdmin &&
+        !userHasPermission(socket.user.id, 'delete_message', channel.id)) {
+      return socket.emit('error-msg', 'This topic is closed');
+    }
 
     // ── Moderation controls (#5483) ───────────────────────
     // This handler grew up alongside send-message but never picked up the

@@ -582,6 +582,8 @@ _forumApplyTopicUpdate(data) {
   topic.tags = Array.isArray(data.tags) ? data.tags : [];
   const wasClosed = !!topic.closed;
   if (typeof data.closed === 'boolean') topic.closed = data.closed;
+  // The topic's thread, if it is open, locks or unlocks with it.
+  if (typeof data.closed === 'boolean' && this._activeThreadParent === data.messageId) this._applyThreadClosed?.(data.closed);
   if (typeof data.nsfw === 'boolean') topic.nsfw = data.nsfw;
   // Marked NSFW while this reader hides NSFW: the card goes away (#5633).
   if (this._forumTopicHidden(topic)) { this._forumReload(); return; }

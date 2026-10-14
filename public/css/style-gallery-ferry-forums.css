@@ -1035,6 +1035,12 @@
 .thread-forum-meta .forum-votes { margin-left: 0.6rem; }
 /* Blog mode (#5742): the post and the author's additions read as one piece,
    then a Comments heading with everyone else's replies under it. */
+/* A closed forum topic: a note above the reply box, and no box for those who
+   may not reply (app-threads.js _applyThreadClosed). */
+.thread-closed-note { padding: 0.375rem 0.75rem; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border); }
+.thread-locked .thread-input-area,
+.thread-locked #thread-reply-bar,
+.thread-locked #thread-image-queue-bar { display: none !important; }
 /* Comments on pictures only (#5765): no general Comments section, and no
    reply box until a picture's comments are open (the author keeps theirs). */
 .thread-blog-pics-only #blog-comments-head,

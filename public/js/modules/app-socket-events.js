@@ -17,6 +17,7 @@ _listenFeatureEvents() {
 
   // ── Threads ───────────────────────────────────────
   this.socket.on('thread-messages', async (data) => {
+    this._applyThreadClosed?.(!!data.closed);
     if (data.parentUsername) {
       this._setThreadParentHeader({
         userId: data.parentUserId || null,
