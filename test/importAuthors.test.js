@@ -59,5 +59,5 @@ test('new imports are stored with no account, and unread counts include account-
   const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   assert.match(server, /INSERT OR IGNORE INTO messages \(channel_id, user_id, content,[^)]*\)\s*VALUES \(\?, NULL,/);
   const handlers = fs.readFileSync(path.join(__dirname, '..', 'src', 'socketHandlers', 'index.js'), 'utf8');
-  assert.match(handlers, /AND \(user_id IS NULL OR user_id != \?\) AND thread_id IS NULL LIMIT 1000/);
+  assert.match(handlers, /AND \(user_id IS NULL OR user_id != \?\) AND thread_id IS NULL /);
 });

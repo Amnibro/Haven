@@ -608,8 +608,9 @@ function setupSocketHandlers(io, db, opts = {}) {
             // on every channel-list refresh.
             // (user_id IS NULL OR ...): imported and relayed messages belong
             // to no account, and NULL != ? is never true, so they never
-            // counted (#5771).
-            'SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL LIMIT 1000)'
+            // counted (#5771). A group DM's "joined" / "left" lines are not
+            // new messages.
+            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' LIMIT 1000)"
           ).get(ch.id, lastRead, userId);
           ch.unreadCount = countRow ? countRow.cnt : 0;
         } else {

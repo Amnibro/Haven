@@ -1003,6 +1003,15 @@ _createMessageEl(msg, prevMsg) {
     el.textContent = msg.content;
     return el;
   }
+  // A group DM's "invited" / "joined" / "left" line, drawn from ids.
+  if (msg && msg.type === 'notice') {
+    const el = document.createElement('div');
+    el.className = 'system-message group-notice';
+    el.dataset.type = 'notice';
+    if (Number.isInteger(msg.id) && msg.id > 0) el.dataset.msgId = msg.id;
+    el.textContent = this._groupNoticeText?.(msg.content) || '';
+    return el;
+  }
   const isImage = this._isImageUrl(msg.content);
   const curCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
   const isAnnouncement = curCh && curCh.notification_type === 'announcement';

@@ -24,6 +24,13 @@ _setupGroupListeners() {
   s.on('group-dm-member-left', changed);
   s.on('group-dm-member-removed', (d) => this._showToast(t('groups.member_removed', { name: this._getNickname(d.user?.id, d.user?.username || t('groups.someone')) }), 'success'));
   s.on('group-dm-updated', () => s.emit('get-channels'));
+  s.on('group-notice', (d) => {
+    if (!d || !d.message) return;
+    if (this._activeDMPip === d.channelCode) this._appendDMPiPMessage?.(d.message);
+    if (d.channelCode !== this.currentChannel || this._noMoreFuture === false) return;
+    this._appendMessage(d.message);
+    if (Number.isInteger(d.message.id) && d.message.id > 0) this._newestMsgId = d.message.id;
+  });
   s.on('group-dm-left', (d) => {
     this._groups.delete(d.code);
     if (this._leavingGroup === d.code) {
@@ -370,6 +377,9 @@ async _decryptGroupMessages(messages, ch) {
     : r.reason === 'signer-changed' ? t('groups.signer_changed', { name: this._groupMemberName(ch.code, id) })
     : t('groups.cannot_verify'));
   for (const msg of messages) {
+    // Membership lines are drawn from ids by _groupNoticeText, never shown as
+    // text, so they need no signature.
+    if (msg.type === 'notice') continue;
     if (this._isGroupEnvelope(msg.content)) {
       const r = await this._groupDecrypt(ch.code, msg.content, msg.user_id, msg.id || 0);
       msg.content = r.ok ? r.plaintext : fail(r, msg.user_id);
@@ -508,6 +518,23 @@ _e2eEncryptBytes(partner, buf) {
 _e2eDecryptBytes(partner, data) {
   return partner.group ? this._groupDecryptBytes(partner.code, data) : this.e2e.decryptBytes(data, partner.userId, partner.publicKeyJwk);
 },
+/** The text of a group's "invited" / "joined" / "left" / "removed" line.
+ *  The server stores only ids (and names to fall back on), so the words
+ *  always come from here. Null when the row is not one of these. */
+_groupNoticeText(content) {
+  let n;
+  try { n = JSON.parse(content); } catch { return null; } // not a notice row: draw nothing
+  if (!n || typeof n !== 'object' || !n.by) return null;
+  const name = (u) => this._getNickname(u && u.id, (u && u.name) || t('groups.someone'));
+  const users = (Array.isArray(n.users) ? n.users : []).slice(0, 50).map(name);
+  let list = users.join(', ');
+  try { list = new Intl.ListFormat(this._timeLocale?.() || undefined, { style: 'long', type: 'conjunction' }).format(users); } catch { /* old browser: plain commas */ }
+  if (n.event === 'invited' && users.length) return t('groups.notice_invited', { name: name(n.by), names: list });
+  if (n.event === 'removed' && users.length) return t('groups.notice_removed', { name: name(n.by), names: list });
+  if (n.event === 'joined') return t('groups.notice_joined', { name: name(n.by) });
+  if (n.event === 'left') return t('groups.notice_left', { name: name(n.by) });
+  return null;
+},
 _groupName(ch) {
   const names = (ch.group_members || []).filter(m => m.id !== this.user?.id).map(m => this._getNickname(m.id, m.username));
   return ch.name && ch.name !== 'Group DM' ? ch.name : (names.join(', ') || t('groups.default_name'));
@@ -525,8 +552,11 @@ async _groupCandidates() {
 async _openGroupPicker({ code = null } = {}) {
   document.getElementById('group-picker-modal')?.remove();
   const ch = code && this.channels.find(c => c.code === code);
-  const exclude = new Set([...(ch?.group_members || []), ...(ch?.group_pending || [])].map(m => m.id));
-  const people = (await this._groupCandidates()).filter(p => !exclude.has(p.id));
+  // People already in the group, or already invited, stay in the list but
+  // greyed out with a note, so it is clear why they cannot be picked.
+  const inGroup = new Set((ch?.group_members || []).map(m => m.id));
+  const invited = new Set((ch?.group_pending || []).map(m => m.id));
+  const people = await this._groupCandidates();
   const modal = document.createElement('div');
   modal.id = 'group-picker-modal';
   modal.className = 'modal-overlay';
@@ -551,11 +581,20 @@ async _openGroupPicker({ code = null } = {}) {
       row.className = 'gp-row';
       const box = document.createElement('input');
       box.type = 'checkbox';
-      box.checked = picked.has(p.id);
+      const already = inGroup.has(p.id) ? 'groups.already_in_group' : invited.has(p.id) ? 'groups.already_invited' : null;
+      box.checked = !already && picked.has(p.id);
+      box.disabled = !!already;
       box.addEventListener('change', () => { box.checked ? picked.add(p.id) : picked.delete(p.id); q('.gp-go').disabled = picked.size < need || picked.size > 49; });
       const name = document.createElement('span');
       name.textContent = p.username;
       row.append(box, name);
+      if (already) {
+        row.classList.add('gp-row-taken');
+        const note = document.createElement('span');
+        note.className = 'gp-taken';
+        note.textContent = t(already);
+        row.appendChild(note);
+      }
       list.appendChild(row);
     });
     if (!list.children.length) { const e = document.createElement('p'); e.className = 'gp-empty'; e.textContent = t('groups.nobody'); list.appendChild(e); }

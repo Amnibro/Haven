@@ -1809,7 +1809,7 @@ _appendE2ENotice(text) {
 async _decryptMessages(messages, channelCode = null) {
   if (!messages || !messages.length) return;
   const ch = this.channels.find(c => c.code === (channelCode || this.currentChannel));
-  if (ch && ch.is_dm && ch.is_group) return this.e2e?.ready ? this._decryptGroupMessages(messages, ch) : messages.forEach(m => { if (m.user_id && m.content) m.content = t('groups.no_key'); });
+  if (ch && ch.is_dm && ch.is_group) return this.e2e?.ready ? this._decryptGroupMessages(messages, ch) : messages.forEach(m => { if (m.user_id && m.content && m.type !== 'notice') m.content = t('groups.no_key'); });
   if (!this.e2e || !this.e2e.ready) return;
   if (!ch || !ch.is_dm || !ch.dm_target) return;
 

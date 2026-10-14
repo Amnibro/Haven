@@ -34,6 +34,31 @@ module.exports = function register(socket, ctx) {
 
   const sameIds = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 
+  // A line in the group's history saying who was invited, joined, left or
+  // was removed. It holds ids and names only, never sentences: each member's
+  // app writes the line itself (app-groups.js _groupNoticeText), so these
+  // plain rows cannot be used to put words in a member's mouth.
+  const nameOf = (id) => {
+    const u = db.prepare('SELECT COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(id);
+    return u ? u.username : '';
+  };
+  const postNotice = (ch, actorId, event, userIds = []) => {
+    const content = JSON.stringify({
+      event,
+      by: { id: actorId, name: nameOf(actorId) },
+      users: userIds.map((id) => ({ id, name: nameOf(id) })),
+    });
+    try {
+      const info = db.prepare("INSERT INTO messages (channel_id, user_id, content, type) VALUES (?, ?, ?, 'notice')").run(ch.id, actorId, content);
+      io.to(`channel:${ch.code}`).emit('group-notice', {
+        channelCode: ch.code,
+        message: { id: Number(info.lastInsertRowid), user_id: actorId, content, type: 'notice', created_at: new Date().toISOString() },
+      });
+    } catch (err) {
+      console.warn('[groups] could not record a membership notice:', err.message);
+    }
+  };
+
   const findExistingGroup = (want) => {
     const target = [...want].sort((a, b) => a - b);
     const candidates = db.prepare(`
@@ -185,6 +210,7 @@ module.exports = function register(socket, ctx) {
     const payload = groupPayload({ id: channelId, code, name });
     socket.join(`channel:${code}`);
     socket.emit('group-dm-opened', payload);
+    postNotice({ id: channelId, code }, socket.user.id, 'invited', invitees);
     // Named people are invited, not joined. They opt in via accept-group-dm.
     for (const [, s] of io.of('/').sockets) {
       if (s.user && invitees.includes(s.user.id)) {
@@ -220,6 +246,7 @@ module.exports = function register(socket, ctx) {
       user: { id: socket.user.id, username: socket.user.displayName || socket.user.username },
       members: payload.members,
     });
+    postNotice(ch, socket.user.id, 'joined');
   });
 
   socket.on('decline-group-dm', (data) => {
@@ -268,8 +295,9 @@ module.exports = function register(socket, ctx) {
     const payload = groupPayload(ch);
     for (const s of socketsOf(ids)) s.emit('group-dm-invite', { ...payload, invitedBy: { id: socket.user.id, username: socket.user.displayName || socket.user.username } });
     io.to(`channel:${ch.code}`).emit('group-dm-updated', payload);
+    postNotice(ch, socket.user.id, 'invited', ids);
   });
-  function leaveGroup(ch, userId, attachments) {
+  function leaveGroup(ch, userId, attachments, removedBy = null) {
     db.transaction(() => {
       db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(ch.id, userId);
       db.prepare('DELETE FROM dm_group_invites WHERE channel_id = ? AND user_id = ?').run(ch.id, userId);
@@ -286,6 +314,8 @@ module.exports = function register(socket, ctx) {
     } else {
       const user = db.prepare('SELECT COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(userId);
       io.to(`channel:${ch.code}`).emit('group-dm-member-left', { code: ch.code, user: { id: userId, username: user && user.username }, members: groupPayload(ch).members });
+      if (removedBy) postNotice(ch, removedBy, 'removed', [userId]);
+      else postNotice(ch, userId, 'left');
     }
     if (ctx.broadcastChannelLists) ctx.broadcastChannelLists();
   }
@@ -313,7 +343,7 @@ module.exports = function register(socket, ctx) {
     const target = db.prepare('SELECT COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(targetId);
     // Told first, while their app still knows the group's name.
     for (const s of socketsOf([targetId])) s.emit('kicked', { channelCode: ch.code, group: true, reason: '' });
-    leaveGroup(ch, targetId, []);
+    leaveGroup(ch, targetId, [], socket.user.id);
     socket.emit('group-dm-member-removed', { code: ch.code, user: { id: targetId, username: target && target.username } });
   });
   // The server admin can delete a group for everyone in it, the way a 1:1 DM

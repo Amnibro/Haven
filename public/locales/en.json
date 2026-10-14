@@ -657,7 +657,13 @@
     "keys_changed_body": "{{names}} changed their encryption keys. This happens when someone resets their keys, but it can also mean someone is trying to read the group or post as them. Check with them some other way (in person, or on a call) before trusting the new keys. Until you do, the group key is not shared with the new keys and messages signed with them stay hidden.",
     "trust_keys": "Trust the new keys",
     "signer_changed": "⚠️ {{name}}'s keys changed. This message is hidden until you trust the new keys.",
-    "someone": "Someone"
+    "someone": "Someone",
+    "already_in_group": "Already in the group",
+    "already_invited": "Invited",
+    "notice_invited": "{{name}} invited {{names}}",
+    "notice_joined": "{{name}} joined the group",
+    "notice_left": "{{name}} left the group",
+    "notice_removed": "{{name}} removed {{names}} from the group"
   },
   "modmode": {
     "enabled": "Mod Mode ON: drag sections or panel handles to rearrange",
