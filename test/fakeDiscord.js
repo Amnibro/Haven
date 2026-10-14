@@ -76,13 +76,34 @@ function startFakeDiscord(port) {
   }
 
   const server = http.createServer((req, res) => {
-    let raw = '';
-    req.on('data', (c) => { raw += c; });
+    const chunks = [];
+    req.on('data', (c) => { chunks.push(c); });
     req.on('end', () => {
       const url = new URL(req.url, 'http://x');
       const parts = url.pathname.split('/').filter(Boolean);
+      const raw = Buffer.concat(chunks).toString('latin1');
       let body = null;
-      try { body = raw ? JSON.parse(raw) : null; } catch { body = null; }
+      const boundary = /multipart\/form-data;\s*boundary=(.+)$/.exec(req.headers['content-type'] || '');
+      if (boundary) {
+        // An upload: the message is in payload_json, and each file is noted
+        // with its name and size.
+        const files = [];
+        for (const part of raw.split('--' + boundary[1].replace(/^"|"$/g, ''))) {
+          const name = /name="([^"]+)"/.exec(part);
+          const sep = part.indexOf('\r\n\r\n');
+          if (!name || sep < 0) continue;
+          const value = part.slice(sep + 4).replace(/\r\n$/, '');
+          if (name[1] === 'payload_json') {
+            try { body = JSON.parse(value); } catch { body = null; }
+          } else {
+            const filename = /filename="([^"]*)"/.exec(part);
+            files.push({ field: name[1], filename: filename ? filename[1] : null, size: Buffer.from(value, 'latin1').length });
+          }
+        }
+        if (body) body.files = files;
+      } else {
+        try { body = raw ? JSON.parse(raw) : null; } catch { body = null; }
+      }
 
       if (req.method === 'GET' && url.pathname === '/users/@me') {
         return json(res, 200, { id: BOT_ID, username: 'FerryBot', discriminator: '0', avatar: null });

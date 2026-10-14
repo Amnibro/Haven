@@ -3799,7 +3799,7 @@
       "connect_first": "Connect the bot first.",
       "no_pairings": "No pairings yet.",
       "no_roles": "No roles exist yet.",
-      "public_url_warning": "PUBLIC_URL is not set in your .env, so Haven avatars and uploaded images will not show on the Discord side. Names still come through.",
+      "public_url_warning": "PUBLIC_URL is not set in your .env, so Haven avatars will not show on the Discord side, and files too big for Discord are not linked. Names, pictures and smaller files still come through.",
       "step_connect": "Connect your Discord bot",
       "step_connect_hint": "At <strong>discord.com/developers/applications</strong>: New Application, then the <strong>Bot</strong> tab. Turn on <strong>Message Content Intent</strong>, press Reset Token, and paste it here.",
       "token_placeholder": "Paste your bot token",
