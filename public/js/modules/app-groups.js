@@ -59,6 +59,7 @@ _setupGroupListeners() {
     const st = this._groups.get(d.code);
     if (!st || st.keys.has(d.epoch)) return;
     st.ready = false;
+    st.missing.clear();
     this._groupFetchKeys(d.code).catch(err => console.warn('[Groups] could not load the new group key:', err.message));
   });
   s.on('group-rewrap-requested', (d) => this._groupRewrap(d).catch(err => console.warn('[Groups] could not re-share the group key:', err.message)));
@@ -68,12 +69,13 @@ _setupGroupListeners() {
     if (!st) return;
     st.rewrapAsked = false;
     st.ready = false;
+    st.missing.clear();
     this._groupFetchKeys(d.code).then(() => this._groupRerender(d.code), err => console.warn('[Groups] could not load the re-shared key:', err.message));
   });
   s.on('connect', () => {
     s.emit('get-group-invites');
     // Events may have been missed while disconnected.
-    this._groups.forEach(st => { st.ready = false; });
+    this._groups.forEach(st => { st.ready = false; st.missing.clear(); });
   });
   if (s.connected) s.emit('get-group-invites');
 },
@@ -87,7 +89,7 @@ _isGroupEnvelope(content) {
 },
 _groupState(code) {
   if (!this._groups) this._groups = new Map();
-  if (!this._groups.has(code)) this._groups.set(code, { keys: new Map(), epoch: 0, roster: null, needsRotation: false, lastHash: null, lastId: 0, busy: null, changed: new Set(), pendingRewraps: new Map(), reviewing: null });
+  if (!this._groups.has(code)) this._groups.set(code, { keys: new Map(), epoch: 0, roster: null, needsRotation: false, lastHash: null, lastId: 0, busy: null, changed: new Set(), pendingRewraps: new Map(), reviewing: null, missing: new Set(), keyFetch: null });
   return this._groups.get(code);
 },
 _groupReq(emitEvent, payload, results, ms = 8000) {
@@ -117,7 +119,16 @@ async _groupPublicKey(userId, roster) {
   const m = roster?.members?.find(x => x.id === userId);
   return m?.publicKey || this._dmPublicKeys?.[userId] || await this.e2e.requestPartnerKey(this.socket, userId);
 },
-async _groupFetchKeys(code, { all = false } = {}) {
+// One key fetch at a time per group: a page of history decrypting at once
+// shares it instead of sending a request per message.
+_groupFetchKeys(code, opts = {}) {
+  const st = this._groupState(code);
+  if (st.keyFetch && !opts.all) return st.keyFetch;
+  const run = this._groupFetchKeysNow(code, opts).finally(() => { if (st.keyFetch === run) st.keyFetch = null; });
+  if (!opts.all) st.keyFetch = run;
+  return run;
+},
+async _groupFetchKeysNow(code, { all = false } = {}) {
   const st = this._groupState(code);
   const since = st.keys.size && !all ? Math.max(...st.keys.keys()) : 0;
   const r = await this._groupReq('get-group-keys', { code, sinceEpoch: since }, { 'group-keys': d => d.code === code });
@@ -354,7 +365,12 @@ async _groupDecrypt(code, content, senderId, msgId = 0) {
   const st = this._groupState(code);
   let env;
   try { env = JSON.parse(content); } catch { return { ok: false, reason: 'malformed' }; }
-  if (!st.keys.has(env.e)) await this._groupFetchKeys(code);
+  // An epoch from before you joined has no key for you, ever. Ask once, not
+  // once per message, or a page of old history ran into "too many requests".
+  if (!st.keys.has(env.e) && !st.missing.has(env.e)) {
+    await this._groupFetchKeys(code);
+    if (!st.keys.has(env.e)) st.missing.add(env.e);
+  }
   const key = st.keys.get(env.e);
   if (!key) return { ok: false, reason: 'no-key' };
   const channelId = this._groupChannelId(code);
