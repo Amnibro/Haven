@@ -21,7 +21,7 @@
      "legacy": [
       "thumbs-up"
      ],
-     "sha256": "44fe52f1c64b1bcb3c7d24ce93fd21528cf35089dc3b4c47cd5b9e1202709a65"
+     "sha256": "7cef02157a44a3714bb8c605500a73418459184af78e22c4b34885380b30ad87"
     },
     {
      "id": "thumbs-down",
@@ -34,7 +34,7 @@
       "-1"
      ],
      "animated": false,
-     "sha256": "c46493a8b9fee2024dd3e27c8c8acf3e2838b970ebe8a9bc1f5d0441494eff9a"
+     "sha256": "f9d711dca59bfa52cb0825f1b42701d9f741b70a21ecabaacd0acac54b1846e8"
     },
     {
      "id": "heart",
@@ -152,7 +152,7 @@
      "legacy": [
       "laugh"
      ],
-     "sha256": "35ac3359aa6e6b00794d1423d66772f93126dbaaaa1132c9039a285004772f58"
+     "sha256": "fcdc2e51065fcf3e5e386741e1290d9a420b0ae966d55ec94811fc657e590c41"
     },
     {
      "id": "cry",
@@ -164,7 +164,7 @@
       "upset"
      ],
      "animated": false,
-     "sha256": "b43175d0effbe102281d121bf1f85b93f8a3a4756cdd759475d702f0513aa496"
+     "sha256": "852c0057812674b1c2e6bb9bce37942f9c63e50d61f3a74d86bcedacbffc1d97"
     },
     {
      "id": "mind-blown",
@@ -216,7 +216,7 @@
       "ponder"
      ],
      "animated": false,
-     "sha256": "794b72e809ac0500ad38a42ab6bd7d7f6904646a29efbd899f4f1a8a7f4ec84a"
+     "sha256": "2612b89613447156522ac9f1af2e8a24f7427dc755f1a80640fd23ea8359f977"
     },
     {
      "id": "facepalm",
@@ -253,7 +253,7 @@
       "meh"
      ],
      "animated": false,
-     "sha256": "60afc7f30af9a4cb0b111df67838cde15c85a1b55b981b19e6ae03427b94710a"
+     "sha256": "280ff0c3238090bbd529bdd251e1e7f832bde60891c8f0ec2dab6b6381cc3546"
     },
     {
      "id": "wave",
