@@ -145,14 +145,21 @@ function openHand(col = C.yellow, o = {}) {
   ];
 }
 const motion = (d) => shape('path', { d }, { f: 'none', s: INK, w: 7 });
+// A chunky thumbs-up fist, drawn level (wrist on the left, fingers curled
+// toward the viewer, thumb up) and tilted by the sticker. `flip` turns the
+// shading around for the upside-down thumbs-down.
 function thumbHand(flip) {
   const off = flip ? [3, 4] : [-3, -4];
-  const fist = 'M98 112H168A14 14 0 0 1 168 140A14 14 0 0 1 168 168A14 14 0 0 1 168 196A14 14 0 0 1 168 224H98Q80 224 80 206V130Q80 112 98 112Z';
+  const fingers = [[176, 112, 38], [182, 146, 36], [178, 178, 34], [168, 208, 30]].reverse();
   return [
-    toon('path', { d: rrect(34, 106, 48, 124, 12) }, C.blue, { c: [58, 168], k: 0.8, off }),
-    toon('path', { d: fist }, C.yellow, { c: [126, 168], k: 0.86, off }),
-    ink('M138 140H168M138 168H168M138 196H168', 6),
-    toon('path', { d: capsule(104, 118, 114, 46, 22) }, C.yellow, { c: [109, 82], k: 0.8, off }),
+    // Cuff at the wrist end, narrower than the fist.
+    toon('path', { d: 'M34 148Q34 136 46 136H72V214H46Q34 214 34 202Z' }, C.blue, { c: [53, 175], k: 0.78, off }),
+    // The thumb grows out of the top of the fist: wide base, rounded tip, nail.
+    toon('path', { d: 'M78 130C72 100 80 64 92 42C100 26 134 24 140 44C146 66 144 100 148 128Z' }, C.yellow, { c: [112, 84], k: 0.84, off }),
+    shape('path', { d: 'M106 48C109 38 126 36 130 46L132 60C126 65 112 65 108 60Z' }, { f: '#fff3c4', s: C.yellow[1], w: 4, n: true }),
+    // The back of the hand, then the curled fingers stacked on its front.
+    toon('path', { d: 'M64 134Q64 110 90 110H124V234H90Q64 234 64 210Z' }, C.yellow, { c: [94, 172], k: 0.86, off }),
+    fingers.map(([x2, y, h]) => toon('path', { d: rrect(100, y, x2 - 100, h, h / 2) }, C.yellow, { c: [(100 + x2) / 2, y + h / 2], k: 0.86, off: flip ? [2, 3] : [-2, -3] })),
   ];
 }
 // Party popper stripes: bands across the cone between fractions t1..t2.
@@ -176,6 +183,45 @@ const plate = (x, y, w, h, col = C.white) => toon('path', { d: rrect(x, y, w, h,
 const hexArm = (x1, y1, x2, y2) => toon('path', { d: capsule(x1, y1, x2, y2, 11) }, C.purple, { c: [(x1 + x2) / 2, (y1 + y2) / 2], k: 0.7, off: [-1, -2] });
 const zzz = (x, y, s, col = C.blue[0]) => lettering('Z', x, y, s, col, { w: 14, edge: 5, shine: false });
 
+// A tapered stream along a smooth centre line (tears): `pts` are
+// [x, y, width] samples, start to end. Both ends are rounded, so a stream that
+// widens toward its end finishes in a drop.
+function smoothThrough(P) {
+  let d = '';
+  for (let i = 0; i < P.length - 1; i++) {
+    const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += `C${r2(c1[0])} ${r2(c1[1])} ${r2(c2[0])} ${r2(c2[1])} ${r2(p2[0])} ${r2(p2[1])}`;
+  }
+  return d;
+}
+const r2 = (n) => Math.round(n * 10) / 10;
+function ribbon(pts) {
+  const left = [];
+  const right = [];
+  pts.forEach(([x, y, w], i) => {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(pts.length - 1, i + 1)];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const nx = -(b[1] - a[1]) / len;
+    const ny = (b[0] - a[0]) / len;
+    left.push([x + nx * w / 2, y + ny * w / 2]);
+    right.push([x - nx * w / 2, y - ny * w / 2]);
+  });
+  // Round caps: pick the arc direction that bulges away from the stream.
+  const cap = (from, to, [cx, cy, w], dir) => {
+    const cross = (from[0] - cx) * dir[1] - (from[1] - cy) * dir[0];
+    return `A${r2(w / 2)} ${r2(w / 2)} 0 0 ${cross > 0 ? 1 : 0} ${r2(to[0])} ${r2(to[1])}`;
+  };
+  const n = pts.length - 1;
+  const endDir = [pts[n][0] - pts[n - 1][0], pts[n][1] - pts[n - 1][1]];
+  const startDir = [pts[0][0] - pts[1][0], pts[0][1] - pts[1][1]];
+  return `M${r2(left[0][0])} ${r2(left[0][1])}${smoothThrough(left)}${cap(left[n], right[n], pts[n], endDir)}`
+    + `${smoothThrough(right.slice().reverse())}${cap(right[0], left[0], pts[0], startDir)}Z`;
+}
+const tearStream = (pts, o = {}) => toon('path', { d: ribbon(pts) }, C.blue, { c: [pts[pts.length - 1][0], pts[pts.length - 1][1]], k: 0.78, off: [-1, -2], w: o.w ?? 6, n: o.n });
+
 // ── Stickers ──────────────────────────────────────────────
 const HEART = 'M128 218C70 182 30 146 32 98C34 62 62 42 90 44C108 45 120 56 128 72C136 56 148 45 166 44C194 42 222 62 224 98C226 146 186 182 128 218Z';
 // Each entry returns a renderer so build.js can pass the fitted transform.
@@ -183,8 +229,8 @@ const sticky = (shapes, css) => (o = {}) => sticker(shapes, { ...o, css: css && 
 
 const art = {
   // ── Reactions ──
-  'thumbs-up': () => sticky([thumbHand(false)]),
-  'thumbs-down': () => sticky([{ tr: 'rotate(180 128 128)', shapes: thumbHand(true) }]),
+  'thumbs-up': () => sticky([{ tr: 'rotate(-16 120 140)', shapes: thumbHand(false) }]),
+  'thumbs-down': () => sticky([{ tr: 'rotate(180 128 128) rotate(-16 120 140)', shapes: thumbHand(true) }]),
 
   heart: () => sticky([{ cls: 'b', shapes: [toon('path', { d: HEART }, C.red, { c: [128, 120], k: 0.84, off: [-5, -7] }), shine(76, 86, 16, 9, -40)] }],
     [['b', '0%,40%,100%{transform:scale(1)}12%{transform:scale(1.09)}24%{transform:scale(.97)}32%{transform:scale(1.05)}', 1.4, '128px 140px']]),
@@ -217,17 +263,28 @@ const art = {
     return sticky([[eye(80), eye(178)]]);
   },
 
-  laugh: () => sticky([{ cls: 'j', shapes: [face(), squintEyes(104, 38), openMouth(128, 136, 52, 58), tear(42, 116, 0.9), tear(214, 116, 0.9)] }],
-    [['j', '0%,100%{transform:rotate(0)}25%{transform:rotate(-5deg)}75%{transform:rotate(5deg)}', 0.5, '128px 200px']]),
-
-  cry: () => sticky([[
+  laugh: () => sticky([{ cls: 'j', tr: 'rotate(-10 128 128)', shapes: [
     face(),
-    ink('M70 92Q86 72 108 76', 8), ink('M186 92Q170 72 148 76', 8),
-    closedEyes(112, 36, 128, 16, 8).map((x) => x),
-    stroke('M92 124C88 150 96 178 88 214', C.blue[0], 16, { edge: 5, n: true }),
-    stroke('M164 124C168 150 160 178 168 214', C.blue[0], 16, { edge: 5, n: true }),
-    ink('M104 176Q116 162 128 172Q140 162 152 176', 8),
-  ]]),
+    ink('M70 82Q88 66 106 78', 8), ink('M150 78Q168 66 186 82', 8),
+    squintEyes(108, 38),
+    openMouth(128, 138, 54, 60),
+    // Tears of joy spring from the outer corner of each squeezed eye.
+    tearStream([[76, 104, 7], [60, 92, 10], [42, 92, 13], [30, 104, 17], [26, 124, 22]]),
+    tearStream([[180, 104, 7], [196, 92, 10], [214, 92, 13], [226, 104, 17], [230, 124, 22]]),
+  ] }], [['j', '0%,100%{transform:rotate(0)}25%{transform:rotate(-5deg)}75%{transform:rotate(5deg)}', 0.5, '128px 200px']]),
+
+  cry: () => sticky([
+    // A puddle under the chin, then the face, then two sobbing streams.
+    [toon('ellipse', { cx: 128, cy: 222, rx: 104, ry: 18 }, C.blue, { c: [128, 222], k: 0.9, off: [-2, -3] })],
+    [ball(128, 118, 94, C.yellow),
+      ink('M64 88Q82 70 106 68', 9), ink('M192 88Q174 70 150 68', 9),
+      ink('M78 114Q93 100 108 114', 9), ink('M178 114Q163 100 148 114', 9),
+      tearStream([[93, 118, 10], [86, 140, 13], [80, 162, 16], [80, 184, 19], [70, 204, 22], [66, 222, 27]]),
+      tearStream([[163, 118, 10], [170, 140, 13], [176, 162, 16], [176, 184, 19], [186, 204, 22], [190, 222, 27]]),
+      shape('path', { d: 'M106 162Q117 150 128 158Q139 150 150 162C154 184 144 200 128 200C112 200 102 184 106 162Z' }, { f: '#5b2338', n: true }),
+      fillInk('path', { d: 'M112 190Q128 176 144 190Q138 200 128 200Q118 200 112 190Z' }, '#ff6f8e'),
+      shape('path', { d: 'M106 162Q117 150 128 158Q139 150 150 162C154 184 144 200 128 200C112 200 102 184 106 162Z' }, { f: 'none', s: INK, w: 7, n: true })],
+  ]),
 
   'mind-blown': () => sticky([[
     ball(128, 154, 82, C.yellow),
@@ -270,8 +327,17 @@ const art = {
   ]),
 
   thinking: () => sticky([
-    [face(), ink('M72 82Q88 76 104 82', 8), ink('M150 70Q168 58 186 72', 8), dotEyes(112, 34, 128, 11, 16, [4, -2]), ink('M122 170Q144 166 164 156', 8)],
-    { tr: 'translate(80 246) rotate(-12)', shapes: [toon('path', { d: capsule(6, -46, 24, -94, 12) }, C.yellow, { c: [15, -70], k: 0.7, off: [-2, -2] }), toon('path', { d: rrect(-34, -58, 66, 50, 22) }, C.yellow, { c: [0, -33], k: 0.84, off: [-3, -3] }), ink('M-20 -40H8M-20 -24H8', 5)] },
+    [ball(134, 118, 94, C.yellow),
+      ink('M82 78L114 88', 9), ink('M150 66Q170 50 192 66', 9),
+      dotEyes(114, 32, 134, 11, 16, [5, -3]),
+      ink('M128 160Q152 156 178 142', 9)],
+    // The 🤔 hand: knuckles below the chin, the thumb along the jaw and the
+    // index finger up the cheek, cradling the chin.
+    [toon('path', { d: 'M52 214C46 196 56 180 74 178L104 176C116 176 122 186 120 198L116 218C114 230 104 236 92 236H70C60 236 54 228 52 214Z' }, C.yellow, { c: [86, 206], k: 0.84, off: [-3, -3] }),
+      ink('M64 210Q74 214 84 210M68 224Q78 226 88 222', 5),
+      toon('path', { d: capsule(80, 186, 88, 162, 13) }, C.yellow, { c: [84, 174], k: 0.74, off: [-2, -3] }),
+      toon('path', { d: capsule(104, 194, 152, 180, 13) }, C.yellow, { c: [128, 187], k: 0.74, off: [-2, -3] }),
+      shape('path', { d: 'M152 176C160 176 162 186 154 188L146 188C143 184 143 179 146 176Z' }, { f: '#fff3c4', s: C.yellow[1], w: 3, n: true })],
   ]),
 
   facepalm: () => sticky([
@@ -285,9 +351,13 @@ const art = {
   ]),
 
   shrug: () => sticky([
-    [ball(128, 112, 82, C.yellow), ink('M78 76Q94 64 110 72', 8), ink('M146 72Q162 64 178 76', 8), dotEyes(100, 28, 128, 10, 14, [5, 0]), ink('M104 146Q124 146 152 134', 8)],
-    { tr: 'translate(92 220) rotate(-45) scale(.46)', shapes: openHand(C.yellow) },
-    { tr: 'translate(164 220) rotate(45) scale(.46) scale(-1 1)', shapes: openHand(C.yellow) },
+    [ball(128, 104, 80, C.yellow),
+      ink('M80 66Q96 52 114 60', 8), ink('M142 56Q160 44 178 58', 8),
+      dotEyes(96, 28, 128, 10, 14, [6, -1]),
+      ink('M106 134Q126 140 152 124', 8)],
+    // Palms up at shoulder height, fingers out, thumbs up.
+    { tr: 'translate(64 194) rotate(-80) scale(.72)', shapes: mitten(C.yellow, { thumb: 1, len: 104, w: 64, cuff: C.blue }) },
+    { tr: 'translate(192 194) rotate(80) scale(.72)', shapes: mitten(C.yellow, { thumb: -1, len: 104, w: 64, cuff: C.blue }) },
   ]),
 
   wave: () => sticky([
