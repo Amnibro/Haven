@@ -1020,7 +1020,7 @@
   0% { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent); }
   70%, 100% { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 9px transparent; }
 }
-@media (prefers-reduced-motion: reduce) { .forum-unread-dot { animation: none; } }
+html.reduce-motion .forum-unread-dot { animation: none; }
 /* New replies: a glowing ring, the one thing that lights a card's edge. */
 .forum-topic-unread, .forum-topic-unread:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 38%, transparent); }
 .messages.forum-feed .forum-topic-unread, .messages.forum-feed .forum-topic-unread:hover { box-shadow: inset 3px 0 0 var(--accent); border-color: var(--border); }
