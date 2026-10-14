@@ -2413,6 +2413,8 @@
       "import_in_channel": "in #{{name}}",
       "import_fetching": "Fetching…",
       "import_fetch_failed": "Fetch failed",
+      "import_fetch_progress": "Read {{messages}} messages so far ({{done}} of {{total}} channels done)...",
+      "import_bad_response": "Haven got an unexpected answer (HTTP {{status}}). A proxy or tunnel in front of the server may have cut the request off. Try again, and if it keeps happening, check the server's log.",
       "registration": {
         "clear_confirm": "Clear the registration token? People will no longer be able to register with it.",
         "copied": "Token copied",

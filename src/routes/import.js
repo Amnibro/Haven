@@ -224,13 +224,22 @@ module.exports = function registerImport(deps) {
   });
 
   // Step C: fetch all messages from selected channels → save temp → return preview
-  app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
+  // Reading a large server takes minutes. Held open as one request, it was
+  // cut off by whatever sits in front of Haven (Cloudflare Tunnel gives up
+  // after 100 seconds and answers with an HTML page). So the read runs as a
+  // job: this starts it and answers at once, and the page asks for progress
+  // until the result is ready.
+  const fetchJobs = new Map();
+  const FETCH_JOB_TTL = 30 * 60 * 1000;
+  setInterval(() => {
+    const cutoff = Date.now() - FETCH_JOB_TTL;
+    for (const [id, job] of fetchJobs) if (job.updatedAt < cutoff) fetchJobs.delete(id);
+  }, 5 * 60 * 1000).unref();
+
+  app.post('/api/import/discord/fetch', express.json(), (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-    // A large server takes minutes to read and nothing is sent until it is done,
-    // so the 2 minute socket inactivity timeout (server.timeout) would cut it off.
-    req.setTimeout(30 * 60 * 1000);
 
     const auth = resolveImportAuth(req.body);
     if (auth.error) return res.status(400).json({ error: auth.error });
@@ -238,143 +247,171 @@ module.exports = function registerImport(deps) {
     if (!Array.isArray(selected) || !selected.length || !selected.every(ch => typeof ch?.id === 'string' && DISCORD_ID.test(ch.id))) {
       return res.status(400).json({ error: 'Missing params' });
     }
-
-    try {
-      const result = {
-        format: 'Discord Direct',
-        serverName: guildName || 'Discord Import',
-        channels: []
-      };
-      // Channels the reader can't open (a bot only sees what its roles allow)
-      // are skipped and named, instead of failing the whole import.
-      const skipped = [];
-      // A bot without the Message Content intent gets every message with an
-      // empty body, which would import as nothing at all.
-      let peopleMessages = 0, emptyPeopleMessages = 0;
-
-      // Discord rate-limits message reads per channel, so several channels can
-      // be fetched at once without hitting the limits.
-      const IMPORT_CONCURRENCY = 4;
-      const fetched = new Array(selected.length);
-      let nextIdx = 0;
-      const worker = async () => {
-      while (nextIdx < selected.length) {
-        const idx = nextIdx++;
-        const ch = selected[idx];
-        const messages = [];
-        let before = null, batch;
-        // What the entry is (#5772): a thread goes into its parent channel, and
-        // a forum becomes a Haven forum whose posts are its topics.
-        const kind = ['text', 'announcement', 'forum', 'media', 'thread'].includes(ch.kind) ? ch.kind : 'text';
-        const parentId = typeof ch.parentId === 'string' && DISCORD_ID.test(ch.parentId) ? ch.parentId : null;
-        const tags = Array.isArray(ch.tags)
-          ? ch.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 20)
-          : [];
-        const isForum = kind === 'forum' || kind === 'media';
-
-        try {
-          if (!isForum) do {
-            let ep = `/channels/${ch.id}/messages?limit=100`;
-            if (before) ep += `&before=${before}`;
-            batch = await discordApiFetch(ep, auth);
-
-            for (const msg of batch) {
-              if (msg.type !== 0 && msg.type !== 19) continue; // Default + Reply only
-              if (!msg.author?.bot) {
-                peopleMessages++;
-                if (!msg.content && !msg.attachments?.length && !msg.embeds?.length) emptyPeopleMessages++;
-              }
-              let content = msg.content || '';
-              if (Array.isArray(msg.attachments)) {
-                for (const a of msg.attachments) {
-                  content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
-                }
-              }
-              if (Array.isArray(msg.embeds)) {
-                for (const e of msg.embeds) {
-                  if (e.title) content += `\n🔗 **${e.title}**`;
-                  if (e.description) content += `\n${e.description}`;
-                  if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
-                }
-              }
-              content = content.trim();
-              if (!content) continue;
-
-              messages.push({
-                discordId: msg.id,
-                author: msg.author?.global_name || msg.author?.username || 'Unknown',
-                authorId: msg.author?.id || null,
-                authorAvatar: msg.author?.avatar
-                  ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png?size=64`
-                  : null,
-                isBot: msg.author?.bot || false,
-                content,
-                timestamp: msg.timestamp,
-                isPinned: msg.pinned || false,
-                reactions: (msg.reactions || []).map(r => ({
-                  emoji: r.emoji?.name || '❓',
-                  count: r.count || 1
-                })),
-                replyTo: msg.message_reference?.message_id || null
-              });
-            }
-
-            if (batch.length > 0) before = batch[batch.length - 1].id;
-            await new Promise(r => setTimeout(r, 300)); // respect rate limits
-          } while (batch.length === 100);
-        } catch (err) {
-          if (err.status !== 403) throw err;
-          skipped.push(ch.name || ch.id);
-          continue;
-        }
-
-        fetched[idx] = {
-          discordId: ch.id,
-          name: ch.name,
-          topic: ch.topic || '',
-          category: ch.category || null,
-          kind,
-          parentId,
-          tags,
-          messageCount: messages.length,
-          messages
-        };
-      }
-      };
-      await Promise.all(Array.from({ length: Math.min(IMPORT_CONCURRENCY, selected.length) }, worker));
-      for (const c of fetched) if (c) result.channels.push(c);
-
-      if (auth.ferry && peopleMessages >= 5 && emptyPeopleMessages === peopleMessages) {
-        return res.status(400).json({ error: "Discord sent the messages without their text. On the Ferry bot's Bot page in the Discord Developer Portal, turn on Message Content Intent, then try again." });
-      }
-      if (!result.channels.length) {
-        return res.status(400).json({ error: auth.ferry
-          ? "The Ferry bot can't read any of those channels. On Discord, give it a role that can see them, then try again."
-          : "Couldn't read any of those channels." });
-      }
-
-      const importId = crypto.randomBytes(16).toString('hex');
-      const tempPath = path.join(os.tmpdir(), `haven-import-${importId}.json`);
-      fs.writeFileSync(tempPath, JSON.stringify(result));
-
-      res.json({
-        importId,
-        skipped,
-        format: result.format,
-        serverName: result.serverName,
-        channels: result.channels.map(c => ({
-          discordId: c.discordId,
-          name: c.name,
-          topic: c.topic,
-          category: c.category,
-          messageCount: c.messageCount
-        })),
-        totalMessages: result.channels.reduce((sum, c) => sum + c.messageCount, 0)
-      });
-    } catch (err) {
-      res.status(400).json({ error: err.message });
+    if ([...fetchJobs.values()].filter(j => j.state === 'running').length >= 3) {
+      return res.status(429).json({ error: 'Other imports are still reading from Discord. Try again when they finish.' });
     }
+
+    const jobId = crypto.randomBytes(16).toString('hex');
+    const job = { userId: user.id, state: 'running', channelsDone: 0, channelsTotal: selected.length, messages: 0, updatedAt: Date.now() };
+    fetchJobs.set(jobId, job);
+    res.status(202).json({ jobId });
+    readDiscordChannels(job, auth, guildName, selected).catch((err) => {
+      console.warn('[import] Discord read failed:', err.message);
+      Object.assign(job, { state: 'done', status: 400, body: { error: err.message }, updatedAt: Date.now() });
+    });
   });
+
+  app.get('/api/import/discord/fetch/:jobId', (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
+    const job = fetchJobs.get(String(req.params.jobId));
+    if (!job || job.userId !== user.id) return res.status(404).json({ error: 'That import is no longer running. Fetch the messages again.' });
+    if (job.state === 'running') {
+      return res.json({ state: 'running', channelsDone: job.channelsDone, channelsTotal: job.channelsTotal, messages: job.messages });
+    }
+    fetchJobs.delete(String(req.params.jobId));
+    res.status(job.status).json({ state: 'done', ...job.body });
+  });
+
+  async function readDiscordChannels(job, auth, guildName, selected) {
+    const finish = (status, body) => Object.assign(job, { state: 'done', status, body, updatedAt: Date.now() });
+    const result = {
+      format: 'Discord Direct',
+      serverName: guildName || 'Discord Import',
+      channels: []
+    };
+    // Channels the reader can't open (a bot only sees what its roles allow)
+    // are skipped and named, instead of failing the whole import.
+    const skipped = [];
+    // A bot without the Message Content intent gets every message with an
+    // empty body, which would import as nothing at all.
+    let peopleMessages = 0, emptyPeopleMessages = 0;
+
+    // Discord rate-limits message reads per channel, so several channels can
+    // be fetched at once without hitting the limits.
+    const IMPORT_CONCURRENCY = 4;
+    const fetched = new Array(selected.length);
+    let nextIdx = 0;
+    const worker = async () => {
+    while (nextIdx < selected.length) {
+      const idx = nextIdx++;
+      const ch = selected[idx];
+      const messages = [];
+      let before = null, batch;
+      // What the entry is (#5772): a thread goes into its parent channel, and
+      // a forum becomes a Haven forum whose posts are its topics.
+      const kind = ['text', 'announcement', 'forum', 'media', 'thread'].includes(ch.kind) ? ch.kind : 'text';
+      const parentId = typeof ch.parentId === 'string' && DISCORD_ID.test(ch.parentId) ? ch.parentId : null;
+      const tags = Array.isArray(ch.tags)
+        ? ch.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 20)
+        : [];
+      const isForum = kind === 'forum' || kind === 'media';
+
+      try {
+        if (!isForum) do {
+          let ep = `/channels/${ch.id}/messages?limit=100`;
+          if (before) ep += `&before=${before}`;
+          batch = await discordApiFetch(ep, auth);
+          job.messages += batch.length;
+          job.updatedAt = Date.now();
+
+          for (const msg of batch) {
+            if (msg.type !== 0 && msg.type !== 19) continue; // Default + Reply only
+            if (!msg.author?.bot) {
+              peopleMessages++;
+              if (!msg.content && !msg.attachments?.length && !msg.embeds?.length) emptyPeopleMessages++;
+            }
+            let content = msg.content || '';
+            if (Array.isArray(msg.attachments)) {
+              for (const a of msg.attachments) {
+                content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
+              }
+            }
+            if (Array.isArray(msg.embeds)) {
+              for (const e of msg.embeds) {
+                if (e.title) content += `\n🔗 **${e.title}**`;
+                if (e.description) content += `\n${e.description}`;
+                if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
+              }
+            }
+            content = content.trim();
+            if (!content) continue;
+
+            messages.push({
+              discordId: msg.id,
+              author: msg.author?.global_name || msg.author?.username || 'Unknown',
+              authorId: msg.author?.id || null,
+              authorAvatar: msg.author?.avatar
+                ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png?size=64`
+                : null,
+              isBot: msg.author?.bot || false,
+              content,
+              timestamp: msg.timestamp,
+              isPinned: msg.pinned || false,
+              reactions: (msg.reactions || []).map(r => ({
+                emoji: r.emoji?.name || '❓',
+                count: r.count || 1
+              })),
+              replyTo: msg.message_reference?.message_id || null
+            });
+          }
+
+          if (batch.length > 0) before = batch[batch.length - 1].id;
+          await new Promise(r => setTimeout(r, 300)); // respect rate limits
+        } while (batch.length === 100);
+      } catch (err) {
+        if (err.status !== 403) throw err;
+        skipped.push(ch.name || ch.id);
+        job.channelsDone++;
+        continue;
+      }
+      job.channelsDone++;
+
+      fetched[idx] = {
+        discordId: ch.id,
+        name: ch.name,
+        topic: ch.topic || '',
+        category: ch.category || null,
+        kind,
+        parentId,
+        tags,
+        messageCount: messages.length,
+        messages
+      };
+    }
+    };
+    await Promise.all(Array.from({ length: Math.min(IMPORT_CONCURRENCY, selected.length) }, worker));
+    for (const c of fetched) if (c) result.channels.push(c);
+
+    if (auth.ferry && peopleMessages >= 5 && emptyPeopleMessages === peopleMessages) {
+      return finish(400, { error: "Discord sent the messages without their text. On the Ferry bot's Bot page in the Discord Developer Portal, turn on Message Content Intent, then try again." });
+    }
+    if (!result.channels.length) {
+      return finish(400, { error: auth.ferry
+        ? "The Ferry bot can't read any of those channels. On Discord, give it a role that can see them, then try again."
+        : "Couldn't read any of those channels." });
+    }
+
+    const importId = crypto.randomBytes(16).toString('hex');
+    const tempPath = path.join(os.tmpdir(), `haven-import-${importId}.json`);
+    fs.writeFileSync(tempPath, JSON.stringify(result));
+
+    finish(200, {
+      importId,
+      skipped,
+      format: result.format,
+      serverName: result.serverName,
+      channels: result.channels.map(c => ({
+        discordId: c.discordId,
+        name: c.name,
+        topic: c.topic,
+        category: c.category,
+        messageCount: c.messageCount
+      })),
+      totalMessages: result.channels.reduce((sum, c) => sum + c.messageCount, 0)
+    });
+  }
 
   // ── Periodic cleanup of orphaned import temp files (1 hour TTL) ──
   function cleanupTempImports() {
