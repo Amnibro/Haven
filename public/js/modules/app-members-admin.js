@@ -363,8 +363,13 @@ _renderAllMembers(members) {
     const adminBadge = m.isAdmin ? `<span class="aml-admin-badge">${t('settings.admin.badge_admin')}</span>` : '';
     const bannedBadge = m.banned ? `<span class="aml-banned-badge">${t('settings.admin.badge_banned')}</span>` : '';
     // Same colours as the member list: away and do not disturb show as such.
-    const presence = m.online && !m.banned ? (m.status === 'away' || m.status === 'dnd' ? m.status : 'online') : 'offline';
+    // Staff are sent invisible members as they are (socketHandlers/admin.js,
+    // get-all-members), and see them with a hollow dot. Keep this.
+    const presence = m.online && !m.banned
+      ? (['away', 'dnd', 'invisible'].includes(m.status) ? m.status : 'online')
+      : 'offline';
     const onlineDot = 'aml-' + presence;
+    const presenceLabel = presence === 'invisible' ? t('app.profile.invisible') : '';
     const created = m.createdAt ? new Date(m.createdAt.endsWith('Z') ? m.createdAt : m.createdAt + 'Z') : null;
     const joinedStr = created ? this._fmtDate(created) : '';
     const isNew = created && (Date.now() - created.getTime()) < 7 * 24 * 60 * 60 * 1000;
@@ -423,7 +428,7 @@ _renderAllMembers(members) {
       <div class="aml-member-left">
         <div class="aml-avatar-wrap">
           ${avatarHtml}
-          <span class="aml-status-dot ${onlineDot}"></span>
+          <span class="aml-status-dot ${onlineDot}"${presenceLabel ? ` title="${this._escapeHtml(presenceLabel)}"` : ''}></span>
         </div>
         <div class="aml-member-info">
           <div class="aml-member-name">

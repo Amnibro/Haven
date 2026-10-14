@@ -628,6 +628,8 @@
 .aml-status-dot.aml-offline { background: var(--text-muted); }
 .aml-status-dot.aml-away { background: #faa61a; }
 .aml-status-dot.aml-dnd { background: var(--danger); }
+/* Connected but invisible; only staff are shown this (see admin.js). */
+.aml-status-dot.aml-invisible { background: var(--bg-tertiary); box-shadow: inset 0 0 0 2px var(--text-muted); }
 
 .aml-member-info {
   display: flex;

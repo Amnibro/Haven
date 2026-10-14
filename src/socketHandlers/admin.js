@@ -1338,9 +1338,14 @@ module.exports = function register(socket, ctx) {
         };
       };
 
-      // Invisible members read as offline here too, as in the member list,
-      // except to themselves.
-      const hidden = (u) => u.status === 'invisible' && u.id !== socket.user.id;
+      // Invisible members read as offline here, as in the member list, to
+      // anyone who sees only some members. Staff (anyone with the full list,
+      // and audit log readers) see them as invisible instead.
+      // KEEP THIS: the owner relies on it to see who is really connected.
+      // It was removed once (2026-10-11, when the dots learned away and do
+      // not disturb) and staff lost that view without anyone noticing.
+      const staffSeesInvisible = canSeeAll || userHasPermission(socket.user.id, 'view_audit_log');
+      const hidden = (u) => u.status === 'invisible' && u.id !== socket.user.id && !staffSeesInvisible;
       const members = users.map(u => ({
         id: u.id, username: u.username, displayName: u.displayName,
         isAdmin: !!u.is_admin, online: onlineIds.has(u.id) && !hidden(u),
