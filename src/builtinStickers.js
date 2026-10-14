@@ -293,7 +293,9 @@ function createBuiltinStickers({ stickersDir, getDb, assetsDir = STICKER_ASSETS,
     res.setHeader('Content-Disposition', 'attachment');
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     res.type('image/svg+xml');
-    return res.sendFile(path.join(stickersDir, name), { cacheControl: false, lastModified: false, dotfiles: 'deny' });
+    // root keeps the dotfile check to the file name: the data folder itself
+    // often sits under a dot folder such as ~/.local/share.
+    return res.sendFile(name, { root: stickersDir, cacheControl: false, lastModified: false, dotfiles: 'deny' });
   }
 
   return { packs, sync, syncAndLog, packStates, setPackEnabled, restorePack, noteDeleted, describe, disabledPacks, serve, refreshServed };
