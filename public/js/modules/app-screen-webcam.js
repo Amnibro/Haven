@@ -844,7 +844,16 @@ _startStreamStallWatchdog(tileId, userId) {
       ? videoEl.srcObject.getVideoTracks()[0]
       : null;
     // Nothing is meant to be flowing, so not a stall.
-    if (!track || track.readyState !== 'live' || track.muted) { stalls = 0; return; }
+    if (!track || track.readyState !== 'live') { stalls = 0; return; }
+    // Chromium also mutes the incoming track when frames stop arriving over
+    // the network, which is what a stream frozen by a bad link looks like
+    // (audio keeps playing, the picture stops until you rejoin). By default a
+    // muted track is left alone, since a sharer showing a still screen can
+    // look the same. The Debug toggle treats it as a stall instead, for
+    // people who hit the frozen-stream case (reported over a VPN and TURN).
+    let recoverMuted = false;
+    try { recoverMuted = localStorage.getItem('haven_recover_muted_streams') === '1'; } catch { /* storage blocked: the default */ }
+    if (track.muted && !recoverMuted) { stalls = 0; return; }
 
     const frames = readFrames(videoEl);
     if (frames < 0) { this._stopStreamStallWatchdog(tileId); return; } // unsupported

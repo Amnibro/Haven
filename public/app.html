@@ -2546,6 +2546,14 @@
 
         <div class="settings-group">
           <label class="toggle-row">
+            <input type="checkbox" id="pref-debug-recover-muted-streams">
+            <span class="toggle-label" data-i18n="settings.debug_section.recover_muted_streams">Recover streams that freeze</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.debug_section.recover_muted_streams_hint">Turn this on if someone's stream freezes for you while you can still hear them, and only leaving and rejoining fixes it. Haven then reloads the stream for you, and asks the person sharing to resend it if that doesn't help. It can also reload a stream that is only showing a still screen, so leave it off unless you see the freeze. Only the person watching needs it on.</p>
+        </div>
+
+        <div class="settings-group">
+          <label class="toggle-row">
             <input type="checkbox" id="pref-debug-screen-relay-auto" checked>
             <span class="toggle-label" data-i18n="settings.debug_section.screen_relay_auto">Soften screen share automatically for relayed viewers</span>
           </label>

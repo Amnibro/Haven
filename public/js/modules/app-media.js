@@ -63,6 +63,20 @@ _setupDebugSection() {
   // last lever. This restores the pre-3.18.1 ceilings and unpins both. Off by
   // default while it is unverified; read live by voice.js on every apply, and
   // re-applied here so flipping it mid-share works without restarting it.
+  // A stream that freezes (picture stops, audio goes on) until a rejoin:
+  // treat a muted incoming track as a stall (app-screen-webcam.js watchdog).
+  // Opt in, since a sharer showing a still screen can look the same.
+  const mutedCb = document.getElementById('pref-debug-recover-muted-streams');
+  if (mutedCb) {
+    try { mutedCb.checked = localStorage.getItem('haven_recover_muted_streams') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
+    mutedCb.addEventListener('change', () => {
+      try {
+        if (mutedCb.checked) localStorage.setItem('haven_recover_muted_streams', '1');
+        else localStorage.removeItem('haven_recover_muted_streams');
+      } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
+    });
+  }
+
   const relayCb = document.getElementById('pref-debug-screen-relay-profile');
   if (relayCb) {
     try { relayCb.checked = localStorage.getItem('haven_screen_relay_profile') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
