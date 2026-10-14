@@ -77,6 +77,11 @@ _bindMediaGallery() {
     const parentId = parseInt(row.dataset.parentId, 10);
     if (!parentId) return;
     document.getElementById('threads-list-modal').style.display = 'none';
+    const panel = document.getElementById('thread-panel');
+    if (panel && panel.style.display !== 'none' && String(this._activeThreadParent) === String(parentId)) {
+      this._closeThread?.();
+      return;
+    }
     // Jump first: _openThread reads the parent's author and preview out of the
     // rendered message, so opening a thread whose root sits far up the channel
     // would otherwise show an empty header.
