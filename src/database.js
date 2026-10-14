@@ -483,6 +483,7 @@ function initDatabase() {
   insertSetting.run('max_tag_len', '20');               // max characters in an upload tag name (1-50) (#tagging phase 4)
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2-25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200-100000)
+  insertSetting.run('max_avatar_mb', '2');               // max profile picture / border / persona avatar size in MB (1-10)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256-10240)
   insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64-1024)
   insertSetting.run('max_sticker_kb', '1024');            // max sticker file size in KB (256-10240), #5392

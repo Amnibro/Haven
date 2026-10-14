@@ -9,6 +9,13 @@ const { sanitizeBorderTransform } = require('../socketHandlers');
 
 module.exports = function registerProfile(deps) {
   const { uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, uploadDir, upload, uploadLimiter } = deps;
+  // Profile pictures, borders and persona avatars share one size limit the
+  // admin sets (Settings, Uploads & Limits): 1 to 10 MB, 2 MB by default.
+  const avatarMaxMb = () => {
+    const { getDb } = require('../database');
+    const n = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_avatar_mb'").get()?.value, 10);
+    return n >= 1 && n <= 10 ? n : 2;
+  };
   // ── Avatar upload endpoint (saves to /uploads, updates DB) ──
   app.post('/api/upload-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -22,9 +29,10 @@ module.exports = function registerProfile(deps) {
     upload.single('avatar')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      if (req.file.size > 2 * 1024 * 1024) {
+      const maxMb = avatarMaxMb();
+      if (req.file.size > maxMb * 1024 * 1024) {
         fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Avatar must be under 2 MB' });
+        return res.status(400).json({ error: `Avatar must be under ${maxMb} MB` });
       }
 
       // Validate file magic bytes
@@ -113,9 +121,10 @@ module.exports = function registerProfile(deps) {
     upload.single('border')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      if (req.file.size > 2 * 1024 * 1024) {
+      const maxMb = avatarMaxMb();
+      if (req.file.size > maxMb * 1024 * 1024) {
         fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Border must be under 2 MB' });
+        return res.status(400).json({ error: `Border must be under ${maxMb} MB` });
       }
 
       // Validate file magic bytes
@@ -431,7 +440,7 @@ module.exports = function registerProfile(deps) {
     }
   });
 
-  // Persona avatar upload: same validation as user avatar (2 MB, magic-byte check)
+  // Persona avatar upload: same validation as user avatar (size limit, magic-byte check)
   app.post('/api/upload-persona-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
@@ -444,9 +453,10 @@ module.exports = function registerProfile(deps) {
     upload.single('avatar')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      if (req.file.size > 2 * 1024 * 1024) {
+      const maxMb = avatarMaxMb();
+      if (req.file.size > maxMb * 1024 * 1024) {
         try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Avatar must be under 2 MB' });
+        return res.status(400).json({ error: `Avatar must be under ${maxMb} MB` });
       }
       try {
         const fd = fs.openSync(req.file.path, 'r');
