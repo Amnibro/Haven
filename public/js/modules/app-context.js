@@ -162,11 +162,11 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
       this._hideUserContextMenu();
       this._showAdminActionModal('kick', targetUserId, targetName);
     });
-    if (canMod) addBtn(`🔇 ${t('users.gear_menu.mute')}`, () => {
+    if (canMod) addBtn(`⏳ ${t('users.gear_menu.mute')}`, () => {
       this._hideUserContextMenu();
       this._showAdminActionModal('mute', targetUserId, targetName);
     });
-    if (canMod) addBtn(`🔊 ${t('users.gear_menu.unmute')}`, () => {
+    if (canMod) addBtn(`⌛ ${t('users.gear_menu.unmute')}`, () => {
       this._hideUserContextMenu();
       this.socket.emit('unmute-user', { userId: targetUserId });
     });

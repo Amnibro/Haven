@@ -65,7 +65,7 @@ module.exports = function register(socket, ctx) {
 
     // A muted member cannot vote, the same as reacting.
     const mute = db.prepare("SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime('now') LIMIT 1").get(socket.user.id);
-    if (mute) return cb({ error: 'You are muted' });
+    if (mute) return cb({ error: 'You are in a timeout' });
 
     let totals;
     try {

@@ -803,7 +803,7 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    socket.emit('error-msg', `Muted ${targetUser.username} for ${durationMinutes} min`);
+    socket.emit('error-msg', `Gave ${targetUser.username} a ${durationMinutes} min timeout`);
     _audit({ actor: socket.user, action: 'user_mute',
       target_type: 'user', target_id: data.userId, target_name: targetUser.username,
       details: { durationMinutes, reason, channelCode: muteCode || null } });

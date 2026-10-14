@@ -1954,7 +1954,7 @@ module.exports = function register(socket, ctx) {
     ).get(userId);
     if (!row) return null;
     const remaining = Math.ceil((new Date(row.expires_at + 'Z') - Date.now()) / 60000);
-    return `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`;
+    return `You are in a timeout for ${remaining} more minute${remaining !== 1 ? 's' : ''}`;
   }
 
   socket.on('edit-message', (data) => {
@@ -2524,7 +2524,7 @@ module.exports = function register(socket, ctx) {
       ).get(socket.user.id);
       if (activeMute) {
         const remaining = Math.ceil((new Date(activeMute.expires_at + 'Z') - Date.now()) / 60000);
-        return socket.emit('error-msg', `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
+        return socket.emit('error-msg', `You are in a timeout for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
       }
 
       const code = socket.currentChannel;
@@ -3019,7 +3019,7 @@ module.exports = function register(socket, ctx) {
     ).get(socket.user.id);
     if (tMute) {
       const remaining = Math.ceil((new Date(tMute.expires_at + 'Z') - Date.now()) / 60000);
-      return socket.emit('error-msg', `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
+      return socket.emit('error-msg', `You are in a timeout for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
     }
 
     const tChannelRow = db.prepare('SELECT read_only FROM channels WHERE id = ?').get(channel.id);
