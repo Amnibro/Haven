@@ -198,6 +198,12 @@ class HavenApp {
       // Preserve invite param so it survives the redirect to the auth page
       const _inv = new URLSearchParams(window.location.search).get('invite');
       if (_inv) sessionStorage.setItem('haven_pending_invite', _inv);
+      // ...and a channel/message link, so signing in still lands on it.
+      const _link = window.HavenMessageLinks?.fromSearch(window.location.search) || window.HavenMessageLinks?.fromHash(window.location.hash);
+      if (_link) {
+        sessionStorage.setItem('haven_pending_channel', _link.channel);
+        if (_link.message) sessionStorage.setItem('haven_pending_message', String(_link.message));
+      }
       window.location.href = '/';
       return;
     }
