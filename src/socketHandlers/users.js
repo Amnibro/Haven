@@ -26,8 +26,6 @@ function cleanChannelOrder(raw) {
   return out.length <= 20000 ? out : null;
 }
 
-const BIRTHDAY_LOCK_MS = 30 * 24 * 60 * 60 * 1000;
-
 // A real calendar date from 1900 up to today as YYYY-MM-DD, else null. A day
 // of slack lets someone whose local date is ahead of UTC pick their today.
 function cleanBirthday(value) {
@@ -295,7 +293,8 @@ module.exports = function register(socket, ctx) {
       const row = db.prepare(
         `SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
                 u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at,
-                CASE WHEN u.birthday_hide_year = 0 THEN u.birthday ELSE substr(u.birthday, 6) END as birthday
+                CASE WHEN u.birthday_hidden <> 0 OR u.birthday_hidden IS NULL THEN NULL
+                     WHEN u.birthday_hide_year = 0 THEN u.birthday ELSE substr(u.birthday, 6) END as birthday
          FROM users u WHERE u.id = ?`
       ).get(data.userId);
       if (!row) return;
@@ -362,7 +361,8 @@ module.exports = function register(socket, ctx) {
         status: hidden ? 'offline' : (row.status || 'online'),
         statusText: row.status_text || '',
         bio: row.bio || '',
-        // MM-DD, or YYYY-MM-DD when the owner turned off Hide birth year.
+        // MM-DD, or YYYY-MM-DD when the owner turned off Hide birth year;
+        // null while they hide their birthday.
         birthday: row.birthday || null,
         roles: roles,
         online: isOnline,
@@ -390,30 +390,41 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  // Setting a birthday locks it for 30 days. Unsetting (null) hides it at any
-  // time but keeps the lock, so it cannot be used to pick a new date early.
-  // Hide birth year is not part of the lock and can change whenever.
+  // A birthday is set once and can never be changed. Hiding it keeps the date
+  // and only takes it off the profile and member lists; Hide birth year
+  // changes whenever. `hidden` is optional: clients from before it existed
+  // send birthday null to hide, and a first date shows.
   socket.on('set-birthday', (data) => {
     if (!data || typeof data !== 'object') return;
-    const birthday = data.birthday === null ? null : cleanBirthday(data.birthday);
-    if (data.birthday !== null && !birthday) return socket.emit('error-msg', 'Invalid birthday');
-    const hideYear = data.hideYear === false ? 0 : 1;
+    let birthday = null;
+    if (data.birthday != null) {
+      birthday = cleanBirthday(data.birthday);
+      if (!birthday) return socket.emit('error-msg', 'Invalid birthday');
+    }
     try {
-      const row = db.prepare('SELECT birthday, birthday_set_at, birthday_hide_year FROM users WHERE id = ?').get(socket.user.id);
-      if (!row || (row.birthday === birthday && row.birthday_hide_year === hideYear)) return;
-      let setAt = row.birthday_set_at;
-      if (birthday && birthday !== row.birthday) {
-        if (setAt && Date.now() - Date.parse(setAt) < BIRTHDAY_LOCK_MS) {
-          return socket.emit('error-msg', 'Your birthday can only be changed once every 30 days');
-        }
-        setAt = new Date().toISOString();
+      const row = db.prepare('SELECT birthday, birthday_set_at, birthday_hide_year, birthday_hidden FROM users WHERE id = ?').get(socket.user.id);
+      if (!row) return;
+      if (row.birthday && birthday && birthday !== row.birthday) {
+        return socket.emit('error-msg', 'Your birthday can only be set once.');
       }
-      db.prepare('UPDATE users SET birthday = ?, birthday_set_at = ?, birthday_hide_year = ? WHERE id = ?')
-        .run(birthday, setAt, hideYear, socket.user.id);
-      socket.user.birthday = birthday;
+      const firstSet = !row.birthday && !!birthday;
+      const date = row.birthday || birthday;
+      const setAt = firstSet ? new Date().toISOString() : row.birthday_set_at;
+      // A missing or NULL flag counts as hidden, so privacy fails closed.
+      const wasHidden = row.birthday_hidden !== 0;
+      const hidden = typeof data.hidden === 'boolean' ? data.hidden
+        : data.birthday === null ? true
+        : firstSet ? false
+        : wasHidden;
+      const hideYear = typeof data.hideYear === 'boolean' ? data.hideYear : row.birthday_hide_year !== 0;
+      if (date === row.birthday && hidden === wasHidden && hideYear === (row.birthday_hide_year !== 0)) return;
+      db.prepare('UPDATE users SET birthday = ?, birthday_set_at = ?, birthday_hide_year = ?, birthday_hidden = ? WHERE id = ?')
+        .run(date, setAt, hideYear ? 1 : 0, hidden ? 1 : 0, socket.user.id);
+      socket.user.birthday = date;
       socket.user.birthdaySetAt = setAt;
-      socket.user.birthdayHideYear = !!hideYear;
-      socket.emit('birthday-updated', { birthday, birthdaySetAt: setAt, birthdayHideYear: !!hideYear });
+      socket.user.birthdayHideYear = hideYear;
+      socket.user.birthdayHidden = hidden;
+      socket.emit('birthday-updated', { birthday: date, birthdaySetAt: setAt, birthdayHideYear: hideYear, birthdayHidden: hidden });
     } catch (err) {
       console.error('Set birthday error:', err);
       return;

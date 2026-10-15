@@ -729,7 +729,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   function getMentionableChannelMembers(channelId) {
     return db.prepare(`
       SELECT u.id, COALESCE(u.display_name, u.username) as username, u.username as loginName,
-             substr(u.birthday, 6) as birthday FROM users u
+             CASE WHEN u.birthday_hidden = 0 THEN substr(u.birthday, 6) END as birthday FROM users u
       JOIN channel_members cm ON u.id = cm.user_id
       LEFT JOIN bans b ON b.user_id = u.id
       WHERE cm.channel_id = ? AND b.user_id IS NULL
@@ -1065,7 +1065,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // included) was the cost that grew with the size of the server.
       const statusRows = db.prepare(`
         SELECT u.id, u.status, u.status_text, u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.is_guest,
-               substr(u.birthday, 6) as birthday
+               CASE WHEN u.birthday_hidden = 0 THEN substr(u.birthday, 6) END as birthday
         FROM users u
         JOIN channel_members cm ON cm.user_id = u.id
         JOIN channels c ON c.id = cm.channel_id
@@ -2097,7 +2097,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     try {
       // created_at feeds the automod new-account link gate (v3.42.0).
-      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year FROM users WHERE id = ?').get(user.id);
+      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden FROM users WHERE id = ?').get(user.id);
       if (!uRow || uRow.username !== user.username) {
         return next(new Error('Session expired'));
       }
@@ -2117,6 +2117,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       socket.user.birthday = uRow.birthday || null;
       socket.user.birthdaySetAt = uRow.birthday_set_at || null;
       socket.user.birthdayHideYear = uRow.birthday_hide_year !== 0;
+      socket.user.birthdayHidden = uRow.birthday_hidden !== 0;
       // (#12) The client needs this to ask for the right secret: an SSO
       // account unlocks E2E with its encryption passphrase, not a password.
       socket.user.isSso = !!uRow.oidc_subject;
@@ -2314,6 +2315,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       birthday: socket.user.birthday || null,
       birthdaySetAt: socket.user.birthdaySetAt || null,
       birthdayHideYear: socket.user.birthdayHideYear !== false,
+      birthdayHidden: socket.user.birthdayHidden === true,
       nicknames,
       // Official messages (src/messageHighlights.js): whether this person keeps
       // official mode on, and what the server supports, for clients that talk
