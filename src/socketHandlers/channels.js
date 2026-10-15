@@ -1112,7 +1112,7 @@ module.exports = function register(socket, ctx) {
         const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?');
         for (const [, s] of io.sockets.sockets) {
           if (!s.user || s.user.isAdmin) continue;
-          if (!isMember.get(channel.id, s.user.id)) s.leave(`channel:${channel.code}`);
+          if (!isMember.get(channel.id, s.user.id)) ctx.liveAccess?.cutOff(s.user.id, [channel.code], 'This channel is private now');
         }
       }
       if (permission === 'voice' && newVal === 0) {
@@ -1436,7 +1436,7 @@ module.exports = function register(socket, ctx) {
     for (const [, s] of io.sockets.sockets) {
       if (!s.user || s.user.isAdmin) continue;
       if (joined.has(s.user.id)) s.join(`channel:${channel.code}`);
-      else if (stored && !ctx.roleGateAllows(s.user.id, fresh)) s.leave(`channel:${channel.code}`);
+      else if (stored && !ctx.roleGateAllows(s.user.id, fresh)) ctx.liveAccess?.cutOff(s.user.id, [channel.code], 'This channel needs a role you do not hold');
     }
     broadcastChannelLists();
     // The member list follows the requirement too (#5703).
@@ -1829,6 +1829,8 @@ module.exports = function register(socket, ctx) {
     // Channel Mod could still act there.
     const delScoped = db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?');
     [channelId, ...subs.map(s => s.id)].forEach(id => delScoped.run(targetUserId, id));
+    // Out of the call too, before the code rotates below.
+    ctx.liveAccess?.cutOff(targetUserId, [channel.code, ...subs.map(s => s.code)], 'You were removed from this channel');
     const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === targetUserId);
     for (const ts of targetSockets) {
       if (ts.currentChannel === channel.code || subs.some(sub => sub.code === ts.currentChannel)) ts.currentChannel = null;

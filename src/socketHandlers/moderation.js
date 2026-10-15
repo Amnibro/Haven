@@ -165,6 +165,11 @@ module.exports = function register(socket, ctx) {
         io.to(targetInfo.socketId).emit('kicked', { channelCode: code, reason: kickReason });
       }
 
+      // Out of the call as well as the chat, before the code rotates below:
+      // someone still in the voice room would be handed the new code.
+      const subCodes = kickCh ? db.prepare('SELECT code FROM channels WHERE parent_channel_id = ?').all(kickCh.id).map(r => r.code) : [];
+      ctx.liveAccess?.cutOff(data.userId, [code, ...subCodes], 'You were kicked from this channel');
+
       for (const ts of targetSockets) {
         if (ts.currentChannel === code) ts.currentChannel = null;
         ts.leave(`channel:${code}`);

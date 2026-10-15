@@ -303,6 +303,8 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM dm_group_invites WHERE channel_id = ? AND user_id = ?').run(ch.id, userId);
       db.prepare('DELETE FROM dm_group_rewrap_requests WHERE channel_id = ? AND requester_id = ?').run(ch.id, userId);
     })();
+    // Out of the group's call too: leaving the group is leaving its call.
+    ctx.liveAccess?.dropFromVoice(userId, [ch.code], 'You are no longer in this group');
     for (const s of socketsOf([userId])) { s.leave(`channel:${ch.code}`); s.emit('channel-deleted', { code: ch.code }); s.emit('group-dm-left', { code: ch.code }); }
     const left = memberIds(ch.id);
     if (!left.length) {

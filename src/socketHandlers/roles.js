@@ -81,10 +81,8 @@ module.exports = function register(socket, ctx) {
     const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
     if (row && row.is_admin) return;
     try { ctx.syncRoleGateMemberships({ userId }); } catch (err) { console.error('role gate membership sync failed:', err.message); }
-    for (const [, s] of io.sockets.sockets) {
-      if (!s.user || s.user.id !== userId) continue;
-      gated.forEach(ch => { if (!ctx.roleGateAllows(userId, ch)) s.leave(`channel:${ch.code}`); });
-    }
+    const lost = gated.filter(ch => !ctx.roleGateAllows(userId, ch)).map(ch => ch.code);
+    ctx.liveAccess?.cutOff(userId, lost, 'This channel needs a role you do not hold');
     pushChannelList(userId);
   }
 

@@ -74,6 +74,7 @@ const { quietRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const forumUnread = require('../forumUnread');
 const registerForumVotes = require('./forumVotes');
+const createLiveAccess = require('./liveAccess');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
 // Some failures would repeat on every timer tick, connection or message.
@@ -241,6 +242,8 @@ function setupSocketHandlers(io, db, opts = {}) {
   }, 5000).unref?.();
 
   const dmCalls = createDmCalls({ io, db, voiceUsers, sendPushNotifications });
+  // Taking people out of a channel's rooms and voice call when they lose it.
+  const liveAccess = createLiveAccess({ io, state, handleVoiceLeave });
 
   // ── Rich presence ───────────────────────────────────────
   // Owns the in-memory "what is this user doing" map and the Steam/Spotify
@@ -524,6 +527,8 @@ function setupSocketHandlers(io, db, opts = {}) {
       `).all(userId);
 
       // Self-heal legacy accounts that somehow ended up with zero memberships.
+      // Never into a channel whose code is hidden: that is how someone kicked
+      // from their only channel was put straight back into it.
       // This restores visibility without requiring the user to manually join by code.
       if (channels.length === 0) {
         const userRow = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(userId);
@@ -539,7 +544,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             if (ids.length > 0) {
               const ph = ids.map(() => '?').join(',');
               targetRows = db.prepare(
-                `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND id IN (${ph})`
+                `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND id IN (${ph})`
               ).all(...ids);
             }
           } catch {
@@ -548,7 +553,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
           if (targetRows.length === 0) {
             targetRows = db.prepare(
-              'SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 ORDER BY position, name'
+              "SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') ORDER BY position, name"
             ).all();
           }
 
@@ -2747,6 +2752,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence, resetPresenceSync,
       dropRelayUser, closeRelaySources,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
+      liveAccess,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, dmCalls,
