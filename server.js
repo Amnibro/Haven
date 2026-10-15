@@ -2760,11 +2760,15 @@ function requireModBot(req, res) {
 // do no more than they could themselves: nobody at or above them, and no
 // undoing an admin's or a higher-ranked moderator's ban or mute. A bot with
 // no creator on record acts with no rank at all.
-function botModAuth(webhook) {
-  if (!webhook || !webhook.created_by) return null;
+// It also needs the creator to hold, today, the permission the route uses:
+// a bot keeps no power its maker has since lost.
+const BOT_MOD_DENIED = 'The person who made this bot no longer has this moderation permission';
+function botModAuth(webhook, permission, channelId = null) {
+  if (!webhook || !webhook.created_by || !permission) return null;
   const { getDb } = require('./src/database');
   const creator = getDb().prepare('SELECT id, username, display_name, is_admin FROM users WHERE id = ?').get(webhook.created_by);
   if (!creator) return null;
+  if (!creator.is_admin && !(socketRuntime && socketRuntime.userHasPermission(creator.id, permission, channelId))) return null;
   return { user: { id: creator.id, username: creator.username, displayName: creator.display_name || creator.username }, isAdmin: !!creator.is_admin, bot: webhook };
 }
 function httpModAudit(auth, action, targetId, targetName, details) {
@@ -2792,7 +2796,8 @@ app.post('/api/webhooks/:token/moderation/kick', webhookLimiter, express.json({ 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot kick an admin' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'kick_user', channel.id);
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   if (!modOutranks(botAuth, userId)) return res.status(403).json({ error: 'This bot can only act on people ranked below the person who made it' });
   httpModAudit(botAuth, 'user_kick', userId, target.username, { channel: channelCode });
 
@@ -2822,7 +2827,8 @@ app.post('/api/webhooks/:token/moderation/ban', webhookLimiter, express.json({ l
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot ban an admin' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'ban_user');
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   if (!modOutranks(botAuth, userId)) return res.status(403).json({ error: 'This bot can only act on people ranked below the person who made it' });
   const priorBan = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(userId);
   if (priorBan && !modMayUndo(botAuth, priorBan.banned_by)) return res.status(403).json({ error: 'That ban was placed by someone of equal or higher rank' });
@@ -2850,7 +2856,8 @@ app.post('/api/webhooks/:token/moderation/unban', webhookLimiter, express.json({
   const db = getDb();
   const { userId } = req.body || {};
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'ban_user');
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   const existingBan = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(userId);
   if (existingBan && !modMayUndo(botAuth, existingBan.banned_by)) {
     return res.status(403).json({ error: 'You can\'t undo a ban placed by an admin or by someone of equal or higher rank' });
@@ -2873,7 +2880,8 @@ app.post('/api/webhooks/:token/moderation/mute', webhookLimiter, express.json({ 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot mute an admin' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'mute_user');
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   if (!modOutranks(botAuth, userId)) return res.status(403).json({ error: 'This bot can only act on people ranked below the person who made it' });
   for (const { muted_by: by } of db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(userId)) {
     if (!modMayUndo(botAuth, by)) return res.status(403).json({ error: 'That timeout was given by someone of equal or higher rank' });
@@ -2903,7 +2911,8 @@ app.post('/api/webhooks/:token/moderation/unmute', webhookLimiter, express.json(
   const db = getDb();
   const { userId } = req.body || {};
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'mute_user');
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   for (const { muted_by: by } of db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(userId)) {
     if (!modMayUndo(botAuth, by)) return res.status(403).json({ error: 'You can\'t undo a timeout given by an admin or by someone of equal or higher rank' });
   }
