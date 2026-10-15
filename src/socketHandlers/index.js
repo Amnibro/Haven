@@ -43,6 +43,7 @@ const {
   registerBotVoiceSocket
 } = require('../botVoice');
 const { creatorCanReachChannel } = require('../botAccess');
+const { ipBanRefusal } = require('../ipBanGuard');
 
 const { createActivity } = require('../activity');
 const createDmCalls = require('../dmCalls');
@@ -2577,10 +2578,25 @@ function setupSocketHandlers(io, db, opts = {}) {
             const { normalizeIp } = require('../clientIp');
             const ips = db.prepare('SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 3').all(socket.user.id);
             const stmt = db.prepare('INSERT OR REPLACE INTO ip_bans (ip, banned_by, reason) VALUES (?, ?, ?)');
+            // Never this machine, and never an address used by anyone automod
+            // would leave alone: an admin, a moderator (50) or anyone at the
+            // configured exempt level. A spammer on the same CGNAT address or
+            // home network as staff loses the account, not the address.
+            const exemptLevel = parseInt(automod.settings().automod_link_exempt_level, 10);
+            const guard = {
+              getUserEffectiveLevel,
+              protectAdmins: true,
+              protectLevel: Number.isFinite(exemptLevel) && exemptLevel >= 0 ? Math.min(50, exemptLevel) : 50,
+            };
             let banned = 0;
             for (const r of ips) {
               const norm = normalizeIp(r.ip);
               if (!norm) continue;
+              const refusal = ipBanRefusal(db, norm, guard);
+              if (refusal) {
+                console.warn(`automod: IP ban skipped (${refusal})`);
+                continue;
+              }
               stmt.run(norm, actorId, reason);
               banned++;
             }
