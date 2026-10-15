@@ -116,6 +116,32 @@ module.exports = function register(socket, ctx) {
     }
   }
 
+  // A poll's votes as one person sees them. In an anonymous poll, everyone
+  // else's vote is a blank entry: the counts stay right and your own vote
+  // still shows as yours, but no names or ids leave the server. Only the
+  // page used to hide them.
+  function pollVotesView(poll, votes, viewerId) {
+    const out = {};
+    poll.options.forEach((_, i) => { out[i] = []; });
+    for (const v of votes) {
+      if (!out[v.option_index]) out[v.option_index] = [];
+      out[v.option_index].push(poll.anonymous && v.user_id !== viewerId
+        ? { user_id: 0, username: '' }
+        : { user_id: v.user_id, username: v.username });
+    }
+    return out;
+  }
+  function emitPollUpdate(code, messageId, poll, votes) {
+    const base = { channelCode: code, messageId, totalVotes: votes.length };
+    if (!poll.anonymous) {
+      io.to(`channel:${code}`).emit('poll-updated', { ...base, votes: pollVotesView(poll, votes, null) });
+      return;
+    }
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.rooms.has(`channel:${code}`)) s.emit('poll-updated', { ...base, votes: pollVotesView(poll, votes, s.user.id) });
+    }
+  }
+
   // Reply banners must match message rendering: bots live in webhook_* with
   // user_id NULL, so a users-table COALESCE alone becomes "[Deleted User]".
   const REPLY_CONTEXT_SELECT = `
@@ -459,12 +485,7 @@ module.exports = function register(socket, ctx) {
         try {
           obj.poll = JSON.parse(m.poll_data);
           const votes = pollVoteMap.get(m.id) || [];
-          obj.poll.votes = {};
-          obj.poll.options.forEach((_, i) => { obj.poll.votes[i] = []; });
-          votes.forEach(v => {
-            if (!obj.poll.votes[v.option_index]) obj.poll.votes[v.option_index] = [];
-            obj.poll.votes[v.option_index].push({ user_id: v.user_id, username: v.username });
-          });
+          obj.poll.votes = pollVotesView(obj.poll, votes, socket.user.id);
           obj.poll.totalVotes = votes.length;
         } catch (e) { /* invalid poll_data: send the message without its poll rather than drop it */ }
       }
@@ -961,13 +982,14 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return cb({ error: 'Channel not found' });
 
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
-    if (!member && !socket.user.isAdmin) return cb({ error: 'Not a member' });
+    // In a channel, the people its gate lets in (and the admin). In a DM, only
+    // its two people, and each only their own messages: a server-wide delete
+    // permission, or being the admin, is not a key to other people's DMs.
+    const canReach = channel.is_dm ? hasChannelAccess(channel.id) : (socket.user.isAdmin || hasChannelAccess(channel.id));
+    if (!canReach) return cb({ error: 'Not a member' });
 
-    const canDeleteAny  = socket.user.isAdmin || userHasPermission(socket.user.id, 'delete_message', channel.id);
-    const canDeleteLowr = !canDeleteAny && userHasPermission(socket.user.id, 'delete_lower_messages', channel.id);
+    const canDeleteAny  = !channel.is_dm && (socket.user.isAdmin || userHasPermission(socket.user.id, 'delete_message', channel.id));
+    const canDeleteLowr = !channel.is_dm && !canDeleteAny && userHasPermission(socket.user.id, 'delete_lower_messages', channel.id);
     const myLevel = (!canDeleteAny && canDeleteLowr) ? getUserEffectiveLevel(socket.user.id, channel.id) : 0;
 
     // Allow self-delete fallback only if the policy allows it. Mirrors
@@ -1997,6 +2019,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id, is_dm, is_group FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // Editing takes still being there: someone removed from a channel or a
+    // group could otherwise keep rewriting what they had posted in it.
+    if (!(socket.user.isAdmin && !channel.is_dm) && !hasChannelAccess(channel.id)) return;
     if (channel.is_group && !isGroupEnvelope(data.content)) return socket.emit('error-msg', 'Group messages must be end-to-end encrypted. Update Haven to send here.');
     if (data.content.length > contentCap(_editMax, channel, data.content)) {
       return socket.emit('error-msg', `Message too long (max ${_editMax} characters)`);
@@ -2067,6 +2092,8 @@ module.exports = function register(socket, ctx) {
     // someone else holds; anywhere else, a non-admin must be in the channel.
     const _inChannel = !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
     if (channel.is_dm ? !_inChannel : (!_inChannel && !socket.user.isAdmin)) return;
+    // A role-gated channel is out of reach for people its gate keeps out.
+    if (!channel.is_dm && !socket.user.isAdmin && !hasChannelAccess(channel.id)) return;
 
     const msg = db.prepare(
       'SELECT id, user_id, content, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
@@ -2092,6 +2119,8 @@ module.exports = function register(socket, ctx) {
         }
       }
     } else {
+      // In a DM each person deletes only their own messages.
+      if (channel.is_dm) return socket.emit('error-msg', 'You can only delete your own messages');
       const canDeleteAny = socket.user.isAdmin || userHasPermission(socket.user.id, 'delete_message', channel.id);
       let canDeleteLower = false;
       if (!canDeleteAny && userHasPermission(socket.user.id, 'delete_lower_messages', channel.id)) {
@@ -2650,19 +2679,7 @@ module.exports = function register(socket, ctx) {
         WHERE pv.message_id = ? ORDER BY pv.id
       `).all(data.messageId);
 
-      const votesByOption = {};
-      poll.options.forEach((_, i) => { votesByOption[i] = []; });
-      votes.forEach(v => {
-        if (!votesByOption[v.option_index]) votesByOption[v.option_index] = [];
-        votesByOption[v.option_index].push({ user_id: v.user_id, username: v.username });
-      });
-
-      io.to(`channel:${code}`).emit('poll-updated', {
-        channelCode: code,
-        messageId: data.messageId,
-        votes: votesByOption,
-        totalVotes: votes.length
-      });
+      emitPollUpdate(code, data.messageId, poll, votes);
     } catch (err) {
       console.error('vote-poll error:', err.message);
     }
@@ -2694,19 +2711,7 @@ module.exports = function register(socket, ctx) {
         WHERE pv.message_id = ? ORDER BY pv.id
       `).all(data.messageId);
 
-      const votesByOption = {};
-      poll.options.forEach((_, i) => { votesByOption[i] = []; });
-      votes.forEach(v => {
-        if (!votesByOption[v.option_index]) votesByOption[v.option_index] = [];
-        votesByOption[v.option_index].push({ user_id: v.user_id, username: v.username });
-      });
-
-      io.to(`channel:${code}`).emit('poll-updated', {
-        channelCode: code,
-        messageId: data.messageId,
-        votes: votesByOption,
-        totalVotes: votes.length
-      });
+      emitPollUpdate(code, data.messageId, poll, votes);
     } catch (err) {
       console.error('unvote-poll error:', err.message);
     }
