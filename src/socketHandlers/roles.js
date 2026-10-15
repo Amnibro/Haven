@@ -185,6 +185,20 @@ module.exports = function register(socket, ctx) {
   // or put its holders into channels they are not in, and handing it out, or
   // taking it themselves from a role menu, passed those on.
   const ADMIN_ONLY_PERMS = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
+  // Making a role automatic hands it to every new account and member, and
+  // takes the automatic flag off whichever role had it. Someone other than the
+  // admin may do that, and undo it, only with roles they could hand out
+  // themselves, the role being replaced included.
+  function autoRoleRefusal(roleId) {
+    if (socket.user.isAdmin) return null;
+    if (roleId && roleGrantRefusal(roleId)) return 'You can only make a role automatic, or stop it being automatic, if you could give it out yourself';
+    const current = db.prepare('SELECT id FROM roles WHERE auto_assign = 1').get();
+    if (current && current.id !== roleId && roleGrantRefusal(current.id)) {
+      return 'The current automatic role is one you could not give out, so only the admin can replace it';
+    }
+    return null;
+  }
+
   function roleGrantRefusal(roleId, granterId = socket.user.id) {
     const granter = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(granterId);
     if (granter && granter.is_admin) return null;
@@ -562,9 +576,12 @@ module.exports = function register(socket, ctx) {
     const color2 = safeRoleColor(data.color2);
     const shimmer = color2 && data.shimmer ? 1 : 0;
     const autoAssign = data.autoAssign ? 1 : 0;
-    // An automatic role goes to every new account and every new member, so
-    // turning it on is the admin's call alone.
-    if (autoAssign && !socket.user.isAdmin) return cb({ error: 'Only the admin can make a role automatic' });
+    // The new role is held below the creator's level with only permissions
+    // they have (checked below), so what remains is the role it replaces.
+    if (autoAssign) {
+      const refusal = autoRoleRefusal(null);
+      if (refusal) return cb({ error: refusal });
+    }
     const transparent = data.transparent ? 1 : 0;
     const icon = isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon) ? data.icon : null;
     const maxUploadMb = isInt(data.maxUploadMb) && data.maxUploadMb >= 1 && data.maxUploadMb <= 102400 ? data.maxUploadMb : null;
@@ -639,7 +656,8 @@ module.exports = function register(socket, ctx) {
       // Level 0 makes a role a group anyone can join, and clears its
       // permissions. Neither is for someone who could not hand it out.
       if (data.autoAssign !== undefined && !!data.autoAssign !== !!role.auto_assign) {
-        return cb({ error: 'Only the admin can change which role is automatic' });
+        const refusal = autoRoleRefusal(roleId);
+        if (refusal) return cb({ error: refusal });
       }
       if (data.linkChannelAccess && !role.link_channel_access) {
         const refusal = linkRefusal(roleId);
