@@ -1769,8 +1769,14 @@ module.exports = function register(socket, ctx) {
       const isMod = userHasPermission(socket.user.id, 'kick_user', channelId);
       if (!isCreator && !isMod) return socket.emit('error-msg', 'Only the channel creator or moderators can invite people to private channels');
     }
-    const targetUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(targetUserId);
-    if (!targetUser) return socket.emit('error-msg', 'User not found');
+    const targetUser = db.prepare(`
+      SELECT u.id, u.username, u.is_guest, (b.id IS NOT NULL) AS banned
+      FROM users u LEFT JOIN bans b ON b.user_id = u.id WHERE u.id = ?
+    `).get(targetUserId);
+    if (!targetUser || targetUser.banned) return socket.emit('error-msg', 'User not found');
+    // A guest sees only the channels the admin opened to guests (join-channel
+    // refuses them a code too), so an invite is no way past that list.
+    if (targetUser.is_guest && !socket.user.isAdmin) return socket.emit('error-msg', 'Guests can only use the channels the admin opened to them');
     const alreadyMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, targetUserId);
     if (alreadyMember) return socket.emit('error-msg', `${targetUser.username} is already in #${channel.name}`);
     db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, targetUserId);
