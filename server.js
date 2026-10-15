@@ -628,6 +628,7 @@ if (!sslCert && !sslKey) {
 }
 
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
+let tlsIssue = null;
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -1434,7 +1435,8 @@ app.get('/api/public-config', (req, res) => {
       // login page never offers a button that can only fail. The issuer and
       // client id stay server-side; the client needs neither.
       oidc_enabled: oidcConfig.enabled,
-      oidc_button_label: oidcConfig.enabled ? oidcConfig.buttonLabel : ''
+      oidc_button_label: oidcConfig.enabled ? oidcConfig.buttonLabel : '',
+      tls_issue: tlsIssue
     });
   } catch {
     res.json({ default_theme: '', default_locale: '', server_title: '' });
@@ -3336,6 +3338,15 @@ if (useSSL) {
     };
     server = createHttpsServer(sslOptions, app);
     console.log('🔒 HTTPS enabled');
+    try {
+      const { inspectCertChain, certAdvice } = require('./src/certCheck');
+      const status = inspectCertChain(sslOptions.cert);
+      tlsIssue = status.issue;
+      const advice = certAdvice(status, sslCert);
+      if (advice) console.warn(`⚠️  TLS certificate problem: ${advice}`);
+    } catch (err) {
+      console.warn('⚠️  Could not check the TLS certificate chain:', err.message);
+    }
 
     // Also start an HTTP server that redirects to HTTPS (hardened)
     const httpRedirect = express();
@@ -3377,6 +3388,7 @@ if (useSSL) {
     });
   } catch (err) {
     console.error('Failed to load SSL certs, falling back to HTTP:', err.message);
+    if (err.code === 'EACCES') console.error(`   Haven cannot read ${err.path || 'the certificate files'} as this user. Certbot keeps /etc/letsencrypt/live and /etc/letsencrypt/archive readable by root only: copy fullchain.pem and privkey.pem somewhere Haven can read (a certbot deploy hook keeps them fresh), or grant this user read access.`);
     server = createServer(app);
   }
 } else {
@@ -3854,9 +3866,9 @@ server.on('error', (err) => {
         ? `this machine has no network interface with address ${HOST}; check HOST in your .env`
         : process.platform === 'win32'
           ? `Windows refused port ${PORT}. Ports below 1024 need an elevated prompt; otherwise the port is usually inside a reserved range held by Hyper-V/WSL (see: netsh interface ipv4 show excludedportrange protocol=tcp). Pick another PORT in your .env, or free the range with: net stop winnat && net start winnat`
-          : `no permission to bind port ${PORT} (ports below 1024 need elevation)`;
+          : `no permission to bind port ${PORT}. Ports below 1024 need elevation: on Linux run  sudo setcap 'cap_net_bind_service=+ep' "${process.execPath}"  (or keep Haven on a high port behind a reverse proxy or a port forward to 443)`;
     console.error(`\n❌ Haven could not start: ${why}`);
-    console.error(`   Stop the other process or change PORT in your .env, then start Haven again.`);
+    console.error(err.code === 'EADDRINUSE' ? '   Stop the other process or change PORT in your .env, then start Haven again.' : '   Fix that or change PORT/HOST in your .env, then start Haven again.');
     logCrash('Fatal listen error (exiting)', err);
     process.exit(1);
   }

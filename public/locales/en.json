@@ -1328,6 +1328,8 @@
       "ios_version": "Push notifications are not supported on this iOS browser version. Update to iOS 16.4 or later.",
       "service_worker": "Service worker registration failed: {{error}}",
       "ssl_required": "Push notifications require a trusted SSL certificate.\n\nSelf-signed certificates do not support push. Use a Cloudflare Tunnel, access Haven via localhost, or install a trusted certificate such as Let's Encrypt.",
+      "ssl_chain": "Push notifications need a certificate chain the browser can verify, and this server sends its certificate without the intermediate certificates.\n\nThe certificate itself can be valid (Let's Encrypt, for example). The server admin should set SSL_CERT_PATH to fullchain.pem instead of cert.pem and restart Haven.",
+      "ssl_expired": "Push notifications are unavailable because this server's SSL certificate has expired. The server admin needs to renew it and restart Haven.",
       "brave_setup": "Brave blocks push notifications by default. Enable Use Google Services for Push Messaging in Brave privacy settings, restart Brave, and reload Haven. If that does not work, try Chrome or Edge.",
       "brave_copy_hint": "Paste this into your Brave address bar, enable Use Google Services for Push Messaging, and restart Brave.",
       "permission_denied": "Notification permission was denied. Allow notifications for this site in your browser settings, then try again.",
