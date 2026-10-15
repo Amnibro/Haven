@@ -217,6 +217,18 @@ test('voice channel access is scoped to assignment, membership, or admin ownersh
   assert.deepEqual(adminChannels.map(channel => channel.code), ['11111111', '22222222', '44444444']);
 });
 
+test('voice channel access follows the creator role gate and ban', t => {
+  const db = createDb();
+  t.after(() => db.close());
+  db.prepare('UPDATE channels SET role_gate = ? WHERE id = 2').run(JSON.stringify({ mode: 'any', roles: [5] }));
+  const codes = () => getAccessibleVoiceChannels(db, { channel_id: 1, created_by: 10 }).map(channel => channel.code);
+  assert.deepEqual(codes(), ['11111111']);
+  db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id) VALUES (10, 5, NULL)').run();
+  assert.deepEqual(codes(), ['11111111', '22222222']);
+  db.prepare('INSERT INTO bans (user_id, banned_by) VALUES (10, 11)').run();
+  assert.deepEqual(codes(), []);
+});
+
 test('active bot access detects token, membership, channel, and permission revocation', t => {
   const db = createDb();
   t.after(() => db.close());
