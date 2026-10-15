@@ -267,7 +267,7 @@ module.exports = function registerBackup(deps) {
     // (reporters hit 15GB+), and the old 4GB cap rejected the upload part-way,
     // which surfaced to the browser as a "failed to fetch" (#5436). The practical
     // limit is the host's disk, not this number.
-    limits: { fileSize: 512 * 1024 * 1024 * 1024 },
+    limits: { fileSize: 512 * 1024 * 1024 * 1024, fields: 20, fieldSize: 16 * 1024 },
   });
 
   app.post('/api/admin/restore', authLimiter, async (req, res) => {

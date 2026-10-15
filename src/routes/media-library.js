@@ -36,7 +36,7 @@ module.exports = function registerMediaLibrary(deps) {
     const maxKb = parseInt(getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get('max_sound_kb')?.value) || 1024;
     return multer({
       storage: uploadStorage,
-      limits: { fileSize: maxKb * 1024 },
+      limits: { fileSize: maxKb * 1024, fields: 20, fieldSize: 16 * 1024 },
       fileFilter: (req, file, cb) => {
         if (/^audio\/(mpeg|ogg|wav|webm)$/.test(file.mimetype)) cb(null, true);
         else cb(new Error('Only audio files allowed (mp3, ogg, wav, webm)'));
@@ -166,7 +166,7 @@ module.exports = function registerMediaLibrary(deps) {
     const maxKb = parseInt(getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get('max_emoji_kb')?.value) || 256;
     return multer({
       storage: uploadStorage,
-      limits: { fileSize: maxKb * 1024 },
+      limits: { fileSize: maxKb * 1024, fields: 20, fieldSize: 16 * 1024 },
       fileFilter: (req, file, cb) => {
         if (/^image\/(png|gif|webp|jpeg)$/.test(file.mimetype)) cb(null, true);
         else cb(new Error('Only images allowed (png, gif, webp, jpg)'));
@@ -435,7 +435,7 @@ module.exports = function registerMediaLibrary(deps) {
     const maxKb = parseInt(getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get('max_sticker_kb')?.value) || 1024;
     return multer({
       storage: stickerStorage,
-      limits: { fileSize: maxKb * 1024 },
+      limits: { fileSize: maxKb * 1024, fields: 20, fieldSize: 16 * 1024 },
       fileFilter: (req, file, cb) => {
         if (/^image\/(png|gif|webp|jpeg)$/.test(file.mimetype)) cb(null, true);
         else cb(new Error('Only images allowed (png, gif, webp, jpg)'));

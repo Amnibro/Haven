@@ -887,7 +887,9 @@ function cappedUpload(options) {
   return {
     single: (field) => (req, res, next) => {
       const capMb = uploadCapMbFor(req);
-      multer({ ...options, limits: { fileSize: capMb * 1024 * 1024 + 1 } }).single(field)(req, res, (err) => {
+      // Text fields are held in memory, and busboy allows any number of them
+      // by default; a handful of short ones is all any upload form sends.
+      multer({ ...options, limits: { fileSize: capMb * 1024 * 1024 + 1, fields: 20, fieldSize: 16 * 1024 } }).single(field)(req, res, (err) => {
         if (err && err.code === 'LIMIT_FILE_SIZE') err.message = `File too large (max ${capMb} MB)`;
         next(err);
       });
@@ -3082,7 +3084,7 @@ const importUpload = multer({
       cb(null, `haven-import-${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
     }
   }),
-  limits: { fileSize: 500 * 1024 * 1024 },
+  limits: { fileSize: 500 * 1024 * 1024, fields: 20, fieldSize: 16 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (ext === '.json' || ext === '.zip') cb(null, true);
