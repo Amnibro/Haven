@@ -42,7 +42,14 @@ module.exports = function register(socket, ctx) {
       channelRows.forEach(r => ins.run(r.channel_id, userId));
     } else {
       const del = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
-      channelRows.forEach(r => del.run(r.channel_id, userId));
+      const codeOf = db.prepare('SELECT code FROM channels WHERE id = ?');
+      const lost = [];
+      channelRows.forEach(r => {
+        if (del.run(r.channel_id, userId).changes) lost.push(codeOf.get(r.channel_id)?.code);
+      });
+      // Out of the rooms and calls too, or the live feed carries on.
+      const holder = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+      if (!(holder && holder.is_admin)) ctx.liveAccess?.cutOff(userId, lost, 'You no longer have access to this channel');
     }
 
     for (const [, s] of io.sockets.sockets) {

@@ -661,22 +661,17 @@ module.exports = function register(socket, ctx) {
 
     db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channel.id, socket.user.id);
 
+    const leftCodes = [code];
     if (!channel.parent_channel_id) {
-      const subs = db.prepare('SELECT id FROM channels WHERE parent_channel_id = ?').all(channel.id);
+      const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ?').all(channel.id);
       const delSub = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
-      subs.forEach(s => delSub.run(s.id, socket.user.id));
+      subs.forEach(s => { delSub.run(s.id, socket.user.id); leftCodes.push(s.code); });
     }
 
-    socket.leave(`channel:${code}`);
-
-    if (socket.currentChannel === code) {
-      const prevUsers = channelUsers.get(code);
-      if (prevUsers) {
-        prevUsers.delete(socket.user.id);
-        emitOnlineUsers(code);
-      }
-      socket.currentChannel = null;
-    }
+    // Every tab and device leaves, sub-channels included, not just this one.
+    const wasHere = !!channelUsers.get(code)?.has(socket.user.id);
+    ctx.liveAccess?.cutOff(socket.user.id, leftCodes, 'You left this channel');
+    if (wasHere) emitOnlineUsers(code);
 
     socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
     cb({ success: true });
