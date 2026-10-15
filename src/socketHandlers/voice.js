@@ -1,6 +1,7 @@
 'use strict';
 
 const { isString, isInt } = require('./helpers');
+const userBlocks = require('../userBlocks');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getUserHighestRole,
@@ -133,6 +134,9 @@ module.exports = function register(socket, ctx) {
   // voice (no use_voice, missing the channel's required roles, a guest on a
   // text-only server) could get in that way, and past a full room.
   function voiceEntryRefusal(code, channelId) {
+    if (userBlocks.dmBlocked(db, db.prepare('SELECT id, is_dm, is_group FROM channels WHERE id = ?').get(channelId), socket.user.id)) {
+      return userBlocks.CALL_BLOCKED_ERROR;
+    }
     if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId))) {
       return 'This channel needs a role you do not hold';
     }
@@ -159,12 +163,18 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const vch = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const vch = db.prepare('SELECT id, is_dm, is_group FROM channels WHERE code = ?').get(code);
     if (!vch) return;
     const vMember = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(vch.id, socket.user.id);
     if (!vMember) return socket.emit('error-msg', 'Not a member of this channel');
+    // No calls in a 1:1 DM where either side blocked the other (src/userBlocks.js).
+    if (userBlocks.dmBlocked(db, vch, socket.user.id)) {
+      socket.emit('error-msg', userBlocks.CALL_BLOCKED_ERROR);
+      socket.emit('voice-channel-gone', { code });
+      return;
+    }
     // A role gate on the channel covers its voice room too (#5597).
     if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(vch.id))) {
       return socket.emit('error-msg', 'This channel needs a role you do not hold');

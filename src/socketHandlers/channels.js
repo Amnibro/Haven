@@ -39,6 +39,7 @@ async function releaseChannelUploads(db, byAuthor, label) {
     } catch (err) { console.warn(`${label} attachment cleanup failed:`, err.message); /* the files stay in uploads/; nothing is lost */ }
   }
 }
+const userBlocks = require('../userBlocks');
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { reachableChannel } = require('./channelAccess');
 const protectedMessages = require('../protectedMessages');
@@ -1965,6 +1966,8 @@ module.exports = function register(socket, ctx) {
       return;
     }
     if (!isSelfDm) {
+      // No new 1:1 DM between two people when either blocked the other.
+      if (userBlocks.blockedEitherWay(db, socket.user.id, targetId)) return socket.emit('error-msg', userBlocks.DM_BLOCKED_ERROR);
       if (refuseYoungAccount(null)) return;
       if (!socket.user.isAdmin) {
         let started;

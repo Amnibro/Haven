@@ -82,6 +82,8 @@ const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
 const registerMessageNsfw = require('./messageNsfw');
 const createLiveAccess = require('./liveAccess');
+const registerDataControls = require('./dataControls');
+const userBlocks = require('../userBlocks');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
 // Some failures would repeat on every timer tick, connection or message.
@@ -627,8 +629,9 @@ function setupSocketHandlers(io, db, opts = {}) {
             // to no account, and NULL != ? is never true, so they never
             // counted (#5771). A group DM's "joined" / "left" lines are not
             // new messages.
-            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' LIMIT 1000)"
-          ).get(ch.id, lastRead, userId);
+            // Messages from people this member blocked do not count either.
+            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' AND (user_id IS NULL OR user_id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = ?)) LIMIT 1000)"
+          ).get(ch.id, lastRead, userId, userId);
           ch.unreadCount = countRow ? countRow.cnt : 0;
         } else {
           ch.unreadCount = 0;
@@ -982,6 +985,16 @@ function setupSocketHandlers(io, db, opts = {}) {
   // notice one you do not recognise, so it reduces to browser plus platform.
   function _describeUserAgent(ua) {
     if (!ua || typeof ua !== 'string') return 'Unknown device';
+    // The Android and iOS apps send "Haven-Android/<version> (Android <release>;
+    // <model>)" and "Haven-iOS/<version> (iOS <version>; <model>)". The model is
+    // the part worth showing; it comes from the device, so it is trimmed and
+    // capped like any other text it sends.
+    const mobile = ua.match(/\bHaven-(Android|iOS)\/\S*(?:\s*\(([^)]*)\))?/);
+    if (mobile) {
+      const model = (mobile[2] || '').split(';').slice(1).join(';').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 60);
+      const app = `Haven for ${mobile[1]}`;
+      return model ? `${app} · ${model}` : app;
+    }
     // The desktop app's user agent also names Chrome, so it is checked first.
     const browser =
       /Haven|Electron/i.test(ua)                ? 'Haven Desktop'
@@ -2447,6 +2460,10 @@ function setupSocketHandlers(io, db, opts = {}) {
       const rows = db.prepare('SELECT target_id, nickname FROM user_nicknames WHERE owner_id = ?').all(socket.user.id);
       for (const r of rows) nicknames[r.target_id] = r.nickname;
     } catch { /* non-critical: nicknames are saved, they just do not sync to this connection */ }
+    // People this member blocked, so every client can hide their messages and
+    // typing from the start (src/userBlocks.js).
+    let blockedUserIds = [];
+    try { blockedUserIds = userBlocks.blockedIds(db, socket.user.id); } catch (err) { console.warn('[blocks] could not load blocked users:', err.message); }
 
     socket.emit('session-info', {
       id: socket.user.id, username: socket.user.username,
@@ -2474,6 +2491,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       birthdayHideYear: socket.user.birthdayHideYear !== false,
       birthdayHidden: socket.user.birthdayHidden === true,
       nicknames,
+      blockedUserIds,
       // Official messages (src/messageHighlights.js): whether this person keeps
       // official mode on, and what the server supports, for clients that talk
       // to servers of different versions.
@@ -2984,6 +3002,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);
     registerMessageNsfw(socket, ctx);
+    registerDataControls(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made
