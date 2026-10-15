@@ -3,6 +3,10 @@
 const crypto = require('crypto');
 const { isString, isInt } = require('./helpers');
 
+// The most tracks a call's queue holds. Every change sends the whole queue to
+// everyone in the call, so without a cap one person could grow it forever.
+const MAX_QUEUE = 200;
+
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission,
           resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, resolveMusicMetadata,
@@ -63,6 +67,7 @@ module.exports = function register(socket, ctx) {
     }
 
     const queue = musicQueues.get(data.code) || [];
+    if (queue.length >= MAX_QUEUE) return socket.emit('error-msg', `The queue is full (${MAX_QUEUE} tracks)`);
     queue.push(entry);
     musicQueues.set(data.code, queue);
     broadcastMusicQueue(data.code);
@@ -109,6 +114,7 @@ module.exports = function register(socket, ctx) {
         startQueuedMusic(data.code, entry);
       } else {
         const queue = musicQueues.get(data.code) || [];
+        if (queue.length >= MAX_QUEUE) break;
         queue.push(entry);
         musicQueues.set(data.code, queue);
       }
