@@ -51,10 +51,16 @@ const path = require('path');
     process.exit(1);
   }
 }
+// .env holds JWT_SECRET: readable by other accounts on a shared Linux host,
+// it would let them sign admin tokens. No effect on Windows.
+function _lockEnvFile() {
+  try { fs.chmodSync(ENV_PATH, 0o600); } catch (err) { console.warn('Could not restrict .env permissions:', err.message); }
+}
 if (!fs.existsSync(ENV_PATH)) {
   const example = path.join(__dirname, '.env.example');
   if (fs.existsSync(example)) {
     fs.copyFileSync(example, ENV_PATH);
+    _lockEnvFile();
     console.log(`📄 Created .env in ${DATA_DIR} from template`);
   } else {
     // Write a minimal .env so dotenv doesn't fail
@@ -103,7 +109,8 @@ if (process.env.JWT_SECRET === 'change-me-to-something-random-and-long' || !proc
   const generated = crypto.randomBytes(48).toString('base64');
   let envContent = fs.readFileSync(ENV_PATH, 'utf-8');
   envContent = envContent.replace(/JWT_SECRET=.*/, `JWT_SECRET=${generated}`);
-  fs.writeFileSync(ENV_PATH, envContent);
+  fs.writeFileSync(ENV_PATH, envContent, { mode: 0o600 });
+  _lockEnvFile();
   process.env.JWT_SECRET = generated;
   console.log('🔑 Auto-generated strong JWT_SECRET (saved to .env)');
 }
@@ -114,7 +121,8 @@ if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
   const vapidKeys = webpush.generateVAPIDKeys();
   let envContent = fs.readFileSync(ENV_PATH, 'utf-8');
   envContent += `\nVAPID_PUBLIC_KEY=${vapidKeys.publicKey}\nVAPID_PRIVATE_KEY=${vapidKeys.privateKey}\n`;
-  fs.writeFileSync(ENV_PATH, envContent);
+  fs.writeFileSync(ENV_PATH, envContent, { mode: 0o600 });
+  _lockEnvFile();
   process.env.VAPID_PUBLIC_KEY = vapidKeys.publicKey;
   process.env.VAPID_PRIVATE_KEY = vapidKeys.privateKey;
   console.log('🔔 Auto-generated VAPID keys for push notifications (saved to .env)');
@@ -715,6 +723,13 @@ const BLOCKED_UPLOAD_DIRS = ['deleted-attachments', 'bot-audio'].map(
 app.use('/uploads', (req, res, next) => {
   let decoded;
   try { decoded = decodeURIComponent(req.path); } catch { return res.status(400).end(); }
+  // Windows also answers to a folder's 8.3 short name (DELETE~1 for
+  // deleted-attachments), and ignores a trailing dot or space and anything
+  // after a colon (alternate streams). None of those appear in a real upload
+  // name, so a path with any of them is refused before it can slip past.
+  if (decoded.split(/[\\/]/).some(seg => seg.includes('~') || seg.includes(':') || /[. ]$/.test(seg))) {
+    return res.status(404).end();
+  }
   // path.resolve treats a backslash as a separator on Windows and as an
   // ordinary filename character on Linux, which is exactly right in both
   // cases, so the raw decoded path goes in as-is.
@@ -2498,12 +2513,13 @@ app.post('/api/moderation/kick', modLimiter, express.json({ limit: '16kb' }), (r
   if (!userId || !Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
   if (!channelCode || typeof channelCode !== 'string') return res.status(400).json({ error: 'channelCode required' });
 
-  const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(channelCode);
+  const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
   if (!channel) return res.status(404).json({ error: 'Channel not found' });
 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (!modOutranks(auth, userId)) return res.status(403).json({ error: 'You can only kick people ranked below you' });
+  httpModAudit(auth, 'user_kick', userId, target.username, { channel: channelCode });
 
   db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channel.id, userId);
 
@@ -2535,8 +2551,12 @@ app.post('/api/moderation/ban', modLimiter, express.json({ limit: '16kb' }), (re
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot ban an admin' });
   if (!modOutranks(auth, userId)) return res.status(403).json({ error: 'You can only ban people ranked below you' });
+  // Banning again takes over the ban, and with it who may lift it.
+  const priorBan = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(userId);
+  if (priorBan && !modMayUndo(auth, priorBan.banned_by)) return res.status(403).json({ error: 'That ban was placed by an admin or by someone of equal or higher rank' });
 
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
+  httpModAudit(auth, 'user_ban', userId, target.username, { reason: safeReason });
 
   try {
     db.prepare('INSERT OR REPLACE INTO bans (user_id, banned_by, reason) VALUES (?, ?, ?)').run(userId, auth.user.id, safeReason);
@@ -2572,6 +2592,7 @@ app.post('/api/moderation/unban', modLimiter, express.json({ limit: '16kb' }), (
 
   db.prepare('DELETE FROM bans WHERE user_id = ?').run(userId);
   const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
+  if (existingBan) httpModAudit(auth, 'user_unban', userId, target ? target.username : null, null);
   res.json({ success: true, message: `Unbanned ${target ? target.username : 'user'}` });
 });
 
@@ -2588,6 +2609,11 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (!modOutranks(auth, userId)) return res.status(403).json({ error: 'You can only mute people ranked below you' });
+  // A new timeout replaces the old one, and with it who may lift it.
+  for (const { muted_by: by } of db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(userId)) {
+    if (!modMayUndo(auth, by)) return res.status(403).json({ error: 'That timeout was given by an admin or by someone of equal or higher rank' });
+  }
+  httpModAudit(auth, 'user_mute', userId, target.username, { duration });
 
   // Same ceiling as the app: 30 days.
   const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
@@ -2624,6 +2650,7 @@ app.post('/api/moderation/unmute', modLimiter, express.json({ limit: '16kb' }), 
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);
   const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
+  httpModAudit(auth, 'user_unmute', userId, target ? target.username : null, null);
   res.json({ success: true, message: `Unmuted ${target ? target.username : 'user'}` });
 });
 
@@ -2667,6 +2694,7 @@ function getWebhookByToken(token) {
     FROM webhooks w
     LEFT JOIN channels c ON c.id = w.channel_id
     WHERE w.token = ? AND w.is_active = 1 AND COALESCE(c.is_dm, 0) = 0
+      AND NOT EXISTS (SELECT 1 FROM bans b WHERE b.user_id = w.created_by)
   `).get(token);
 }
 
@@ -2726,6 +2754,26 @@ function requireModBot(req, res) {
   if (!webhook.can_moderate) { res.status(403).json({ error: 'This bot does not have moderation permission' }); return null; }
   return webhook;
 }
+// A moderation bot acts with the rank of the person who made it, so it can
+// do no more than they could themselves: nobody at or above them, and no
+// undoing an admin's or a higher-ranked moderator's ban or mute. A bot with
+// no creator on record acts with no rank at all.
+function botModAuth(webhook) {
+  if (!webhook || !webhook.created_by) return null;
+  const { getDb } = require('./src/database');
+  const creator = getDb().prepare('SELECT id, username, display_name, is_admin FROM users WHERE id = ?').get(webhook.created_by);
+  if (!creator) return null;
+  return { user: { id: creator.id, username: creator.username, displayName: creator.display_name || creator.username }, isAdmin: !!creator.is_admin, bot: webhook };
+}
+function httpModAudit(auth, action, targetId, targetName, details) {
+  try {
+    socketRuntime?.logAudit?.({
+      actor: { id: auth.user.id, username: auth.user.username, displayName: auth.user.displayName || auth.user.username },
+      action, target_type: 'user', target_id: targetId, target_name: targetName || null,
+      details: { ...(details || {}), via: auth.bot ? `bot ${auth.bot.name}` : 'api' },
+    });
+  } catch (err) { console.warn('[audit] HTTP moderation entry failed:', err.message); }
+}
 
 // POST /api/webhooks/:token/moderation/kick
 app.post('/api/webhooks/:token/moderation/kick', webhookLimiter, express.json({ limit: '16kb' }), (req, res) => {
@@ -2736,11 +2784,15 @@ app.post('/api/webhooks/:token/moderation/kick', webhookLimiter, express.json({ 
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
   if (!channelCode || typeof channelCode !== 'string') return res.status(400).json({ error: 'channelCode required' });
 
-  const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(channelCode);
+  // Only from the bot's own channel.
+  const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND id = ? AND is_dm = 0').get(channelCode, webhook.channel_id);
   if (!channel) return res.status(404).json({ error: 'Channel not found' });
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot kick an admin' });
+  const botAuth = botModAuth(webhook);
+  if (!modOutranks(botAuth, userId)) return res.status(403).json({ error: 'This bot can only act on people ranked below the person who made it' });
+  httpModAudit(botAuth, 'user_kick', userId, target.username, { channel: channelCode });
 
   db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channel.id, userId);
 
@@ -2768,8 +2820,13 @@ app.post('/api/webhooks/:token/moderation/ban', webhookLimiter, express.json({ l
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot ban an admin' });
+  const botAuth = botModAuth(webhook);
+  if (!modOutranks(botAuth, userId)) return res.status(403).json({ error: 'This bot can only act on people ranked below the person who made it' });
+  const priorBan = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(userId);
+  if (priorBan && !modMayUndo(botAuth, priorBan.banned_by)) return res.status(403).json({ error: 'That ban was placed by someone of equal or higher rank' });
 
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
+  httpModAudit(botAuth, 'user_ban', userId, target.username, { reason: safeReason });
   try {
     db.prepare('INSERT OR REPLACE INTO bans (user_id, banned_by, reason) VALUES (?, ?, ?)').run(userId, webhook.created_by || null, safeReason);
   } catch {
@@ -2791,6 +2848,12 @@ app.post('/api/webhooks/:token/moderation/unban', webhookLimiter, express.json({
   const db = getDb();
   const { userId } = req.body || {};
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
+  const botAuth = botModAuth(webhook);
+  const existingBan = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(userId);
+  if (existingBan && !modMayUndo(botAuth, existingBan.banned_by)) {
+    return res.status(403).json({ error: 'You can\'t undo a ban placed by an admin or by someone of equal or higher rank' });
+  }
+  if (existingBan) httpModAudit(botAuth, 'user_unban', userId, null, null);
 
   db.prepare('DELETE FROM bans WHERE user_id = ?').run(userId);
   const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
@@ -2808,8 +2871,15 @@ app.post('/api/webhooks/:token/moderation/mute', webhookLimiter, express.json({ 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot mute an admin' });
+  const botAuth = botModAuth(webhook);
+  if (!modOutranks(botAuth, userId)) return res.status(403).json({ error: 'This bot can only act on people ranked below the person who made it' });
+  for (const { muted_by: by } of db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(userId)) {
+    if (!modMayUndo(botAuth, by)) return res.status(403).json({ error: 'That timeout was given by someone of equal or higher rank' });
+  }
+  httpModAudit(botAuth, 'user_mute', userId, target.username, { duration });
 
-  const durationMs = Number.isInteger(duration) && duration > 0 ? duration * 60 * 1000 : 10 * 60 * 1000;
+  // Same ceiling as the app: 30 days.
+  const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
   const expiresAt = new Date(Date.now() + durationMs).toISOString();
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
@@ -2831,6 +2901,11 @@ app.post('/api/webhooks/:token/moderation/unmute', webhookLimiter, express.json(
   const db = getDb();
   const { userId } = req.body || {};
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
+  const botAuth = botModAuth(webhook);
+  for (const { muted_by: by } of db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(userId)) {
+    if (!modMayUndo(botAuth, by)) return res.status(403).json({ error: 'You can\'t undo a timeout given by an admin or by someone of equal or higher rank' });
+  }
+  httpModAudit(botAuth, 'user_unmute', userId, null, null);
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);
   const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
@@ -2926,15 +3001,22 @@ app.delete('/api/webhooks/:token/commands/:command', webhookLimiter, (req, res) 
 });
 
 // GET /api/bot-commands: list all registered bot commands (for client autocomplete)
+// Signed in only, and only bots in channels the caller can see: open to
+// anyone, it listed the invite code of every channel with a bot command.
 app.get('/api/bot-commands', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
   const { getDb } = require('./src/database');
+  const isAdmin = verifyAdminFromDb(user);
   const rows = getDb().prepare(`
-    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name, c.code as channel_code
+    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name, c.code as channel_code, c.id AS channel_id, c.role_gate
     FROM bot_commands bc
     JOIN webhooks w ON bc.webhook_id = w.id
-    LEFT JOIN channels c ON c.id = w.channel_id
+    JOIN channels c ON c.id = w.channel_id
+    JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
     WHERE w.is_active = 1
-  `).all();
+  `).all(user.id).filter(r => isAdmin || !socketRuntime || socketRuntime.roleGateAllows(user.id, { id: r.channel_id, role_gate: r.role_gate }));
   const commands = [];
   for (const row of rows) {
     let subcommands = [];
