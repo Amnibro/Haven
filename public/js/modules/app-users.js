@@ -849,9 +849,15 @@ _showProfilePopup(profile) {
   const gearBtnHtml = gearVisible
     ? `<button class="profile-popup-action-btn profile-gear-btn" title="${this._escapeHtml(t('users.more_actions'))}">⚙️ ${t('users.more_actions')}</button>`
     : '';
+  // Block / Unblock (app-data-controls.js). Guests and bots have no account
+  // to block.
+  const _blocked = this._isBlocked?.(profile.id);
+  const blockBtnHtml = !isSelf && Number.isInteger(profile.id)
+    ? `<button class="profile-popup-action-btn profile-block-btn" data-block-uid="${profile.id}">${_blocked ? '✅' : '🚫'} ${t(_blocked ? 'blocks.unblock' : 'blocks.block')}</button>`
+    : '';
   const actionsHtml = isSelf
     ? `<button class="profile-popup-action-btn profile-edit-btn" id="profile-popup-edit-btn">✏️ ${t('users.edit_profile')}</button><button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}" title="${t('users.notes_to_self')}">📝 ${t('users.notes_to_self')}</button>`
-    : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 ${t('users.message_btn')}</button>${gearBtnHtml}`;
+    : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 ${t('users.message_btn')}</button>${gearBtnHtml}${blockBtnHtml}`;
 
   const popup = document.createElement('div');
   popup.id = 'profile-popup';
@@ -982,6 +988,12 @@ _showProfilePopup(profile) {
       this._showToast(t('users.opening_dm', { name: profile.displayName }), 'info');
     });
   }
+
+  // Block / Unblock button
+  popup.querySelector('.profile-block-btn')?.addEventListener('click', () => {
+    this._closeProfilePopup();
+    this._toggleBlockUser(profile.id, profile.displayName || profile.username);
+  });
 
   // Edit profile button (for self)
   const editBtnEl = popup.querySelector('#profile-popup-edit-btn');

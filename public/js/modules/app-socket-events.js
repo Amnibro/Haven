@@ -510,16 +510,24 @@ _listenMessageChanges() {
   // Someone deleted every message they wrote (#5686): one event per channel.
   // Their rows go from whatever is on screen, and the open channel is loaded
   // again so the compact chains and the history cursor come out right.
+  // With `before` (an ISO time: Delete my messages older than..., or
+  // Auto-delete) only their rows written before it go.
   this.socket.on('messages-purged', (data) => {
     if (!data || !data.channelCode || !data.userId) return;
     const uid = String(data.userId);
+    const cutoff = data.before ? Date.parse(data.before) : NaN;
+    const older = (el) => {
+      if (Number.isNaN(cutoff)) return true;
+      const at = Date.parse(el.dataset.time || '');
+      return Number.isNaN(at) || at < cutoff;
+    };
     const views = [
       ['messages', this.currentChannel], ['thread-messages', this.currentChannel],
       ['dm-pip-messages', this._activeDMPip],
     ];
     for (const [id, code] of views) {
       if (code !== data.channelCode) continue;
-      document.getElementById(id)?.querySelectorAll(`[data-msg-id][data-user-id="${uid}"]`).forEach(el => el.remove());
+      document.getElementById(id)?.querySelectorAll(`[data-msg-id][data-user-id="${uid}"]`).forEach(el => { if (older(el)) el.remove(); });
     }
     if (data.channelCode === this.currentChannel) {
       this._oldestMsgId = null;

@@ -471,7 +471,7 @@ _listenChannelsAndMessages() {
           // the sidebar dot + taskbar badge actually fire.
           // Skip the unread bump for muted channels; muting should also silence badges.
           const _hiddenMutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-          if (!_hiddenMutedChs.includes(data.channelCode)) {
+          if (!_hiddenMutedChs.includes(data.channelCode) && !this._isBlocked?.(data.message.user_id)) {
             this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
             this._updateBadge(data.channelCode);
           }
@@ -547,7 +547,8 @@ _listenChannelsAndMessages() {
           try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[DM] _updateDmSectionBadge failed', err); }
           try { this._updateTabTitle?.(); } catch (err) { console.warn('[DM] _updateTabTitle failed', err); }
           try { this._updateDesktopBadge?.(); } catch (err) { console.warn('[DM] _updateDesktopBadge failed', err); }
-        } else if (!_isMuted2) {
+        } else if (!_isMuted2 && !this._isBlocked?.(data.message.user_id)) {
+          // Messages from someone you blocked are not counted as unread.
           this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
           this._updateBadge(data.channelCode);
         }
