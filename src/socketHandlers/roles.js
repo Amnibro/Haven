@@ -480,7 +480,11 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const userId = isInt(data.userId) ? data.userId : null;
     if (!userId) return;
-    const roles = getUserRoles(userId);
+    // Channel-scoped roles only for channels the asker can reach: a row names
+    // the channel, and someone's role in a channel you cannot see is not yours
+    // to learn.
+    const roles = getUserRoles(userId).filter(r => r.channel_id == null || userId === socket.user.id
+      || reachableNonDm(r.channel_id));
     const highestRole = getUserHighestRole(userId);
     socket.emit('user-roles', { userId, roles, highestRole });
   });

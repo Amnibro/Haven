@@ -330,8 +330,9 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'You already have the maximum number of temporary channels (3)');
       }
     } catch (err) {
-      // The per-user cap of 3 was not checked for this request.
-      console.warn('create-temp-channel limit check failed:', err.message);
+      // The cap could not be checked, so the channel is not made.
+      console.warn('create-temp-channel limit check failed, refusing:', err.message);
+      return socket.emit('error-msg', 'Could not create the temporary channel. Try again in a moment.');
     }
 
     const code = generateUniqueSharedCode();
