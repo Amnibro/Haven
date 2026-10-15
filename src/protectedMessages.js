@@ -41,24 +41,15 @@ function deletableSql(alias = 'm') {
   return `NOT ${keptSql(alias)}`;
 }
 
-/** Whether message `id` must stay. A failed check counts as kept. */
-function isKept(db, id) {
-  try {
-    return !!db.prepare(`SELECT 1 FROM messages m WHERE m.id = ? AND ${keptSql('m')}`).get(id);
-  } catch (err) {
-    console.warn('[protected] message check failed, keeping it:', err.message);
-    return true;
-  }
-}
-
-/** How many protected messages these channels hold. A failed check counts
+/** How many messages in these channels must stay: protected ones, and
+ *  thread heads whose protected reply sits elsewhere. A failed check counts
  *  as one, so the caller keeps the channel. */
 function protectedCount(db, channelIds) {
   const ids = (channelIds || []).filter(Number.isInteger);
   if (!ids.length) return 0;
   try {
     const ph = ids.map(() => '?').join(',');
-    return db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE is_archived = 1 AND channel_id IN (${ph})`).get(...ids).n;
+    return db.prepare(`SELECT COUNT(*) AS n FROM messages m WHERE m.channel_id IN (${ph}) AND ${keptSql('m')}`).get(...ids).n;
   } catch (err) {
     console.warn('[protected] channel check failed, keeping it:', err.message);
     return 1;
@@ -101,5 +92,5 @@ function installGuard(db) {
 
 module.exports = {
   REFUSAL, THREAD_REFUSAL, CHANNEL_REFUSAL, CONVERSATION_REFUSAL,
-  keptSql, deletableSql, isKept, refusal, protectedCount, clearUnprotected, keepChannel, installGuard,
+  keptSql, deletableSql, refusal, protectedCount, clearUnprotected, keepChannel, installGuard,
 };
