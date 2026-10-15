@@ -1552,6 +1552,7 @@
           <div class="settings-nav-item" data-target="section-sessions">💻 <span data-i18n="settings.nav.sessions">Sessions</span></div>
           <div class="settings-nav-item" data-target="section-2fa">🔐 <span data-i18n="settings.nav.two_factor">Two-Factor</span></div>
           <div class="settings-nav-item" data-target="section-recovery">🔑 <span data-i18n="settings.nav.recovery">Recovery</span></div>
+          <div class="settings-nav-item" data-target="section-data-privacy">🛡️ <span data-i18n="settings.nav.data_privacy">Data &amp; privacy</span></div>
           <div class="settings-nav-item" data-target="section-delete-account">⚠️ <span data-i18n="settings.nav.account">Account</span></div>
 
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_advanced">Advanced</div>
@@ -2525,16 +2526,61 @@
         </div>
       </div>
 
+      <!-- Data & privacy (app-data-controls.js). The same four items, in the
+           same order and with the same choices, as the Android and iOS apps. -->
+      <div class="settings-section" id="section-data-privacy">
+        <h5 class="settings-section-title">🛡️ <span data-i18n="settings.data_privacy.title">Data &amp; privacy</span></h5>
+        <!-- Delete my messages and Auto-delete: only while the server allows
+             members to delete their own messages, and never for guests. -->
+        <div id="self-purge-block" style="display:none">
+          <div class="data-privacy-item">
+            <h6 class="data-privacy-heading">🧹 <span data-i18n="settings.data_privacy.purge_title">Delete my messages</span></h6>
+            <p class="settings-hint" data-i18n="settings.data_privacy.purge_desc">Remove messages and files you posted here and keep your account. Messages a moderator has protected stay. This cannot be undone.</p>
+            <div class="data-privacy-row">
+              <select id="self-purge-range" class="settings-select" data-i18n-aria-label="settings.data_privacy.purge_title" aria-label="Delete my messages">
+              <option value="0" data-i18n="settings.data_privacy.purge_all">All my messages</option>
+              <option value="1" data-i18n="settings.data_privacy.older_1d">Older than 1 day</option>
+              <option value="7" data-i18n="settings.data_privacy.choice_7d">7 days</option>
+              <option value="30" data-i18n="settings.data_privacy.choice_30d">30 days</option>
+              <option value="90" data-i18n="settings.data_privacy.choice_90d">90 days</option>
+              <option value="365" data-i18n="settings.data_privacy.choice_1y">1 year</option>
+              </select>
+              <button class="btn-sm btn-danger-fill" id="self-purge-btn" data-i18n="settings.data_privacy.purge_btn">Delete my messages</button>
+            </div>
+          </div>
+          <div class="data-privacy-item">
+            <h6 class="data-privacy-heading">⏳ <span data-i18n="settings.data_privacy.auto_delete_title">Auto-delete my messages</span></h6>
+            <p class="settings-hint" data-i18n="settings.data_privacy.auto_delete_hint">Your messages on this server are deleted automatically once they are older than this. Protected messages are kept.</p>
+            <select id="auto-delete-select" class="settings-select" data-current="0" data-i18n-aria-label="settings.data_privacy.auto_delete_title" aria-label="Auto-delete my messages">
+              <option value="0" data-i18n="settings.data_privacy.off">Off</option>
+              <option value="1" data-i18n="settings.data_privacy.choice_1d">1 day</option>
+              <option value="7" data-i18n="settings.data_privacy.choice_7d">7 days</option>
+              <option value="30" data-i18n="settings.data_privacy.choice_30d">30 days</option>
+              <option value="90" data-i18n="settings.data_privacy.choice_90d">90 days</option>
+              <option value="365" data-i18n="settings.data_privacy.choice_1y">1 year</option>
+            </select>
+            <small class="settings-hint" id="auto-delete-status"></small>
+          </div>
+        </div>
+        <div class="data-privacy-item" id="data-export-block">
+          <h6 class="data-privacy-heading">📦 <span data-i18n="settings.data_privacy.export_title">Export my data</span></h6>
+          <p class="settings-hint" data-i18n="settings.data_privacy.export_desc">Download your account details, settings and every message you wrote here as a JSON file.</p>
+          <p class="settings-hint" data-i18n="settings.data_privacy.export_e2e_hint">Encrypted DMs are included as they are stored on the server (still encrypted).</p>
+          <button class="btn-sm btn-accent" id="export-data-btn" data-i18n="settings.data_privacy.export_btn">Download my data</button>
+          <small class="settings-hint" id="export-data-status"></small>
+        </div>
+        <div class="data-privacy-item">
+          <h6 class="data-privacy-heading">🚫 <span data-i18n="settings.data_privacy.blocked_title">Blocked users</span></h6>
+          <p class="settings-hint" data-i18n="settings.data_privacy.blocked_desc">You don't see their messages or get DMs from them. They aren't told. Block someone from their profile.</p>
+          <div id="blocked-users-list" class="blocked-users-list"></div>
+        </div>
+      </div>
+
       <!-- Delete Account Section -->
       <div class="settings-section" id="section-delete-account">
         <h5 class="settings-section-title">⚠️ <span data-i18n="settings.delete_account_section.title">Delete Account</span></h5>
         <p class="settings-hint" style="margin-bottom:8px;" data-i18n="settings.delete_account_section.desc">Permanently delete your account. This cannot be undone.</p>
         <button class="btn-sm btn-danger-fill" id="delete-account-btn" data-i18n="settings.delete_account_section.btn">Delete My Account</button>
-        <div id="self-purge-block" style="display:none;margin-top:14px">
-          <h5 class="settings-section-title">🧹 <span data-i18n="settings.self_purge.title">Delete All My Messages</span></h5>
-          <p class="settings-hint" style="margin-bottom:8px;" data-i18n="settings.self_purge.desc">Remove every message and file you ever posted here, in one go, and keep your account. Messages a moderator has protected stay. This cannot be undone.</p>
-          <button class="btn-sm btn-danger-fill" id="self-purge-btn" data-i18n="settings.self_purge.btn">Delete All My Messages</button>
-        </div>
       </div>
 
       <!-- Plugins & Themes Section -->
