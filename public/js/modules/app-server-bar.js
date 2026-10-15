@@ -427,7 +427,7 @@ _renderManageServersList() {
     const online = s.status.online;
     const statusClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
     const statusText = online === true ? t('servers.online') : online === false ? t('servers.offline') : t('servers.checking');
-    const initial = s.name.charAt(0).toUpperCase();
+    const initial = this._escapeHtml(s.name.charAt(0).toUpperCase());
     const iconUrl = this.serverManager.iconFor(s);
     const iconContent = iconUrl
       ? `<img src="${this._escapeHtml(iconUrl)}" alt="" class="manage-srv-icon-img">`

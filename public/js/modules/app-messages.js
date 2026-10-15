@@ -1209,7 +1209,7 @@ _createMessageEl(msg, prevMsg) {
   }
 
   const color = this._getUserColor(msg.username);
-  const initial = msg.username.charAt(0).toUpperCase();
+  const initial = this._escapeHtml(msg.username.charAt(0).toUpperCase());
   // Look up user's role from online users list (falls back to channelMembers for offline users)
   const onlineUser = this._memberById(msg.user_id);
   // Use the message sender's avatar_shape (from server), not the local user's preference
@@ -1390,7 +1390,7 @@ _promoteCompactToFull(compactEl) {
   const statusSlotHtml = needsStatusSlot ? `<span class="message-inline-status">${e2eTag}</span>` : '';
 
   const color = this._getUserColor(username);
-  const initial = username.charAt(0).toUpperCase();
+  const initial = this._escapeHtml(username.charAt(0).toUpperCase());
   const onlineUser = this._memberById(userId);
   // Prefer the avatar stored on the compact element (set at render time from server data).
   // Fall back to the online-users list so newly-uploaded avatars still appear.

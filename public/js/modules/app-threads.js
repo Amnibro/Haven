@@ -26,7 +26,7 @@ _renderThreadPreview(parentId, thread, opts = {}) {
       return `<img class="thread-participant-avatar${shape}" ${this._imgSrcAttr(p.avatar)} alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
     }
     const color = this._getUserColor(p.username);
-    const initial = p.username.charAt(0).toUpperCase();
+    const initial = this._escapeHtml(p.username.charAt(0).toUpperCase());
     return `<div class="thread-participant-avatar thread-participant-initial${shape}" style="background:${color}" title="${this._escapeHtml(p.username)}">${initial}</div>`;
   }).join('');
 
@@ -389,7 +389,7 @@ _appendThreadMessage(msg) {
   // everywhere else nicknames are honored. (#5291)
   const displayName = this._getNickname?.(msg.user_id, msg.username) || msg.username;
   const color = this._getUserColor(msg.username);
-  const initial = displayName.charAt(0).toUpperCase();
+  const initial = this._escapeHtml(displayName.charAt(0).toUpperCase());
   // Author name in role colors, as in the channel itself.
   const authorRole = this._chatNameRole(msg.user_id);
   const authorColor = authorRole ? this._roleLook(authorRole).c1 : color;
@@ -513,7 +513,7 @@ _promoteThreadCompactToFull(compactEl) {
   const displayName = this._getNickname?.(userId, rawUsername) || rawUsername;
   const time = compactEl.dataset.time;
   const color = this._getUserColor(rawUsername);
-  const initial = (displayName || '?').charAt(0).toUpperCase();
+  const initial = this._escapeHtml((displayName || '?').charAt(0).toUpperCase());
   const authorRole = this._chatNameRole(userId);
   const authorColor = authorRole ? this._roleLook(authorRole).c1 : color;
 

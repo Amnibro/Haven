@@ -225,7 +225,7 @@ _renderMobileServerList() {
     return;
   }
   list.innerHTML = servers.map(s => {
-    const initial = s.name.charAt(0).toUpperCase();
+    const initial = this._escapeHtml(s.name.charAt(0).toUpperCase());
     const online = s.status.online;
     const dotClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
     const iconUrl = this.serverManager.iconFor(s);

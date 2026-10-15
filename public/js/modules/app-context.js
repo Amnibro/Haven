@@ -306,7 +306,7 @@ _renderOnlineOverlay() {
 },
 
 _renderOverlayUserItem(u) {
-  const initial = (u.username || '?')[0].toUpperCase();
+  const initial = this._escapeHtml((u.username || '?')[0].toUpperCase());
   // Member list entries carry their role as `role`; roleColor is the flat
   // shape some older callers used.
   const role = u.role || (u.roleColor ? u : null);
