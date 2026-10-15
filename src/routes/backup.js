@@ -139,19 +139,28 @@ module.exports = function registerBackup(deps) {
           try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch { /* optional tidy-up; VACUUM INTO reads a consistent snapshot either way */ }
           const safePath = tmpDb.replace(/'/g, "''");
           db.prepare(`VACUUM INTO '${safePath}'`).run();
-          // If DMs are NOT included, scrub them from the cloned DB so the backup
-          // doesn't ship encrypted-but-still-private DM ciphertext (or attachment
-          // refs) to wherever the admin stores their backup files.
-          if (!has('dms')) {
-            const Database = require('better-sqlite3');
-            const tmp = new Database(tmpDb);
-            try {
+          const Database = require('better-sqlite3');
+          const tmp = new Database(tmpDb);
+          try {
+            // Two-factor secrets and one-time codes never leave the server. With
+            // someone's secret, whoever held the backup could make their codes,
+            // and an admin could reset that person's password and log in as
+            // them, which two-factor exists to stop. A restored server has 2FA
+            // off for everyone until each person turns it on again; passwords
+            // stay (bcrypt hashes) so people can still log in.
+            tmp.exec(`UPDATE users SET totp_secret = NULL, totp_enabled = 0, temp_password_hash = NULL, must_change_password = 0`);
+            tmp.exec('DELETE FROM totp_backup_codes');
+            tmp.exec('DELETE FROM account_recovery_codes');
+            // If DMs are NOT included, scrub them from the cloned DB so the backup
+            // doesn't ship encrypted-but-still-private DM ciphertext (or attachment
+            // refs) to wherever the admin stores their backup files.
+            if (!has('dms')) {
               tmp.exec('DELETE FROM messages WHERE channel_id IN (SELECT id FROM channels WHERE is_dm = 1)');
               tmp.exec('DELETE FROM channels WHERE is_dm = 1');
-              tmp.exec('VACUUM');
-            } finally {
-              tmp.close();
             }
+            tmp.exec('VACUUM');
+          } finally {
+            tmp.close();
           }
           // Streamed from disk during finalize; the temp clone is unlinked in finish().
           archive.file(tmpDb, { name: 'haven.db' });
