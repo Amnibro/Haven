@@ -104,6 +104,7 @@ import BlockedNameMethods from './modules/app-blocked-names.js?v=4.29.15';
 import CallSettingsMethods from './modules/app-call-settings.js?v=4.29.77';
 import MasterVolumeMethods from './modules/app-master-volume.js?v=4.29.71';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.25';
+import DataControlMethods from './modules/app-data-controls.js?v=4.23.0-afff018db';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.3';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.31.2';
 import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
@@ -498,6 +499,7 @@ class HavenApp {
     this._setupModCases();
     this._setupBadges();
     this._setupServerMute();
+    this._setupDataControls();
     this._setupForumUnread();
     this._setupThreadUnread();
     this._setupThreadScroll();
@@ -715,6 +717,7 @@ Object.assign(HavenApp.prototype,
   AdminReauthMethods,
   MasterVolumeMethods,
   CallSettingsMethods,
+  DataControlMethods,
   ForumUnreadMethods,
   ThreadUnreadMethods,
   ThreadDockMethods,

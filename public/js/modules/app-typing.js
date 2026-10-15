@@ -19,6 +19,8 @@ _setupTyping() {
     if (!data || !data.channelCode) return;
     // Your own other devices are not "someone".
     if (this.user && data.userId != null && data.userId === this.user.id) return;
+    // Nobody sees someone they blocked typing (app-data-controls.js).
+    if (this._isBlocked?.(data.userId)) return;
     this._typingAdd(data.channelCode, data.userId, data.username);
   });
   // Their message arrived: they are done typing it.
