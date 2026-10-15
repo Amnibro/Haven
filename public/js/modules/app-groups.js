@@ -242,6 +242,8 @@ _groupEnsure(code) {
   st.busy = (async () => {
     if (!this.e2e?.ready) throw new Error('E2E not ready');
     if (!this.e2e.signingPrivateKey) await this.e2e.initSigning(this.socket);
+    // Refuse rather than sign, rotate or wrap with a key the account does not use.
+    if (!this.e2e.signingPrivateKey && this.e2e.signingBlock) throw Object.assign(new Error('Group signing unavailable on this device'), { code: this.e2e.signingBlock });
     await this._groupRoster(code);
     await this._groupFetchKeys(code);
     if (st.needsRotation || !st.epoch) await this._groupRotate(code);
@@ -482,13 +484,16 @@ async _decryptGroupMessages(messages, ch) {
 },
 async _groupEncryptBytes(code, buf) {
   const st = await this._groupEnsure(code);
-  const key = st.keys.get(st.epoch);
+  // One read: a rotation landing during the await below must not put a newer
+  // epoch number in front of bytes sealed with this one's key.
+  const epoch = st.epoch;
+  const key = st.keys.get(epoch);
   if (!key) throw new Error('Group encryption not ready');
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, buf));
   const out = new Uint8Array(17 + ct.length);
   out[0] = 0x47;
-  new DataView(out.buffer).setUint32(1, st.epoch);
+  new DataView(out.buffer).setUint32(1, epoch);
   out.set(iv, 5);
   out.set(ct, 17);
   return out;
@@ -562,7 +567,8 @@ async _groupTrustKeys(userId) {
 async _groupSendGate(code) {
   const failed = (err) => {
     console.warn('[Groups] encryption not ready:', err.message);
-    this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+    if (err.code === 'locked') this._groupOfferSigningReset();
+    else this._showToast(t(err.code === 'out-of-sync' ? 'groups.signing_out_of_sync' : 'toasts.encryption_failed_not_sent'), 'error', null, err.code ? 10000 : undefined);
     return null;
   };
   try { await this._groupEnsure(code); } catch (err) { return failed(err); }
@@ -571,6 +577,20 @@ async _groupSendGate(code) {
     try { await this._groupEnsure(code); } catch (err) { return failed(err); }
   }
   return { partner: this._getE2EPartnerFor(code) };
+},
+/**
+ * This device holds the account's encryption key but cannot open the signing
+ * key backup. Only the person can decide to replace the signing key.
+ */
+async _groupOfferSigningReset() {
+  if (this._signingResetAsked) return;
+  this._signingResetAsked = true;
+  try {
+    if (!(await this._showConfirmModal(t('groups.signing_locked_title'), t('groups.signing_locked_body'), { danger: true }))) return;
+    const ok = await this.e2e.initSigning(this.socket, { force: true });
+    if (ok) for (const st of this._groups?.values() || []) st.ready = false;
+    this._showToast(t(ok ? 'groups.signing_reset_done' : 'toasts.encryption_failed_not_sent'), ok ? 'success' : 'error');
+  } finally { this._signingResetAsked = false; }
 },
 /** Load the group's messages again, wherever it is open. */
 _groupRerender(code) {
