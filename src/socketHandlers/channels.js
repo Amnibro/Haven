@@ -565,14 +565,18 @@ module.exports = function register(socket, ctx) {
       _applyChannelDefaultRole(channel.id, socket.user.id);
     }
 
+    // A role-gated channel's live feed is only for those its gate lets in,
+    // the same rule get-messages and the channel list apply. Joining its room
+    // here regardless let anyone listen in by entering a code.
+    const gateOk = (ch) => socket.user.isAdmin || ctx.roleGateAllows(socket.user.id, ch);
     if (!channel.parent_channel_id) {
       const subs = db.prepare(
-        'SELECT id, code FROM channels WHERE parent_channel_id = ? AND is_private = 0'
+        'SELECT id, code, role_gate FROM channels WHERE parent_channel_id = ? AND is_private = 0'
       ).all(channel.id);
       const insertSub = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
       subs.forEach(sub => {
         insertSub.run(sub.id, socket.user.id);
-        socket.join(`channel:${sub.code}`);
+        if (gateOk(sub)) socket.join(`channel:${sub.code}`);
         _applyChannelDefaultRole(sub.id, socket.user.id);
       });
     }
@@ -594,7 +598,7 @@ module.exports = function register(socket, ctx) {
     }
 
     const activeCode = channel.code;
-    socket.join(`channel:${activeCode}`);
+    if (gateOk(channel)) socket.join(`channel:${activeCode}`);
 
     // Only a new member is announced. Entering the code of a channel you are
     // already in runs this handler too, and used to post "joined the channel"
@@ -1742,11 +1746,15 @@ module.exports = function register(socket, ctx) {
       console.warn('invite-to-channel auto-role grant failed:', err.message);
     }
     const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === targetUserId);
+    // Only into the rooms the invited person's role gates allow.
+    const targetIsAdmin = !!db.prepare('SELECT is_admin FROM users WHERE id = ?').get(targetUserId)?.is_admin;
+    const gateFor = (ch) => targetIsAdmin || ctx.roleGateAllows(targetUserId, ch);
+    const gatedRow = db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id);
     for (const ts of targetSockets) {
-      ts.join(`channel:${channel.code}`);
+      if (gateFor(gatedRow)) ts.join(`channel:${channel.code}`);
       if (!channel.parent_channel_id) {
-        const subs = db.prepare('SELECT code FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(channel.id);
-        subs.forEach(sub => ts.join(`channel:${sub.code}`));
+        const subs = db.prepare('SELECT id, code, role_gate FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(channel.id);
+        subs.forEach(sub => { if (gateFor(sub)) ts.join(`channel:${sub.code}`); });
       }
       ts.emit('channels-list', getEnrichedChannels(targetUserId, ts.user.isAdmin, (room) => ts.join(room)));
       ts.emit('toast', { message: `${socket.user.username} invited you to #${channel.name}`, type: 'info' });
