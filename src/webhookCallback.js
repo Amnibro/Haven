@@ -195,6 +195,15 @@ function createPinnedLookup(address, family) {
   };
 }
 
+// An agent for libraries that take one instead of a lookup (web-push): it
+// connects to exactly the address resolveCallbackDestination checked, or
+// through the proxy when the destination goes that way.
+function agentForDestination(destination) {
+  if (destination.proxy) return outboundProxy.agentThrough(destination.url, destination.proxy);
+  const Agent = destination.url.protocol === 'https:' ? https.Agent : http.Agent;
+  return new Agent({ keepAlive: false, lookup: createPinnedLookup(destination.address, destination.family) });
+}
+
 function withDeadline(promise, deadlineAt, message) {
   const remaining = deadlineAt - Date.now();
   if (remaining <= 0) return Promise.reject(new Error(message));
@@ -263,9 +272,11 @@ async function postWebhookCallback(urlString, payload, headers, options = {}) {
 
 module.exports = {
   UnsafeCallbackError,
+  agentForDestination,
   createPinnedLookup,
   isBlockedAddress,
   postWebhookCallback,
   resolveCallbackDestination,
-  validateCallbackUrl
+  validateCallbackUrl,
+  withDeadline
 };

@@ -137,3 +137,12 @@ test('callback deadline includes DNS resolution', async () => {
     /DNS resolution timed out/
   );
 });
+
+test('an agent for a checked destination connects only to the checked address', async () => {
+  const { agentForDestination } = require('../src/webhookCallback');
+  const https = require('node:https');
+  const agent = agentForDestination({ url: new URL('https://push.example.com/send'), address: '93.184.216.34', family: 4 });
+  assert.ok(agent instanceof https.Agent, 'web-push only takes an https.Agent');
+  const answer = await new Promise(resolve => agent.options.lookup('evil.example', {}, (err, address) => resolve(address)));
+  assert.equal(answer, '93.184.216.34');
+});

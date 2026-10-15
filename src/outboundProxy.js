@@ -450,6 +450,7 @@ function install({ log = console.log, warn = console.warn } = {}) {
 
 module.exports = {
   agentFor,
+  agentThrough,
   fetch: proxiedFetch,
   install,
   proxyFor,

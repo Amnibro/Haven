@@ -20,10 +20,12 @@ const highlights = require('../messageHighlights');
 const { grantAdminRole } = require('../roleDefaults');
 const {
   UnsafeCallbackError,
+  agentForDestination,
   postWebhookCallback,
-  validateCallbackUrl
+  resolveCallbackDestination,
+  validateCallbackUrl,
+  withDeadline
 } = require('../webhookCallback');
-const { agentFor } = require('../outboundProxy');
 const {
   clearChannelRuntimeState,
   createTempChannelDeleteCallback,
@@ -1398,6 +1400,25 @@ function setupSocketHandlers(io, db, opts = {}) {
     pumpPushQueue();
   }
 
+  // The endpoint is whatever URL the subscribing browser sent, so every send
+  // looks the name up again, refuses a private or blocked address, and
+  // connects to exactly the address it checked. A name that later moves to an
+  // internal address gets nothing. A push service that never answers must not
+  // hold a queue slot forever, or a handful of them would stop every
+  // notification, so the lookup and the send each have a deadline.
+  async function sendOnePush(job) {
+    const destination = await withDeadline(
+      resolveCallbackDestination(job.sub.endpoint, { allowPrivateCallbacks: false }),
+      Date.now() + 10000,
+      'Push endpoint lookup timed out'
+    );
+    return webpush.sendNotification(
+      { endpoint: job.sub.endpoint, keys: { p256dh: job.sub.p256dh, auth: job.sub.auth } },
+      job.payload,
+      { timeout: 10000, agent: agentForDestination(destination) }
+    );
+  }
+
   function pumpPushQueue() {
     if (pushPumping) return;
     pushPumping = true;
@@ -1408,15 +1429,12 @@ function setupSocketHandlers(io, db, opts = {}) {
         const job = pushQueue.shift();
         pushWaiting.delete(job.key);
         pushActive++;
-        let sending;
-        try {
-          // A push service that never answers must not hold a queue slot
-          // forever, or a handful of them would stop every notification.
-          sending = webpush.sendNotification({ endpoint: job.sub.endpoint, keys: { p256dh: job.sub.p256dh, auth: job.sub.auth } }, job.payload, { timeout: 10000, agent: agentFor(job.sub.endpoint) });
-        } catch (err) {
-          sending = Promise.reject(err);
-        }
+        const sending = sendOnePush(job);
         sending.catch((err) => {
+          if (err instanceof UnsafeCallbackError || err?.code === 'ERR_UNSAFE_CALLBACK_URL') {
+            throttledWarn('push endpoint refused', err);
+            return;
+          }
           if (err.statusCode === 410 || err.statusCode === 404) {
             try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(job.sub.endpoint); } catch { /* the next push to this dead endpoint tries the cleanup again */ }
           }
