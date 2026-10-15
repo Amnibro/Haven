@@ -12,6 +12,7 @@ const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
 const forumUnread = require('../forumUnread');
+const protectedMessages = require('../protectedMessages');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -2124,6 +2125,9 @@ module.exports = function register(socket, ctx) {
       'SELECT id, user_id, content, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
     ).get(data.messageId, channel.id);
     if (!msg) return;
+    // Protected means kept, whoever asks, the admin included.
+    const kept = protectedMessages.refusal(db, msg.id);
+    if (kept) return socket.emit('error-msg', kept);
 
     if (msg.user_id === socket.user.id) {
       if (!socket.user.isAdmin) {

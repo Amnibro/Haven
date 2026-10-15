@@ -14,8 +14,22 @@
 // fails instead of losing the message.
 
 const REFUSAL = 'This message is protected. Unprotect it first.';
+const THREAD_REFUSAL = 'This thread holds a protected reply. Unprotect it first.';
 const CHANNEL_REFUSAL = 'This channel holds protected messages. Unprotect them first, or ask the admin.';
 const CONVERSATION_REFUSAL = 'This conversation holds protected messages. Unprotect them first, or ask the admin.';
+
+/** Why message `id` cannot be deleted, or null when it can. A failed check
+ *  refuses. */
+function refusal(db, id) {
+  try {
+    const row = db.prepare(`SELECT m.is_archived, ${keptSql('m')} AS kept FROM messages m WHERE m.id = ?`).get(id);
+    if (!row || !row.kept) return null;
+    return row.is_archived ? REFUSAL : THREAD_REFUSAL;
+  } catch (err) {
+    console.warn('[protected] message check failed, keeping it:', err.message);
+    return REFUSAL;
+  }
+}
 
 /** SQL that is true for a message row (table alias `alias`) that must stay. */
 function keptSql(alias = 'm') {
@@ -86,6 +100,6 @@ function installGuard(db) {
 }
 
 module.exports = {
-  REFUSAL, CHANNEL_REFUSAL, CONVERSATION_REFUSAL,
-  keptSql, deletableSql, isKept, protectedCount, clearUnprotected, keepChannel, installGuard,
+  REFUSAL, THREAD_REFUSAL, CHANNEL_REFUSAL, CONVERSATION_REFUSAL,
+  keptSql, deletableSql, isKept, refusal, protectedCount, clearUnprotected, keepChannel, installGuard,
 };
