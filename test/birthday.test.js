@@ -37,7 +37,8 @@ function connect(token) {
   const s = io(BASE, { auth: { token }, transports: ['websocket'], forceNew: true });
   sockets.push(s);
   s.lists = new Map();
-  s.on('online-users', (d) => s.lists.set(d.channelCode, d.users));
+  s.memberLists = 0;
+  s.on('online-users', (d) => { s.memberLists++; s.lists.set(d.channelCode, d.users); });
   return new Promise((res, rej) => { s.on('connect', () => res(s)); s.on('connect_error', rej); });
 }
 function next(sock, event, ms = 4000) {
@@ -129,9 +130,12 @@ test('a birthday is set once, hiding keeps the date, and the year shows only whe
 
   assert.match((await setBirthday(A, '2000-06-16')).error || '', /only be set once/, 'a second date is refused');
 
+  const listsBefore = B.memberLists;
   const shown = await setBirthday(A, { birthday: '2000-06-15', hideYear: false });
   assert.equal(shown.updated?.birthdaySetAt, set.updated.birthdaySetAt, 'Hide birth year leaves the date alone');
   assert.equal((await profileOf(B, ann.user.id)).birthday, '2000-06-15', 'the year shows once unhidden');
+  await wait(1200);
+  assert.equal(B.memberLists, listsBefore, 'member lists carry no year, so they are not resent');
 
   // Hiding keeps the date for the owner and takes it away from everyone else.
   const hidden = await setBirthday(A, { hidden: true });

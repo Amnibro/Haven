@@ -401,6 +401,7 @@ module.exports = function register(socket, ctx) {
       birthday = cleanBirthday(data.birthday);
       if (!birthday) return socket.emit('error-msg', 'Invalid birthday');
     }
+    let listsChanged = false;
     try {
       const row = db.prepare('SELECT birthday, birthday_set_at, birthday_hide_year, birthday_hidden FROM users WHERE id = ?').get(socket.user.id);
       if (!row) return;
@@ -417,7 +418,9 @@ module.exports = function register(socket, ctx) {
         : firstSet ? false
         : wasHidden;
       const hideYear = typeof data.hideYear === 'boolean' ? data.hideYear : row.birthday_hide_year !== 0;
-      if (date === row.birthday && hidden === wasHidden && hideYear === (row.birthday_hide_year !== 0)) return;
+      // Member lists only carry MM-DD, so Hide birth year alone leaves them be.
+      listsChanged = date !== row.birthday || hidden !== wasHidden;
+      if (!listsChanged && hideYear === (row.birthday_hide_year !== 0)) return;
       db.prepare('UPDATE users SET birthday = ?, birthday_set_at = ?, birthday_hide_year = ?, birthday_hidden = ? WHERE id = ?')
         .run(date, setAt, hideYear ? 1 : 0, hidden ? 1 : 0, socket.user.id);
       socket.user.birthday = date;
@@ -429,6 +432,7 @@ module.exports = function register(socket, ctx) {
       console.error('Set birthday error:', err);
       return;
     }
+    if (!listsChanged) return;
     // Member lists carry the birthday, so a 🎉 shows (or goes) right away.
     for (const [code, users] of channelUsers) {
       if (users.has(socket.user.id)) emitOnlineUsers(code);
