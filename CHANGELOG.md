@@ -20,6 +20,10 @@ automatically, download your data, and block people.
 - Block from someone's profile or by right-clicking them. Their messages in channels and groups fold into a "Blocked message · Show" row, their typing is hidden, and they make no sound, pop-up, push or unread count. A 1:1 DM between you is closed both ways, calls included, and someone who blocked you cannot be added to a group by you. They are not told.
 - The session list names the Haven apps for Android and iOS, with the phone's model.
 
+### Fixed
+- Group DMs: a device signed in with an outdated encryption key (an old install, or a key reset made elsewhere) could replace your group signing key for every device, so your messages from your other devices showed as "could not be verified" or "keys changed" to everyone. The server now refuses a signing key or signing backup from a connection whose encryption key it has just turned down, and the web app refuses to sign, rotate or replace the key until the device has synced. Only an explicit key reset, or Reset group signing key when asked, makes a new one.
+- Group DMs: an attachment could carry the wrong key number if the group key changed while it was being encrypted.
+
 ## [4.28.0] - Unreleased
 
 ### Added
