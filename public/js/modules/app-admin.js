@@ -1077,7 +1077,7 @@ _saveAdminSettings() {
     changed = true;
   }
 
-  const maxTagsPer = String(Math.max(1, Math.min(10, parseInt(document.getElementById('max-tags-per-attachment')?.value) || 3)));
+  const maxTagsPer = String(Math.max(1, Math.min(20, parseInt(document.getElementById('max-tags-per-attachment')?.value) || 3)));
   if (maxTagsPer !== (snap.max_tags_per_attachment || '3')) {
     this.socket.emit('update-server-setting', { key: 'max_tags_per_attachment', value: maxTagsPer });
     changed = true;

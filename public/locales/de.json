@@ -2152,7 +2152,7 @@
       "deleted_retention_hint": "Anhänge aus gelöschten Nachrichten und Kanälen werden so lange aufbewahrt und danach endgültig entfernt. Dies geschieht unabhängig davon, ob die automatische Bereinigung aktiviert ist (Standard: 7 Tage).",
       "max_attachments_hint": "Legt fest, wie viele Dateien jemand durch Ziehen, Einfügen oder Auswählen an eine Nachricht anhängen kann (1 bis 50, Standard: 10). Jede Datei muss weiterhin innerhalb des obigen Größenlimits liegen.",
       "max_tags_per_attachment": "Maximale Tags pro Anhang",
-      "max_tags_per_attachment_hint": "Legt fest, wie viele Upload-Tags ein Benutzer einem Anhang zuweisen kann (1 bis 10, Standard: 3).",
+      "max_tags_per_attachment_hint": "Legt fest, wie viele Upload-Tags ein Benutzer einem Anhang zuweisen kann (1 bis 20, Standard: 3).",
       "max_tag_len": "Maximale Taglänge (Zeichen)",
       "max_tag_len_hint": "Maximale Zeichenanzahl eines Upload-Tag-Namens (1 bis 50, Standard: 20).",
       "tags_title": "Tags",

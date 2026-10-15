@@ -20,7 +20,7 @@
 const MAX_TAG_LEN = 20;          // default; hard ceiling for the admin setting
 const MAX_TAG_LEN_CEIL = 50;
 const MAX_TAGS_PER_ATTACHMENT = 3;    // default; hard ceiling for the setting
-const MAX_TAGS_CEIL = 10;
+const MAX_TAGS_CEIL = 20;
 
 // Read the admin-configured limits from server_settings, clamped to the ceilings
 // above and falling back to the defaults. Tolerant: a missing table or bad value

@@ -2331,7 +2331,7 @@
       "max_upload_hint": "Tamanho máximo de arquivo que os usuários podem enviar em MB (padrão: 25). Não há limite rígido; o espaço disponível em disco é o fator limitante.",
       "max_attachments_hint": "Quantos arquivos alguém pode juntar numa mensagem arrastando, colando ou escolhendo (1 a 50, padrão 10). Cada um ainda precisa caber no limite de tamanho acima.",
       "max_tags_per_attachment": "Máximo de tags por anexo",
-      "max_tags_per_attachment_hint": "Quantas tags de upload alguém pode colocar num anexo (1 a 10, padrão 3).",
+      "max_tags_per_attachment_hint": "Quantas tags de upload alguém pode colocar num anexo (1 a 20, padrão 3).",
       "max_tag_len": "Tamanho máximo da tag (caracteres)",
       "max_tag_len_hint": "Máximo de caracteres no nome de uma tag de upload (1 a 50, padrão 20).",
       "tags_title": "Tags",
