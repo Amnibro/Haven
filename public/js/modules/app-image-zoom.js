@@ -153,7 +153,8 @@ _setupImageZoom() {
       if (iz.st.scale > 1) {
         g.panning = true;
         lb.classList.add('is-panning');
-        lb.setPointerCapture(e.pointerId);
+        // Touch pointers are captured by the browser already.
+        if (e.pointerType === 'mouse') lb.setPointerCapture(e.pointerId);
       }
     }
     if (g.panning) {
