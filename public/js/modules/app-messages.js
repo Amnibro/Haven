@@ -445,24 +445,6 @@ _restyleMessageAuthors() {
   });
 },
 
-// The 🎉 in front of authors follows the member lists, so it appears on
-// messages already on screen the moment someone sets today as their birthday.
-_syncBirthdayMarks() {
-  const container = document.getElementById('messages');
-  if (!container) return;
-  if (!(this._lastOnlineUsers || []).length && !(this.channelMembers || []).length) return;
-  container.querySelectorAll('.message[data-user-id]').forEach(el => {
-    if (el.dataset.personaId || el.classList.contains('webhook-message') || el.classList.contains('imported-message')) return;
-    const author = el.querySelector('.message-header .message-author');
-    if (!author) return;
-    const prev = author.previousElementSibling;
-    const mark = prev && prev.classList.contains('birthday-mark') ? prev : null;
-    const html = this._birthdayMarkHtml(this._memberById(el.dataset.userId)?.birthday);
-    if (html && !mark) author.insertAdjacentHTML('beforebegin', html);
-    else if (!html && mark) mark.remove();
-  });
-},
-
 _renderMessages(messages, lastReadMessageId) {
   // Cache the last batch so other handlers can re-render (e.g. mention
   // formatting after channel-members arrives on first load). (#5273)
