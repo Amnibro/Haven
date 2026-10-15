@@ -32,6 +32,39 @@ function moveUploadToDeleted(relPath) {
   } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
 }
 const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
+
+// The files the messages in these channels point at, kept per author, read
+// before the rows go. A file only goes with its own uploader's messages
+// (releasableUploads), so posting another member's avatar or emoji in a
+// channel of your own and deleting it cannot take that file from everyone.
+function channelUploadsByAuthor(db, channelIds) {
+  const byAuthor = new Map();
+  const marks = channelIds.map(() => '?').join(',');
+  const msgs = db.prepare(`SELECT user_id, content FROM messages WHERE channel_id IN (${marks})`).all(...channelIds);
+  for (const row of msgs) {
+    if (!Number.isInteger(row.user_id)) continue;
+    const text = row.content || '';
+    UPLOAD_PATH_RE.lastIndex = 0;
+    let m;
+    while ((m = UPLOAD_PATH_RE.exec(text)) !== null) {
+      if (!isSafeUploadRelPath(m[1])) continue;
+      if (!byAuthor.has(row.user_id)) byAuthor.set(row.user_id, new Set());
+      byAuthor.get(row.user_id).add(m[1]);
+    }
+  }
+  return byAuthor;
+}
+
+// After the delete: move out the files nothing else points at anymore. The
+// same file can be linked from more than one message (a copy pasted image
+// URL), so a file still used elsewhere stays. Mirrors auto-cleanup (#5423).
+function releaseChannelUploads(db, byAuthor, label) {
+  for (const [authorId, rels] of byAuthor) {
+    try {
+      for (const rel of releasableUploads(db, [...rels], [authorId])) moveUploadToDeleted(rel);
+    } catch (err) { console.warn(`${label} attachment cleanup failed:`, err.message); /* the files stay in uploads/; nothing is lost */ }
+  }
+}
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { reachableChannel } = require('./channelAccess');
 const protectedMessages = require('../protectedMessages');
@@ -761,36 +794,16 @@ module.exports = function register(socket, ctx) {
     ).all(channel.id);
     const doomed = [...subChannels, channel]; // sub-channels first, then the parent
     const deletedCodes = doomed.map(c => c.code);
-    const idMarks = doomed.map(() => '?').join(',');
     const ids = doomed.map(c => c.id);
     // Protected messages outlive any delete, so a channel (or a sub-channel)
     // still holding one stays until they are unprotected.
     if (protectedMessages.protectedCount(db, ids)) return socket.emit('error-msg', protectedMessages.CHANNEL_REFUSAL);
 
-    // Collect the attachments these channels' messages point at, before the
-    // rows go away. Deleting a channel dropped the messages but left every
-    // uploaded file sitting in uploads/ forever, while deleting a single message
-    // has always cleaned up after itself, and deleting a whole channel is
-    // the same thing in bulk. (#5487)
-    // Kept per author: a file goes only if the person whose message named it
-    // uploaded it to a channel, and nothing else uses it (releasableUploads).
-    // Moving every path the messages named let someone post another member's
-    // avatar or an emoji's file in a channel of their own, delete the channel,
-    // and take that file away from everyone.
-    const doomedUploads = new Map();
+    // Deleting a channel is deleting its messages in bulk, so their files go
+    // too, as they do for a single message (#5487).
+    let doomedUploads = new Map();
     try {
-      const msgs = db.prepare(`SELECT user_id, content FROM messages WHERE channel_id IN (${idMarks})`).all(...ids);
-      for (const row of msgs) {
-        if (!Number.isInteger(row.user_id)) continue;
-        const text = row.content || '';
-        UPLOAD_PATH_RE.lastIndex = 0;
-        let m;
-        while ((m = UPLOAD_PATH_RE.exec(text)) !== null) {
-          if (!isSafeUploadRelPath(m[1])) continue;
-          if (!doomedUploads.has(row.user_id)) doomedUploads.set(row.user_id, new Set());
-          doomedUploads.get(row.user_id).add(m[1]);
-        }
-      }
+      doomedUploads = channelUploadsByAuthor(db, ids);
     } catch (err) {
       // Never block the delete; the channel's files just stay in uploads/.
       console.warn('delete-channel attachment scan failed:', err.message);
@@ -809,14 +822,7 @@ module.exports = function register(socket, ctx) {
     for (const deletedCode of deletedCodes) botAudioManager?.stopChannel(deletedCode, 'channel-deleted');
     broadcastChannelLists();
 
-    // The same file can be linked from more than one message (a copy-pasted
-    // image URL), so only relocate the ones nothing else points at anymore.
-    // Mirrors what auto-cleanup does. (#5423)
-    for (const [authorId, rels] of doomedUploads) {
-      try {
-        for (const rel of releasableUploads(db, [...rels], [authorId])) moveUploadToDeleted(rel);
-      } catch (err) { console.warn('delete-channel attachment cleanup failed:', err.message); /* the files stay in uploads/; nothing is lost */ }
-    }
+    releaseChannelUploads(db, doomedUploads, 'delete-channel');
 
     for (const deletedCode of deletedCodes) {
       io.to(`channel:${deletedCode}`).to(`voice:${deletedCode}`).emit('channel-deleted', { code: deletedCode });
@@ -1002,12 +1008,22 @@ module.exports = function register(socket, ctx) {
     }
     if (protectedMessages.protectedCount(db, [channel.id])) return socket.emit('error-msg', protectedMessages.CHANNEL_REFUSAL);
 
+    // Its files go with it, as with delete-channel (#5783).
+    let doomedUploads = new Map();
+    try {
+      doomedUploads = channelUploadsByAuthor(db, [channel.id]);
+    } catch (err) {
+      // Never block the delete; the sub-channel's files just stay in uploads/.
+      console.warn('delete-sub-channel attachment scan failed:', err.message);
+    }
+
     try {
       db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(channel.id);
       db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
+      releaseChannelUploads(db, doomedUploads, 'delete-sub-channel');
       botAudioManager?.stopChannel(code, 'channel-deleted');
       io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
       clearChannelRuntimeState(state, code);

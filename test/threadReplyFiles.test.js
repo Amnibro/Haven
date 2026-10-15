@@ -93,11 +93,15 @@ async function upload(token) {
   assert.ok(j.url, 'uploaded: ' + JSON.stringify(j));
   return j.url;
 }
+let _accounts = null;
+async function accounts() {
+  if (!_accounts) _accounts = { admin: await register('admin'), bob: await register('bob') };
+  return _accounts;
+}
 const inUploads = (url) => fs.existsSync(path.join(DATA, 'uploads', url.replace('/uploads/', '')));
 
 test('deleting a topic moves its replies\' files out of uploads', async () => {
-  const admin = await register('admin');
-  const bob = await register('bob');
+  const { admin, bob } = await accounts();
   const A = await connect(admin.token), B = await connect(bob.token);
   const list = next(A, 'channels-list', (c) => Array.isArray(c) && c.some((x) => x.name === 'gallery'));
   A.emit('create-channel', { name: 'gallery' });
@@ -126,4 +130,70 @@ test('deleting a topic moves its replies\' files out of uploads', async () => {
   assert.ok(!inUploads(replyPic), "a reply's picture left uploads");
   assert.ok(!inUploads(bobPic), "another member's reply picture left uploads too");
   assert.ok(fs.existsSync(path.join(DATA, 'uploads', 'deleted-attachments', replyPic.replace('/uploads/', ''))), 'and waits in deleted-attachments');
+});
+
+// Builds a blog forum the way the app does: a post with a picture, the rest
+// of its gallery as the author's own replies, and a member's comment with a
+// picture of their own. Returns the channel code and every file it used.
+async function blogForum(A, B, adminToken, bobToken, name, extra = {}) {
+  const list = next(A, 'channels-list', (c) => Array.isArray(c) && c.some((x) => x.name === name));
+  if (extra.parentCode) A.emit('create-sub-channel', { parentCode: extra.parentCode, name });
+  else A.emit('create-channel', { name });
+  const code = (await list).find((c) => c.name === name).code;
+  for (const permission of ['forum', 'forum_blog']) {
+    A.emit('toggle-channel-permission', { code, permission });
+    await wait(150);
+  }
+  B.emit('join-channel', { code });
+  await wait(300);
+  A.emit('enter-channel', { code }); B.emit('enter-channel', { code });
+  await wait(200);
+
+  const pics = [];
+  for (let i = 0; i < 4; i++) pics.push(await upload(adminToken));
+  const bobPic = await upload(bobToken);
+  A.emit('send-message', { code, content: `Trip ${name}\n${pics[0]}` });
+  await wait(400);
+  const topic = readDb('SELECT id FROM messages WHERE content LIKE ?', `Trip ${name}%`)[0];
+  assert.ok(topic, 'the post was made');
+  for (const pic of pics.slice(1)) await new Promise((r) => A.emit('send-thread-message', { parentId: topic.id, content: pic }, r));
+  await new Promise((r) => B.emit('send-thread-message', { parentId: topic.id, content: `love it\n${bobPic}`, replyTo: topic.id }, r));
+  await wait(300);
+  const all = [...pics, bobPic];
+  assert.ok(all.every(inUploads), 'every picture is in uploads before the delete');
+  return { code, files: all };
+}
+
+test('deleting a whole blog forum moves every picture in it out of uploads', async () => {
+  const { admin: adminLogin, bob: bobLogin } = await accounts();
+  const A = await connect(adminLogin.token), B = await connect(bobLogin.token);
+  await wait(200);
+
+  const top = await blogForum(A, B, adminLogin.token, bobLogin.token, 'travel');
+  A.emit('delete-channel', { code: top.code });
+  await wait(700);
+  assert.equal(readDb('SELECT COUNT(*) AS n FROM channels WHERE code = ?', top.code)[0].n, 0, 'the forum is gone');
+  for (const f of top.files) assert.ok(!inUploads(f), `${f} left uploads with the forum`);
+});
+
+test('deleting a blog forum that is a sub-channel moves its pictures out of uploads', async () => {
+  const { admin: adminLogin, bob: bobLogin } = await accounts();
+  const A = await connect(adminLogin.token), B = await connect(bobLogin.token);
+  await wait(200);
+  const list = next(A, 'channels-list', (c) => Array.isArray(c) && c.some((x) => x.name === 'hobbies'));
+  A.emit('create-channel', { name: 'hobbies' });
+  const parentCode = (await list).find((c) => c.name === 'hobbies').code;
+  B.emit('join-channel', { code: parentCode });
+  await wait(300);
+
+  const viaParent = await blogForum(A, B, adminLogin.token, bobLogin.token, 'cats', { parentCode });
+  A.emit('delete-channel', { code: viaParent.code });
+  await wait(700);
+  for (const f of viaParent.files) assert.ok(!inUploads(f), `${f} left uploads with the sub-channel (delete-channel)`);
+
+  const viaSub = await blogForum(A, B, adminLogin.token, bobLogin.token, 'dogs', { parentCode });
+  A.emit('delete-sub-channel', { code: viaSub.code });
+  await wait(700);
+  assert.equal(readDb('SELECT COUNT(*) AS n FROM channels WHERE code = ?', viaSub.code)[0].n, 0, 'the sub-channel is gone');
+  for (const f of viaSub.files) assert.ok(!inUploads(f), `${f} left uploads with the sub-channel (delete-sub-channel)`);
 });
