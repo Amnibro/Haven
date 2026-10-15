@@ -4,6 +4,11 @@ const bcrypt = require('bcryptjs');
 const { utcStamp, isInt } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { ipBanRefusal } = require('../ipBanGuard');
+const { deletableSql } = require('../protectedMessages');
+
+// A scrub or purge leaves protected messages, and thread heads holding one,
+// as they are (src/protectedMessages.js).
+const SCRUBBABLE = deletableSql('m');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
@@ -78,8 +83,8 @@ module.exports = function register(socket, ctx) {
     db.prepare('UPDATE whitelist SET added_by = NULL WHERE added_by = ?').run(uid);
     db.prepare('UPDATE deleted_users SET deleted_by = NULL WHERE deleted_by = ?').run(uid);
     if (scrubMessages) {
-      db.prepare('DELETE FROM pinned_messages WHERE message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)').run(uid);
-      db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0').run(uid);
+      db.prepare(`DELETE FROM pinned_messages WHERE message_id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE})`).run(uid);
+      db.prepare(`DELETE FROM messages WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE})`).run(uid);
       db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
     } else {
       db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
@@ -203,11 +208,11 @@ module.exports = function register(socket, ctx) {
     if (data.scrubMessages) {
       const scrubScope = (socket.user.isAdmin && data.scrubScope === 'server') ? 'server' : 'channel';
       if (scrubScope === 'channel' && kickCh) {
-        db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE channel_id = ? AND is_archived = 0)').run(data.userId, kickCh.id);
-        db.prepare('DELETE FROM messages WHERE user_id = ? AND channel_id = ? AND is_archived = 0').run(data.userId, kickCh.id);
+        db.prepare(`DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT m.id FROM messages m WHERE m.channel_id = ? AND ${SCRUBBABLE})`).run(data.userId, kickCh.id);
+        db.prepare(`DELETE FROM messages WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND m.channel_id = ? AND ${SCRUBBABLE})`).run(data.userId, kickCh.id);
       } else if (scrubScope === 'server') {
-        db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0))').run(data.userId, data.userId);
-        db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0)').run(data.userId);
+        db.prepare(`DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`).run(data.userId, data.userId);
+        db.prepare(`DELETE FROM messages WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`).run(data.userId);
       }
     }
 
@@ -294,8 +299,8 @@ module.exports = function register(socket, ctx) {
     // A ban clears what they said in the server's channels. Their DMs and
     // group DMs belong to the people they talked with, and stay.
     if (data.scrubMessages) {
-      db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0))').run(data.userId, data.userId);
-      db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0)').run(data.userId);
+      db.prepare(`DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`).run(data.userId, data.userId);
+      db.prepare(`DELETE FROM messages WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`).run(data.userId);
     } else if (data.purgeMessages) {
       // Replace the user's messages with a placeholder rather than deleting
       // them. Useful when admins want a visible "this user was banned"
@@ -307,19 +312,19 @@ module.exports = function register(socket, ctx) {
       const affectedChannels = db.prepare(
         `SELECT DISTINCT c.code FROM messages m
          JOIN channels c ON c.id = m.channel_id
-         WHERE m.user_id = ? AND m.is_archived = 0 AND c.is_dm = 0`
+         WHERE m.user_id = ? AND ${SCRUBBABLE} AND c.is_dm = 0`
       ).all(data.userId).map(r => r.code);
       // Drop reactions tied to the purged messages (they no longer make sense
       // with the placeholder body).
       db.prepare(
-        'DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0))'
+        `DELETE FROM reactions WHERE message_id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`
       ).run(data.userId);
       // Replace content + clear file metadata so attachments aren't shown.
       // edited_at gets set so the "edited" tag conveys the change.
       db.prepare(
         `UPDATE messages
          SET content = ?, original_name = NULL, edited_at = datetime('now')
-         WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0)`
+         WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`
       ).run(placeholder, data.userId);
       for (const ccode of affectedChannels) {
         io.to(`channel:${ccode}`).emit('user-messages-purged', {
@@ -747,8 +752,8 @@ module.exports = function register(socket, ctx) {
       _runIfTable('pinned_messages', 'UPDATE pinned_messages SET pinned_by = NULL WHERE pinned_by = ?', uid);
 
       if (scrubMessages) {
-        _runIfTable('pinned_messages', 'DELETE FROM pinned_messages WHERE message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)', uid);
-        _runIfTable('messages', 'DELETE FROM messages WHERE user_id = ? AND is_archived = 0', uid);
+        _runIfTable('pinned_messages', `DELETE FROM pinned_messages WHERE message_id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE})`, uid);
+        _runIfTable('messages', `DELETE FROM messages WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE})`, uid);
         _runIfTable('messages', 'UPDATE messages SET user_id = NULL WHERE user_id = ?', uid);
 
         const dmChannels = db.prepare(`

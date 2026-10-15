@@ -2335,6 +2335,7 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
 });
 
 // ── Bot: Delete recent messages and their replies ─────────
+// Protected messages, and thread heads holding one, are left out.
 app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
   const webhook = requireModBot(req, res);
   if (!webhook) return;
@@ -2379,6 +2380,7 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
     SELECT m.id, m.channel_id, m.content
     FROM messages m
     JOIN doomed d ON d.id = m.id
+    WHERE ${protectedMessages.deletableSql('m')}
     ORDER BY m.id DESC
   `);
   const deletePin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');

@@ -1039,12 +1039,16 @@ module.exports = function register(socket, ctx) {
 
     const placeholders = ids.map(() => '?').join(',');
     const rows = db.prepare(
-      `SELECT id, user_id, content FROM messages WHERE channel_id = ? AND id IN (${placeholders})`
+      `SELECT m.id, m.user_id, m.content, ${protectedMessages.keptSql('m')} AS kept
+       FROM messages m WHERE m.channel_id = ? AND m.id IN (${placeholders})`
     ).all(channel.id, ...ids);
 
     const deletable = [];
     const skipped = [];
+    let kept = 0;
     for (const r of rows) {
+      // Protected messages stay, and so does a thread head holding one.
+      if (r.kept) { skipped.push(r.id); kept++; continue; }
       let ok = false;
       if (r.user_id === socket.user.id) {
         ok = allowOwnDelete;
@@ -1059,7 +1063,8 @@ module.exports = function register(socket, ctx) {
     }
 
     if (deletable.length === 0) {
-      return cb({ error: 'You don\'t have permission to delete the selected items', deleted: 0, skipped: skipped.length });
+      if (kept && kept === rows.length) return cb({ error: protectedMessages.REFUSAL, deleted: 0, skipped: skipped.length, kept });
+      return cb({ error: 'You don\'t have permission to delete the selected items', deleted: 0, skipped: skipped.length, kept });
     }
 
     const delPin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
@@ -1113,7 +1118,7 @@ module.exports = function register(socket, ctx) {
       });
     }
 
-    cb({ success: true, deleted: deletable.length, skipped: skipped.length });
+    cb({ success: true, deleted: deletable.length, skipped: skipped.length, kept });
   };
 
   // ── Delete every message you wrote (#5686) ────────────────
@@ -1148,9 +1153,9 @@ module.exports = function register(socket, ctx) {
       const rows = db.prepare(`
         SELECT m.id, m.content, c.code, c.is_dm
         FROM messages m JOIN channels c ON c.id = m.channel_id
-        WHERE m.user_id = ? AND m.is_archived = 0
+        WHERE m.user_id = ? AND ${protectedMessages.deletableSql('m')}
       `).all(uid);
-      const kept = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE user_id = ? AND is_archived = 1').get(uid).n;
+      const kept = db.prepare(`SELECT COUNT(*) AS n FROM messages m WHERE m.user_id = ? AND ${protectedMessages.keptSql('m')}`).get(uid).n;
       if (!rows.length) return cb({ success: true, deleted: 0, kept });
 
       // Reactions, votes, tags and thread replies follow through the foreign

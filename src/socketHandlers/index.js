@@ -43,6 +43,7 @@ const {
   registerBotVoiceSocket
 } = require('../botVoice');
 const { creatorCanReachChannel } = require('../botAccess');
+const protectedMessages = require('../protectedMessages');
 const { ipBanRefusal } = require('../ipBanGuard');
 
 const { createActivity } = require('../activity');
@@ -2878,7 +2879,12 @@ function setupSocketHandlers(io, db, opts = {}) {
           }
           if (stillOnline) return;
           try {
-            db.prepare('DELETE FROM users WHERE id = ? AND is_guest = 1').run(guestId);
+            // Protected messages outlive the guest, unattributed, the way an
+            // account deletion keeps them.
+            db.transaction(() => {
+              db.prepare(`UPDATE messages SET user_id = NULL WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${protectedMessages.keptSql('m')})`).run(guestId);
+              db.prepare('DELETE FROM users WHERE id = ? AND is_guest = 1').run(guestId);
+            })();
             console.log(`👤 guest ${guestName} (id=${guestId}) cleaned up, username freed`);
           } catch (err) {
             console.warn(`[guest-cleanup] failed for ${guestName}:`, err.message);
