@@ -2360,6 +2360,12 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Opening a channel sends about seven cheap reads at once, so clicking
       // quickly through a server ran out of the general allowance (#5701).
       browse:  { max: 400, windowMs: 10000 },
+      // Reading the keys a group DM or an E2E DM needs. Each lookup is a few
+      // indexed reads of the caller's own rows or of public keys, but opening
+      // a group with history from before you joined used to cost one lookup
+      // per locked message, and those spent the general allowance: the
+      // member got "Slow down" and their sends were dropped with the lookups.
+      keys:    { max: 120, windowMs: 10000 },
       nativeSignal: { max: 120, windowMs: 10000 },
       nativeSignalGlobal: { max: 12000, windowMs: 10000 },
       screenLifecycle: { max: 12, windowMs: 10000 },
@@ -2419,6 +2425,13 @@ function setupSocketHandlers(io, db, opts = {}) {
       'request-voice-users', 'get-voice-counts', 'get-channels',
     ]);
 
+    // Read-only key lookups, limited by the 'keys' bucket so a group DM full
+    // of locked history cannot use up the allowance that sending relies on.
+    const KEY_READ_EVENTS = new Set([
+      'get-group-keys', 'get-group-roster', 'get-public-key', 'get-signing-key',
+      'get-group-invites', 'get-encrypted-key',
+    ]);
+
     // Events that mark a real, engaged human for the idle-online flag. Kept
     // deliberately narrow: passive traffic (typing, visibility, presence
     // pings) and the client's automatic away transition are NOT here, because
@@ -2448,7 +2461,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         return next();
       }
       if (FLOOD_EXEMPT.has(eventName)) return next();
-      const bucket = BROWSE_EVENTS.has(eventName) ? 'browse' : 'event';
+      const bucket = BROWSE_EVENTS.has(eventName) ? 'browse' : KEY_READ_EVENTS.has(eventName) ? 'keys' : 'event';
       if (floodCheck(bucket)) {
         // One warning every few seconds, not one per blocked request (#5701).
         const now = Date.now();
@@ -2456,7 +2469,9 @@ function setupSocketHandlers(io, db, opts = {}) {
           socket._lastSlowDown = now;
           socket.emit('error-msg', 'Slow down: too many requests');
         }
-        return;
+        // A caller waiting on an ack hears why instead of timing out and
+        // asking again.
+        return acknowledgeFlood('rate_limited');
       }
       next();
     });
