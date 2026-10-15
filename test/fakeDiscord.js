@@ -47,11 +47,16 @@ function startFakeDiscord(port) {
     ],
   });
 
+  // @everyone can view and read history, and the bot's own member entry
+  // comes along as it does from Discord, so Ferry can tell which channels the
+  // bot is kept out of.
   const guild = () => ({
     id: GUILD_ID,
     name: 'Test Guild',
     icon: null,
-    roles: [{ id: GUILD_ID, name: '@everyone', mentionable: false }],
+    owner_id: '1300000000000000099',
+    roles: [{ id: GUILD_ID, name: '@everyone', mentionable: false, permissions: String(1024 + 2048 + 65536) }],
+    members: [{ user: { id: BOT_ID, username: 'FerryBot' }, roles: [] }],
     emojis: [],
     threads: [],
     channels: [

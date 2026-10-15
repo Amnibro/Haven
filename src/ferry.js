@@ -41,6 +41,7 @@ const WebSocket = require('ws');
 const { agentFor } = require('./outboundProxy');
 const automod = require('./automod');
 const { stripRoleMentions } = require('./socketHandlers/helpers');
+const { accessContext, channelAccess, bits } = require('./discordPermissions');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -526,6 +527,7 @@ function handleDispatch(type, d) {
     case 'GUILD_UPDATE': {
       const g = guilds.get(d.id);
       if (g) { g.name = d.name; g.icon = d.icon; }
+      if (g && g.access && d.owner_id) g.access.ownerId = String(d.owner_id);
       break;
     }
 
@@ -554,6 +556,7 @@ function handleDispatch(type, d) {
     case 'GUILD_ROLE_UPDATE': {
       const g = guilds.get(d.guild_id);
       const r = d.role;
+      if (g && g.access && r && r.id) g.access.roles.set(String(r.id), bits(r.permissions));
       if (g && r && r.id && r.name && r.id !== d.guild_id) {
         if (!g.roles) g.roles = new Map();
         g.roles.set(String(r.id), { id: String(r.id), name: String(r.name), mentionable: !!r.mentionable });
@@ -564,6 +567,18 @@ function handleDispatch(type, d) {
     case 'GUILD_ROLE_DELETE': {
       const g = guilds.get(d.guild_id);
       if (g && g.roles) g.roles.delete(String(d.role_id));
+      if (g && g.access) g.access.roles.delete(String(d.role_id));
+      break;
+    }
+
+    case 'GUILD_MEMBER_UPDATE': {
+      // Only the bot's own roles matter here: they decide which private
+      // channels it can see. Without the Server Members intent Discord may not
+      // send this, and the next reconnect picks the change up instead.
+      const g = guilds.get(d.guild_id);
+      if (g && g.access && botUser && d.user && String(d.user.id) === String(botUser.id) && Array.isArray(d.roles)) {
+        g.access.memberRoleIds = d.roles.map(String);
+      }
       break;
     }
 
@@ -666,10 +681,15 @@ function cacheGuild(g) {
       name: c.name,
       type: c.type,
       category: c.parent_id ? (byId.get(c.parent_id)?.name || null) : null,
+      overwrites: c.permission_overwrites || [],
       ...forumFields(c),
     });
   }
-  guilds.set(g.id, { id: g.id, name: g.name, icon: g.icon || null, channels, channelNames, emojis: emojiMap(g.emojis), roles: roleMap(g.roles, g.id) });
+  // The bot's own member entry always comes with GUILD_CREATE. With it, the
+  // pairing form can flag a private channel the bot was never let into.
+  const self = botUser && (g.members || []).find(m => m && m.user && String(m.user.id) === String(botUser.id));
+  const access = botUser ? accessContext({ guild: g, member: self, userId: botUser.id }) : null;
+  guilds.set(g.id, { id: g.id, name: g.name, icon: g.icon || null, channels, channelNames, emojis: emojiMap(g.emojis), roles: roleMap(g.roles, g.id), access });
   // Every active thread the bot can see comes with the guild, forum posts
   // among them. Archived ones do not, and are learned when they wake up.
   for (const th of g.threads || []) cacheThread({ ...th, guild_id: th.guild_id || g.id });
@@ -705,7 +725,8 @@ function cacheChannel(c) {
   if (!g) return;
   if (g.channelNames && c.id && c.name) g.channelNames.set(c.id, c.name);
   if (!RELAYABLE_TYPES.has(c.type)) { g.channels.delete(c.id); return; }
-  g.channels.set(c.id, { id: c.id, name: c.name, type: c.type, category: g.channels.get(c.id)?.category || null, ...forumFields(c) });
+  g.channels.set(c.id, { id: c.id, name: c.name, type: c.type, category: g.channels.get(c.id)?.category || null,
+    overwrites: c.permission_overwrites || [], ...forumFields(c) });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2036,8 +2057,10 @@ function getDirectory() {
       name: g.name,
       channels: [...g.channels.values()]
         // `forum` lets the pairing form offer a Haven forum only Discord
-        // forums, and a chat channel only the rest.
-        .map(c => ({ id: c.id, name: c.name, category: c.category, type: c.type, forum: isForumType(c.type) }))
+        // forums, and a chat channel only the rest. `hidden` marks a private
+        // channel the bot's role was never added to: nothing would relay.
+        .map(c => ({ id: c.id, name: c.name, category: c.category, type: c.type, forum: isForumType(c.type),
+          hidden: !!g.access && !channelAccess(g.access, { permission_overwrites: c.overwrites }).view }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     });
   }

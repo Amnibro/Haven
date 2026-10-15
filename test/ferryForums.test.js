@@ -147,6 +147,15 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
   const dChannels = connected.guilds[0].channels;
   assert.strictEqual(dChannels.find((c) => c.id === FORUM_ID).forum, true, 'the Discord forum is offered and marked as a forum');
   assert.strictEqual(dChannels.find((c) => c.id === TEXT_ID).forum, false);
+  assert.strictEqual(dChannels.find((c) => c.id === TEXT_ID).hidden, false, 'a public channel is not flagged');
+
+  // A private channel the bot's role was never added to is flagged for the
+  // pairing form, and the flag clears once Discord lets the bot back in.
+  const textWith = (overwrites) => ({ id: TEXT_ID, name: 'general', type: 0, parent_id: null, guild_id: GUILD_ID, permission_overwrites: overwrites });
+  discord.dispatch('CHANNEL_UPDATE', textWith([{ id: GUILD_ID, type: 0, allow: '0', deny: '1024' }]));
+  assert.ok(await until(async () => (await getConfig()).guilds[0].channels.find((c) => c.id === TEXT_ID).hidden), 'a private channel is flagged');
+  discord.dispatch('CHANNEL_UPDATE', textWith([]));
+  assert.ok(await until(async () => !(await getConfig()).guilds[0].channels.find((c) => c.id === TEXT_ID).hidden), 'the flag clears');
 
   // ── A Haven forum and a Haven chat channel ──
   let list = next(A, 'channels-list', (chs) => Array.isArray(chs) && chs.some((c) => c.name === 'help'));

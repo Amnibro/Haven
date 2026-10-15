@@ -48,6 +48,12 @@ function forumMark(isForum) {
   return isForum ? ' (' + t('modals.ferry.kind_forum') + ')' : '';
 }
 
+// A private Discord channel the bot's role was never added to. Pairing it
+// would never relay anything, so the list says so before the admin picks it.
+function hiddenMark(isHidden) {
+  return isHidden ? ' 🔒 ' + t('modals.ferry.hidden_mark') : '';
+}
+
 function buildChannelOptions(parents, subsByParent, orphans, esc) {
   const sorted = [...parents].sort((a, b) => a.name.localeCompare(b.name));
   let html = '';
@@ -87,7 +93,7 @@ function buildDiscordChannelOptions(guild, esc, forumOnly = null) {
   }
   let html = opt('', t('modals.ferry.pick_one'));
   for (const [cat, chans] of byCategory) {
-    html += group(esc(cat), chans.map(c => opt(esc(c.id), '#' + esc(c.name) + esc(forumMark(c.forum)))).join(''));
+    html += group(esc(cat), chans.map(c => opt(esc(c.id), '#' + esc(c.name) + esc(forumMark(c.forum)) + esc(hiddenMark(c.hidden)))).join(''));
   }
   return html;
 }
@@ -441,6 +447,7 @@ export default {
     }
 
     const isForumLink = (l) => l.discord_channel_type === 15 || l.discord_channel_type === 16;
+    const linkHidden = (l) => !!(cfg.guilds || []).find(g => g.id === l.guild_id)?.channels.find(c => c.id === l.discord_channel_id)?.hidden;
     const linkRows = (cfg.links || []).map(l => `
       <tr data-ferry-link="${l.id}"${l.is_active ? '' : ' class="ferry-row-off"'}>
         <td><strong>#${esc(l.channel_name)}</strong>${l.is_forum ? `<br><span class="muted-text">${esc(t('modals.ferry.kind_forum'))}</span>` : ''}</td>
@@ -461,6 +468,7 @@ export default {
           <label class="toggle-row"><span>${esc(t('modals.ferry.on'))}</span><input type="checkbox" data-ferry-field="isActive"${l.is_active ? ' checked' : ''}></label>
           <button class="btn-sm btn-danger" data-ferry-delete="${l.id}">${esc(t('modals.ferry.remove'))}</button>
           ${l.last_error ? `<div class="ferry-link-error">${esc(l.last_error)}</div>` : ''}
+          ${linkHidden(l) ? `<div class="ferry-link-error">${esc(t('modals.ferry.hidden_warning'))}</div>` : ''}
         </div></td>
       </tr>`).join('');
 
@@ -515,7 +523,8 @@ export default {
            </label>
             <button class="btn-sm btn-accent ferry-add-btn" id="ferry-add-btn">${esc(t('modals.ferry.add_pairing'))}</button>
          </div>
-         <small class="settings-hint" id="ferry-add-kind-hint">${esc(t('modals.ferry.kind_rule_hint'))}</small>`
+         <small class="settings-hint" id="ferry-add-kind-hint">${esc(t('modals.ferry.kind_rule_hint'))}</small>
+         <small class="settings-hint ferry-hidden-hint" id="ferry-add-hidden-hint" style="display:none">🔒 ${esc(t('modals.ferry.hidden_warning'))}</small>`
       : `<p class="muted-text">${esc(t('modals.ferry.connect_first'))}</p>`;
 
     const pairTable = (cfg.links || []).length
@@ -658,6 +667,12 @@ export default {
     const havenSel = body.querySelector('#ferry-add-channel');
     const modeSel = body.querySelector('#ferry-add-mode');
     const kindHint = body.querySelector('#ferry-add-kind-hint');
+    const hiddenHint = body.querySelector('#ferry-add-hidden-hint');
+    const pickedHidden = () => {
+      const guild = (cfg.guilds || []).find(g => g.id === guildSel?.value);
+      return !!guild?.channels.find(c => c.id === dChanSel?.value)?.hidden;
+    };
+    const refreshHiddenHint = () => { if (hiddenHint) hiddenHint.style.display = pickedHidden() ? '' : 'none'; };
     const refreshDiscordChannels = () => {
       if (!guildSel || !dChanSel) return;
       const esc = (v) => this._escapeHtml(String(v ?? ''));
@@ -674,9 +689,11 @@ export default {
         if (forumOnly === true) modeSel.value = 'all';
       }
       if (kindHint) kindHint.textContent = t(forumOnly === true ? 'modals.ferry.forum_pair_hint' : 'modals.ferry.kind_rule_hint');
+      refreshHiddenHint();
     };
     guildSel?.addEventListener('change', refreshDiscordChannels);
     havenSel?.addEventListener('change', refreshDiscordChannels);
+    dChanSel?.addEventListener('change', refreshHiddenHint);
 
     body.querySelector('#ferry-add-btn')?.addEventListener('click', () => {
       const channelCode = body.querySelector('#ferry-add-channel')?.value;
@@ -685,6 +702,7 @@ export default {
       if (!channelCode || !guildId || !discordChannelId) {
         return this._showToast(t('modals.ferry.pairing_required'), 'warning');
       }
+      if (pickedHidden() && !confirm(t('modals.ferry.hidden_confirm'))) return;
       this.socket.emit('ferry:create-link', {
         channelCode, guildId, discordChannelId,
         direction: body.querySelector('#ferry-add-direction')?.value,

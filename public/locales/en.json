@@ -3862,7 +3862,10 @@
       "forum_pair_hint": "Forum pairing: each new post becomes a topic on the other side, with its title and any tags both forums share, and replies follow it. Only posts made after pairing cross.",
       "forum_mirrors": "Every post and reply",
       "no_matching_forum": "The bot cannot see any forum channels in this server",
-      "no_matching_chat": "The bot cannot see any text channels in this server"
+      "no_matching_chat": "The bot cannot see any text channels in this server",
+      "hidden_mark": "(Ferry can't see it)",
+      "hidden_warning": "Ferry can't see this Discord channel, so messages won't cross. In Discord, add the bot's role to it with View Channel and Read Message History.",
+      "hidden_confirm": "Ferry can't see that Discord channel, so messages won't cross until you add the bot's role to it in Discord. Pair it anyway?"
     }
   },
   "context_menu": {
