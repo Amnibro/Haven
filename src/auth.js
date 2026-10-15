@@ -2214,6 +2214,29 @@ function _usernameFromClaims(db, claims) {
   return `sso_${crypto.randomBytes(6).toString('hex')}`;
 }
 
+// The state alone does not say which browser started a login, so someone could
+// start one with their own account and send the callback link to someone
+// else, who would land signed in as them. A random value in an HttpOnly
+// cookie, set at the start and checked at the callback, ties the two
+// together. SameSite=Lax still sends it on the provider's top-level redirect.
+const OIDC_BIND_COOKIE = 'haven_oidc_bind';
+function _oidcBindCookie(req, value, maxAgeSec) {
+  const secure = req.secure || req.protocol === 'https';
+  return `${OIDC_BIND_COOKIE}=${value}; Path=/api/auth/oidc; Max-Age=${maxAgeSec}; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+}
+function _oidcBindFrom(req) {
+  const raw = String(req.headers.cookie || '');
+  for (const part of raw.split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === OIDC_BIND_COOKIE) return v.join('=');
+  }
+  return '';
+}
+function _sameBind(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || !a || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 /** Bounce back to the login page with a short reason code. */
 function _oidcFail(res, code, err) {
   if (err) console.warn(`[OIDC] ${code}:`, err.message || err);
@@ -2226,7 +2249,9 @@ router.get('/oidc/start', authLimiter, async (req, res) => {
   if (!oidc.isOidcEnabled()) return _oidcFail(res, 'disabled');
   try {
     const { url, state, nonce, verifier } = await oidc.buildAuthorizationUrl(_oidcRedirectUri(req));
-    oidc.saveTransaction(state, { nonce, verifier });
+    const bind = crypto.randomBytes(32).toString('hex');
+    oidc.saveTransaction(state, { nonce, verifier, bind });
+    res.set('Set-Cookie', _oidcBindCookie(req, bind, 600));
     res.redirect(url);
   } catch (err) {
     _oidcFail(res, 'provider_unreachable', err);
@@ -2250,6 +2275,10 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
   // Single-use: a replayed callback finds nothing here.
   const tx = oidc.takeTransaction(state);
   if (!tx) return _oidcFail(res, 'expired');
+  // Only the browser that started this login may finish it.
+  const bind = _oidcBindFrom(req);
+  res.set('Set-Cookie', _oidcBindCookie(req, '', 0));
+  if (!_sameBind(bind, tx.bind)) return _oidcFail(res, 'expired', new Error('callback from a different browser than the one that started the login'));
 
   try {
     const tokens = await oidc.exchangeCode(code, tx.verifier, _oidcRedirectUri(req));
