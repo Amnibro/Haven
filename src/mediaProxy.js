@@ -84,35 +84,40 @@ function _secret() {
   return process.env.JWT_SECRET || 'haven-fallback-media-secret';
 }
 
-function _sign(userId, dayBucket) {
+// The password version is signed in too, so changing the password or signing
+// out other sessions ends the media tokens those sessions held.
+function _sign(userId, dayBucket, pwv) {
   return crypto.createHmac('sha256', _secret())
-    .update(`media:${userId}:${dayBucket}`)
+    .update(`media:${userId}:${pwv}:${dayBucket}`)
     .digest('base64url')
     .slice(0, 32);
 }
 
 function _today() { return Math.floor(Date.now() / 86400000); }
 
-function issueToken(userId) {
+function issueToken(userId, pwv = 1) {
   if (!Number.isInteger(userId)) return null;
-  return `${userId}.${_sign(userId, _today())}`;
+  return `${userId}.${_sign(userId, _today(), Number(pwv) || 1)}`;
 }
 
 // A token outlives the session it came from by up to two days, so it is only
-// honoured while the account still exists and is not banned. A failed check
-// refuses the token rather than serving a possibly banned account.
+// honoured while the account still exists and is not banned. Returns the
+// account's password version, or null. A failed check refuses the token
+// rather than serving a possibly banned account.
 let _accountCheckWarnedAt = 0;
-function _accountActive(userId, db) {
+function _accountPwv(userId, db) {
   try {
     const conn = db || require('./database').getDb();
-    if (!conn.prepare('SELECT 1 FROM users WHERE id = ?').get(userId)) return false;
-    return !conn.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(userId);
+    const row = conn.prepare('SELECT password_version FROM users WHERE id = ?').get(userId);
+    if (!row) return null;
+    if (conn.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(userId)) return null;
+    return Number(row.password_version) || 1;
   } catch (err) {
     if (Date.now() - _accountCheckWarnedAt > 60000) {
       _accountCheckWarnedAt = Date.now();
       console.warn('[media-proxy] account check failed, refusing token:', err.message);
     }
-    return false;
+    return null;
   }
 }
 
@@ -124,13 +129,15 @@ function verifyToken(token, db = null) {
   const userId = parseInt(token.slice(0, dot), 10);
   const sig = token.slice(dot + 1);
   if (!Number.isInteger(userId)) return null;
+  const pwv = _accountPwv(userId, db);
+  if (pwv === null) return null;
 
   for (const bucket of [_today(), _today() - 1]) {
-    const expected = _sign(userId, bucket);
+    const expected = _sign(userId, bucket, pwv);
     // Constant-time compare; lengths already match by construction.
     if (sig.length === expected.length &&
         crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
-      return _accountActive(userId, db) ? userId : null;
+      return userId;
     }
   }
   return null;
