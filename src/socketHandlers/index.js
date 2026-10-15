@@ -777,7 +777,13 @@ function setupSocketHandlers(io, db, opts = {}) {
       for (const [userId, sockets] of byUser) {
         const live = sockets.filter(s => s.connected);
         if (live.length) {
-          const list = getEnrichedChannels(userId, live[0].user.isAdmin, null, shared);
+          // Every socket that is sent the list joins its channels' rooms, as
+          // get-channels does. Joining on one device (or a channel made
+          // after a device connected) only put that one socket in the room,
+          // so the person's other open apps listed the channel but never
+          // heard who joined its voice, until they reloaded (#5782).
+          const joinRooms = (room) => { for (const s of live) s.join(room); };
+          const list = getEnrichedChannels(userId, live[0].user.isAdmin, joinRooms, shared);
           for (const s of live) s.emit('channels-list', list);
         }
         if (Date.now() - sliceStart > 12) {

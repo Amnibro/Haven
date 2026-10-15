@@ -676,7 +676,12 @@ module.exports = function register(socket, ctx) {
       created_by: channel.created_by, topic: channel.topic || '', is_dm: channel.is_dm || 0
     });
 
-    socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
+    // Every app this person has open gets the channel and its rooms, not
+    // only this one: joined on a phone, the desktop app showed the channel
+    // later but never heard who was in its voice room (#5782).
+    const mine = [...io.sockets.sockets.values()].filter(s => s.connected && s.user && s.user.id === socket.user.id);
+    const list = getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => { for (const s of mine) s.join(room); });
+    for (const s of mine) s.emit('channels-list', list);
   });
 
   // ── Leave channel ───────────────────────────────────────
