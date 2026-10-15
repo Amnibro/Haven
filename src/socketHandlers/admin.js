@@ -429,6 +429,12 @@ module.exports = function register(socket, ctx) {
         const parts = value.split(',').map(s => s.trim());
         if (!parts.every(p => /^\d+$/.test(p) && parseInt(p) > 0)) return;
         if (parts.length > 500) return;
+        // Guests can read what they are given. Someone who is not the admin
+        // may not hand them a private or role-gated channel.
+        if (!socket.user.isAdmin) {
+          const closed = db.prepare(`SELECT 1 FROM channels WHERE id IN (${parts.map(() => '?').join(',')}) AND (is_private = 1 OR role_gate IS NOT NULL OR is_dm = 1) LIMIT 1`).get(...parts.map(Number));
+          if (closed) return;
+        }
       }
     }
     if (key === 'stun_urls') {
@@ -1326,10 +1332,21 @@ module.exports = function register(socket, ctx) {
       `).all();
       ccRows.forEach(r => { channelCounts[r.user_id] = r.cnt; });
 
+      // Moderators see the channels they can see themselves, and no invite
+      // codes: a code is enough to join, so listing every channel's code
+      // handed private channels to anyone with kick or ban permission.
+      const seenBy = new Set();
+      if (canMod && !isAdmin) {
+        for (const c of db.prepare('SELECT c.id, c.role_gate FROM channels c JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ? WHERE c.is_dm = 0').all(socket.user.id)) {
+          if (ctx.roleGateAllows(socket.user.id, c)) seenBy.add(c.id);
+        }
+      }
+      const visible = (id) => isAdmin || seenBy.has(id);
       let allChannels = [];
       if (canMod) {
         allChannels = db.prepare('SELECT id, name, code, parent_channel_id FROM channels WHERE is_dm = 0 ORDER BY position, name').all()
-          .map(c => ({ id: c.id, name: c.name, code: c.code, parentId: c.parent_channel_id }));
+          .filter(c => visible(c.id))
+          .map(c => ({ id: c.id, name: c.name, code: isAdmin ? c.code : undefined, parentId: c.parent_channel_id }));
       }
 
       const userChannelMap = {};
@@ -1339,8 +1356,9 @@ module.exports = function register(socket, ctx) {
           FROM channel_members cm JOIN channels c ON cm.channel_id = c.id WHERE c.is_dm = 0
         `).all();
         cmRows.forEach(r => {
+          if (!visible(r.channel_id)) return;
           if (!userChannelMap[r.user_id]) userChannelMap[r.user_id] = [];
-          userChannelMap[r.user_id].push({ id: r.channel_id, name: r.channel_name, code: r.channel_code });
+          userChannelMap[r.user_id].push({ id: r.channel_id, name: r.channel_name, code: isAdmin ? r.channel_code : undefined });
         });
       }
 
@@ -1438,6 +1456,15 @@ module.exports = function register(socket, ctx) {
         'FROM audit_log ' + whereSql + ' ORDER BY id DESC LIMIT ?'
       ).all(...params);
       const actions = db.prepare('SELECT DISTINCT action FROM audit_log ORDER BY action ASC').all().map(r => r.action);
+      // Channel codes are invites (a code is enough to join), so only the
+      // admin sees them in the log.
+      if (!isAdmin) {
+        const hide = (v) => (typeof v === 'string' ? v.replace(/\b[a-f0-9]{8}\b/gi, '(code hidden)') : v);
+        for (const r of rows) {
+          r.target_name = hide(r.target_name);
+          r.details = hide(r.details);
+        }
+      }
       cb({ rows, actions, hasMore: rows.length === limit });
     } catch (err) {
       console.error('get-audit-log error:', err);
