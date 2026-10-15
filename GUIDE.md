@@ -465,8 +465,8 @@ your machine. There are three routes here, least safe first:
 3. **[Cloudflare Tunnel](#cloudflare-tunnel-no-port-forwarding)**: a public URL
    without opening a port or revealing your home IP.
 
-Haven can also run LocalTunnel or Cloudflared for you from **Settings, Server Admin
-Settings, Tunnel** if you would rather not install anything by hand.
+Haven can also run LocalTunnel or Cloudflared for you from **Settings, Admin,
+Tunnel** if you would rather not install anything by hand.
 
 ### Before you port forward, know what it costs
 
@@ -658,9 +658,9 @@ cloudflared --version
 
 1. Start Haven normally (`Start Haven.bat`)
 2. Log in as admin
-3. Open **⚙️ Settings** → scroll to the **Tunnel** section
-4. Select **Cloudflare** as the tunnel provider
-5. Flip the toggle **on**
+3. Open **⚙️ Settings** → **Admin** → **Tunnel**
+4. Pick **Cloudflared** in the Provider list
+5. Click **Start Tunnel**
 6. Haven will start cloudflared and display your public URL (e.g. `https://abc-def-123.trycloudflare.com`)
 
 ### Step 3: Share the URL
@@ -809,7 +809,7 @@ Link previews, the media proxy, bot callbacks, push notifications and Haven's ot
 | Friends get "took too long to respond" | Port forwarding not set up, or firewall blocking |
 | Friends get "connection refused" | Server isn't running: launch `Start Haven.bat` |
 | Can't connect with `https://` | Make sure you're using port 3000, not 443 |
-| Voice chat doesn't work | Must use `https://`. Voice requires a secure connection |
+| Voice chat doesn't work | Use `https://` (or `http://localhost` on the server itself). Browsers only allow the microphone on a secure connection |
 | "Certificate error" in browser | Normal. Click Advanced → Proceed |
 
 ---
@@ -824,7 +824,7 @@ Link previews, the media proxy, bot callbacks, push notifications and Haven's ot
 
 Voice chat is **peer-to-peer** by default: audio goes directly between you and other users, not through the server. Big servers can turn on the optional voice relay instead (Settings, Large Server Setup).
 
-> Voice requires HTTPS. If you're running locally, use `https://localhost:3000`. For remote connections, use `https://YOUR_IP:3000`.
+> Voice needs a secure connection. On the server itself, `http://localhost:3000` or `https://localhost:3000` both work. From any other device, use `https://YOUR_IP:3000`.
 
 ### TURN Server (Voice Over the Internet)
 
@@ -1133,7 +1133,7 @@ review. Setting one up takes a couple of minutes and is free.
 
 ### 2. Connect it to Haven
 
-1. In Haven, go to **Settings → Server Admin Settings → Ferry**
+1. In Haven, go to **Settings → Admin → Ferry**
 2. Click **Set up Ferry** and paste the token
 3. Haven checks the token with Discord and then shows an invite link
 4. Open the invite link and add the bot to your Discord server. Keep the
@@ -1373,7 +1373,7 @@ code directory holds no personal data.
 
 ### Built-in backups
 
-You do not have to copy files by hand. **Settings → Server Admin Settings → Backup**
+You do not have to copy files by hand. **Settings → Admin → Backup**
 has:
 
 - **One-click export**: download an archive, with checkboxes for what to include
@@ -1456,7 +1456,7 @@ Haven has a built-in bot API powered by webhooks. Bots can send messages, delete
 
 ### Creating a Bot
 
-1. Go to **Settings → Server Admin Settings → Bots** (or open a channel's settings and look for the webhook/bot option)
+1. Go to **Settings → Admin → Bots** (or open a channel's settings and look for the webhook/bot option)
 2. Create a new webhook. Give it a name, optionally set an avatar URL and a callback URL
 3. Copy the **Webhook Token** (64-character hex string). This is your bot's API key
 
