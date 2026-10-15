@@ -1091,6 +1091,11 @@ module.exports = function register(socket, ctx) {
     const colName = colMap[permission];
     const current = channel[colName];
     const newVal = current ? 0 : 1;
+    // Opening a private channel up lets anyone with its code in, which is
+    // the admin's call, as changing who passes its gate is.
+    if (permission === 'private' && newVal === 0 && !socket.user.isAdmin) {
+      return socket.emit('error-msg', 'Only the admin can make a private channel public');
+    }
 
     if ((permission === 'streams' || permission === 'music') && newVal === 1 && channel.voice_enabled === 0) {
       return socket.emit('error-msg', 'Enable voice first: streams and music require voice');
