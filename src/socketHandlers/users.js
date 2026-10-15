@@ -2,10 +2,11 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform } = require('./helpers');
+const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 const { saveFcmToken } = require('../fcm');
+const { validHighScore } = require('../highScores');
 
 // A personal sidebar order (#5779): category keys and, per category, channel
 // codes. Only that shape is kept, within limits, so the value cannot carry
@@ -913,8 +914,10 @@ module.exports = function register(socket, ctx) {
   socket.on('submit-high-score', (data) => {
     if (!data || typeof data !== 'object') return;
     const game = typeof data.game === 'string' ? data.game.trim() : '';
-    const score = isInt(data.score) && data.score >= 0 ? data.score : 0;
     if (!game || !/^[a-z0-9_-]{1,32}$/.test(game)) return;
+    // Same rule as POST /api/high-scores: a safe integer under the game's ceiling.
+    const score = validHighScore(game, data.score);
+    if (score === null) return;
 
     const current = db.prepare(
       'SELECT score FROM high_scores WHERE user_id = ? AND game = ?'
