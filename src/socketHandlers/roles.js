@@ -266,6 +266,29 @@ module.exports = function register(socket, ctx) {
   // A posted menu is a message that keeps its author's name, so only its
   // author, an admin, or someone in its channel who outranks the author may
   // read it back for editing or change it.
+  // A role menu is a message, so posting or rewriting one takes what posting
+  // does: reaching the channel, no timeout, the read-only rule, the wait for
+  // new accounts and the link policy. Returns an error string, or null.
+  // Any error refuses.
+  const { refuseYoungAccount } = require('./postingWait')(socket, ctx);
+  function menuPostRefusal(channelId, text) {
+    try {
+      const ch = reachableChannel(ctx, socket.user, channelId);
+      if (!ch || ch.is_dm) return 'Not a member of this channel';
+      if (!socket.user.isAdmin) {
+        const muted = db.prepare("SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime('now') LIMIT 1").get(socket.user.id);
+        if (muted) return 'You are in a timeout';
+        if (ch.read_only === 1 && !userHasPermission(socket.user.id, 'read_only_override', ch.id)) return 'This channel is read-only';
+      }
+      if (refuseYoungAccount(ch.id)) return 'New accounts have to wait before posting';
+      if (text && ctx.enforceAutomod && ctx.enforceAutomod(text, { surface: 'message', channelId: ch.id })) return 'That message was blocked';
+      return null;
+    } catch (err) {
+      console.warn('[role-menu] posting check failed, refusing:', err.message);
+      return 'Could not post the role menu';
+    }
+  }
+
   function canEditRoleMenu(channelId, createdBy) {
     if (socket.user.isAdmin || createdBy === socket.user.id) return true;
     if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
@@ -312,6 +335,8 @@ module.exports = function register(socket, ctx) {
     const maxChars = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get()?.value, 10) || 2000;
     const custom = isString(data.content, 1, maxChars) ? sanitizeText(data.content.trim()) : '';
     const content = custom || roleMenuContent(row.title, parsed.entries);
+    const editRefusal = menuPostRefusal(row.channel_id, content);
+    if (editRefusal) return cb({ error: editRefusal });
     const before = readRoleMenu(row).map(r => r.emoji);
     const after = parsed.entries.map(e => e.emoji);
     try {
@@ -353,14 +378,14 @@ module.exports = function register(socket, ctx) {
     if (!/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Invalid channel' });
     const channel = db.prepare('SELECT id, name, code FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return cb({ error: 'Channel not found' });
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!member && !socket.user.isAdmin) return cb({ error: 'Not a member of this channel' });
     const { sanitizeText } = require('./helpers');
     const title = isString(data.title, 0, 120) ? sanitizeText(data.title.trim()) : '';
     const parsed = roleMenuEntries(data.roles);
     if (parsed.error) return cb({ error: parsed.error });
     const entries = parsed.entries;
     const content = roleMenuContent(title, entries);
+    const postRefusal = menuPostRefusal(channel.id, content);
+    if (postRefusal) return cb({ error: postRefusal });
     try {
       const result = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(channel.id, socket.user.id, content);
       const messageId = result.lastInsertRowid;
