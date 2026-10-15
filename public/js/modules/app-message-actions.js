@@ -264,6 +264,8 @@ _bindMessageActions() {
     } else if (action === 'edit') {
       this._startEditMessage(msgEl, msgId);
     } else if (action === 'delete') {
+      // A protected message cannot be deleted by anyone; the server says the same.
+      if (msgEl.dataset.archived === '1') return this._showToast?.(t('app.messages.protected_no_delete'), 'error');
       if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
         this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
       }
