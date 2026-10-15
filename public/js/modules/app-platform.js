@@ -1345,8 +1345,8 @@ async _submitE2EPassword() {
       ? { valid: true }
       : await (await fetch('/api/auth/verify-password', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: this.user.username, password })
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` },
+          body: JSON.stringify({ password })
         })).json();
 
     if (!data.valid) {

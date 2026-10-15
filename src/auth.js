@@ -70,12 +70,41 @@ function verifyTotpChallengeToken(token) {
   } catch { return null; }
 }
 
+// Wrong passwords, per account. Twenty in 15 minutes closes the account to
+// addresses it has never been used from, so guessing from many addresses gets
+// nowhere. An address the owner has signed in from before is only held to its
+// own ten, so a stranger guessing cannot lock the owner out.
 const PW_MAX_FAILS = 20;
-const _pwFails = new Map();
+const PW_MAX_FAILS_PER_IP = 10;
+const _pwFails = new Map(); // userId -> [{ t, ip }]
 function _pwFailsRecent(userId) {
   const cutoff = Date.now() - 15 * 60 * 1000;
-  return (_pwFails.get(userId) || []).filter(t => t > cutoff);
+  return (_pwFails.get(userId) || []).filter(f => f.t > cutoff);
 }
+function _knownAddress(userId, ip) {
+  if (!ip) return false;
+  try {
+    return !!getDb().prepare('SELECT 1 FROM user_ips WHERE user_id = ? AND ip = ?').get(userId, ip);
+  } catch (err) {
+    console.warn('[auth] known address lookup failed:', err.message);
+    return false;
+  }
+}
+function _pwBlocked(userId, ip) {
+  const recent = _pwFailsRecent(userId);
+  if (recent.filter(f => f.ip === ip).length >= PW_MAX_FAILS_PER_IP) return true;
+  return recent.length >= PW_MAX_FAILS && !_knownAddress(userId, ip);
+}
+function _notePwFail(userId, ip) {
+  const recent = _pwFailsRecent(userId);
+  recent.push({ t: Date.now(), ip });
+  _pwFails.set(userId, recent.slice(-200));
+}
+function _clearPwFails(userId, ip) {
+  const rest = _pwFailsRecent(userId).filter(f => f.ip !== ip);
+  if (rest.length) _pwFails.set(userId, rest); else _pwFails.delete(userId);
+}
+const PW_BLOCKED_MSG = 'Too many wrong passwords for this account. Wait a few minutes and try again.';
 // For code checks outside login (transfer-admin): the same per-account limit
 // as the login code prompt, so a stolen session cannot guess its way past.
 function totpLimited(userId) { return _totpRecentFails(userId).length >= TOTP_MAX_FAILS; }
@@ -700,9 +729,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
     // Per account, whatever address the attempts come from: the address
     // limit alone can be stepped around behind a proxy that is trusted.
-    if (_pwFailsRecent(user.id).length >= PW_MAX_FAILS) {
-      return res.status(429).json({ error: 'Too many wrong passwords for this account. Wait a few minutes and try again.' });
-    }
+    if (_pwBlocked(user.id, req.ip)) return res.status(429).json({ error: PW_BLOCKED_MSG });
     const valid = await bcrypt.compare(password, user.password_hash);
     // (#5300 DM-preservation) If the original password didn't match, fall
     // back to the temp hash set by an admin reset. Tracking which one matched
@@ -719,10 +746,10 @@ router.post('/login', authLimiter, async (req, res) => {
       } catch { usedTemp = false; }
     }
     if (!okWithOriginal && !usedTemp) {
-      _pwFails.set(user.id, [..._pwFailsRecent(user.id), Date.now()]);
+      _notePwFail(user.id, req.ip);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    _pwFails.delete(user.id);
+    _clearPwFails(user.id, req.ip);
 
     // ── Ban check (deferred until AFTER credentials verify) ──────
     // Kept below the password check on purpose (#5457): the ban reason is
@@ -823,14 +850,21 @@ router.post('/ban-appeal', authLimiter, async (req, res) => {
 
     const db = getDb();
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) {
+      await bcrypt.compare(password, _dummyHash());
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    if (_pwBlocked(user.id, req.ip)) return res.status(429).json({ error: PW_BLOCKED_MSG });
 
     let ok = false;
     try { ok = await bcrypt.compare(password, user.password_hash); } catch { ok = false; }
     if (!ok && user.temp_password_hash) {
       try { ok = await bcrypt.compare(password, user.temp_password_hash); } catch { ok = false; }
     }
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!ok) {
+      _notePwFail(user.id, req.ip);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
     const ban = db.prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
     if (!ban) return res.status(400).json({ error: 'This account is not banned' });
@@ -1416,20 +1450,21 @@ router.post('/revoke-sessions', authLimiter, async (req, res) => {
   }
 });
 
+// Checks the signed-in user's own password (before an E2E backup is wrapped
+// with it). Open to anyone, it was a password check for any account with no
+// per-account limit.
 router.post('/verify-password', authLimiter, async (req, res) => {
   try {
-    const username = sanitizeString(req.body.username, 20);
+    const session = verifyToken(req.headers.authorization?.split(' ')[1]);
+    if (!session) return res.status(401).json({ valid: false, error: 'Unauthorized' });
     const password = typeof req.body.password === 'string' ? req.body.password : '';
-    if (!username || !password) {
-      return res.status(400).json({ valid: false, error: 'Username and password required' });
-    }
-    const db = getDb();
-    const user = db.prepare('SELECT password_hash FROM users WHERE username = ?').get(username);
-    if (!user) {
-      return res.status(401).json({ valid: false, error: 'Invalid credentials' });
-    }
+    if (!password) return res.status(400).json({ valid: false, error: 'Password required' });
+    const user = getDb().prepare('SELECT id, password_hash FROM users WHERE id = ?').get(session.id);
+    if (!user || !hasLocalPassword(user)) return res.status(401).json({ valid: false, error: 'Invalid credentials' });
+    if (_pwBlocked(user.id, req.ip)) return res.status(429).json({ valid: false, error: PW_BLOCKED_MSG });
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
+      _notePwFail(user.id, req.ip);
       return res.status(401).json({ valid: false, error: 'Invalid credentials' });
     }
     res.json({ valid: true });
@@ -1641,7 +1676,10 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
 
     // Only the ADMIN_USERNAME from .env can use this endpoint
     if (username.toLowerCase() !== ADMIN_USERNAME) {
-      return res.status(403).json({ error: 'This endpoint is only available for the server admin account' });
+      // The same answer as a wrong password, so this does not reveal the
+      // admin account's name.
+      await bcrypt.compare(password, _dummyHash());
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const db = getDb();

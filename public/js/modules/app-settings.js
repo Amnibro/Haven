@@ -908,8 +908,8 @@ _setupE2EPassphraseSection() {
         // key nobody can reproduce.
         const res = await fetch('/api/auth/verify-password', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: this.user.username, password })
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` },
+          body: JSON.stringify({ password })
         });
         const data = await res.json().catch(() => ({}));
         if (!data.valid) return say(t('settings.e2e_passphrase.wrong_password'), 'error');
