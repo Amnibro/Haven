@@ -2123,9 +2123,11 @@ function setupSocketHandlers(io, db, opts = {}) {
         uRow.is_admin = 1;
       }
       socket.user.isAdmin = !!uRow.is_admin;
-    } catch {
-      socket.user.displayName = user.displayName || user.username;
-      socket.user.isGuest = !!user.isGuest;
+    } catch (err) {
+      // The account could not be checked (revoked? still admin?), so the
+      // connection is refused rather than trusting what the token says.
+      console.warn('[socket] account check failed at connect:', err.message);
+      return next(new Error('Server error, try again'));
     }
 
     try {
@@ -2887,7 +2889,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit, refreshRoleHolders: roleRefresh.refreshRoleHolders };
+  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit, roleGateAllows, refreshRoleHolders: roleRefresh.refreshRoleHolders };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext };

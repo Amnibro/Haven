@@ -70,6 +70,17 @@ function verifyTotpChallengeToken(token) {
   } catch { return null; }
 }
 
+const PW_MAX_FAILS = 20;
+const _pwFails = new Map();
+function _pwFailsRecent(userId) {
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  return (_pwFails.get(userId) || []).filter(t => t > cutoff);
+}
+// For code checks outside login (transfer-admin): the same per-account limit
+// as the login code prompt, so a stolen session cannot guess its way past.
+function totpLimited(userId) { return _totpRecentFails(userId).length >= TOTP_MAX_FAILS; }
+function noteTotpFail(userId) { _totpFails.set(userId, [..._totpRecentFails(userId), Date.now()]); }
+
 // A two-factor code works once. totp.validate accepts the codes either side
 // of now, so without remembering the last step used, a code someone watched
 // being typed kept working for about a minute and a half.
@@ -687,6 +698,11 @@ router.post('/login', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'This account signs in through SSO. Use the SSO button on the login page.' });
     }
 
+    // Per account, whatever address the attempts come from: the address
+    // limit alone can be stepped around behind a proxy that is trusted.
+    if (_pwFailsRecent(user.id).length >= PW_MAX_FAILS) {
+      return res.status(429).json({ error: 'Too many wrong passwords for this account. Wait a few minutes and try again.' });
+    }
     const valid = await bcrypt.compare(password, user.password_hash);
     // (#5300 DM-preservation) If the original password didn't match, fall
     // back to the temp hash set by an admin reset. Tracking which one matched
@@ -703,8 +719,10 @@ router.post('/login', authLimiter, async (req, res) => {
       } catch { usedTemp = false; }
     }
     if (!okWithOriginal && !usedTemp) {
+      _pwFails.set(user.id, [..._pwFailsRecent(user.id), Date.now()]);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    _pwFails.delete(user.id);
 
     // ── Ban check (deferred until AFTER credentials verify) ──────
     // Kept below the password check on purpose (#5457): the ban reason is
@@ -1100,8 +1118,11 @@ router.post('/totp/verify-setup', authLimiter, async (req, res) => {
     }
     // Turning 2FA on asks for the password, as turning it off does. Without
     // it, someone holding a stolen session could put their own authenticator
-    // on the account and shut the real owner out for good.
-    if (hasLocalPassword(user)) {
+    // on the account and shut the real owner out for good. An account that
+    // signs in through SSO has no password here, and its sign-in never asks
+    // for a code, so 2FA belongs with the identity provider instead.
+    if (!hasLocalPassword(user)) return res.status(400).json({ error: 'This account signs in through SSO. Turn on two-factor at your sign-in provider instead.' });
+    {
       const password = typeof req.body.password === 'string' ? req.body.password : '';
       if (!password) return res.status(400).json({ error: 'Enter your password to turn on 2FA' });
       if (!(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: 'Incorrect password' });
@@ -1119,8 +1140,7 @@ router.post('/totp/verify-setup', authLimiter, async (req, res) => {
       secret: OTPAuth.Secret.fromBase32(user.totp_secret)
     });
 
-    const delta = totp.validate({ token: code, window: 1 });
-    if (delta === null) {
+    if (!acceptTotpCode(user.id, totp, code)) {
       return res.status(401).json({ error: 'Invalid code. Make sure your authenticator app is synced and try again.' });
     }
 
@@ -1223,7 +1243,7 @@ router.get('/totp/status', (req, res) => {
 });
 
 // ── TOTP Regenerate Backup Codes ─────────────────────────
-router.post('/totp/regenerate-backup', async (req, res) => {
+router.post('/totp/regenerate-backup', authLimiter, async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -1440,7 +1460,12 @@ function _currentPwv(userId) {
     const row = getDb().prepare('SELECT password_version FROM users WHERE id = ?').get(userId);
     // No row means the account is gone: its tokens are no longer sessions.
     pwv = row ? (row.password_version || 1) : 'gone';
-  } catch { return null; }
+  } catch (err) {
+    // Could not check whether the token was revoked: refuse it rather than
+    // accept a possibly revoked session.
+    console.warn('[auth] password version lookup failed:', err.message);
+    return 'error';
+  }
   _pwvCache.set(userId, { pwv, at: now });
   return pwv;
 }
@@ -1458,7 +1483,7 @@ function verifyToken(token, opts = {}) {
       const current = _currentPwv(decoded.id);
       // A deleted account's token stops working everywhere, not only at the
       // socket handshake.
-      if (current === 'gone') return null;
+      if (current === 'gone' || current === 'error') return null;
       if (current !== null && (decoded.pwv || 1) !== current) return null;
     }
     return decoded;
@@ -1574,7 +1599,9 @@ router.post('/recover-account', authLimiter, async (req, res) => {
         encrypted_private_key = NULL,
         e2e_key_salt = NULL,
         e2e_secret = NULL,
-        e2e_passphrase = 0
+        e2e_passphrase = 0,
+        temp_password_hash = NULL,
+        must_change_password = 0
       WHERE id = ?
     `).run(newHash, newVersion, user.id);
     _forgetPwv(user.id);
@@ -1687,6 +1714,13 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
 });
 
 function generateToken(payload) {
+  // A session token without pwv reads as version 1, so one issued on a
+  // rename stopped working for anyone who had ever changed their password or
+  // turned on 2FA. Fill it in from the account.
+  if (payload && Number.isInteger(payload.id) && payload.pwv == null) {
+    const pwv = _currentPwv(payload.id);
+    if (typeof pwv === 'number') payload = { ...payload, pwv };
+  }
   return jwt.sign(payload, JWT_SECRET, _sessionSignOptions());
 }
 
@@ -2165,7 +2199,9 @@ function _usernameFromClaims(db, claims) {
   if (!base) base = `sso_${String(claims.sub).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12)}`;
   if (base.length < 3) base = `${base}_sso`;
 
-  const taken = (name) => !!db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(name);
+  // The ADMIN_USERNAME name stays reserved, as at /register.
+  const taken = (name) => name.toLowerCase() === ADMIN_USERNAME
+    || !!db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(name);
   if (!taken(base)) return base;
   // A directory username can collide with a local account. Suffix rather than
   // adopt the existing account; taking it over would be exactly the account
@@ -2304,4 +2340,4 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
   }
 });
 
-module.exports = { router, verifyToken, generateChannelCode, generateToken, generateConnectToken, authLimiter, acceptTotpCode };
+module.exports = { router, verifyToken, generateChannelCode, generateToken, generateConnectToken, authLimiter, acceptTotpCode, totpLimited, noteTotpFail };

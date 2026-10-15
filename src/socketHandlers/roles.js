@@ -1571,7 +1571,10 @@ module.exports = function register(socket, ctx) {
             period: 30,
             secret: OTPAuth.Secret.fromBase32(adminUser.totp_secret)
           });
-          validCode = require('../auth').acceptTotpCode(adminUser.id, totp, code);
+          const auth = require('../auth');
+          if (auth.totpLimited(adminUser.id)) { transferAdminRef.value = false; return cb({ error: 'Too many wrong codes. Wait a few minutes and try again.' }); }
+          validCode = auth.acceptTotpCode(adminUser.id, totp, code);
+          if (!validCode) auth.noteTotpFail(adminUser.id);
         } catch (err) {
           console.error('Transfer admin code verification error:', err);
           transferAdminRef.value = false;
