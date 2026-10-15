@@ -364,7 +364,7 @@ test('the first page keeps its own order when the app has none yet', async () =>
 test('one server under two addresses shows once in the rail and twice, with a note, in Manage Servers', async () => {
   const store = seeded([]);
   const L = 'https://localhost:3000';
-  const D = 'http://localhost:3001';
+  const D = 'https://anchaven.duckdns.org:3000';
   const health = {
     [L]: { name: 'Anc', fingerprint: 'same' },
     [D]: { name: 'Anc', fingerprint: 'same' },

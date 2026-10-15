@@ -510,22 +510,34 @@ class ServerManager {
    *  same server under a second address (another port or scheme) and
    *  carries duplicateOf: { url, name } of the first. The fingerprint is
    *  self-reported, so it alone never hides a server: any server could
-   *  repeat another's to take its place on the rail. */
+   *  repeat another's to take its place on the rail. The one exception is an
+   *  address on this machine or the local network, which a server out on the
+   *  internet cannot answer for: that pairs with any address by fingerprint,
+   *  so a server added both as localhost and by its public name shows once. */
   getAll() {
-    const firstByKey = new Map();
+    const firstByFingerprint = new Map(); // fp -> [{ server, host }]
     return this.servers.map(s => {
       const status = this.statusCache.get(s.url) || { online: null, name: s.name };
       const out = { ...s, status };
       const fp = status.online === true ? status.fingerprint : null;
       const host = fp ? this._hostnameOf(s.url) : null;
       if (fp && host) {
-        const key = `${fp}|${host}`;
-        const first = firstByKey.get(key);
-        if (first) out.duplicateOf = { url: first.url, name: first.name };
-        else firstByKey.set(key, s);
+        const seen = firstByFingerprint.get(fp) || [];
+        const first = seen.find(e => e.host === host || this._isLocalHost(e.host) || this._isLocalHost(host));
+        if (first) out.duplicateOf = { url: first.server.url, name: first.server.name };
+        else { seen.push({ server: s, host }); firstByFingerprint.set(fp, seen); }
       }
       return out;
     });
+  }
+
+  /** Loopback, .local and private network addresses. */
+  _isLocalHost(host) {
+    if (!host) return false;
+    const h = host.replace(/^\[|\]$/g, '');
+    return h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local')
+      || h === '::1' || /^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h)
+      || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^f[cd][0-9a-f]{2}:/i.test(h) || /^fe80:/i.test(h);
   }
 
   /** Lowercased hostname of a server address, or null when it does not parse. */
