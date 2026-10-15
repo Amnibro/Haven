@@ -164,6 +164,14 @@ module.exports = function registerMaintenance(deps) {
         let orphansDeleted = 0;
         for (const ch of orphanRows) {
           try {
+            // A DM holding protected messages stays, and only the rest of
+            // it goes. Their files stay where they are.
+            if (protectedMessages.protectedCount(db, [ch.id])) {
+              if (db.prepare(`SELECT 1 FROM messages m WHERE m.channel_id = ? AND ${protectedMessages.deletableSql('m')} LIMIT 1`).get(ch.id)) {
+                protectedMessages.keepChannel(db, ch, 'orphaned DM');
+              }
+              continue;
+            }
             // Move any /uploads/<file> referenced in this DM's messages to
             // deleted-attachments first so file cleanup doesn't lose track.
             const msgs = db.prepare('SELECT content FROM messages WHERE channel_id = ?').all(ch.id);
