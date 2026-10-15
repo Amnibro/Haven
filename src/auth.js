@@ -1464,7 +1464,10 @@ router.get('/recovery-codes/status', async (req, res) => {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+    // A session token only: the two-factor challenge token is signed with the
+    // same key, and it once got recovery codes here without the second factor.
+    const decoded = verifyToken(auth.slice(7));
+    if (!decoded) return res.status(401).json({ error: 'Invalid token' });
     const db = getDb();
     const count = db.prepare(
       'SELECT COUNT(*) as count FROM account_recovery_codes WHERE user_id = ? AND used = 0'
@@ -1479,7 +1482,10 @@ router.post('/recovery-codes/generate', authLimiter, async (req, res) => {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+    // A session token only: the two-factor challenge token is signed with the
+    // same key, and it once got recovery codes here without the second factor.
+    const decoded = verifyToken(auth.slice(7));
+    if (!decoded) return res.status(401).json({ error: 'Invalid token' });
     const password = typeof req.body.password === 'string' ? req.body.password : '';
     if (!password) return res.status(400).json({ error: 'Password required' });
 
