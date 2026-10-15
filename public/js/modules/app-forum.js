@@ -95,7 +95,7 @@ _forumAvatarHtml(msg) {
   const color = this._getUserColor ? this._getUserColor(name) : 'var(--accent)';
   const shape = msg && msg.avatar_shape ? ` avatar-${this._escapeHtml(String(msg.avatar_shape))}` : '';
   if (msg && msg.avatar) {
-    return `<div class="forum-topic-avatar${shape}"><img src="${this._escapeHtml(msg.avatar)}" alt=""></div>`;
+    return `<div class="forum-topic-avatar${shape}"><img ${this._imgSrcAttr(msg.avatar)} alt=""></div>`;
   }
   return `<div class="forum-topic-avatar${shape}" style="background:${color}">${initial}</div>`;
 },

@@ -23,7 +23,7 @@ _renderThreadPreview(parentId, thread, opts = {}) {
   const participantAvatars = (thread.participants || []).map(p => {
     const shape = this._threadAvatarShape(p.avatarShape);
     if (p.avatar) {
-      return `<img class="thread-participant-avatar${shape}" src="${this._escapeHtml(p.avatar)}" alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
+      return `<img class="thread-participant-avatar${shape}" ${this._imgSrcAttr(p.avatar)} alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
     }
     const color = this._getUserColor(p.username);
     const initial = p.username.charAt(0).toUpperCase();
@@ -72,7 +72,7 @@ _setThreadParentHeader(meta = {}) {
   nameEl.dataset.userId = uid;
 
   if (meta.avatar) {
-    wrap.innerHTML = `<img class="thread-parent-avatar${shapeClass}" src="${this._escapeHtml(meta.avatar)}" alt="${this._escapeHtml(username)}">`;
+    wrap.innerHTML = `<img class="thread-parent-avatar${shapeClass}" ${this._imgSrcAttr(meta.avatar)} alt="${this._escapeHtml(username)}">`;
   } else {
     const initial = username.charAt(0).toUpperCase() || '?';
     const color = this._getUserColor(username);
@@ -248,7 +248,9 @@ _openThread(parentId) {
 
   const avatarImg = msgEl?.querySelector('.message-avatar-img');
   let avatar = null;
-  if (avatarImg && avatarImg.getAttribute('src')) avatar = avatarImg.getAttribute('src');
+  // A remote avatar renders through the media proxy; take its original URL
+  // so the thread header proxies it afresh instead of reusing a stale token.
+  if (avatarImg) avatar = avatarImg.getAttribute('data-mp-origin') || avatarImg.getAttribute('data-mp-src') || avatarImg.getAttribute('src') || null;
   const avatarShape = msgEl?.dataset?.avatarShape || 'circle';
   const parentUserIdRaw = msgEl?.dataset?.userId;
   const parentUserId = parentUserIdRaw ? parseInt(parentUserIdRaw, 10) : null;
@@ -394,7 +396,7 @@ _appendThreadMessage(msg) {
   const shape = this._threadAvatarShape(msg.avatar_shape);
   let avatarHtml;
   if (msg.avatar) {
-    avatarHtml = `<img class="thread-msg-avatar${shape}" src="${this._escapeHtml(msg.avatar)}" alt="${initial}">`;
+    avatarHtml = `<img class="thread-msg-avatar${shape}" ${this._imgSrcAttr(msg.avatar)} alt="${initial}">`;
   } else {
     avatarHtml = `<div class="thread-msg-avatar thread-msg-avatar-initial${shape}" style="background:${color}">${initial}</div>`;
   }
@@ -525,7 +527,7 @@ _promoteThreadCompactToFull(compactEl) {
   const avatar = compactEl.dataset.avatar || (onlineUser && onlineUser.avatar) || null;
   const shape = this._threadAvatarShape(compactEl.dataset.avatarShape || (onlineUser && onlineUser.avatarShape));
   const avatarHtml = avatar
-    ? `<img class="thread-msg-avatar${shape}" src="${this._escapeHtml(avatar)}" alt="${initial}">`
+    ? `<img class="thread-msg-avatar${shape}" ${this._imgSrcAttr(avatar)} alt="${initial}">`
     : `<div class="thread-msg-avatar thread-msg-avatar-initial${shape}" style="background:${color}">${initial}</div>`;
 
   compactEl.classList.remove('thread-compact');
