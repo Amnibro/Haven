@@ -1852,10 +1852,13 @@ function setupSocketHandlers(io, db, opts = {}) {
           // sweep repeats (e.g. daily flood-channel reset) until an admin
           // disables it. If for some reason the interval wasn't stored,
           // fall back to disabling the timer to avoid getting stuck firing
-          // a zero-second loop.
-          db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
-          db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
+          // a zero-second loop. Protected messages stay, as with every other
+          // bulk delete: a timer is no way around a moderator saving them.
+          db.transaction(() => {
+            db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ? AND is_archived = 0)').run(ch.id);
+            db.prepare('DELETE FROM pinned_messages WHERE channel_id = ? AND message_id IN (SELECT id FROM messages WHERE channel_id = ? AND is_archived = 0)').run(ch.id, ch.id);
+            db.prepare('DELETE FROM messages WHERE channel_id = ? AND is_archived = 0').run(ch.id);
+          })();
           const interval = ch.auto_delete_interval_hours;
           if (interval && interval > 0) {
             const nextExpiry = new Date(Date.now() + interval * 3600000).toISOString();
