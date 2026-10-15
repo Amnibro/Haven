@@ -407,17 +407,32 @@ _setupIOSKeyboard() {
 /* ── Mobile App Bridge (Capacitor shell ↔ Haven) ───── */
 
 _setupMobileBridge() {
-  // Only activate when running inside the mobile app's iframe
-  this._isMobileApp = (window !== window.top);
-  if (!this._isMobileApp) return;
+  // Being framed is not enough: any site could frame Haven and feed the
+  // bridge (for example its own FCM token). The bridge only talks to a
+  // direct parent whose origin is the Capacitor shell's local origin.
+  this._isMobileApp = false;
+  if (window === window.top) return;
+  const SHELL_ORIGINS = ['capacitor://localhost', 'ionic://localhost', 'https://localhost', 'http://localhost'];
+  // Chromium and WebKit WebViews expose the parent's origin up front.
+  const ancestors = window.location.ancestorOrigins;
+  const parentOrigin = ancestors && ancestors.length ? ancestors[0] : null;
+  if (parentOrigin && !SHELL_ORIGINS.includes(parentOrigin)) return;
 
-  // Add a body class so CSS can adapt for mobile-app context
-  document.body.classList.add('haven-mobile-app');
+  const activate = (origin) => {
+    if (this._isMobileApp) return;
+    this._isMobileApp = true;
+    this._shellOrigin = origin;
+    this._activateMobileBridge();
+  };
 
   // Listen for messages from the Capacitor shell
   window.addEventListener('message', (e) => {
+    if (e.source !== window.parent || !SHELL_ORIGINS.includes(e.origin)) return;
+    if (parentOrigin && e.origin !== parentOrigin) return;
     const data = e.data;
     if (!data || typeof data.type !== 'string') return;
+    // Without ancestorOrigins the first verified shell message switches the bridge on.
+    activate(e.origin);
 
     switch (data.type) {
       case 'haven:back':
@@ -472,6 +487,13 @@ _setupMobileBridge() {
     }
   });
 
+  if (parentOrigin) activate(parentOrigin);
+},
+
+_activateMobileBridge() {
+  // Add a body class so CSS can adapt for mobile-app context
+  document.body.classList.add('haven-mobile-app');
+
   // Notify the shell that Haven is loaded and ready
   this._postToShell({ type: 'haven:ready' });
 
@@ -496,7 +518,10 @@ _setupMobileBridge() {
 
 _postToShell(msg) {
   if (!this._isMobileApp) return;
-  try { window.parent.postMessage(msg, '*'); } catch (err) { console.warn('[Shell] postMessage failed', err); }
+  // A custom scheme origin (capacitor://) cannot be named as a postMessage
+  // target, so those fall back to '*'; these messages carry no secrets.
+  const target = /^https?:\/\//.test(this._shellOrigin || '') ? this._shellOrigin : '*';
+  try { window.parent.postMessage(msg, target); } catch (err) { console.warn('[Shell] postMessage failed', err); }
 },
 
 _handleMobileBack() {

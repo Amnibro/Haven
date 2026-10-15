@@ -5,6 +5,12 @@
 export default {
 
 _formatContent(str) {
+  if (typeof str !== 'string') str = String(str ?? '');
+  // Control characters have no business in a message, and NUL in particular
+  // is the delimiter of the placeholders below; strip them (keeping line
+  // breaks and tabs) so typed text can never pose as a placeholder.
+  str = str.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '');
+
   // Spoiler image: spoiler-img:<payload> where payload is an /uploads URL or
   // an e2e-img: marker. The sender marked this image as a spoiler, so render
   // it blurred behind a "Spoiler" overlay; a click reveals it (handled by the
@@ -92,6 +98,11 @@ _formatContent(str) {
   // Render file attachments [file:name](url|size)
   const fileMatch = str.match(/^\[file:(.+?)\]\((.+?)\|(.+?)\)$/);
   if (fileMatch) {
+    // Real attachments always live in this server's /uploads. Any other URL
+    // would make every viewer fetch it directly (leaking their IP past the
+    // media proxy) or dress a foreign link up as an attachment, so it stays
+    // plain text.
+    if (!/^\/uploads\//.test(fileMatch[2])) return this._escapeHtml(str);
     const fileName = this._escapeHtml(fileMatch[1]);
     const fileUrl = this._escapeHtml(fileMatch[2]);
     const fileSize = this._escapeHtml(fileMatch[3]);
@@ -185,11 +196,20 @@ _formatContent(str) {
   // line ends there, as in Discord: "```js" then a new line. On one line,
   // "```chmod +x start.sh```" is all code; reading "chmod" as the language
   // used to drop it from the block.
+  // Placeholders carry a random nonce per call as a second guard, so even
+  // text that slipped past the strip above could not match one.
+  const nonceBytes = new Uint8Array(6);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(nonceBytes);
+  else nonceBytes.forEach((_, i) => { nonceBytes[i] = Math.floor(Math.random() * 256); });
+  const nonce = Array.from(nonceBytes, b => b.toString(16).padStart(2, '0')).join('');
+  const ph = (kind, idx) => `\x00${nonce}${kind}_${idx}\x00`;
+  const endColor = `\x00${nonce}ENDCOLOR\x00`;
+
   const codeBlocks = [];
   const withPlaceholders = str.replace(/```(?:(\w+)[ \t]*\n|\n)?([\s\S]*?)```/g, (_, lang, code) => {
     const idx = codeBlocks.length;
     codeBlocks.push({ lang: lang || '', code });
-    return `\x00CODEBLOCK_${idx}\x00`;
+    return ph('CODEBLOCK', idx);
   });
 
   // ── Timestamps: <t:1780853820> / <t:1780853820:R> ──
@@ -201,7 +221,7 @@ _formatContent(str) {
     if (!rendered) return full;
     const idx = timestamps.length;
     timestamps.push(rendered);
-    return `\x00TIMESTAMP_${idx}\x00`;
+    return ph('TIMESTAMP', idx);
   });
 
   // ── Discord custom emotes: <:name:id> / <a:name:id> ──
@@ -215,7 +235,7 @@ _formatContent(str) {
   const withEmotes = withTimestamps.replace(/<(a?):([A-Za-z0-9_]{2,32}):(\d{15,25})>/g, (full, anim, name, id) => {
     const idx = emotes.length;
     emotes.push(this._discordEmoteHtml(name, id, !!anim));
-    return `\x00DEMOTE_${idx}\x00`;
+    return ph('DEMOTE', idx);
   });
 
   let html = this._escapeHtml(withEmotes);
@@ -228,13 +248,13 @@ _formatContent(str) {
   html = html.replace(/c#([0-9a-fA-F]{6})([\s\S]+?)#c/g, (full, hex, inner) => {
     const idx = colorOpens.length;
     colorOpens.push(`<span style="color:#${hex}">`);
-    return `\x00COLOR_${idx}\x00${inner}\x00ENDCOLOR\x00`;
+    return `${ph('COLOR', idx)}${inner}${endColor}`;
   });
   html = html.replace(/c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)([\s\S]+?)#c/g, (full, r, g, b, inner) => {
     const [rr, gg, bb] = [r, g, b].map(v => Math.min(255, parseInt(v, 10)));
     const idx = colorOpens.length;
     colorOpens.push(`<span style="color:rgb(${rr},${gg},${bb})">`);
-    return `\x00COLOR_${idx}\x00${inner}\x00ENDCOLOR\x00`;
+    return `${ph('COLOR', idx)}${inner}${endColor}`;
   });
 
   // ── Markdown images & links (extract before auto-linking) ──
@@ -247,7 +267,7 @@ _formatContent(str) {
     mdLinks.push((this._isImageHidden && this._isImageHidden(safeUrl))
       ? this._hiddenImagePlaceholder(safeUrl)
       : `<img ${this._imgSrcAttr(safeUrl)} class="chat-image" alt="${alt || 'image'}">`);
-    return `\x00MDLINK_${idx}\x00`;
+    return ph('MDLINK', idx);
   });
   // [text](url)
   html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (full, text, url) => {
@@ -255,7 +275,7 @@ _formatContent(str) {
     if (!safeUrl) return full;
     const idx = mdLinks.length;
     mdLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow" title="${this._escapeHtml(safeUrl)}" data-masked-link="true">${text}</a>`);
-    return `\x00MDLINK_${idx}\x00`;
+    return ph('MDLINK', idx);
   });
 
   // Auto-link URLs (and render image URLs as inline images)
@@ -274,7 +294,7 @@ _formatContent(str) {
       } else {
         autoLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow">${this._escapeHtml(safeUrl)}</a>`);
       }
-      return `\x00AUTOLINK_${idx}\x00`;
+      return ph('AUTOLINK', idx);
     }
   );
 
@@ -474,7 +494,7 @@ _formatContent(str) {
     // The line break after the quote stays in the text, so a list that
     // follows still starts on its own line; the <br> it turns into is
     // dropped again when the quote is put back (#5661).
-    return `${pre}\x00BLOCKQUOTE_${idx}\x00${block.endsWith('\n') ? '\n' : ''}`;
+    return `${pre}${ph('BLOCKQUOTE', idx)}${block.endsWith('\n') ? '\n' : ''}`;
   });
 
   // (Colour spans were marked out before the link pass and are put back at
@@ -521,7 +541,7 @@ _formatContent(str) {
       : '';
     const idx = tablePlaceholders.length;
     tablePlaceholders.push(`<div class="chat-table-wrap"><table class="chat-table">${thead}${tbody}</table></div>`);
-    return `${pre}\x00TABLE_${idx}\x00`;
+    return `${pre}${ph('TABLE', idx)}`;
   });
 
   // ── Lists (ordered + unordered) with multi-tier nesting (#5304) ──
@@ -597,11 +617,11 @@ _formatContent(str) {
 
   // ── Restore tables (do this after <br> so they aren't broken up) ──
   tablePlaceholders.forEach((tbl, idx) => {
-    html = html.replace(new RegExp(`(?:<br>)?\\x00TABLE_${idx}\\x00(?:<br>)?`), tbl);
+    html = html.replace(new RegExp(`(?:<br>)?${ph('TABLE', idx)}(?:<br>)?`), () => tbl);
   });
 
   blockquotes.forEach((block, idx) => {
-    html = html.replace(new RegExp(`(?:<br>)?\\x00BLOCKQUOTE_${idx}\\x00(?:<br>)?`), () => block);
+    html = html.replace(new RegExp(`(?:<br>)?${ph('BLOCKQUOTE', idx)}(?:<br>)?`), () => block);
   });
 
   // ── Restore fenced code blocks ──
@@ -610,36 +630,38 @@ _formatContent(str) {
     const langAttr = block.lang ? ` data-lang="${this._escapeHtml(block.lang)}"` : '';
     const langLabel = block.lang ? `<span class="code-block-lang">${this._escapeHtml(block.lang)}</span>` : '';
     const rendered = `<div class="code-block"${langAttr}>${langLabel}<pre><code>${escaped}</code></pre></div>`;
-    html = html.replace(`\x00CODEBLOCK_${idx}\x00`, rendered);
+    html = html.replace(ph('CODEBLOCK', idx), () => rendered);
   });
 
   // ── Restore markdown links/images ──
+  // Function replacements throughout: a URL holding $& or $' must not be
+  // read as a replacement pattern.
   mdLinks.forEach((link, idx) => {
-    html = html.replace(`\x00MDLINK_${idx}\x00`, link);
+    html = html.replace(ph('MDLINK', idx), () => link);
   });
 
   // ── Restore auto-linked URLs ──
   autoLinks.forEach((link, idx) => {
-    html = html.replace(`\x00AUTOLINK_${idx}\x00`, link);
+    html = html.replace(ph('AUTOLINK', idx), () => link);
   });
 
   // ── Restore timestamps ──
   // Function replacement, so a formatted date containing $& or $1 cannot
   // be read as a replacement pattern.
   timestamps.forEach((el, idx) => {
-    html = html.replace(`\x00TIMESTAMP_${idx}\x00`, () => el);
+    html = html.replace(ph('TIMESTAMP', idx), () => el);
   });
 
   // ── Restore Discord emotes ──
   emotes.forEach((el, idx) => {
-    html = html.replace(`\x00DEMOTE_${idx}\x00`, () => el);
+    html = html.replace(ph('DEMOTE', idx), () => el);
   });
 
   // ── Colour spans go back last, around whatever was rendered inside them ──
   colorOpens.forEach((open, idx) => {
-    html = html.replace(`\x00COLOR_${idx}\x00`, () => open);
+    html = html.replace(ph('COLOR', idx), () => open);
   });
-  html = html.replace(/\x00ENDCOLOR\x00/g, '</span>');
+  html = html.split(endColor).join('</span>');
 
   if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;
 

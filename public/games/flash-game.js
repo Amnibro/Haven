@@ -1,8 +1,26 @@
 // Haven: Flash Game Loader (Ruffle)
 // Parse game info from URL params: ?swf=URL&title=NAME
 const params = new URLSearchParams(window.location.search);
-const swfUrl = params.get('swf');
+const swfUrl = safeSwfUrl(params.get('swf'));
 const title = params.get('title');
+
+// Only this server's installed games under /games/roms/ may load: any other
+// URL would let a crafted link run a foreign SWF on Haven's origin.
+function safeSwfUrl(raw) {
+  if (!raw) return null;
+  let u;
+  try { u = new URL(raw, window.location.href); } catch (err) {
+    console.warn('[flash] unreadable swf parameter:', err.message);
+    return null;
+  }
+  if (u.origin !== window.location.origin) return null;
+  if (!u.pathname.startsWith('/games/roms/') || !/\.swf$/i.test(u.pathname)) return null;
+  return u.pathname;
+}
+
+function escapeText(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 // Volume control
 const volSlider = document.getElementById('volume-slider');
@@ -42,7 +60,7 @@ function initRuffle() {
     player.load(swfUrl).then(() => {
       applyVolume(parseInt(volSlider.value));
     }).catch((err) => {
-      container.innerHTML = `<div class="error-msg">${t('games.flash.swf_failed', { error: err.message })}<br><br>${t('games.flash.swf_hint')}</div>`;
+      container.innerHTML = `<div class="error-msg">${t('games.flash.swf_failed', { error: escapeText(err && err.message) })}<br><br>${t('games.flash.swf_hint')}</div>`;
     });
 
     setTimeout(() => {
@@ -52,7 +70,7 @@ function initRuffle() {
     }, 20000);
   } catch (err) {
     const loadingMsg = document.getElementById('loading-msg');
-    if (loadingMsg) loadingMsg.innerHTML = `<div class="error-msg">${t('games.flash.init_error', { error: err.message })}</div>`;
+    if (loadingMsg) loadingMsg.innerHTML = `<div class="error-msg">${t('games.flash.init_error', { error: escapeText(err && err.message) })}</div>`;
   }
 }
 
@@ -85,6 +103,8 @@ I18n.init().then(() => {
 
 // Listen for volume messages from parent (Haven game iframe header)
 window.addEventListener('message', (e) => {
+  // Only the Haven page embedding this game may control it.
+  if (e.origin !== location.origin || window.parent === window || e.source !== window.parent) return;
   if (e.data && e.data.type === 'set-volume' && typeof e.data.volume === 'number') {
     const vol = Math.round(e.data.volume * 100);
     volSlider.value = vol;

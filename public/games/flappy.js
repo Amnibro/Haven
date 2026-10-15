@@ -273,7 +273,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         requestLeaderboard();
       }
     } else {
-      try { window.opener.postMessage({ type: 'flappy-score', score: score }, '*'); } catch {}
+      try {
+        window.opener.postMessage({ type: 'flappy-score', score: score }, location.origin);
+      } catch (err) {
+        console.warn('[flappy] score not sent, opener gone:', err && err.message);
+      }
       requestLeaderboard();
     }
   }
@@ -289,7 +293,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     try {
       if (window.opener) {
-        window.opener.postMessage({ type: 'get-leaderboard' }, '*');
+        window.opener.postMessage({ type: 'get-leaderboard' }, location.origin);
       }
     } catch { /* opener closed, try REST */
       fetch('/api/high-scores/flappy').then(r => r.json()).then(d => renderLeaderboard(d.leaderboard)).catch(() => {});
@@ -303,15 +307,33 @@ document.addEventListener('DOMContentLoaded', async () => {
       list.innerHTML = `<p style="font-size:11px;color:var(--text-muted)">${t('games.flappy.no_scores')}</p>`;
       return;
     }
-    list.innerHTML = data.slice(0, 20).map((s, i) => {
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
-      const name = s.username.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
-      return `<div class="lb-row"><span class="lb-rank">${medal}</span><span class="lb-name">${name}</span><span class="lb-score">${s.score}</span></div>`;
-    }).join('');
+    // Built with textContent so a crafted name or score can never become markup.
+    list.textContent = '';
+    data.slice(0, 20).forEach((s, i) => {
+      const row = document.createElement('div');
+      row.className = 'lb-row';
+      const rank = document.createElement('span');
+      rank.className = 'lb-rank';
+      rank.textContent = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+      const name = document.createElement('span');
+      name.className = 'lb-name';
+      name.textContent = String((s && s.username) || '');
+      const sc = document.createElement('span');
+      sc.className = 'lb-score';
+      const n = Number(s && s.score);
+      sc.textContent = Number.isFinite(n) ? String(n) : '0';
+      row.append(rank, name, sc);
+      list.appendChild(row);
+    });
   }
 
   window.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'leaderboard-data') {
+    // Only the Haven window that opened or embeds this game may feed it data.
+    if (e.origin !== location.origin) return;
+    const fromOpener = !!window.opener && e.source === window.opener;
+    const fromParent = window.parent !== window && e.source === window.parent;
+    if (!fromOpener && !fromParent) return;
+    if (e.data && e.data.type === 'leaderboard-data' && Array.isArray(e.data.leaderboard)) {
       renderLeaderboard(e.data.leaderboard);
     }
   });

@@ -288,7 +288,7 @@ _fetchLinkPreviews(containerEl) {
         let meta = '';
         if (isSocial) {
           meta += '<div class="lp-author">';
-          if (data.avatar) meta += `<img class="lp-avatar" src="${this._escapeHtml(data.avatar)}" alt="" loading="lazy">`;
+          if (data.avatar) meta += `<img class="lp-avatar" ${this._imgSrcAttr(data.avatar)} alt="" loading="lazy">`;
           if (data.author) meta += `<span class="lp-author-name">${this._escapeHtml(data.author)}</span>`;
           if (data.handle) meta += `<span class="lp-handle">${this._escapeHtml(data.handle)}</span>`;
           meta += '</div>';

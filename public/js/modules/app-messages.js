@@ -1221,13 +1221,13 @@ _createMessageEl(msg, prevMsg) {
   if (msg.imported_from === 'discord') {
     const discordAvatar = msg.webhook_avatar;
     if (discordAvatar) {
-      avatarHtml = `<img class="message-avatar message-avatar-img ${shapeClass}"${this._animAttr(msg.animateProfile)} src="${this._escapeHtml(discordAvatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`;
+      avatarHtml = `<img class="message-avatar message-avatar-img ${shapeClass}"${this._animAttr(msg.animateProfile)} ${this._imgSrcAttr(discordAvatar)} loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`;
     } else {
       // Generic Discord-style avatar (colored circle with initial)
       avatarHtml = `<div class="message-avatar ${shapeClass} discord-import-avatar" style="background-color:#5865f2">${initial}</div>`;
     }
   } else if (msg.avatar) {
-    avatarHtml = `<img class="message-avatar message-avatar-img ${shapeClass}"${this._animAttr(msg.animateProfile)} src="${this._escapeHtml(msg.avatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`;
+    avatarHtml = `<img class="message-avatar message-avatar-img ${shapeClass}"${this._animAttr(msg.animateProfile)} ${this._imgSrcAttr(msg.avatar)} loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`;
   } else {
     avatarHtml = `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
   }
@@ -1403,7 +1403,7 @@ _promoteCompactToFull(compactEl) {
   try { if (compactEl.dataset.borderTransform) borderTransform = JSON.parse(compactEl.dataset.borderTransform); } catch { /* malformed border data: keep the member list value */ }
   const animateProfile = compactEl.dataset.animateProfile || (onlineUser && onlineUser.animateProfile) || 'trigger';
   const avatarHtml = avatar
-    ? `<img class="message-avatar message-avatar-img ${shapeClass}"${this._animAttr(animateProfile)} src="${this._escapeHtml(avatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
+    ? `<img class="message-avatar message-avatar-img ${shapeClass}"${this._animAttr(animateProfile)} ${this._imgSrcAttr(avatar)} loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
     : `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
   // Multi-role aware (compact-to-full path); mirror of _createMessageEl above.
