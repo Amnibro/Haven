@@ -37,11 +37,14 @@ _mutedUserIds() {
   return this._mutedUsersSet;
 },
 
-// True when this message should stay quiet: its sender is muted for you, or
+// True when this message should stay quiet: its sender is muted for you or
+// blocked, or
 // the server is muted and it is not a DM (or, with "except @mentions", not a
 // mention of you).
 _notifyBlockedByMutes({ senderId, isDm, isMention }) {
   if (senderId != null && this._mutedUserIds().has(Number(senderId))) return true;
+  // Someone you blocked makes no sound or pop-up either (app-data-controls.js).
+  if (this._isBlocked?.(senderId)) return true;
   const mode = this._serverMuteMode();
   if (mode === 'all') return !isDm;
   if (mode === 'mentions') return !isDm && !isMention;

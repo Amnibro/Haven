@@ -170,6 +170,13 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
       this._hideUserContextMenu();
       this._toggleUserMute(targetUserId, targetName);
     });
+    // Block: hides their messages for you and closes your DM with them
+    // (app-data-controls.js).
+    const _blockedForMe = this._isBlocked?.(targetUserId);
+    addBtn(`${_blockedForMe ? '✅' : '🚫'} ${t(_blockedForMe ? 'blocks.unblock' : 'blocks.block')}`, () => {
+      this._hideUserContextMenu();
+      this._toggleBlockUser(targetUserId, targetName);
+    });
   }
 
   // ── Section 3: moderation (kick / mute / ban / delete / transfer) ──
