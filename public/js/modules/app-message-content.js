@@ -818,10 +818,26 @@ _revealMessageBottom(el) {
 // REPLY
 // ═══════════════════════════════════════════════════════
 
+// The text a reply line shows for a message: pictures and files by a short
+// label, not the address they are stored under (an encrypted picture's
+// "e2e-img:image/png:/uploads/..." used to show as it was).
+_replyPreviewText(content) {
+  return String(content || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    if (this._isImageUrl(l) || /^\/uploads\/\S+$/i.test(l)) return `🖼️ ${t('messages.preview_picture')}`;
+    const file = /^\[file:([^\]]*)\]\(/.exec(l);
+    if (file) return `📎 ${file[1] || t('messages.preview_file')}`;
+    if (l.startsWith('e2e-file:')) {
+      let name = '';
+      try { name = JSON.parse(l.slice(9)).name || ''; } catch { /* unreadable marker: plain label */ }
+      return `📎 ${name || t('messages.preview_file')}`;
+    }
+    return l;
+  }).join(' ');
+},
+
 _renderReplyBanner(replyCtx) {
-  const previewText = replyCtx.content.length > 80
-    ? replyCtx.content.substring(0, 80) + '…'
-    : replyCtx.content;
+  const text = this._replyPreviewText(replyCtx.content);
+  const previewText = text.length > 80 ? text.substring(0, 80) + '…' : text;
   const color = this._getUserColor(replyCtx.username);
   return `
     <div class="reply-banner" data-reply-msg-id="${replyCtx.id}">

@@ -463,7 +463,9 @@
     "burn_reveal_hint": "({{seconds}}s after viewing)",
     "new_messages": "NEW MESSAGES",
     "self_destructing": "Self-destructing {{time}}",
-    "self_destruct_no_reply": "Self-destructing messages can't be replied to or quoted"
+    "self_destruct_no_reply": "Self-destructing messages can't be replied to or quoted",
+    "preview_picture": "Picture",
+    "preview_file": "File"
   },
   "utils": {
     "today_at": "Today at {{time}}",
