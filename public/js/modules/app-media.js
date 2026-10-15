@@ -210,7 +210,9 @@ _lightboxShow(imgEl, fallbackSrc = '') {
     }).catch(() => { if (seq === this._lightboxSeq) lbImg.src = ''; });
     return;
   }
-  lbImg.src = imgEl ? imgEl.src : fallbackSrc;
+  // The real URL, not what the feed shows: a picture the lazy loader has not
+  // fetched yet, or has unloaded far off screen, holds a 1px blank.
+  lbImg.src = imgEl ? (this._lazyRealSrc(imgEl) || imgEl.src) : fallbackSrc;
 },
 
 _lightboxNavigate(dir) {
