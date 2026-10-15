@@ -1,5 +1,7 @@
 'use strict';
 
+const { CREATOR_NOT_BANNED_SQL, isCreatorBanned } = require('./botAccess');
+
 const BOT_SOCKET_ROOM = 'bot-sockets';
 
 function getAccessibleVoiceChannels(db, webhook) {
@@ -38,7 +40,7 @@ function getBotVoiceWebhookByToken(db, token) {
            c.code AS channel_code
     FROM webhooks w
     JOIN channels c ON c.id = w.channel_id
-    WHERE w.token = ? AND w.is_active = 1
+    WHERE w.token = ? AND w.is_active = 1 AND ${CREATOR_NOT_BANNED_SQL}
   `).get(token) || null;
 }
 
@@ -57,6 +59,9 @@ function getBotVoiceAccessFailure(db, webhookId, channelCodes = [], expectedToke
   if (!webhook) return 'Webhook was deleted or disabled';
   if (expectedToken && webhook.token !== expectedToken) return 'Bot token was rotated';
   if (!webhook.can_use_voice) return 'Bot voice permission was revoked';
+  // Checked on every packet and by the periodic sweep, so banning the
+  // creator drops a connected bot within seconds.
+  if (isCreatorBanned(db, webhook.created_by)) return 'The person who made this bot is banned';
   for (const code of channelCodes) {
     const channel = canAccessVoiceChannel(db, webhook, code);
     if (!channel) return 'Bot no longer has access to this channel';

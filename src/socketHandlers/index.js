@@ -40,6 +40,7 @@ const {
   reconcileBotVoiceAccess,
   registerBotVoiceSocket
 } = require('../botVoice');
+const { creatorCanReachChannel } = require('../botAccess');
 
 const { createActivity } = require('../activity');
 const createDmCalls = require('../dmCalls');
@@ -1612,11 +1613,13 @@ function setupSocketHandlers(io, db, opts = {}) {
   function fireWebhookEvent(channelId, channelCode, eventType, body) {
     try {
       // DMs are between their two people; no bot callback ever hears them.
-      const _whCh = db.prepare('SELECT is_dm FROM channels WHERE id = ?').get(channelId);
+      const _whCh = db.prepare('SELECT id, is_dm, role_gate FROM channels WHERE id = ?').get(channelId);
       if (!_whCh || _whCh.is_dm) return;
+      // A bot hears only what its creator could still read here: once they
+      // are banned, leave, or lose the channel's required role, it goes quiet.
       const bots = db.prepare(
-        'SELECT id, callback_url, callback_secret, subscribed_events FROM webhooks WHERE channel_id = ? AND is_active = 1 AND callback_url IS NOT NULL'
-      ).all(channelId);
+        'SELECT id, callback_url, callback_secret, subscribed_events, created_by FROM webhooks WHERE channel_id = ? AND is_active = 1 AND callback_url IS NOT NULL'
+      ).all(channelId).filter(bot => creatorCanReachChannel(db, bot.created_by, _whCh));
       if (!bots.length) return;
 
       const payload = JSON.stringify({
@@ -2650,11 +2653,18 @@ function setupSocketHandlers(io, db, opts = {}) {
       // callback URL), making per-bot callback URLs behave server-wide. (#5398)
       try {
         const botCmd = db.prepare(`
-          SELECT bc.command, bc.description, w.id as webhook_id, w.callback_url, w.callback_secret, w.token, w.name as bot_name
+          SELECT bc.command, bc.description, w.id as webhook_id, w.callback_url, w.callback_secret, w.token, w.name as bot_name,
+                 w.created_by, c.id AS channel_id, c.is_dm, c.role_gate
           FROM bot_commands bc
           JOIN webhooks w ON bc.webhook_id = w.id
+          JOIN channels c ON c.id = w.channel_id
           WHERE bc.command = ? AND w.channel_id = ? AND w.is_active = 1 AND w.callback_url IS NOT NULL
         `).get(cmd, channelId);
+        // Same reach as event delivery: nothing for a bot whose creator was
+        // banned or can no longer read this channel.
+        if (botCmd && !creatorCanReachChannel(db, botCmd.created_by, { id: botCmd.channel_id, is_dm: botCmd.is_dm, role_gate: botCmd.role_gate })) {
+          return null;
+        }
         if (botCmd) {
           if (!isSafeCallbackUrl(botCmd.callback_url)) {
             console.error(`Bot command /${cmd}: callback URL blocked by SSRF guard`);

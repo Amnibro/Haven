@@ -55,6 +55,8 @@ function createDb() {
       can_use_voice INTEGER DEFAULT 0
     );
     CREATE TABLE server_settings (key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE bans (user_id INTEGER PRIMARY KEY, banned_by INTEGER, reason TEXT);
+    CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, channel_id INTEGER);
   `);
   db.prepare('INSERT INTO users (id, is_admin) VALUES (?, ?)').run(10, 0);
   db.prepare('INSERT INTO users (id, is_admin) VALUES (?, ?)').run(11, 1);
@@ -230,6 +232,35 @@ test('active bot access detects token, membership, channel, and permission revoc
   assert.match(getBotVoiceAccessFailure(db, 7, [], BOT_TOKEN), /token was rotated/);
   db.prepare('UPDATE webhooks SET token = ?, can_use_voice = 0 WHERE id = 7').run(BOT_TOKEN);
   assert.match(getBotVoiceAccessFailure(db, 7, [], BOT_TOKEN), /permission was revoked/);
+});
+
+test('a bot whose creator is banned loses its token and its voice session', t => {
+  const db = createDb();
+  t.after(() => db.close());
+  insertBot(db);
+  const { getBotVoiceWebhookByToken } = require('../src/botVoice');
+  assert.ok(getBotVoiceWebhookByToken(db, BOT_TOKEN));
+  db.prepare('INSERT INTO bans (user_id, banned_by) VALUES (10, 11)').run();
+  assert.equal(getBotVoiceWebhookByToken(db, BOT_TOKEN), null);
+  assert.match(getBotVoiceAccessFailure(db, 7, [], BOT_TOKEN), /is banned/);
+});
+
+test('a bot reaches a channel only while its creator could read it', t => {
+  const db = createDb();
+  t.after(() => db.close());
+  const { creatorCanReachChannel } = require('../src/botAccess');
+  const member = { id: 2, is_dm: 0, role_gate: null };
+  assert.equal(creatorCanReachChannel(db, 10, member), true);
+  assert.equal(creatorCanReachChannel(db, 10, { id: 1, is_dm: 0, role_gate: null }), false);
+  assert.equal(creatorCanReachChannel(db, 11, { id: 4, is_dm: 0, role_gate: null }), true);
+  assert.equal(creatorCanReachChannel(db, null, member), false);
+  assert.equal(creatorCanReachChannel(db, 999, member), false);
+  const gated = { ...member, role_gate: JSON.stringify({ mode: 'any', roles: [5] }) };
+  assert.equal(creatorCanReachChannel(db, 10, gated), false);
+  db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id) VALUES (10, 5, NULL)').run();
+  assert.equal(creatorCanReachChannel(db, 10, gated), true);
+  db.prepare('INSERT INTO bans (user_id, banned_by) VALUES (10, 11)').run();
+  assert.equal(creatorCanReachChannel(db, 10, gated), false);
 });
 
 test('bot voice gateway joins visibly, relays authorized signaling, and refreshes AFK activity', t => {

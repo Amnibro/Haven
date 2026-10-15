@@ -137,6 +137,7 @@ const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTran
 const { initFerry, stopFerry } = require('./src/ferry');
 const { threadExtras: forumBlogThreadExtras } = require('./src/forumBlog');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
+const { CREATOR_NOT_BANNED_SQL } = require('./src/botAccess');
 const {
   BotAudioManager,
   inspectAudioFile,
@@ -1845,8 +1846,9 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     return res.status(400).json({ error: 'Invalid token' });
   }
 
+  // Same rule as getWebhookByToken: a banned person's bots stop posting.
   const webhook = db.prepare(
-    'SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0'
+    `SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0 AND ${CREATOR_NOT_BANNED_SQL}`
   ).get(token);
 
   if (!webhook) {
@@ -2694,7 +2696,7 @@ function getWebhookByToken(token) {
     FROM webhooks w
     LEFT JOIN channels c ON c.id = w.channel_id
     WHERE w.token = ? AND w.is_active = 1 AND COALESCE(c.is_dm, 0) = 0
-      AND NOT EXISTS (SELECT 1 FROM bans b WHERE b.user_id = w.created_by)
+      AND ${CREATOR_NOT_BANNED_SQL}
   `).get(token);
 }
 
@@ -3015,7 +3017,7 @@ app.get('/api/bot-commands', (req, res) => {
     JOIN webhooks w ON bc.webhook_id = w.id
     JOIN channels c ON c.id = w.channel_id
     JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
-    WHERE w.is_active = 1
+    WHERE w.is_active = 1 AND ${CREATOR_NOT_BANNED_SQL}
   `).all(user.id).filter(r => isAdmin || !socketRuntime || socketRuntime.roleGateAllows(user.id, { id: r.channel_id, role_gate: r.role_gate }));
   const commands = [];
   for (const row of rows) {
