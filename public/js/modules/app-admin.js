@@ -718,8 +718,9 @@ _renderWebhooksList(webhooks) {
   // Simple preview list for server settings; full management is in the bot modal
   container.innerHTML = webhooks.map(wh => {
     const statusDot = `<span class="webhook-status-icon" aria-hidden="true">${wh.is_active ? '🟢' : '🔴'}</span>`;
-    const avatarHtml = wh.avatar_url
-      ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:20px;height:20px;border-radius:50%;object-fit:cover">`
+    const avatarSrc = this._botAvatarSrcAttr(wh.avatar_url);
+    const avatarHtml = avatarSrc
+      ? `<img ${avatarSrc} style="width:20px;height:20px;border-radius:50%;object-fit:cover">`
       : '<span class="webhook-avatar-icon" aria-hidden="true">🤖</span>';
     return `<div class="role-preview-item">${avatarHtml} <span style="font-weight:600">${this._escapeHtml(wh.name)}</span> <span style="opacity:0.5;font-size:0.6875rem">#${this._escapeHtml(wh.channel_name)}</span> ${statusDot}</div>`;
   }).join('');

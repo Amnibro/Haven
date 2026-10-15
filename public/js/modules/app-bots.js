@@ -58,8 +58,9 @@ _renderBotSidebar(webhooks) {
   if (!sidebar) return;
   this._botWebhooks = webhooks; // cache for detail panel
   sidebar.innerHTML = webhooks.map(wh => {
-    const avatarHtml = wh.avatar_url
-      ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+    const avatarSrc = this._botAvatarSrcAttr(wh.avatar_url);
+    const avatarHtml = avatarSrc
+      ? `<img ${avatarSrc} style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0">`
       : `<span style="width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:0.625rem;flex-shrink:0;color:#fff">🤖</span>`;
     const activeClass = this._selectedBotId === wh.id ? ' active' : '';
     return `<div class="role-sidebar-item${activeClass}" data-bot-id="${wh.id}">${avatarHtml}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(wh.name)}</span></div>`;
@@ -86,13 +87,14 @@ _showBotDetail(botId) {
   const webhookUrl = tokenVisible ? `${baseUrl}/api/webhooks/${wh.token}` : '';
   const maskedToken = tokenVisible ? wh.token.slice(0, 12) + '••••••••••••' : t('media_runtime.bot.hidden');
   const channelOptions = this._getBotChannelOptions(wh.channel_id);
+  const avatarSrc = this._botAvatarSrcAttr(wh.avatar_url);
 
   panel.innerHTML = `
     <div class="role-detail-form">
       <label class="settings-label">${t('modals.bot_mgmt.avatar_label')}</label>
       <div class="bot-avatar-row" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
         <div class="bot-avatar-preview" style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:2px solid var(--border);background:var(--bg-tertiary);flex-shrink:0;display:flex;align-items:center;justify-content:center">
-          ${wh.avatar_url ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:1.5rem">🤖</span>'}
+          ${avatarSrc ? `<img ${avatarSrc} style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:1.5rem">🤖</span>'}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <button class="btn-xs btn-accent" id="bot-upload-avatar-btn">📷 ${t('modals.bot_mgmt.upload_avatar_btn')}</button>

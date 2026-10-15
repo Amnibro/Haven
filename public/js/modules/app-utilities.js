@@ -1304,6 +1304,23 @@ _imgSrcAttr(url) {
     : `data-mp-src="${this._escapeHtml(url)}"`) + origin;
 },
 
+// The src attribute for a bot or webhook avatar, whose URL its owner can set
+// to anything. Local ones must be uploads; remote ones go through the media
+// proxy so viewers never fetch them directly. '' means show the placeholder.
+_botAvatarSrcAttr(url) {
+  if (typeof url !== 'string' || !url) return '';
+  let u;
+  try { u = new URL(url, location.href); } catch (err) {
+    console.warn('[media] unreadable bot avatar URL:', err.message);
+    return '';
+  }
+  if (u.origin === location.origin) {
+    return u.pathname.startsWith('/uploads/') ? `src="${this._escapeHtml(url)}"` : '';
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+  return this._imgSrcAttr(url);
+},
+
 // Fill in any images that rendered before the token was available.
 _flushPendingMedia() {
   document.querySelectorAll('[data-mp-src]').forEach(el => {
