@@ -404,18 +404,37 @@ function getUploadUsage() {
 // the real client IP. src/clientIp.js holds the rule, so HTTP and sockets
 // agree.
 //
-//   (unset)        default: a proxy on this machine or the local network
-//                  (loopback, link-local, private ranges). Directly exposed
-//                  servers ignore the header, so nobody can spoof their IP
+//   (unset)        default: a proxy on this machine only (inside a container,
+//                  also the container network's private ranges). Anything
+//                  else ignores the header, so nobody can spoof their IP
 //                  past the auth rate limiter or an IP ban.
+//   TRUST_PROXY=192.168.1.20  a reverse proxy on another LAN machine
 //   TRUST_PROXY=1  one hop, wherever it is (Cloudflare's proxy, or any proxy
 //                  on another machine)
 //   TRUST_PROXY=2  two hops, etc.; TRUST_PROXY=0 trusts nothing
 //
 // Without a trusted proxy every user behind one shares its IP in the auth
 // rate limiter, so innocent users would hit the limit on their first login.
-const { trustProxySetting } = require('./src/clientIp');
+const { trustProxySetting, compileTrust, normalizeIp } = require('./src/clientIp');
 app.set('trust proxy', trustProxySetting());
+
+// A proxy Haven does not trust shows up as every visitor having the proxy's
+// address. Say so once per address, with the setting that fixes it, rather
+// than leave the owner to puzzle over shared rate limits.
+{
+  const trusted = compileTrust(trustProxySetting());
+  const warned = new Set();
+  app.use((req, res, next) => {
+    if (warned.size < 20 && req.headers['x-forwarded-for']) {
+      const peer = normalizeIp(req.socket?.remoteAddress || '');
+      if (peer && !warned.has(peer) && !trusted(peer, 0)) {
+        warned.add(peer);
+        console.warn(`[proxy] ${peer} sent X-Forwarded-For, but Haven does not trust it as a proxy, so everyone coming through it shares that address. If ${peer} is your reverse proxy, set TRUST_PROXY=${peer} in .env and restart.`);
+      }
+    }
+    next();
+  });
+}
 
 // ── IP ban gate (v3.20.0) ─────────────────────────────────
 // Run before anything else (parsers, helmet, static) so banned addresses

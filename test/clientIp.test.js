@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const proxyaddr = require('proxy-addr');
 
-const { socketClientIp, trustProxySetting, DEFAULT_TRUST_PROXY } = require('../src/clientIp');
+const { socketClientIp, trustProxySetting, DEFAULT_TRUST_PROXY, CONTAINER_TRUST_PROXY } = require('../src/clientIp');
 
 const sock = (peer, xff) => ({ handshake: { address: peer, headers: xff ? { 'x-forwarded-for': xff } : {} } });
 const expressIp = (peer, xff, trust) => proxyaddr(
@@ -22,10 +22,13 @@ test('by default a forged header from the internet is ignored', () => {
   assert.equal(socketClientIp(sock('::ffff:203.0.113.9', '1.2.3.4'), DEFAULT_TRUST_PROXY), '203.0.113.9');
 });
 
-test('by default a proxy on this machine or the local network is believed', () => {
+test('by default a proxy on this machine is believed, and a LAN device is not', () => {
   assert.equal(socketClientIp(sock('127.0.0.1', '198.51.100.7'), DEFAULT_TRUST_PROXY), '198.51.100.7');
   assert.equal(socketClientIp(sock('::1', '198.51.100.7'), DEFAULT_TRUST_PROXY), '198.51.100.7');
-  assert.equal(socketClientIp(sock('172.18.0.2', '198.51.100.7'), DEFAULT_TRUST_PROXY), '198.51.100.7');
+  // Any device on a home network could otherwise pick its own address.
+  assert.equal(socketClientIp(sock('192.168.1.50', '198.51.100.7'), DEFAULT_TRUST_PROXY), '192.168.1.50');
+  // In a container the proxy sits on the container network.
+  assert.equal(socketClientIp(sock('172.18.0.2', '198.51.100.7'), CONTAINER_TRUST_PROXY), '198.51.100.7');
   // A client-supplied value in front of what the proxy appended is not believed.
   assert.equal(socketClientIp(sock('127.0.0.1', '6.6.6.6, 198.51.100.7'), DEFAULT_TRUST_PROXY), '198.51.100.7');
 });

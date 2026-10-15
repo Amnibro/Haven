@@ -131,15 +131,24 @@ function isValidIpOrCidr(s) {
 // ── Which proxies to believe (TRUST_PROXY) ──────────────────────────
 // X-Forwarded-For says where a request came from, and anyone can send one.
 // It is believed only from a proxy Haven trusts. The default is a proxy on
-// the same machine or the local network (loopback, link-local and private
-// ranges): nginx, Caddy, a Docker proxy, the built-in tunnel. A server
-// exposed straight to the internet then ignores the header, so a visitor
-// cannot pick their own address to slip past rate limits or IP bans; with
-// the old default of one trusted hop, they could. A proxy on another
-// machine (Cloudflare's, say) needs TRUST_PROXY=1, or the number of hops;
+// this same machine (nginx, Caddy, the built-in tunnel). Trusting the whole
+// local network as well let any device on a home network pick its own
+// address, slipping past rate limits and IP bans. Inside a container the
+// proxy normally sits on the container network instead, so there the default
+// also takes link-local and private ranges. A proxy elsewhere (another LAN
+// machine, Cloudflare's) needs TRUST_PROXY: its address, or 1 for one hop;
 // the value means what it means to Express: a number of hops, true or
 // false, or a list of preset names and addresses/ranges.
-const DEFAULT_TRUST_PROXY = 'loopback, linklocal, uniquelocal';
+const DEFAULT_TRUST_PROXY = 'loopback';
+const CONTAINER_TRUST_PROXY = 'loopback, linklocal, uniquelocal';
+
+// Docker and Podman both leave a marker file; the Haven image also sets
+// HAVEN_IN_CONTAINER.
+function inContainer() {
+  if (process.env.HAVEN_IN_CONTAINER === '1') return true;
+  const fs = require('fs');
+  return fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv');
+}
 const TRUST_PRESETS = {
   loopback: ['127.0.0.0/8', '::1/128'],
   linklocal: ['169.254.0.0/16', 'fe80::/10'],
@@ -148,7 +157,7 @@ const TRUST_PRESETS = {
 
 function trustProxySetting() {
   const raw = process.env.TRUST_PROXY;
-  if (raw === undefined || String(raw).trim() === '') return DEFAULT_TRUST_PROXY;
+  if (raw === undefined || String(raw).trim() === '') return inContainer() ? CONTAINER_TRUST_PROXY : DEFAULT_TRUST_PROXY;
   const s = String(raw).trim();
   if (s === 'true') return true;
   if (s === 'false') return false;
@@ -193,7 +202,9 @@ module.exports = {
   isValidIpOrCidr,
   socketClientIp,
   trustProxySetting,
+  compileTrust,
   DEFAULT_TRUST_PROXY,
+  CONTAINER_TRUST_PROXY,
   isIPv4,
   isIPv6,
   ipToBigInt

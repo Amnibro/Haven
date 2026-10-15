@@ -41,6 +41,7 @@ COPY . .
 # ── Environment defaults (override via docker-compose.yml or .env) ──
 ENV PORT=3000 \
     HOST=0.0.0.0 \
+    HAVEN_IN_CONTAINER=1 \
     HAVEN_DATA_DIR=/data \
     NODE_ENV=production
 
