@@ -2408,6 +2408,11 @@ function setupSocketHandlers(io, db, opts = {}) {
       // 429s, so this is the cap that protects the bot, not the database. The
       // composer debounces at 250ms, so typing cannot reach it.
       ferrySearch: { max: 8, windowMs: 10000 },
+      // Exempt from the general budget (they come in bursts during a call)
+      // but each one is sent on to everyone in the call, so each socket gets
+      // a ceiling of its own.
+      voiceSpeaking: { max: 100, windowMs: 10000 },
+      webcamLifecycle: { max: 20, windowMs: 10000 },
     };
 
     function floodCheck(bucket, scope = '') {
@@ -2464,6 +2469,14 @@ function setupSocketHandlers(io, db, opts = {}) {
       };
       if (PRESENCE_ACTIVE_EVENTS.has(eventName)) touchPresenceActivity(socket.user.id);
       if (eventName === 'screen-share-stopped') return next();
+      if (eventName === 'voice-speaking') {
+        if (floodCheck('voiceSpeaking', socket.id)) return;
+        return next();
+      }
+      if (eventName === 'webcam-started' || eventName === 'webcam-stopped') {
+        if (floodCheck('webcamLifecycle', socket.id)) return;
+        return next();
+      }
       if (eventName === 'screen-share-started') {
         if (floodCheck('screenLifecycle')) return acknowledgeFlood('rate_limited');
         return next();
