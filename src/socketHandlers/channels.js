@@ -1756,9 +1756,15 @@ module.exports = function register(socket, ctx) {
     if (!inviterMember && !socket.user.isAdmin) return socket.emit('error-msg', 'You are not a member of that channel');
     const channel = db.prepare('SELECT * FROM channels WHERE id = ? AND is_dm = 0').get(channelId);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
-    const channelIsPrivate = channel.is_private || channel.code_visibility === 'private';
+    // A sub-channel is reached through its parent, so one under a private
+    // parent is as private as the parent.
+    const parentCh = channel.parent_channel_id
+      ? db.prepare('SELECT created_by, is_private, code_visibility FROM channels WHERE id = ?').get(channel.parent_channel_id)
+      : null;
+    const channelIsPrivate = channel.is_private || channel.code_visibility === 'private'
+      || !!(parentCh && (parentCh.is_private || parentCh.code_visibility === 'private'));
     if (channelIsPrivate && !socket.user.isAdmin) {
-      const isCreator = channel.created_by === socket.user.id;
+      const isCreator = channel.created_by === socket.user.id || !!(parentCh && parentCh.created_by === socket.user.id);
       const isMod = userHasPermission(socket.user.id, 'kick_user', channelId);
       if (!isCreator && !isMod) return socket.emit('error-msg', 'Only the channel creator or moderators can invite people to private channels');
     }
