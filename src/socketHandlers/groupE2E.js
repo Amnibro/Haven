@@ -11,6 +11,7 @@
  *   - a member reads only their own wrapped blob
  */
 const { isInt, NEW_DMS_PER_HOUR } = require('./helpers');
+const userBlocks = require('../userBlocks');
 
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { CONVERSATION_REFUSAL } = require('../protectedMessages');
@@ -216,6 +217,9 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', `Cannot start an encrypted group with ${unusable.map((u) => u.username).join(', ')}: no encryption key published yet`);
     }
 
+    // Nobody who blocked you can be put in a group with you by you.
+    if (userBlocks.whoBlocked(db, socket.user.id, ids).length) return socket.emit('error-msg', userBlocks.GROUP_BLOCKED_ERROR);
+
     const existing = findExistingGroup(ids, socket.user.id);
     if (existing) {
       const payload = { ...groupPayload(existing), existing: true };
@@ -338,6 +342,7 @@ module.exports = function register(socket, ctx) {
     if (users.length !== ids.length) return socket.emit('error-msg', 'One or more users were not found');
     const unusable = users.filter((u) => u.is_guest || !u.public_key || !u.signing_key);
     if (unusable.length) return socket.emit('error-msg', `Cannot add ${unusable.map((u) => u.username).join(', ')} to an encrypted group: no encryption key published yet`);
+    if (userBlocks.whoBlocked(db, socket.user.id, ids).length) return socket.emit('error-msg', userBlocks.GROUP_BLOCKED_ERROR);
     const ins = db.prepare('INSERT OR IGNORE INTO dm_group_invites (channel_id, user_id, invited_by) VALUES (?, ?, ?)');
     db.transaction(() => { for (const id of ids) ins.run(ch.id, id, socket.user.id); })();
     const payload = groupPayload(ch);

@@ -257,6 +257,17 @@ function stripRoleMentions(content, roleNames) {
   return content.replace(re, '@\u200B$1');
 }
 
+// ── End-to-end encrypted content ─────────────────────────────────
+// An encrypted DM is stored as the client sent it: a small JSON envelope
+// (v1/v2 for 1:1 DMs, v3 for groups) around base64 ciphertext.
+function looksEncrypted(content) {
+  if (typeof content !== 'string' || content.charCodeAt(0) !== 123) return false;
+  try {
+    const o = JSON.parse(content);
+    return !!(o && (o.v === 1 || o.v === 2 || (o.v === 3 && Number.isInteger(o.e) && typeof o.sig === 'string')) && typeof o.iv === 'string' && typeof o.ct === 'string');
+  } catch { return false; }
+}
+
 // ── Files that go with a deleted message ─────────────────────────
 // Deleting a message (or a whole DM) takes the files it attached with it,
 // but only files one of `ownerIds` uploaded as an attachment, and only when
@@ -340,6 +351,6 @@ module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
   sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent,
   normalizeWordGroups, validEscalation, filterIdleOnline,
-  replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads,
+  replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads, looksEncrypted,
   NEW_DMS_PER_HOUR,
 };

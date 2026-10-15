@@ -1510,6 +1510,28 @@ function initDatabase() {
   addColumn('users', 'encrypted_servers', "TEXT DEFAULT NULL");
   addColumn('users', 'official_mode', "INTEGER NOT NULL DEFAULT 1");
 
+  // ── Migration: data controls (Settings, Data & privacy) ──
+  // auto_delete_days: a member's own messages older than this many days are
+  // deleted by the maintenance loop (src/selfPurge.js); 0 means off. It only
+  // runs while the server allows self-purge, and the value is kept when an
+  // admin turns that off, so it picks up again if they turn it back on.
+  addColumn('users', 'auto_delete_days', "INTEGER NOT NULL DEFAULT 0");
+  // user_blocks: who each member has blocked (src/userBlocks.js). Blocking is
+  // private to the blocker; the blocked person is never told.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_blocks (
+      blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (blocker_id, blocked_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_id);
+  `);
+  // One member's own messages, in order: auto-delete looks them up every 15
+  // minutes for each member who turned it on, and Export my data pages
+  // through them by id. Without it both walk the whole messages table.
+  db.exec('CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id, id)');
+
   // ── Migration: send_self_destruct (#5725) ──
   // Self-destructing messages came out open to everyone. The permission that
   // now controls them starts out on every role that may delete its own
