@@ -15,7 +15,7 @@ const os = require('node:os');
 const { spawn } = require('node:child_process');
 const { io } = require('socket.io-client');
 
-const PORT = 3399;
+const PORT = 3445;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA = path.join(os.tmpdir(), `haven-reply-bot-${Date.now()}`);
 
