@@ -390,6 +390,18 @@ _listenMessageChanges() {
     this._showToast(t('toasts.bio_updated'), 'success');
   });
 
+  this.socket.on('birthday-updated', (data) => {
+    const wasHidden = this.user.birthdayHidden === true;
+    this.user.birthday = data.birthday || null;
+    this.user.birthdaySetAt = data.birthdaySetAt || null;
+    this.user.birthdayHideYear = data.birthdayHideYear !== false;
+    this.user.birthdayHidden = data.birthdayHidden === true;
+    localStorage.setItem('haven_user', JSON.stringify(this.user));
+    const toast = this.user.birthdayHidden === wasHidden ? 'toasts.birthday_updated'
+      : this.user.birthdayHidden ? 'toasts.birthday_hidden' : 'toasts.birthday_shown';
+    this._showToast(t(toast), 'success');
+  });
+
   // ── Username rename ──────────────────────────────
   this.socket.on('renamed', (data) => {
     this.token = data.token;

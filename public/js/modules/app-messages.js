@@ -1260,6 +1260,7 @@ _createMessageEl(msg, prevMsg) {
   // The author name, painted by a gradient role when the author has one.
   const authorText = msg.persona_id ? msg.username : this._getNickname(msg.user_id, msg.username);
   const authorHtml = authorRoleStyled ? this._roleNameHtml(onlineUser.role, authorText) : this._escapeHtml(authorText);
+  const birthdayMark = msg.persona_id || msg.is_webhook || msg.imported_from ? '' : this._birthdayMarkHtml(onlineUser?.birthday);
 
   const botBadge = msg.imported_from === 'discord'
     ? '<span class="discord-badge">DISCORD</span>'
@@ -1323,7 +1324,7 @@ _createMessageEl(msg, prevMsg) {
       <div class="message-body">
         ${replyHtml}
         <div class="message-header">
-          ${msgRoleIconBefore}
+          ${msgRoleIconBefore}${birthdayMark}
           <span class="message-author" style="color:${authorColor}"${!msg.persona_id && this._nicknames[msg.user_id] ? ` title="${this._escapeHtml(msg.username)}"` : ''}>${authorHtml}</span>
           ${msgRoleIconAfter}
           ${botBadge}
@@ -1431,6 +1432,7 @@ _promoteCompactToFull(compactEl) {
   const authorColor2 = roleStyled2 ? this._safeColor(onlineUser.role.color, color) : color;
   const authorText2 = this._getNickname(userId, username);
   const authorHtml2 = roleStyled2 ? this._roleNameHtml(onlineUser.role, authorText2) : this._escapeHtml(authorText2);
+  const birthdayMark2 = compactEl.dataset.personaId ? '' : this._birthdayMarkHtml(onlineUser?.birthday);
 
   // Replace the compact element in-place
   const wasAnnouncement = compactEl.classList.contains('announcement');
@@ -1447,7 +1449,7 @@ _promoteCompactToFull(compactEl) {
       ${this._avatarWithBorder(avatarHtml, { border, borderTransform, animateProfile })}
       <div class="message-body">
         <div class="message-header">
-          ${msgRoleIconBefore2}
+          ${msgRoleIconBefore2}${birthdayMark2}
           <span class="message-author" style="color:${authorColor2}"${this._nicknames[userId] ? ` title="${this._escapeHtml(username)}"` : ''}>${authorHtml2}</span>
           ${msgRoleIconAfter2}
           ${msgRoleBadge}

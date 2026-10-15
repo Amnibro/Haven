@@ -4,7 +4,7 @@ export default {
 
 _renderOnlineUsers(users) {
   this._lastOnlineUsers = users;
-  try { this._restyleMessageAuthors?.(); } catch { /* cosmetic */ }
+  try { this._restyleMessageAuthors?.(); this._syncBirthdayMarks?.(); } catch { /* cosmetic */ }
   this._refreshOpenProfileCard();
   if (this._activeDMPip) this._refreshDMPipHeader?.();   // (#5574)
   const el = document.getElementById('online-users');
@@ -226,7 +226,7 @@ _renderUserItem(u, scoreLookup) {
       ${avatarHtml}
       <div class="user-item-text">
         <div class="user-item-line">
-          ${roleDot}${roleIconBefore}
+          ${roleDot}${roleIconBefore}${this._birthdayMarkHtml(u.birthday)}
           <span class="user-item-name"${nameStyle}${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${nameHtml}</span>
           ${roleIconAfter}
           ${roleBadge}
@@ -833,8 +833,10 @@ _showProfilePopup(profile) {
        </div>`
     : (isSelf ? `<div class="profile-popup-bio profile-bio-empty">${t('users.no_bio')}</div>` : '');
 
-  // Join date
+  // Join date, with the birthday underneath it when the member has set one
   const joinDate = profile.createdAt ? this._fmtDate(profile.createdAt, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  const birthdayLabel = this._birthdayLabel(profile.birthday);
+  const birthdayHtml = birthdayLabel ? `<div class="profile-popup-birthday">🎂 ${this._escapeHtml(birthdayLabel)}</div>` : '';
 
   // Action buttons. Nickname lives in the unified menu; the gear opens that
   // menu for anyone with mod powers over this user.
@@ -864,7 +866,7 @@ _showProfilePopup(profile) {
     <div class="profile-popup-body">
       <div class="profile-popup-names">
         ${currentNick ? `<span class="profile-popup-nickname">🏷️ ${this._escapeHtml(currentNick)}</span>` : ''}
-        <span class="profile-popup-displayname">${this._escapeHtml(profile.displayName)}</span>
+        <span class="profile-popup-displayname">${this._birthdayMarkHtml(profile.birthday)}${this._escapeHtml(profile.displayName)}</span>
         <span class="profile-popup-username">@${this._escapeHtml(profile.username)}</span>
       </div>
       <div id="profile-popup-status-slot">${statusTextHtml}</div>
@@ -872,7 +874,7 @@ _showProfilePopup(profile) {
       <div class="profile-popup-divider"></div>
       <div id="profile-popup-activity-slot">${this._profileActivityHtml(profile.activity)}</div>
       ${rolesHtml ? `<div class="profile-popup-section-label">${t('users.profile_roles_label')}</div><div class="profile-popup-roles">${rolesHtml}</div>` : ''}
-      ${joinDate ? `<div class="profile-popup-section-label">${t('users.member_since_label')}</div><div class="profile-popup-join-date">${joinDate}</div>` : ''}
+      ${joinDate ? `<div class="profile-popup-section-label">${t('users.member_since_label')}</div><div class="profile-popup-join-date">${joinDate}${birthdayHtml}</div>` : ''}
       <div class="profile-popup-actions">${actionsHtml}</div>
     </div>
   `;
@@ -888,6 +890,13 @@ _showProfilePopup(profile) {
 
   // Position near the anchor element
   this._positionProfilePopup(popup);
+
+  // On the member's birthday the card opens to a shower of 🎉. A hover preview
+  // holds it until it is clicked open (_promoteHoverPopup).
+  if (this._daysUntilBirthday(profile.birthday) === 0) {
+    popup.dataset.birthday = '1';
+    if (!this._isHoverPopup) this._rainBirthdayConfetti(popup);
+  }
 
   // Keep the music progress bar moving, and let presence updates refresh the
   // card live (pause, resume, track change, clear) while it's open.
@@ -1010,6 +1019,7 @@ _promoteHoverPopup(popup) {
   popup.offsetHeight; // force reflow
   popup.style.animation = '';
   this._bindProfilePopupOutsideClose(popup);
+  if (popup.dataset.birthday) this._rainBirthdayConfetti(popup);
 },
 
 _positionProfilePopup(popup) {
@@ -1173,6 +1183,7 @@ _renderVoiceUsers(users, channelCode) {
     return `
       <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? 'true' : 'false'}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
         <span class="user-dot voice"${dotStyle}></span>
+        ${this._birthdayMarkHtml(this._memberById(u.id)?.birthday)}
         <span class="user-item-name"${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
         ${botBadge}
         ${statusIconsHtml}

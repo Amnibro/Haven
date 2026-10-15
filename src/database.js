@@ -675,6 +675,14 @@ function initDatabase() {
   // ── Migration: bio column ─────────────────────────────────
   addColumn('users', 'bio', "TEXT DEFAULT ''");
 
+  // ── Migration: birthday (YYYY-MM-DD) and when it was set (ISO UTC).
+  // A birthday is set once and never changes; birthday_hidden keeps it off
+  // the profile and member lists without throwing the date away.
+  addColumn('users', 'birthday', "TEXT DEFAULT NULL");
+  addColumn('users', 'birthday_set_at', "TEXT DEFAULT NULL");
+  addColumn('users', 'birthday_hide_year', "INTEGER DEFAULT 1");
+  addColumn('users', 'birthday_hidden', "INTEGER DEFAULT 0");
+
   // ── Migration: custom_sounds table (admin-uploaded notification sounds) ──
   db.exec(`
     CREATE TABLE IF NOT EXISTS custom_sounds (

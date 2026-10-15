@@ -257,6 +257,7 @@ _openRenameModal() {
   // Populate bio
   const bioInput = document.getElementById('edit-profile-bio');
   if (bioInput) bioInput.value = this.user.bio || '';
+  this._syncBirthdayEditor();
   // Load personas list (#86, #5349)
   this._loadPersonas?.();
   this._loadRoles(() => this._renderUserProfileGroupsList());
@@ -298,10 +299,33 @@ _saveRename() {
   if (bioInput) {
     this.socket.emit('set-bio', { bio: bioInput.value });
   }
+  // Only an actual birthday change goes out. The date goes once, the first
+  // time; after that only the two toggles can change (the server holds it).
+  const birthday = this.user.birthday ? null : (document.getElementById('edit-profile-birthday').value || null);
+  const hidden = document.getElementById('edit-profile-birthday-hidden').checked;
+  const hideYear = document.getElementById('edit-profile-birthday-hide-year').checked;
+  if (birthday || hidden !== (this.user.birthdayHidden === true) || hideYear !== (this.user.birthdayHideYear !== false)) {
+    this.socket.emit('set-birthday', birthday ? { birthday, hidden, hideYear } : { hidden, hideYear });
+  }
   // Also commit any pending avatar and groups changes
   this._commitAvatarSettings();
   this._GroupManagerSaveGroups();
   document.getElementById('rename-modal').style.display = 'none';
+},
+
+// A birthday is set once and never changed, so the date field locks for good
+// once there is one. Hiding it keeps the date and takes it off the profile.
+_syncBirthdayEditor() {
+  const input = document.getElementById('edit-profile-birthday');
+  const note = document.getElementById('edit-profile-birthday-note');
+  const isSet = !!this.user.birthday;
+  const now = this._nowZonedParts();
+  input.max = `${now.year}-${String(now.monthIndex + 1).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`;
+  input.value = this.user.birthday || '';
+  input.disabled = isSet;
+  document.getElementById('edit-profile-birthday-hidden').checked = this.user.birthdayHidden === true;
+  document.getElementById('edit-profile-birthday-hide-year').checked = this.user.birthdayHideYear !== false;
+  note.textContent = t(isSet ? 'modals.edit_profile.birthday_set_note' : 'modals.edit_profile.birthday_hint');
 },
 
 _loadGroupChannelAccess(roleIds, callback) {

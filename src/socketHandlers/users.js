@@ -28,6 +28,17 @@ function cleanChannelOrder(raw) {
   return out.length <= 20000 ? out : null;
 }
 
+// A real calendar date from 1900 up to today as YYYY-MM-DD, else null. A day
+// of slack lets someone whose local date is ahead of UTC pick their today.
+function cleanBirthday(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null;
+  if (y < 1900 || date.getTime() > Date.now() + 86400000) return null;
+  return value;
+}
+
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission, getUserEffectiveLevel,
           emitOnlineUsers, emitDmPresence, broadcastVoiceUsers, generateToken,
@@ -283,7 +294,9 @@ module.exports = function register(socket, ctx) {
     try {
       const row = db.prepare(
         `SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
-                u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at
+                u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at,
+                CASE WHEN u.birthday_hidden <> 0 OR u.birthday_hidden IS NULL THEN NULL
+                     WHEN u.birthday_hide_year = 0 THEN u.birthday ELSE substr(u.birthday, 6) END as birthday
          FROM users u WHERE u.id = ?`
       ).get(data.userId);
       if (!row) return;
@@ -350,6 +363,9 @@ module.exports = function register(socket, ctx) {
         status: hidden ? 'offline' : (row.status || 'online'),
         statusText: row.status_text || '',
         bio: row.bio || '',
+        // MM-DD, or YYYY-MM-DD when the owner turned off Hide birth year;
+        // null while they hide their birthday.
+        birthday: row.birthday || null,
         roles: roles,
         online: isOnline,
         createdAt: row.created_at,
@@ -374,6 +390,56 @@ module.exports = function register(socket, ctx) {
     } catch (err) {
       console.error('Set bio error:', err);
     }
+  });
+
+  // A birthday is set once and can never be changed. Hiding it keeps the date
+  // and only takes it off the profile and member lists; Hide birth year
+  // changes whenever. `hidden` is optional: clients from before it existed
+  // send birthday null to hide, and a first date shows.
+  socket.on('set-birthday', (data) => {
+    if (!data || typeof data !== 'object') return;
+    let birthday = null;
+    if (data.birthday != null) {
+      birthday = cleanBirthday(data.birthday);
+      if (!birthday) return socket.emit('error-msg', 'Invalid birthday');
+    }
+    let listsChanged = false;
+    try {
+      const row = db.prepare('SELECT birthday, birthday_set_at, birthday_hide_year, birthday_hidden FROM users WHERE id = ?').get(socket.user.id);
+      if (!row) return;
+      if (row.birthday && birthday && birthday !== row.birthday) {
+        return socket.emit('error-msg', 'Your birthday can only be set once.');
+      }
+      const firstSet = !row.birthday && !!birthday;
+      const date = row.birthday || birthday;
+      const setAt = firstSet ? new Date().toISOString() : row.birthday_set_at;
+      // A missing or NULL flag counts as hidden, so privacy fails closed.
+      const wasHidden = row.birthday_hidden !== 0;
+      const hidden = typeof data.hidden === 'boolean' ? data.hidden
+        : data.birthday === null ? true
+        : firstSet ? false
+        : wasHidden;
+      const hideYear = typeof data.hideYear === 'boolean' ? data.hideYear : row.birthday_hide_year !== 0;
+      // Member lists only carry MM-DD, so Hide birth year alone leaves them be.
+      listsChanged = date !== row.birthday || hidden !== wasHidden;
+      if (!listsChanged && hideYear === (row.birthday_hide_year !== 0)) return;
+      db.prepare('UPDATE users SET birthday = ?, birthday_set_at = ?, birthday_hide_year = ?, birthday_hidden = ? WHERE id = ?')
+        .run(date, setAt, hideYear ? 1 : 0, hidden ? 1 : 0, socket.user.id);
+      socket.user.birthday = date;
+      socket.user.birthdaySetAt = setAt;
+      socket.user.birthdayHideYear = hideYear;
+      socket.user.birthdayHidden = hidden;
+      socket.emit('birthday-updated', { birthday: date, birthdaySetAt: setAt, birthdayHideYear: hideYear, birthdayHidden: hidden });
+    } catch (err) {
+      console.error('Set birthday error:', err);
+      return;
+    }
+    if (!listsChanged) return;
+    // Member lists carry the birthday, so a 🎉 shows (or goes) right away.
+    for (const [code, users] of channelUsers) {
+      if (users.has(socket.user.id)) emitOnlineUsers(code);
+    }
+    if (emitDmPresence) emitDmPresence(socket.user.id);
   });
 
   // ── Push Notifications ──────────────────────────────────
