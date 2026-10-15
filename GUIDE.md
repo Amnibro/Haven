@@ -227,7 +227,9 @@ Haven can copy a Discord server's message history into Haven channels. The easie
 5. Click **Fetch Messages** and wait while Haven copies them. A big server can take a few minutes
 6. In the preview, rename channels if you want, then click **Import Selected**
 
-The bot can only import channels it can see on Discord. If a channel is private there, give the bot's role access to it first. Otherwise Haven skips that channel and tells you which ones it skipped.
+Discord keeps private channels hidden from the bot until its role is added to them. Haven greys those channels out with a 🔒 so you can see which ones they are. To bring one in, add the bot's role to that channel in Discord with **View Channel** and **Read Message History** ([here's how](#2-connect-it-to-haven)), then pick your server again. If a channel still can't be read, Haven skips it and tells you which ones it skipped.
+
+Don't give the bot **Administrator** to get around this. Anyone who got hold of its token would then control your whole Discord server.
 
 **What gets imported:** messages, replies, embeds, reactions, pins, links to attachments, and the original Discord names and avatars.
 
@@ -1149,6 +1151,19 @@ review. Setting one up takes a couple of minutes and is free.
    Haven author's name and picture instead of all arriving as one anonymous bot
 5. Back in Haven, turn on the **Ferry is on** switch
 
+**Private channels.** Discord keeps private channels hidden from the bot until its role
+is added to them, even when the bot can see everything else on the server. Haven marks
+those channels with a 🔒 when you pair or import. For each private channel you want
+bridged or imported:
+
+1. In Discord, right-click the channel and pick **Edit Channel**
+2. Open **Permissions**. Under **Advanced permissions**, click **+** and pick the bot's
+   role (it has the same name as the bot)
+3. Set **View Channel** and **Read Message History** to the green check, then save
+
+Don't give the bot **Administrator** to get around this. It works, but then anyone who
+gets hold of the bot's token controls your whole Discord server.
+
 ### 3. Pair some channels
 
 A pairing joins one Haven channel to one Discord channel. Each pairing has two settings:
@@ -1244,6 +1259,7 @@ The Ferry panel shows the connection state and the last error on each pairing.
 | Discord refused the Message Content intent | Turn it on in the Developer Portal, Bot tab |
 | Discord rejected the bot token | Reset the token in the portal and paste the new one |
 | The bot needs "Manage Webhooks" | Give the bot that permission in the Discord channel |
+| Nothing ever arrives from a private Discord channel | Add the bot's role to that channel (see [Private channels](#2-connect-it-to-haven)) |
 | Discord refused the Server Members intent | Turn it on in the portal, or leave DMs off |
 | This pairing joins a forum to a channel that is not a forum | A paired Haven channel was switched to or from a forum. Remove the pairing and pair matching kinds |
 | That Discord forum requires a tag on every post | Add a Haven forum tag named like one of the Discord forum's tags and tag the topic with it |
