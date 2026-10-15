@@ -31,7 +31,7 @@ function moveUploadToDeleted(relPath) {
     fs.renameSync(src, dst);
   } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
 }
-const { isString, isInt, releasableUploads, CHANNEL_NAME_RE } = require('./helpers');
+const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { reachableChannel } = require('./channelAccess');
 
@@ -48,11 +48,8 @@ module.exports = function register(socket, ctx) {
   // threw after the first role and the rest were never granted.
   const applyRoleChannelAccess = (...args) => (typeof ctx.applyRoleChannelAccess === 'function' ? ctx.applyRoleChannelAccess(...args) : undefined);
   const { refuseYoungAccount } = require('./postingWait')(socket, ctx);
-  // New one to one conversations a member may start per hour. A new DM lands
-  // in the other person's list, so without a cap one account could message
-  // every member of a server in minutes. Existing conversations are not
-  // counted, and admins are not limited.
-  const NEW_DMS_PER_HOUR = 20;
+  // New one to one conversations per hour: NEW_DMS_PER_HOUR (helpers.js).
+  // Existing conversations are not counted.
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
