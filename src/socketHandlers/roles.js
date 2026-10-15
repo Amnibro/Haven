@@ -1752,6 +1752,8 @@ module.exports = function register(socket, ctx) {
         for (const [, s] of io.sockets.sockets) {
           if (s.user && s.user.id === userId) {
             s.user.isAdmin = true;
+            // The admin-only live updates (secrets among them) follow the role.
+            s.join('admins');
             s.user.roles = getUserRoles(userId);
             s.user.effectiveLevel = 100;
             s.emit('session-info', {
@@ -1766,6 +1768,7 @@ module.exports = function register(socket, ctx) {
           }
           if (s.user && s.user.id === socket.user.id) {
             s.user.isAdmin = false;
+            s.leave('admins');
             s.user.roles = getUserRoles(socket.user.id);
             s.user.effectiveLevel = getUserEffectiveLevel(socket.user.id);
             s.emit('session-info', {
