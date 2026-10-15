@@ -14,7 +14,7 @@ function fixture() {
   const db = new Database(':memory:');
   db.exec(`
     CREATE TABLE upload_ownership (rel_path TEXT PRIMARY KEY, user_id INTEGER, bytes INTEGER, scope TEXT);
-    CREATE TABLE messages (id INTEGER PRIMARY KEY, content TEXT);
+    CREATE TABLE messages (id INTEGER PRIMARY KEY, content TEXT, is_archived INTEGER DEFAULT 0);
     CREATE TABLE users (id INTEGER PRIMARY KEY, avatar TEXT, border TEXT);
     CREATE TABLE user_personas (id INTEGER PRIMARY KEY, avatar TEXT);
     CREATE TABLE webhooks (id INTEGER PRIMARY KEY, avatar_url TEXT);
@@ -51,4 +51,13 @@ test('someone else\'s file is never released, whoever deletes', () => {
   assert.deepEqual(releasableUploads(db, ['theirs.png'], [1]), []);
   assert.deepEqual(releasableUploads(db, ['theirs.png'], [2]), ['theirs.png']);
   assert.deepEqual(releasableUploads(db, ['theirs.png'], [null, undefined]), []);
+});
+
+test('a protected message keeps its files, even one posted after the deleted message', () => {
+  const db = fixture();
+  const sent = db.prepare('INSERT INTO messages (content) VALUES (?)').run('/uploads/mine.png').lastInsertRowid;
+  db.prepare('INSERT INTO messages (content, is_archived) VALUES (?, 1)').run('evidence /uploads/mine.png');
+  assert.deepEqual(releasableUploads(db, ['mine.png'], [1], { ignoreMessagesAfter: sent }), []);
+  db.prepare('UPDATE messages SET is_archived = 0').run();
+  assert.deepEqual(releasableUploads(db, ['mine.png'], [1], { ignoreMessagesAfter: sent }), ['mine.png']);
 });

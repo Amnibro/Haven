@@ -37,7 +37,7 @@ function setup() {
   db.exec(`
     CREATE TABLE channels (id INTEGER PRIMARY KEY, cleanup_exempt INTEGER DEFAULT 0);
     CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER, content TEXT, e2e_files TEXT,
-      is_archived INTEGER DEFAULT 0, created_at TEXT);
+      is_archived INTEGER DEFAULT 0, thread_id INTEGER, created_at TEXT);
     CREATE TABLE pinned_messages (message_id INTEGER);
     CREATE TABLE reactions (message_id INTEGER, emoji TEXT);
     INSERT INTO channels (id, cleanup_exempt) VALUES (1, 0), (2, 1);
