@@ -85,6 +85,8 @@ I18n.init().then(() => {
 
 // Listen for volume messages from parent (Haven game iframe header)
 window.addEventListener('message', (e) => {
+  // Only the Haven page embedding this game may control it.
+  if (e.origin !== location.origin || window.parent === window || e.source !== window.parent) return;
   if (e.data && e.data.type === 'set-volume' && typeof e.data.volume === 'number') {
     const vol = Math.round(e.data.volume * 100);
     volSlider.value = vol;
