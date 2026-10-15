@@ -133,6 +133,10 @@ test('group DM rules', async (t) => {
   await t.test('a replaced signing key stays on record for the messages it signed', async () => {
     const frank = await register('frank');
     const F = await connect(frank.token);
+    // Apps publish their encryption key as they connect; a signing key is
+    // only replaced from a connection that has.
+    F.emit('publish-public-key', { jwk: jwk('fe') });
+    await next(F, ['public-key-published']);
     F.emit('publish-signing-key', { jwk: jwk('f1') });
     await next(F, ['signing-key-published']);
     F.emit('publish-signing-key', { jwk: jwk('f2'), force: true });

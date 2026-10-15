@@ -15,6 +15,7 @@ const userBlocks = require('../userBlocks');
 
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { CONVERSATION_REFUSAL } = require('../protectedMessages');
+const e2eStale = require('../e2eStale');
 module.exports = function register(socket, ctx) {
   ctx.leaveGroupDm = (code, userId, attachments) => { const ch = groupOf(code); if (ch && isMember(ch.id, userId)) { leaveGroup(ch, userId, attachments); return true; } return false; };
   const { io, db, generateUniqueSharedCode } = ctx;
@@ -153,6 +154,28 @@ module.exports = function register(socket, ctx) {
     }
     const publicJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
     const current = db.prepare('SELECT signing_key FROM users WHERE id = ?').get(socket.user.id);
+    // A device whose encryption key is out of date cannot open the signing
+    // key backup, and older apps answered that by minting a new signing key
+    // and forcing it in: one stale device replaced the account's signing key
+    // for every device, sometimes before it had even published its own key.
+    // So an existing signing key is only replaced, or its backup rewritten,
+    // from a connection that has published the account's current key, and
+    // not at all for a while after a device showed up with an old one (see
+    // src/e2eStale.js), which also stops a first key being set up then. A
+    // client that names the encryption key it holds is judged by that.
+    const pub = db.prepare('SELECT public_key FROM users WHERE id = ?').get(socket.user.id);
+    let pinnedEcdh = null;
+    try { pinnedEcdh = pub && pub.public_key ? JSON.parse(pub.public_key) : null; } catch { /* stored key not JSON: nothing to compare against */ }
+    const claimed = data.ecdh && typeof data.ecdh === 'object' ? data.ecdh : null;
+    const existing = current && current.signing_key ? JSON.parse(current.signing_key) : null;
+    const changes = !existing || existing.x !== publicJwk.x || existing.y !== publicJwk.y || !!backup;
+    const stale = claimed
+      ? !!(pinnedEcdh && (claimed.x !== pinnedEcdh.x || claimed.y !== pinnedEcdh.y))
+      : e2eStale.isStale(socket.user.id) || (!!existing && !socket.e2eKeyProven);
+    if (stale && changes) {
+      console.warn(`[E2E] User ${socket.user.id} tried to replace signing key from a device that has not shown the current key, blocked`);
+      return socket.emit('signing-key-conflict', { existing, rid, stale: true });
+    }
     if (current && current.signing_key && !data.force) {
       const existing = JSON.parse(current.signing_key);
       if (existing.x !== publicJwk.x || existing.y !== publicJwk.y) {
