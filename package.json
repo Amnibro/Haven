@@ -42,5 +42,9 @@
     "esbuild": "^0.28.2",
     "mediasoup-client": "^3.24.1",
     "socket.io-client": "^4.8.1"
+  },
+  "allowScripts": {
+    "better-sqlite3": true,
+    "esbuild": true
   }
 }
