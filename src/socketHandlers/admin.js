@@ -1008,7 +1008,7 @@ module.exports = function register(socket, ctx) {
         ORDER BY w.created_at DESC
       `).all());
       socket.emit('webhooks-list', { webhooks });
-      socket.emit('error-msg', `Webhook "${name}" created for #${channel.name}`);
+      socket.emit('toast', { message: `Webhook "${name}" created for #${channel.name}`, type: 'success' });
     }
   });
 

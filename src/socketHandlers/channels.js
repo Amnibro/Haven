@@ -476,7 +476,7 @@ module.exports = function register(socket, ctx) {
       // A redemption counts on the link itself, so it survives the user (#5562).
       if (use.changes) db.prepare('UPDATE invite_codes SET spent = spent + 1 WHERE id = ?').run(inviteRow.id);
       socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
-      socket.emit('error-msg', `Invite accepted: joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
+      socket.emit('toast', { message: `Invite accepted: joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`, type: 'success' });
       return;
     }
 
@@ -488,7 +488,7 @@ module.exports = function register(socket, ctx) {
     if (isVanity) {
       const joinedCount = _doAutoJoin();
       socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
-      socket.emit('error-msg', `Invite accepted: joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
+      socket.emit('toast', { message: `Invite accepted: joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`, type: 'success' });
       return;
     }
 
@@ -1620,7 +1620,7 @@ module.exports = function register(socket, ctx) {
     try {
       db.prepare('UPDATE channels SET category = ? WHERE id = ?').run(category, channel.id);
       broadcastChannelLists();
-      socket.emit('error-msg', category ? `Category set to "${category}"` : 'Category removed');
+      socket.emit('toast', { message: category ? `Category set to "${category}"` : 'Category removed', type: 'success' });
     } catch (err) {
       console.error('Set category error:', err);
       socket.emit('error-msg', 'Failed to set category');
