@@ -124,8 +124,12 @@ _showMusicSearchResults(data) {
   // Remove any existing search picker
   this._closeMusicSearchPicker();
 
-  const { results, query, offset } = data;
-  if (!results || results.length === 0) {
+  const { query, offset } = data;
+  // A YouTube video id is 11 characters from this set; anything else is dropped.
+  const results = Array.isArray(data.results)
+    ? data.results.filter(r => r && /^[A-Za-z0-9_-]{11}$/.test(r.videoId || ''))
+    : [];
+  if (results.length === 0) {
     this._showToast(offset > 0 ? t('toasts.no_more_results') : t('toasts.no_results_for', { query }), 'error');
     return;
   }
@@ -140,7 +144,7 @@ _showMusicSearchResults(data) {
     </div>
     <div class="music-search-picker-list">
       ${results.map((r, i) => `
-        <div class="music-search-picker-item" data-video-id="${r.videoId}" data-title="${this._escapeHtml(r.title || t('voice_runtime.result', { number: offset + i + 1 }))}">
+        <div class="music-search-picker-item" data-video-id="${this._escapeHtml(r.videoId)}" data-title="${this._escapeHtml(r.title || t('voice_runtime.result', { number: offset + i + 1 }))}">
           <div class="music-search-picker-thumb">
             ${r.thumbnail ? `<img src="${this._escapeHtml(r.thumbnail)}" alt="" loading="lazy">` : '<span>🎵</span>'}
           </div>
@@ -148,7 +152,7 @@ _showMusicSearchResults(data) {
             <div class="music-search-picker-title">${this._escapeHtml(r.title || t('voice_runtime.result', { number: offset + i + 1 }))}</div>
             <div class="music-search-picker-meta">${this._escapeHtml(r.channel)}</div>
           </div>
-          <button class="music-search-picker-play" data-video-id="${r.videoId}" data-title="${this._escapeHtml(r.title || t('voice_runtime.result', { number: offset + i + 1 }))}" title="${t('voice_runtime.play_this')}">▶</button>
+          <button class="music-search-picker-play" data-video-id="${this._escapeHtml(r.videoId)}" data-title="${this._escapeHtml(r.title || t('voice_runtime.result', { number: offset + i + 1 }))}" title="${t('voice_runtime.play_this')}">▶</button>
         </div>
       `).join('')}
     </div>

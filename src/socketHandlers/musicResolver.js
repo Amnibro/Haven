@@ -70,7 +70,7 @@ async function searchYouTube(query, count = 5, offset = 0) {
           if (!items) continue;
           for (const item of items) {
             const vr = item.videoRenderer;
-            if (!vr || !vr.videoId) continue;
+            if (!vr || !/^[A-Za-z0-9_-]{11}$/.test(vr.videoId || '')) continue;
             videos.push({
               videoId: vr.videoId,
               title: vr.title?.runs?.[0]?.text || 'Unknown',
@@ -107,7 +107,7 @@ async function searchYouTube(query, count = 5, offset = 0) {
             if (!items) continue;
             for (const item of items) {
               const vr = item.videoRenderer;
-              if (!vr || !vr.videoId) continue;
+              if (!vr || !/^[A-Za-z0-9_-]{11}$/.test(vr.videoId || '')) continue;
               videos.push({
                 videoId: vr.videoId,
                 title: vr.title?.runs?.[0]?.text || 'Unknown',
