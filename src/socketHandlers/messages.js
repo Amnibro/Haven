@@ -4,9 +4,11 @@ const path = require('path');
 const fs   = require('fs');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
+const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads, looksEncrypted } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
+const selfPurge = require('../selfPurge');
+const userBlocks = require('../userBlocks');
 const { applyTagsToMessage, applyTagsToFiles, fileTags, messageTags, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, extractUploadPaths, effectiveLimits } = require('../uploadTags');
 const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
@@ -27,13 +29,6 @@ const { moveToChannel } = require('../moveMessages');
 // the message box had already cleared (#5691), so ciphertext gets that room.
 function encryptedDmCap(maxChars) {
   return maxChars * 4 + 256;
-}
-function looksEncrypted(content) {
-  if (typeof content !== 'string' || content.charCodeAt(0) !== 123) return false;
-  try {
-    const o = JSON.parse(content);
-    return !!(o && (o.v === 1 || o.v === 2 || (o.v === 3 && Number.isInteger(o.e) && typeof o.sig === 'string')) && typeof o.iv === 'string' && typeof o.ct === 'string');
-  } catch { return false; }
 }
 function isGroupEnvelope(content) {
   return looksEncrypted(content) && JSON.parse(content).v === 3;
@@ -1261,13 +1256,20 @@ module.exports = function register(socket, ctx) {
   // the permission, so the per-role delete-own-messages rule does not apply.
   // Messages a moderator protected stay, the same as the account deletion's
   // scrub. Deleting a message takes its thread along, as a single delete does.
+  // With olderThanDays (1 to 3650) only messages older than that go; the
+  // work itself is shared with Auto-delete my messages (src/selfPurge.js).
+  const purgeMine = (userId, olderThanDays) => selfPurge.purgeOwnMessages({
+    db, io, userId, olderThanDays, uploadPathRe: UPLOAD_PATH_RE, moveUploadToDeleted,
+  });
+  ctx.purgeOwnMessages = purgeMine;
   socket.on('self-purge-messages', async (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
     if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
     const uid = socket.user.id;
-    const allowRow = db.prepare("SELECT value FROM server_settings WHERE key = 'allow_self_purge'").get();
-    if (!allowRow || allowRow.value !== 'true') return cb({ error: 'This server does not allow deleting all your messages at once' });
+    if (!selfPurge.selfPurgeAllowed(db)) return cb({ error: 'This server does not allow deleting all your messages at once' });
     if (socket.user.isGuest) return cb({ error: 'Guest accounts cannot do this' });
+    const olderThanDays = selfPurge.parseOlderThanDays(data.olderThanDays);
+    if (olderThanDays === null) return cb({ error: 'olderThanDays must be a whole number of days from 1 to 3650' });
 
     const password = typeof data.password === 'string' ? data.password : '';
     if (!password) return cb({ error: 'Password is required' });
@@ -1284,45 +1286,15 @@ module.exports = function register(socket, ctx) {
     if (state.selfPurgeInFlight.has(uid)) return cb({ error: 'Already deleting, give it a moment' });
     state.selfPurgeInFlight.add(uid);
     try {
-      const rows = db.prepare(`
-        SELECT m.id, m.content, c.code, c.is_dm
-        FROM messages m JOIN channels c ON c.id = m.channel_id
-        WHERE m.user_id = ? AND ${protectedMessages.deletableSql('m')}
-      `).all(uid);
-      const kept = db.prepare(`SELECT COUNT(*) AS n FROM messages m WHERE m.user_id = ? AND ${protectedMessages.keptSql('m')}`).get(uid).n;
-      if (!rows.length) return cb({ success: true, deleted: 0, kept });
-
-      // Reactions, votes, tags and thread replies follow through the foreign
-      // keys; pins are cleared by hand, the way the bulk delete does it.
-      const delPin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
-      const delMsg = db.prepare('DELETE FROM messages WHERE id = ?');
-      const othersReplies = repliesUnder(rows.map(r => r.id)).filter(r => r.user_id !== uid);
-      db.transaction(() => {
-        for (const r of rows) { delPin.run(r.id); delMsg.run(r.id); }
-      })();
-      releaseReplyUploads(othersReplies);
-
-      const toRelease = [];
-      for (const r of rows) {
-        UPLOAD_PATH_RE.lastIndex = 0;
-        let m;
-        while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) toRelease.push(m[1]);
-      }
-      for (const rel of releasableUploads(db, toRelease, [uid])) moveUploadToDeleted(rel);
-
-      // One event per channel rather than one per message: a person with
-      // years of history would otherwise send thousands of events to every
-      // open client. The client drops that author's rows and reloads the
-      // channel it has open.
-      const codes = new Set(rows.map(r => r.code));
-      for (const code of codes) {
-        io.to(`channel:${code}`).emit('messages-purged', { channelCode: code, userId: uid });
-      }
+      const r = purgeMine(uid, olderThanDays);
+      const result = { success: true, deleted: r.deleted, kept: r.kept };
+      if (r.before) result.before = r.before;
+      if (!r.deleted) return cb(result);
       logAudit({ actor: socket.user, action: 'self_purge_messages',
         target_type: 'user', target_id: uid, target_name: userRow.username,
-        details: { deleted: rows.length, kept, channels: codes.size } });
-      console.log(`🗑️  ${userRow.username} (id: ${uid}) deleted all their messages: ${rows.length} removed, ${kept} protected kept`);
-      cb({ success: true, deleted: rows.length, kept });
+        details: { deleted: r.deleted, kept: r.kept, channels: r.channels, ...(olderThanDays && { days: olderThanDays }) } });
+      console.log(`🗑️  ${userRow.username} (id: ${uid}) deleted ${olderThanDays ? `their messages older than ${olderThanDays} days` : 'all their messages'}: ${r.deleted} removed, ${r.kept} protected kept`);
+      cb(result);
     } catch (err) {
       console.error('Self-purge error:', err);
       cb({ error: 'Failed to delete messages' });
@@ -1418,6 +1390,9 @@ module.exports = function register(socket, ctx) {
     ).get(channel.id, socket.user.id);
     if (!member) return socket.emit('error-msg', 'Not a member of this channel');
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
+    // A 1:1 DM where either side blocked the other takes no messages, from
+    // either of them (src/userBlocks.js).
+    if (userBlocks.dmBlocked(db, channel, socket.user.id)) return socket.emit('error-msg', userBlocks.DM_BLOCKED_ERROR);
 
     // New accounts wait before posting (#5742): messages, forum topics,
     // attachments and DMs alike. A DM with yourself is notes, not a post.
@@ -2190,6 +2165,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8)) return;
     if (data.code !== socket.currentChannel && !typingDmMember.get(socket.user.id, data.code)) return;
+    // userId lets clients hide typing from people they blocked.
     socket.to(`channel:${data.code}`).emit('user-typing', {
       channelCode: data.code,
       userId: socket.user.id,
@@ -2310,6 +2286,7 @@ module.exports = function register(socket, ctx) {
     // A protected message is kept as it was, as a record; editing it would
     // undo that as surely as deleting it.
     if (msg.is_archived) return socket.emit('error-msg', 'This message is protected. Unprotect it first.');
+    if (userBlocks.dmBlocked(db, channel, socket.user.id)) return socket.emit('error-msg', userBlocks.DM_BLOCKED_ERROR);
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'edit_own_messages', channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to edit messages');
     }

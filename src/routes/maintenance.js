@@ -19,6 +19,7 @@ const CLEANABLE = `${protectedMessages.deletableSql('m')} AND m.id NOT IN (SELEC
 const { verifyToken } = require('../auth');
 const { takeTicket } = require('../adminReauth');
 const { getDdnsStatus, triggerDdnsNow } = require('../ddns');
+const selfPurge = require('../selfPurge');
 
 module.exports = function registerMaintenance(deps) {
   const { app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted, verifyAdminFromDb, buildBackupFile, db, late } = deps;
@@ -39,6 +40,19 @@ module.exports = function registerMaintenance(deps) {
           DELETED_ATTACHMENTS_DIR, resolveDeletedRetentionDays(getSetting('deleted_retention_days')));
         if (removed > 0) console.log(`Auto-cleanup: removed ${removed} expired file(s) from deleted-attachments`);
       } catch (e) { console.error('deleted-attachments purge error:', e.message); }
+
+      // Auto-delete my messages: each member who turned it on loses their own
+      // messages older than their setting, the same way deleting them by hand
+      // does (src/selfPurge.js). It runs whether or not the admin's cleanup is
+      // on, and not at all while self-purge is switched off.
+      try {
+        const purge = (userId, days) => selfPurge.purgeOwnMessages({
+          db, io: late.io, userId, olderThanDays: days, uploadPathRe: UPLOAD_PATH_RE,
+          moveUploadToDeleted: (rel) => moveUploadToDeleted(rel, UPLOADS_DIR),
+        });
+        const removed = selfPurge.runAutoDelete({ db, purge, logAudit: late.socketRuntime?.logAudit });
+        if (removed > 0) console.log(`🗑️  Auto-delete: removed ${removed} message(s) members set to expire`);
+      } catch (e) { console.error('Auto-delete error:', e.message); }
 
       const enabled = getSetting('cleanup_enabled');
       if (enabled !== 'true') return;

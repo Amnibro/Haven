@@ -1264,6 +1264,9 @@ app.get('/api/ice-servers', (req, res) => {
 // ── Profile pictures, borders and personas: src/routes/profile.js ──
 require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, uploadDir, upload, uploadLimiter });
 
+// ── Export my data (Settings, Data & privacy): src/routes/dataExport.js ──
+require('./src/routes/dataExport')({ app });
+
 // ── Serve pages ──────────────────────────────────────────
 
 // ── Connection address (any signed-in user) ──────────────
