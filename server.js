@@ -3739,14 +3739,16 @@ server.listen(PORT, HOST, () => {
     }
   } catch { /* leave the placeholder */ }
   const networkLine = `${protocol}://${lanIps[0] || 'YOUR_IP'}:${PORT}`;
+  // Every row is 42 columns inside the box, so the right edge lines up.
+  const row = (label, value) => `║  ${label.padEnd(9)}${String(value).padEnd(31)}║`;
   console.log(`
 ╔══════════════════════════════════════════╗
 ║       🏠  HAVEN is running               ║
 ╠══════════════════════════════════════════╣
-║  Name:    ${(process.env.SERVER_NAME || 'Haven').padEnd(29)}║
-║  Local:   ${protocol}://localhost:${PORT}             ║
-║  Network: ${protocol}://YOUR_IP:${PORT}              ║
-║  Admin:   ${(process.env.ADMIN_USERNAME || 'admin').padEnd(29)}║
+${row('Name:', process.env.SERVER_NAME || 'Haven')}
+${row('Local:', `${protocol}://localhost:${PORT}`)}
+${row('Network:', networkLine)}
+${row('Admin:', process.env.ADMIN_USERNAME || 'admin')}
 ╚══════════════════════════════════════════╝
   `);
   if (lanIps.length > 1) {
