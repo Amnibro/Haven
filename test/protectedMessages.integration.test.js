@@ -98,6 +98,11 @@ test('protected messages survive every delete path', async () => {
   A.emit('delete-message', { messageId: bobKept, channelCode: ev.code });
   assert.ok(await refused, 'the admin is told it is protected');
   assert.ok(row(bobKept), 'still there after the author and admin tried');
+  // Nor can the author rewrite or blank it.
+  refused = h.next(B, 'error-msg', (m) => m === REFUSAL);
+  B.emit('edit-message', { messageId: bobKept, channelCode: ev.code, content: 'rewritten' });
+  assert.ok(await refused, 'an edit is refused too');
+  assert.strictEqual(row(bobKept).content, 'bob: kept', 'the text is unchanged');
 
   // A single delete of an unprotected message still works.
   const deleted = h.next(A, 'message-deleted', (d) => d && d.messageId === bobGone);

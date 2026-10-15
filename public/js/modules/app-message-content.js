@@ -966,6 +966,11 @@ _quoteMessage(msgEl) {
 _startEditMessage(msgEl, msgId) {
   // Guard against re-entering edit mode
   if (msgEl.classList.contains('editing')) return;
+  // A protected message is kept as it is; the server refuses the edit too.
+  if (msgEl.dataset.archived === '1' || msgEl.classList.contains('archived')) {
+    this._showToast?.(t('app.messages.protected_no_edit'), 'error');
+    return;
+  }
 
   const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
   if (!contentEl) return;

@@ -2060,13 +2060,16 @@ module.exports = function register(socket, ctx) {
     }
 
     const msg = db.prepare(
-      'SELECT id, user_id FROM messages WHERE id = ? AND channel_id = ?'
+      'SELECT id, user_id, is_archived FROM messages WHERE id = ? AND channel_id = ?'
     ).get(data.messageId, channel.id);
     if (!msg) return;
 
     if (msg.user_id !== socket.user.id) {
       return socket.emit('error-msg', 'You can only edit your own messages');
     }
+    // A protected message is kept as it was, as a record; editing it would
+    // undo that as surely as deleting it.
+    if (msg.is_archived) return socket.emit('error-msg', 'This message is protected. Unprotect it first.');
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'edit_own_messages', channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to edit messages');
     }

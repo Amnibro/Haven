@@ -351,6 +351,9 @@ module.exports = function register(socket, ctx) {
     const content = custom || roleMenuContent(row.title, parsed.entries);
     const editRefusal = menuPostRefusal(row.channel_id, content);
     if (editRefusal) return cb({ error: editRefusal });
+    if (db.prepare('SELECT is_archived FROM messages WHERE id = ?').get(row.message_id)?.is_archived) {
+      return cb({ error: 'This message is protected. Unprotect it first.' });
+    }
     const before = readRoleMenu(row).map(r => r.emoji);
     const after = parsed.entries.map(e => e.emoji);
     try {

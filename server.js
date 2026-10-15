@@ -3539,7 +3539,7 @@ initFerry({
   editHavenMessage: ({ havenMessageId, channelCode, content }) => {
     try {
       const info = db.prepare(
-        "UPDATE messages SET content = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ? AND is_webhook = 1"
+        "UPDATE messages SET content = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ? AND is_webhook = 1 AND is_archived = 0"
       ).run(content, havenMessageId);
       if (!info.changes) return;
 

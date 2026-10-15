@@ -427,7 +427,7 @@ _showMessageContextMenu(e, msgEl) {
     items.push('<hr class="channel-ctx-sep">');
   }
   // First group (as originally defined)
-  if (isOwn) items.push(`<button class="channel-ctx-item" data-action="edit">✏️ <span>${t('msg_toolbar.edit')}</span></button>`);
+  if (isOwn && !isArchived) items.push(`<button class="channel-ctx-item" data-action="edit">✏️ <span>${t('msg_toolbar.edit')}</span></button>`);
   items.push(`<button class="channel-ctx-item" data-action="reply">↩️ <span>${t('msg_toolbar.reply')}</span></button>`);
   items.push(`<button class="channel-ctx-item" data-action="quote">💬 <span>${t('msg_toolbar.quote')}</span></button>`);
   if (canPin) {
