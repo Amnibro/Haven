@@ -474,7 +474,7 @@ class HavenApp {
 
   async _loadBotCommands() {
     try {
-      const res = await fetch('/api/bot-commands');
+      const res = await fetch('/api/bot-commands', { headers: { 'Authorization': `Bearer ${this.token}` } });
       if (!res.ok) return;
       const data = await res.json();
       if (!data.commands || !data.commands.length) return;
