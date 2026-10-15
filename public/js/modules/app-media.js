@@ -196,6 +196,7 @@ _lightboxShow(imgEl, fallbackSrc = '') {
   const lbImg = document.getElementById('lightbox-img');
   if (!lbImg) return;
   const seq = (this._lightboxSeq = (this._lightboxSeq || 0) + 1);
+  this._imageZoomReset?.();
   if (this._lightboxBlobUrl) {
     try { URL.revokeObjectURL(this._lightboxBlobUrl); } catch { /* already gone */ }
     this._lightboxBlobUrl = null;
@@ -258,6 +259,7 @@ _closeLightbox() {
     this._lightboxBlobUrl = null;
   }
   this._lightboxIndex = -1;
+  this._imageZoomReset?.();
   this._hideImageContextMenu();
 },
 

@@ -1,0 +1,19 @@
+/* Zoom and pan in the image lightbox (app-image-zoom.js). Loaded by style.css
+   right after the lightbox's own rules in style-profile-servers-modals.css. */
+
+/* The lightbox handles pinch and drag itself; the page must not zoom or
+   scroll under them. */
+.image-lightbox { touch-action: none; }
+
+.lightbox-img {
+  transform-origin: 50% 50%;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+.lightbox-img.lightbox-img-animate { transition: transform 0.15s ease-out; }
+html.reduce-motion .lightbox-img.lightbox-img-animate { transition: none; }
+
+.image-lightbox.is-zoomed .lightbox-img { cursor: grab; }
+.image-lightbox.is-panning,
+.image-lightbox.is-panning .lightbox-img { cursor: grabbing; }
