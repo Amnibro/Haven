@@ -138,6 +138,7 @@ module.exports = function register(socket, ctx) {
     // Taking a role needs the poster to still be able to give it. Letting go
     // of one is always allowed.
     if (held && roleGrantRefusal(entry.id, row.created_by)) return;
+    if (held && row.created_by === sock.user.id && !sock.user.isAdmin) return;
     if (setSelfRole(sock.user.id, entry.id, held, row.created_by)) {
       notifySelfRole(sock.user.id, messageId, entry.id, held);
       auditSelfRole(sock.user, entry.id, held, messageId);
@@ -185,8 +186,16 @@ module.exports = function register(socket, ctx) {
       LIMIT 1
     `).get(roleId, granterId);
     if (outside) return `${role.name} opens channels you are not in`;
+    // Holding a role also makes you a member of every channel gated on it.
+    for (const ch of db.prepare('SELECT id, role_gate FROM channels WHERE role_gate IS NOT NULL AND is_dm = 0').all()) {
+      const gate = ctx.parseRoleGate(ch.role_gate);
+      if (!gate || !gate.roles.includes(roleId)) continue;
+      const inIt = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(ch.id, granterId);
+      if (!inIt || !ctx.roleGateAllows(granterId, ch)) return `${role.name} opens channels you are not in`;
+    }
     return null;
   }
+  ctx.roleGrantRefusal = (roleId) => roleGrantRefusal(roleId);
   // The highest level anyone holds a role at, per-person custom levels
   // included. Editing or deleting the role changes things for that person.
   function roleTopHolderLevel(roleId) {
@@ -377,6 +386,9 @@ module.exports = function register(socket, ctx) {
     const has = !!db.prepare('SELECT 1 FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').get(socket.user.id, roleId);
     const held = data.held === undefined ? !has : !!data.held;
     if (held && roleGrantRefusal(roleId, row.created_by)) return cb({ error: 'This menu can no longer hand out that role' });
+    // Nobody hands themselves a role from their own menu, as assign-role
+    // refuses changing your own roles.
+    if (held && row.created_by === socket.user.id && !socket.user.isAdmin) return cb({ error: 'You can\'t take a role from your own menu' });
     if (setSelfRole(socket.user.id, roleId, held, row.created_by)) auditSelfRole(socket.user, roleId, held, messageId);
     // Mirror the state onto the reaction chip so both paths agree.
     if (held) db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)').run(messageId, socket.user.id, entry.emoji);
