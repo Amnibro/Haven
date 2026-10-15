@@ -1401,14 +1401,16 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // The endpoint is whatever URL the subscribing browser sent, so every send
-  // looks the name up again, refuses a private or blocked address, and
-  // connects to exactly the address it checked. A name that later moves to an
-  // internal address gets nothing. A push service that never answers must not
-  // hold a queue slot forever, or a handful of them would stop every
-  // notification, so the lookup and the send each have a deadline.
+  // looks the name up again, refuses a private or blocked address (private
+  // ones are allowed with HAVEN_ALLOW_PRIVATE_CALLBACKS, as at subscribe
+  // time, for a self-hosted ntfy), and connects to exactly the address it
+  // checked. A name that later moves to an internal address gets nothing.
+  // A push service that never answers must not hold a queue slot forever,
+  // or a handful of them would stop every notification, so the lookup and
+  // the send each have a deadline.
   async function sendOnePush(job) {
     const destination = await withDeadline(
-      resolveCallbackDestination(job.sub.endpoint, { allowPrivateCallbacks: false }),
+      resolveCallbackDestination(job.sub.endpoint, { allowPrivateCallbacks: process.env.HAVEN_ALLOW_PRIVATE_CALLBACKS === 'true' }),
       Date.now() + 10000,
       'Push endpoint lookup timed out'
     );
