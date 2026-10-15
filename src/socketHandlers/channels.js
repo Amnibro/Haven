@@ -100,9 +100,17 @@ module.exports = function register(socket, ctx) {
   // being edited: a channel-scoped assignment stays inside that channel and
   // its sub-channels (via the role chain), while a server-wide one applies
   // everywhere as before.
-  const _canManageSettingsOf = (channelId) =>
-    socket.user.isAdmin ||
-    userHasPermission(socket.user.id, 'manage_channel_settings', channelId);
+  // Server-wide permission is not a reach into every channel: someone who is
+  // not the admin changes settings only of channels they are in, through
+  // their gate. Without that, a Mod could put a deletion timer on, or open
+  // up, a private channel they could not even see.
+  const _canManageSettingsOf = (channelId) => {
+    if (socket.user.isAdmin) return true;
+    if (!userHasPermission(socket.user.id, 'manage_channel_settings', channelId)) return false;
+    const ch = db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId);
+    if (!ch || !db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
+    return ctx.roleGateAllows(socket.user.id, ch);
+  };
 
   // (#5492) Authority over ONE END of a move. Nesting a channel under a parent
   // adds a child to that parent's structure, so it needs authority over that
@@ -241,7 +249,7 @@ module.exports = function register(socket, ctx) {
       // Optional: bulk-add every existing user to the new channel.
       // Lets admins approximate Discord-style "everyone is in every channel"
       // when a server uses the server-wide invite code. (#5271)
-      if (data.addAllMembers && !isPrivate) {
+      if (data.addAllMembers && !isPrivate && socket.user.isAdmin) {
         try {
           const allUsers = db.prepare('SELECT id FROM users').all();
           const insertMember = db.prepare(
@@ -289,7 +297,7 @@ module.exports = function register(socket, ctx) {
 
       // If we mass-added every user, push the new channel to all currently
       // connected sockets so it appears for them without a refresh. (#5271)
-      if (data.addAllMembers && !isPrivate) {
+      if (data.addAllMembers && !isPrivate && socket.user.isAdmin) {
         for (const [, s] of io.sockets.sockets) {
           if (!s.user || s.user.isBot || s.user.id === socket.user.id) continue;
           s.join(`channel:${code}`);
@@ -535,6 +543,10 @@ module.exports = function register(socket, ctx) {
     // join below would hand them membership, unlocking its history and the
     // ability to post. Only gate NEW joins; existing members re-emit
     // join-channel to refresh (e.g. after a message move) and must still pass.
+    // A private channel is joined by being added to it, never by its code.
+    if (!membership && !socket.user.isAdmin && !channel.parent_channel_id && channel.is_private && channel.created_by !== socket.user.id) {
+      return socket.emit('error-msg', 'Invalid channel code. Double-check it');
+    }
     if (!membership && !socket.user.isAdmin && channel.parent_channel_id) {
       const isPrivateSub = channel.is_private || channel.code_visibility === 'private';
       const parentMember = db.prepare(
@@ -1219,6 +1231,10 @@ module.exports = function register(socket, ctx) {
         if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) {
           return socket.emit('error-msg', 'Channel not found');
         }
+        // Everyone in the channel gets it, the setter too, so it may carry
+        // nothing the setter could not hand out themselves.
+        const refusal = typeof ctx.roleGrantRefusal === 'function' ? ctx.roleGrantRefusal(role.id) : 'Roles are not ready yet';
+        if (refusal) return socket.emit('error-msg', refusal);
       }
       roleId = role.id;
     }
@@ -1344,6 +1360,14 @@ module.exports = function register(socket, ctx) {
     // as the legacy 'delete' behaviour so unknown values fail closed
     // toward the original semantics.
     const mode = data.mode === 'clear' ? 'clear' : 'delete';
+    // A timer that deletes the channel is deleting it: it takes the delete
+    // permission, and a channel exempt from cleanup is the admin's to time.
+    if (data.hours && data.hours > 0 && mode === 'delete' && !socket.user.isAdmin) {
+      if (!userHasPermission(socket.user.id, 'delete_channel', channel.id)) return socket.emit('error-msg', 'You don\'t have permission to delete this channel');
+      if (db.prepare('SELECT cleanup_exempt FROM channels WHERE id = ?').get(channel.id)?.cleanup_exempt) {
+        return socket.emit('error-msg', 'This channel is exempt from cleanup. Only the admin can set a deletion timer on it.');
+      }
+    }
     let expiresAt = null;
     let intervalHours = null;
     if (data.hours && data.hours > 0) {
@@ -1379,6 +1403,11 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT id, code FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return cb({ error: 'Channel not found' });
     if (!_canManageSettingsOf(channel.id)) return cb({ error: 'You don\'t have permission to change who can open this channel' });
+    // A gate makes everyone who passes it a member. On a private channel that
+    // is inviting people in, which is the admin's call.
+    if (!socket.user.isAdmin && db.prepare('SELECT is_private FROM channels WHERE id = ?').get(channel.id)?.is_private) {
+      return cb({ error: 'Only the admin can change who can open a private channel' });
+    }
     const gate = ctx.parseRoleGate({ mode: data.mode, roles: Array.isArray(data.roles) ? data.roles.slice(0, 50) : [] });
     if (gate) {
       const ph = gate.roles.map(() => '?').join(',');
@@ -1644,7 +1673,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return;
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'set_channel_topic', channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to set channel topics');
@@ -1796,8 +1825,13 @@ module.exports = function register(socket, ctx) {
     const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ?').all(channelId);
     const delSub = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
     subs.forEach(s => delSub.run(s.id, targetUserId));
+    // Roles held in that channel go with the membership; kept, a removed
+    // Channel Mod could still act there.
+    const delScoped = db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?');
+    [channelId, ...subs.map(s => s.id)].forEach(id => delScoped.run(targetUserId, id));
     const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === targetUserId);
     for (const ts of targetSockets) {
+      if (ts.currentChannel === channel.code || subs.some(sub => sub.code === ts.currentChannel)) ts.currentChannel = null;
       ts.leave(`channel:${channel.code}`);
       subs.forEach(sub => ts.leave(`channel:${sub.code}`));
       ts.emit('channels-list', getEnrichedChannels(targetUserId, ts.user.isAdmin, (room) => ts.join(room)));

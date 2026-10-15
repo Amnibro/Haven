@@ -247,13 +247,14 @@ module.exports = function register(socket, ctx) {
     const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 10) : [];
     const tagMode = data.tagMode === 'all' ? 'all' : 'some';
 
-    const channel = db.prepare('SELECT id, is_forum, role_gate, forum_blog FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_forum, role_gate, forum_blog, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
-    if (!member && !socket.user.isAdmin) return socket.emit('error-msg', 'Not a member of this channel');
+    // Being the admin is no key to other people's DMs.
+    if (!member && (!socket.user.isAdmin || channel.is_dm)) return socket.emit('error-msg', 'Not a member of this channel');
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
 
     let messages;
@@ -750,11 +751,11 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = hasChannelAccess(channel.id);
-    if (!member && !socket.user.isAdmin) {
+    if (!member && (!socket.user.isAdmin || channel.is_dm)) {
       return socket.emit('error-msg', 'Not a member of this channel');
     }
 
@@ -922,11 +923,11 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = hasChannelAccess(channel.id);
-    if (!member && !socket.user.isAdmin) {
+    if (!member && (!socket.user.isAdmin || channel.is_dm)) {
       return socket.emit('error-msg', 'Not a member of this channel');
     }
 

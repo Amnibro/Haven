@@ -101,6 +101,16 @@ module.exports = function register(socket, ctx) {
     if (data.userId === socket.user.id) {
       return socket.emit('error-msg', 'You can\'t kick yourself');
     }
+    // A one to one DM belongs to its two people: nobody kicks from it. A
+    // moderator who is not the admin kicks only from a channel they are in.
+    if (kickCh) {
+      const kc = db.prepare('SELECT is_dm, is_group, role_gate FROM channels WHERE id = ?').get(kickCh.id);
+      if (kc && kc.is_dm && !kc.is_group) return socket.emit('error-msg', 'You can\'t kick someone from a DM');
+      if (!socket.user.isAdmin && (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(kickCh.id, socket.user.id)
+          || (kc && !kc.is_dm && !ctx.roleGateAllows(socket.user.id, { id: kickCh.id, role_gate: kc.role_gate })))) {
+        return socket.emit('error-msg', 'You can only kick from a channel you are in');
+      }
+    }
 
     if (!socket.user.isAdmin) {
       const myLevel = getUserEffectiveLevel(socket.user.id, kickCh ? kickCh.id : null);
@@ -145,6 +155,9 @@ module.exports = function register(socket, ctx) {
         const subs = db.prepare('SELECT id FROM channels WHERE parent_channel_id = ?').all(kickCh.id);
         const delSub = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
         subs.forEach(s => delSub.run(s.id, data.userId));
+        // Roles they held in that channel go too.
+        const delScoped = db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?');
+        [kickCh.id, ...subs.map(s => s.id)].forEach(id => delScoped.run(data.userId, id));
       }
 
       if (targetInfo) {
@@ -152,6 +165,7 @@ module.exports = function register(socket, ctx) {
       }
 
       for (const ts of targetSockets) {
+        if (ts.currentChannel === code) ts.currentChannel = null;
         ts.leave(`channel:${code}`);
         if (kickCh) {
           const subs = db.prepare('SELECT code FROM channels WHERE parent_channel_id = ?').all(kickCh.id);
