@@ -534,6 +534,23 @@ class ServerManager {
     catch { return null; } // an unparsable address is never matched as a duplicate
   }
 
+  /** True when url is served from the same origin as the server at serverUrl. */
+  _sameOrigin(url, serverUrl) {
+    try { return new URL(url).origin === new URL(this._normalizeUrl(serverUrl)).origin; }
+    catch { return false; } // an unparsable address never counts as the server's own
+  }
+
+  /** The icon to load for a server: one the user chose, or one the server
+   *  serves itself. An icon a server points at on another host is not
+   *  loaded, so a listed server cannot make the page fetch from anywhere;
+   *  the initial letter shows instead. */
+  iconFor(server) {
+    if (!server) return null;
+    if (server.customIcon && server.icon) return server.icon;
+    const icon = server.icon || (server.status && server.status.icon) || null;
+    return icon && this._sameOrigin(icon, server.url) ? icon : null;
+  }
+
   /** True for this server itself, by address or by fingerprint. */
   isSelf(server, currentOrigin) {
     if (this.selfFingerprint && server.status && server.status.fingerprint === this.selfFingerprint) return true;
@@ -590,7 +607,13 @@ class ServerManager {
 
       if (res.ok) {
         const data = await res.json();
-        const discoveredIcon = data.icon ? new URL(data.icon, `${healthBase}/`).toString() : null;
+        // Only an icon the server serves itself is kept (see iconFor).
+        let discoveredIcon = null;
+        if (data.icon) {
+          try { discoveredIcon = new URL(data.icon, `${healthBase}/`).toString(); }
+          catch { discoveredIcon = null; } // a malformed icon path just means no icon
+          if (discoveredIcon && !this._sameOrigin(discoveredIcon, healthBase)) discoveredIcon = null;
+        }
         this.statusCache.set(normalizedUrl, {
           online: true,
           name: data.name || normalizedUrl,

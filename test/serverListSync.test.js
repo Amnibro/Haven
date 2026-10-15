@@ -125,7 +125,7 @@ function fakeFetch(origin, health) {
       // The page's own server always answers.
       const info = health[base] || (base === origin ? { name: 'Self', fingerprint: 'self:' + origin } : null);
       if (!info) throw new Error('offline');
-      return { ok: true, json: async () => ({ status: 'online', name: info.name, icon: null, fingerprint: info.fingerprint }) };
+      return { ok: true, json: async () => ({ status: 'online', name: info.name, icon: info.icon || null, fingerprint: info.fingerprint }) };
     }
     throw new Error('unexpected fetch ' + full);
   };
@@ -556,4 +556,18 @@ test('the server bar uses the shared list and reports what Sync did', () => {
   assert.doesNotMatch(bar, /servers\.sync_success/);
   const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
   for (const key of ['sync_up_to_date', 'sync_updated', 'same_server_as']) assert.ok(en.servers[key], key);
+});
+
+test('a server icon loads only from that server, or from where the user chose', async () => {
+  const health = {
+    [X]: { name: 'LIT', fingerprint: 'fx', icon: 'https://tracker.example.net/pixel.png' },
+    [Y]: { name: 'Why', fingerprint: 'fy', icon: '/uploads/icon.png' },
+  };
+  const page = openPage(B, { storage: storageWith([X, Y, Z]), health });
+  await page.manager.checkAll();
+  const byUrl = new Map(page.manager.getAll().map(s => [s.url, s]));
+  assert.equal(page.manager.iconFor(byUrl.get(X)), null);
+  assert.equal(page.manager.iconFor(byUrl.get(Y)), 'https://y.example.com/uploads/icon.png');
+  assert.equal(page.manager.iconFor({ url: Z, icon: 'https://cdn.example.org/z.png', status: {} }), null);
+  assert.equal(page.manager.iconFor({ url: Z, icon: 'https://cdn.example.org/z.png', customIcon: true, status: {} }), 'https://cdn.example.org/z.png');
 });
