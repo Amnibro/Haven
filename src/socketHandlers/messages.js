@@ -60,6 +60,30 @@ module.exports = function register(socket, ctx) {
     return stripRoleMentions(out, db.prepare('SELECT name FROM roles').all().map(r => r.name));
   }
 
+  // Slow mode for posts other than send-message (thread replies, polls),
+  // sharing its clock. Returns the refusal text, or null and counts the post.
+  function slowModeRefusal(channelId) {
+    if (socket.user.isAdmin) return null;
+    const row = db.prepare('SELECT slow_mode_interval FROM channels WHERE id = ?').get(channelId);
+    if (!row || !(row.slow_mode_interval > 0)) return null;
+    if (getUserEffectiveLevel(socket.user.id, channelId) >= 25) return null;
+    const key = `slow:${socket.user.id}:${channelId}`;
+    const now = Date.now();
+    const waitMs = row.slow_mode_interval * 1000;
+    const last = slowModeTracker.get(key) || 0;
+    if (now - last < waitMs) return `Slow mode: wait ${Math.ceil((waitMs - (now - last)) / 1000)}s before sending another message`;
+    slowModeTracker.set(key, now);
+    return null;
+  }
+
+  // In a DM only its members; elsewhere the admin, or someone the gate lets in.
+  function canTouchChannel(channelId) {
+    const ch = db.prepare('SELECT is_dm FROM channels WHERE id = ?').get(channelId);
+    if (!ch) return false;
+    if (socket.user.isAdmin && !ch.is_dm) return true;
+    return hasChannelAccess(channelId);
+  }
+
   function hasChannelAccess(channelId) {
     if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
     if (socket.user.isAdmin) return true;
@@ -2258,6 +2282,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // currentChannel is where the person last was, not proof they still
+    // reach it: a gate, a role or going private can have taken it away.
+    if (!canTouchChannel(channel.id)) return;
 
     const msg = db.prepare(
       'SELECT id, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
@@ -2313,6 +2340,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // currentChannel is where the person last was, not proof they still
+    // reach it: a gate, a role or going private can have taken it away.
+    if (!canTouchChannel(channel.id)) return;
 
     const pin = db.prepare(
       'SELECT id FROM pinned_messages WHERE message_id = ? AND channel_id = ?'
@@ -2348,6 +2378,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // currentChannel is where the person last was, not proof they still
+    // reach it: a gate, a role or going private can have taken it away.
+    if (!canTouchChannel(channel.id)) return;
 
     const msg = db.prepare('SELECT id, is_archived, destruct_at FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
     if (!msg) return socket.emit('error-msg', 'Message not found');
@@ -2385,6 +2418,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // currentChannel is where the person last was, not proof they still
+    // reach it: a gate, a role or going private can have taken it away.
+    if (!canTouchChannel(channel.id)) return;
 
     const msg = db.prepare('SELECT id, is_archived FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
     if (!msg) return socket.emit('error-msg', 'Message not found');
@@ -2473,9 +2509,10 @@ module.exports = function register(socket, ctx) {
         if (reactMute) return socket.emit('error-msg', reactMute);
       }
 
-      // Verify membership of the channel the message lives in.
+      // Verify membership of the channel the message lives in. Being the
+      // admin is no key to other people's DMs.
       const member = hasChannelAccess(msg.channel_id);
-      if (!member && !socket.user.isAdmin) return;
+      if (!member && (!socket.user.isAdmin || msg.is_dm)) return;
       if (msg.reactions_enabled === 0) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
@@ -2516,13 +2553,13 @@ module.exports = function register(socket, ctx) {
 
       // Look up the channel from the message (see add-reaction comment).
       const msgRow = db.prepare(
-        'SELECT m.id, c.code, c.id as channel_id, c.reactions_enabled FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+        'SELECT m.id, c.code, c.id as channel_id, c.is_dm, c.reactions_enabled FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
       ).get(data.messageId);
       if (!msgRow) return;
       const code = msgRow.code;
 
       const member = hasChannelAccess(msgRow.channel_id);
-      if (!member && !socket.user.isAdmin) return;
+      if (!member && (!socket.user.isAdmin || msgRow.is_dm)) return;
       if (msgRow.reactions_enabled === 0) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
@@ -2599,6 +2636,8 @@ module.exports = function register(socket, ctx) {
       }
       if (refuseYoungAccount(channel.id)) return;
       if (enforceAutomod([question, ...cleanOptions].join('\n'), { surface: 'message', channelId: channel.id })) return;
+      const pollSlow = slowModeRefusal(channel.id);
+      if (pollSlow) return socket.emit('error-msg', pollSlow);
       for (let i = 0; i < cleanOptions.length; i++) cleanOptions[i] = pingSafe(cleanOptions[i], socket.user.id, channel.id);
 
       const safeQuestion = sanitizeText(pingSafe(question, socket.user.id, channel.id));
@@ -3055,14 +3094,24 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', `You are in a timeout for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
     }
 
-    const tChannelRow = db.prepare('SELECT read_only FROM channels WHERE id = ?').get(channel.id);
+    const tChannelRow = db.prepare('SELECT read_only, text_enabled, media_enabled FROM channels WHERE id = ?').get(channel.id);
     if (tChannelRow && tChannelRow.read_only === 1 && !socket.user.isAdmin &&
         !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
       return socket.emit('error-msg', 'This channel is read-only');
     }
+    // The channel's text and media switches, as send-message applies them.
+    const tIsMedia = /^(?:spoiler-img:)?\/uploads\b/i.test(content) || /^\[file:[^\]]+\]\(/i.test(content);
+    if (tChannelRow && tChannelRow.text_enabled === 0 && (!tIsMedia || tChannelRow.media_enabled === 0)) {
+      return socket.emit('error-msg', 'Text messages are disabled in this channel');
+    }
+    if (tChannelRow && tChannelRow.media_enabled === 0 && tIsMedia && !socket.user.isAdmin) {
+      return socket.emit('error-msg', 'Media uploads are disabled in this channel');
+    }
 
     if (refuseYoungAccount(channel.id)) return;
     if (enforceAutomod(content, { surface: 'message', channelId: channel.id, markdown: true })) return;
+    const tSlow = slowModeRefusal(channel.id);
+    if (tSlow) return socket.emit('error-msg', tSlow);
 
     const safeContent = sanitizeText(pingSafe(content, socket.user.id, channel.id));
     if (!safeContent) return;

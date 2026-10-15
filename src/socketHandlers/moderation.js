@@ -165,6 +165,11 @@ module.exports = function register(socket, ctx) {
         io.to(targetInfo.socketId).emit('kicked', { channelCode: code, reason: kickReason });
       }
 
+      // Out of the call as well as the chat, before the code rotates below:
+      // someone still in the voice room would be handed the new code.
+      const subCodes = kickCh ? db.prepare('SELECT code FROM channels WHERE parent_channel_id = ?').all(kickCh.id).map(r => r.code) : [];
+      ctx.liveAccess?.cutOff(data.userId, [code, ...subCodes], 'You were kicked from this channel');
+
       for (const ts of targetSockets) {
         if (ts.currentChannel === code) ts.currentChannel = null;
         ts.leave(`channel:${code}`);
@@ -201,8 +206,8 @@ module.exports = function register(socket, ctx) {
         db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE channel_id = ? AND is_archived = 0)').run(data.userId, kickCh.id);
         db.prepare('DELETE FROM messages WHERE user_id = ? AND channel_id = ? AND is_archived = 0').run(data.userId, kickCh.id);
       } else if (scrubScope === 'server') {
-        db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)').run(data.userId, data.userId);
-        db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0').run(data.userId);
+        db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0))').run(data.userId, data.userId);
+        db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0)').run(data.userId);
       }
     }
 
@@ -286,9 +291,11 @@ module.exports = function register(socket, ctx) {
       console.warn('[ban] member list refresh failed:', err.message);
     }
 
+    // A ban clears what they said in the server's channels. Their DMs and
+    // group DMs belong to the people they talked with, and stay.
     if (data.scrubMessages) {
-      db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)').run(data.userId, data.userId);
-      db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0').run(data.userId);
+      db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0))').run(data.userId, data.userId);
+      db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0)').run(data.userId);
     } else if (data.purgeMessages) {
       // Replace the user's messages with a placeholder rather than deleting
       // them. Useful when admins want a visible "this user was banned"
@@ -300,19 +307,19 @@ module.exports = function register(socket, ctx) {
       const affectedChannels = db.prepare(
         `SELECT DISTINCT c.code FROM messages m
          JOIN channels c ON c.id = m.channel_id
-         WHERE m.user_id = ? AND m.is_archived = 0`
+         WHERE m.user_id = ? AND m.is_archived = 0 AND c.is_dm = 0`
       ).all(data.userId).map(r => r.code);
       // Drop reactions tied to the purged messages (they no longer make sense
       // with the placeholder body).
       db.prepare(
-        'DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)'
+        'DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0))'
       ).run(data.userId);
       // Replace content + clear file metadata so attachments aren't shown.
       // edited_at gets set so the "edited" tag conveys the change.
       db.prepare(
         `UPDATE messages
          SET content = ?, original_name = NULL, edited_at = datetime('now')
-         WHERE user_id = ? AND is_archived = 0`
+         WHERE user_id = ? AND is_archived = 0 AND channel_id IN (SELECT id FROM channels WHERE is_dm = 0)`
       ).run(placeholder, data.userId);
       for (const ccode of affectedChannels) {
         io.to(`channel:${ccode}`).emit('user-messages-purged', {

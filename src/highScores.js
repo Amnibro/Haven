@@ -8,6 +8,15 @@ const MAX_SCORE_BY_GAME = {
   flappy: 100_000,
 };
 
+// The games that report scores: the Activities games (src/activity.js,
+// HAVEN_GAMES). Any other id would only add rows nobody can see.
+const KNOWN_GAMES = new Set([
+  'flappy', 'flight', 'learn-to-fly-3', 'bubble-tanks-3', 'tanks', 'super-smash-flash-2', 'io-games',
+]);
+function isKnownGame(game) {
+  return typeof game === 'string' && KNOWN_GAMES.has(game);
+}
+
 // The score to store, or null when it is not one.
 function validHighScore(game, score) {
   if (!Number.isSafeInteger(score) || score < 0) return null;
@@ -15,4 +24,4 @@ function validHighScore(game, score) {
   return score <= max ? score : null;
 }
 
-module.exports = { validHighScore, DEFAULT_MAX_SCORE, MAX_SCORE_BY_GAME };
+module.exports = { validHighScore, isKnownGame, KNOWN_GAMES, DEFAULT_MAX_SCORE, MAX_SCORE_BY_GAME };

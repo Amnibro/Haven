@@ -15,6 +15,8 @@
  *            in is paired with, and a live Discord user lookup for DMs.
  */
 
+const { reachableChannel } = require('./channelAccess');
+
 const SNOWFLAKE = /^[0-9]{15,25}$/;
 const DIRECTIONS = new Set(['both', 'to_discord', 'to_haven']);
 const OUT_MODES = new Set(['all', 'command']);
@@ -326,9 +328,8 @@ module.exports = function register(socket, ctx) {
 
     // Membership matters here as much as the permission: the target list names
     // the Discord servers an admin paired, which is not public information.
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?')
-      .get(channel.id, socket.user.id);
-    if (!member) return;
+    // The channel's role gate counts as it does for reading the channel.
+    if (!reachableChannel(ctx, socket.user, channel.id)) return;
 
     const targets = db.prepare(`
       SELECT id, guild_id, guild_name, discord_channel_id, discord_channel_name, out_mode
@@ -358,9 +359,7 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return;
     if (!canUseFerry(channel.id)) return;
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?')
-      .get(channel.id, socket.user.id);
-    if (!member) return;
+    if (!reachableChannel(ctx, socket.user, channel.id)) return;
 
     // Checked after the cheap gates so a rejected caller does not consume
     // budget, and before any Discord call so a flood cannot reach the API.

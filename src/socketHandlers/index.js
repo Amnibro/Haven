@@ -74,6 +74,7 @@ const { quietRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const forumUnread = require('../forumUnread');
 const registerForumVotes = require('./forumVotes');
+const createLiveAccess = require('./liveAccess');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
 // Some failures would repeat on every timer tick, connection or message.
@@ -241,6 +242,8 @@ function setupSocketHandlers(io, db, opts = {}) {
   }, 5000).unref?.();
 
   const dmCalls = createDmCalls({ io, db, voiceUsers, sendPushNotifications });
+  // Taking people out of a channel's rooms and voice call when they lose it.
+  const liveAccess = createLiveAccess({ io, state, handleVoiceLeave });
 
   // ── Rich presence ───────────────────────────────────────
   // Owns the in-memory "what is this user doing" map and the Steam/Spotify
@@ -524,6 +527,8 @@ function setupSocketHandlers(io, db, opts = {}) {
       `).all(userId);
 
       // Self-heal legacy accounts that somehow ended up with zero memberships.
+      // Never into a channel whose code is hidden: that is how someone kicked
+      // from their only channel was put straight back into it.
       // This restores visibility without requiring the user to manually join by code.
       if (channels.length === 0) {
         const userRow = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(userId);
@@ -539,7 +544,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             if (ids.length > 0) {
               const ph = ids.map(() => '?').join(',');
               targetRows = db.prepare(
-                `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND id IN (${ph})`
+                `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND id IN (${ph})`
               ).all(...ids);
             }
           } catch {
@@ -548,7 +553,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
           if (targetRows.length === 0) {
             targetRows = db.prepare(
-              'SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 ORDER BY position, name'
+              "SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') ORDER BY position, name"
             ).all();
           }
 
@@ -894,10 +899,14 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // The channels a user belongs to, for the voice counts sent on request:
   // members only, for the same reason broadcastVoiceUsers sends to members.
+  // Through each channel's role gate too: a membership row alone (joining
+  // with the server code adds gated channels) does not open a gated room.
   function voiceCodesVisibleTo(userId) {
-    return new Set(db.prepare(
-      'SELECT c.code FROM channels c JOIN channel_members cm ON cm.channel_id = c.id WHERE cm.user_id = ?'
-    ).all(userId).map(r => r.code));
+    const rows = db.prepare(
+      'SELECT c.id, c.code, c.is_dm, c.role_gate FROM channels c JOIN channel_members cm ON cm.channel_id = c.id WHERE cm.user_id = ?'
+    ).all(userId);
+    const admin = !!db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId)?.is_admin;
+    return new Set(rows.filter(r => admin || r.is_dm || roleGateAllows(userId, r)).map(r => r.code));
   }
 
   // ── broadcastVoiceUsers ─────────────────────────────────
@@ -2399,6 +2408,11 @@ function setupSocketHandlers(io, db, opts = {}) {
       // 429s, so this is the cap that protects the bot, not the database. The
       // composer debounces at 250ms, so typing cannot reach it.
       ferrySearch: { max: 8, windowMs: 10000 },
+      // Exempt from the general budget (they come in bursts during a call)
+      // but each one is sent on to everyone in the call, so each socket gets
+      // a ceiling of its own.
+      voiceSpeaking: { max: 100, windowMs: 10000 },
+      webcamLifecycle: { max: 20, windowMs: 10000 },
     };
 
     function floodCheck(bucket, scope = '') {
@@ -2455,6 +2469,14 @@ function setupSocketHandlers(io, db, opts = {}) {
       };
       if (PRESENCE_ACTIVE_EVENTS.has(eventName)) touchPresenceActivity(socket.user.id);
       if (eventName === 'screen-share-stopped') return next();
+      if (eventName === 'voice-speaking') {
+        if (floodCheck('voiceSpeaking', socket.id)) return;
+        return next();
+      }
+      if (eventName === 'webcam-started' || eventName === 'webcam-stopped') {
+        if (floodCheck('webcamLifecycle', socket.id)) return;
+        return next();
+      }
       if (eventName === 'screen-share-started') {
         if (floodCheck('screenLifecycle')) return acknowledgeFlood('rate_limited');
         return next();
@@ -2747,6 +2769,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence, resetPresenceSync,
       dropRelayUser, closeRelaySources,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
+      liveAccess,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, dmCalls,

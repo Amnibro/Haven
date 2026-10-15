@@ -139,7 +139,7 @@ const { threadExtras: forumBlogThreadExtras } = require('./src/forumBlog');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
 const { CREATOR_NOT_BANNED_SQL } = require('./src/botAccess');
 const { cleanWebhookName, cleanWebhookAvatarUrl } = require('./src/webhookFields');
-const { validHighScore } = require('./src/highScores');
+const { validHighScore, isKnownGame } = require('./src/highScores');
 const {
   BotAudioManager,
   inspectAudioFile,
@@ -1802,7 +1802,7 @@ app.post('/api/high-scores', express.json(), (req, res) => {
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
   const game = typeof req.body.game === 'string' ? req.body.game.trim() : '';
-  if (!game || !/^[a-z0-9_-]{1,32}$/.test(game)) return res.status(400).json({ error: 'Invalid game id' });
+  if (!game || !/^[a-z0-9_-]{1,32}$/.test(game) || !isKnownGame(game)) return res.status(400).json({ error: 'Invalid game id' });
   // A JSON number only: no strings, and nothing past the game's ceiling.
   const score = typeof req.body.score === 'number' ? validHighScore(game, req.body.score) : null;
   if (score === null) return res.status(400).json({ error: 'Invalid score' });

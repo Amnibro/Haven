@@ -12,6 +12,7 @@ const {
   validatedThemeDefault,
 } = require('../themeMetadata');
 const memberDefaults = require('../memberDefaults');
+const { reachableChannel } = require('./channelAccess');
 const { cleanWebhookName, cleanWebhookAvatarUrl } = require('../webhookFields');
 
 const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
@@ -1738,7 +1739,7 @@ module.exports = function register(socket, ctx) {
     const limit = (data && Number.isInteger(data.limit) && data.limit > 0 && data.limit <= 500) ? data.limit : 100;
     try {
       const entries = db.prepare(`
-        SELECT i.id, i.rule, i.host, i.excerpt, i.created_at, i.user_id,
+        SELECT i.id, i.rule, i.host, i.excerpt, i.created_at, i.user_id, i.channel_id,
                COALESCE(u.display_name, u.username, '[deleted user]') AS username,
                c.code AS channel_code, c.name AS channel_name
         FROM automod_infractions i
@@ -1747,6 +1748,24 @@ module.exports = function register(socket, ctx) {
         ORDER BY i.created_at DESC LIMIT ?
       `).all(limit);
       entries.forEach(e => { e.created_at = utcStamp(e.created_at); });
+      // As in the audit log, a channel code (an invite) is the admin's alone,
+      // and someone else sees what was blocked only in channels they can open.
+      if (!socket.user.isAdmin) {
+        const seen = new Map();
+        const canSee = (id) => {
+          if (!seen.has(id)) {
+            const ch = reachableChannel(ctx, socket.user, id);
+            seen.set(id, !!ch && !ch.is_dm);
+          }
+          return seen.get(id);
+        };
+        for (let i = entries.length - 1; i >= 0; i--) {
+          const e = entries[i];
+          if (e.channel_id != null && !canSee(e.channel_id)) entries.splice(i, 1);
+          else e.channel_code = null;
+        }
+      }
+      entries.forEach(e => { delete e.channel_id; });
 
       // Most-blocked hosts in the last week, so a domain that everyone keeps
       // trying to share is easy to spot and allow in one click.

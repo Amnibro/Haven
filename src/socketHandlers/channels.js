@@ -31,8 +31,9 @@ function moveUploadToDeleted(relPath) {
     fs.renameSync(src, dst);
   } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
 }
-const { isString, isInt, releasableUploads, CHANNEL_NAME_RE } = require('./helpers');
+const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
+const { reachableChannel } = require('./channelAccess');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -47,11 +48,8 @@ module.exports = function register(socket, ctx) {
   // threw after the first role and the rest were never granted.
   const applyRoleChannelAccess = (...args) => (typeof ctx.applyRoleChannelAccess === 'function' ? ctx.applyRoleChannelAccess(...args) : undefined);
   const { refuseYoungAccount } = require('./postingWait')(socket, ctx);
-  // New one to one conversations a member may start per hour. A new DM lands
-  // in the other person's list, so without a cap one account could message
-  // every member of a server in minutes. Existing conversations are not
-  // counted, and admins are not limited.
-  const NEW_DMS_PER_HOUR = 20;
+  // New one to one conversations per hour: NEW_DMS_PER_HOUR (helpers.js).
+  // Existing conversations are not counted.
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
@@ -332,8 +330,9 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'You already have the maximum number of temporary channels (3)');
       }
     } catch (err) {
-      // The per-user cap of 3 was not checked for this request.
-      console.warn('create-temp-channel limit check failed:', err.message);
+      // The cap could not be checked, so the channel is not made.
+      console.warn('create-temp-channel limit check failed, refusing:', err.message);
+      return socket.emit('error-msg', 'Could not create the temporary channel. Try again in a moment.');
     }
 
     const code = generateUniqueSharedCode();
@@ -660,22 +659,17 @@ module.exports = function register(socket, ctx) {
 
     db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channel.id, socket.user.id);
 
+    const leftCodes = [code];
     if (!channel.parent_channel_id) {
-      const subs = db.prepare('SELECT id FROM channels WHERE parent_channel_id = ?').all(channel.id);
+      const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ?').all(channel.id);
       const delSub = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
-      subs.forEach(s => delSub.run(s.id, socket.user.id));
+      subs.forEach(s => { delSub.run(s.id, socket.user.id); leftCodes.push(s.code); });
     }
 
-    socket.leave(`channel:${code}`);
-
-    if (socket.currentChannel === code) {
-      const prevUsers = channelUsers.get(code);
-      if (prevUsers) {
-        prevUsers.delete(socket.user.id);
-        emitOnlineUsers(code);
-      }
-      socket.currentChannel = null;
-    }
+    // Every tab and device leaves, sub-channels included, not just this one.
+    const wasHere = !!channelUsers.get(code)?.has(socket.user.id);
+    ctx.liveAccess?.cutOff(socket.user.id, leftCodes, 'You left this channel');
+    if (wasHere) emitOnlineUsers(code);
 
     socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
     cb({ success: true });
@@ -853,6 +847,8 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
 
+    // Only a channel the renamer is in, through its gate.
+    if (!socket.user.isAdmin && !reachableChannel(ctx, socket.user, channel.id)) return socket.emit('error-msg', 'Channel not found');
     const permChannel = channel.parent_channel_id || channel.id;
     const renamePermission = channel.parent_channel_id ? 'rename_sub_channel' : 'rename_channel';
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, renamePermission, permChannel)) {
@@ -889,6 +885,7 @@ module.exports = function register(socket, ctx) {
 
     const parentChannel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(parentCode);
     if (!parentChannel) return socket.emit('error-msg', 'Parent channel not found');
+    if (!socket.user.isAdmin && !reachableChannel(ctx, socket.user, parentChannel.id)) return socket.emit('error-msg', 'Parent channel not found');
 
     // (#5467) Adding a sub-channel to an existing channel is that channel's
     // business, so it takes manage_sub_channels on the parent and nothing
@@ -1098,6 +1095,11 @@ module.exports = function register(socket, ctx) {
     const colName = colMap[permission];
     const current = channel[colName];
     const newVal = current ? 0 : 1;
+    // Opening a private channel up lets anyone with its code in, which is
+    // the admin's call, as changing who passes its gate is.
+    if (permission === 'private' && newVal === 0 && !socket.user.isAdmin) {
+      return socket.emit('error-msg', 'Only the admin can make a private channel public');
+    }
 
     if ((permission === 'streams' || permission === 'music') && newVal === 1 && channel.voice_enabled === 0) {
       return socket.emit('error-msg', 'Enable voice first: streams and music require voice');
@@ -1112,7 +1114,7 @@ module.exports = function register(socket, ctx) {
         const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?');
         for (const [, s] of io.sockets.sockets) {
           if (!s.user || s.user.isAdmin) continue;
-          if (!isMember.get(channel.id, s.user.id)) s.leave(`channel:${channel.code}`);
+          if (!isMember.get(channel.id, s.user.id)) ctx.liveAccess?.cutOff(s.user.id, [channel.code], 'This channel is private now');
         }
       }
       if (permission === 'voice' && newVal === 0) {
@@ -1436,7 +1438,7 @@ module.exports = function register(socket, ctx) {
     for (const [, s] of io.sockets.sockets) {
       if (!s.user || s.user.isAdmin) continue;
       if (joined.has(s.user.id)) s.join(`channel:${channel.code}`);
-      else if (stored && !ctx.roleGateAllows(s.user.id, fresh)) s.leave(`channel:${channel.code}`);
+      else if (stored && !ctx.roleGateAllows(s.user.id, fresh)) ctx.liveAccess?.cutOff(s.user.id, [channel.code], 'This channel needs a role you do not hold');
     }
     broadcastChannelLists();
     // The member list follows the requirement too (#5703).
@@ -1675,6 +1677,7 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return;
+    if (!socket.user.isAdmin && !reachableChannel(ctx, socket.user, channel.id)) return;
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'set_channel_topic', channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to set channel topics');
     }
@@ -1755,14 +1758,26 @@ module.exports = function register(socket, ctx) {
     if (!inviterMember && !socket.user.isAdmin) return socket.emit('error-msg', 'You are not a member of that channel');
     const channel = db.prepare('SELECT * FROM channels WHERE id = ? AND is_dm = 0').get(channelId);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
-    const channelIsPrivate = channel.is_private || channel.code_visibility === 'private';
+    // A sub-channel is reached through its parent, so one under a private
+    // parent is as private as the parent.
+    const parentCh = channel.parent_channel_id
+      ? db.prepare('SELECT created_by, is_private, code_visibility FROM channels WHERE id = ?').get(channel.parent_channel_id)
+      : null;
+    const channelIsPrivate = channel.is_private || channel.code_visibility === 'private'
+      || !!(parentCh && (parentCh.is_private || parentCh.code_visibility === 'private'));
     if (channelIsPrivate && !socket.user.isAdmin) {
-      const isCreator = channel.created_by === socket.user.id;
+      const isCreator = channel.created_by === socket.user.id || !!(parentCh && parentCh.created_by === socket.user.id);
       const isMod = userHasPermission(socket.user.id, 'kick_user', channelId);
       if (!isCreator && !isMod) return socket.emit('error-msg', 'Only the channel creator or moderators can invite people to private channels');
     }
-    const targetUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(targetUserId);
-    if (!targetUser) return socket.emit('error-msg', 'User not found');
+    const targetUser = db.prepare(`
+      SELECT u.id, u.username, u.is_guest, (b.id IS NOT NULL) AS banned
+      FROM users u LEFT JOIN bans b ON b.user_id = u.id WHERE u.id = ?
+    `).get(targetUserId);
+    if (!targetUser || targetUser.banned) return socket.emit('error-msg', 'User not found');
+    // A guest sees only the channels the admin opened to guests (join-channel
+    // refuses them a code too), so an invite is no way past that list.
+    if (targetUser.is_guest && !socket.user.isAdmin) return socket.emit('error-msg', 'Guests can only use the channels the admin opened to them');
     const alreadyMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, targetUserId);
     if (alreadyMember) return socket.emit('error-msg', `${targetUser.username} is already in #${channel.name}`);
     db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, targetUserId);
@@ -1807,6 +1822,10 @@ module.exports = function register(socket, ctx) {
     const channelId = isInt(data.channelId) ? data.channelId : null;
     if (!targetUserId || !channelId) return cb({ error: 'Invalid data' });
     if (targetUserId === socket.user.id) return cb({ error: 'You can\'t remove yourself' });
+    // Only from a channel the remover can reach themselves, and the same
+    // answer for one that does not exist, so ids cannot be walked for names.
+    const reach = reachableChannel(ctx, socket.user, channelId);
+    if (!reach || reach.is_dm) return cb({ error: 'Channel not found' });
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'kick_user', channelId)) {
       return cb({ error: 'You don\'t have permission to remove users from channels' });
     }
@@ -1829,6 +1848,8 @@ module.exports = function register(socket, ctx) {
     // Channel Mod could still act there.
     const delScoped = db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?');
     [channelId, ...subs.map(s => s.id)].forEach(id => delScoped.run(targetUserId, id));
+    // Out of the call too, before the code rotates below.
+    ctx.liveAccess?.cutOff(targetUserId, [channel.code, ...subs.map(s => s.code)], 'You were removed from this channel');
     const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === targetUserId);
     for (const ts of targetSockets) {
       if (ts.currentChannel === channel.code || subs.some(sub => sub.code === ts.currentChannel)) ts.currentChannel = null;
