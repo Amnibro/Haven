@@ -26,6 +26,13 @@ module.exports = function registerLinkPreview(deps) {
       .replace(/&gt;/gi, '>')
       .replace(/&amp;/gi, '&');
   }
+
+  // Engagement counts come from third-party JSON; keep only real
+  // non-negative numbers so the card never renders anything else.
+  function statCount(n) {
+    const v = typeof n === 'number' ? n : (typeof n === 'string' && n.trim() !== '' ? Number(n) : NaN);
+    return Number.isFinite(v) && v >= 0 ? v : -1;
+  }
   const { resolveCallbackDestination } = require('../webhookCallback');
   const { safeGet } = require('../safeFetch');
 
@@ -271,7 +278,7 @@ module.exports = function registerLinkPreview(deps) {
                 images: photos.length >= 2 ? photos.slice(0, 4) : undefined,
                 video: vid?.url || null,
                 videoType: vid?.url ? 'video/mp4' : undefined,
-                stats: { replies: tw.replies ?? -1, reposts: tw.retweets ?? -1, likes: tw.likes ?? -1, views: tw.views ?? -1 },
+                stats: { replies: statCount(tw.replies), reposts: statCount(tw.retweets), likes: statCount(tw.likes), views: statCount(tw.views) },
                 url
               };
             }
@@ -459,7 +466,7 @@ module.exports = function registerLinkPreview(deps) {
                   image,
                   images,
                   video: mType.startsWith('app.bsky.embed.video') ? url : null,
-                  stats: { replies: post.replyCount ?? -1, reposts: post.repostCount ?? -1, likes: post.likeCount ?? -1, views: -1 },
+                  stats: { replies: statCount(post.replyCount), reposts: statCount(post.repostCount), likes: statCount(post.likeCount), views: -1 },
                   url
                 };
               }
