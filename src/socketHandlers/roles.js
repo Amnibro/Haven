@@ -5,6 +5,7 @@ const OTPAuth = require('otpauth');
 const { isString, isInt, VALID_ROLE_PERMS, ROLE_MENU_EMOJI_RE, roleMenuContent } = require('./helpers');
 const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('../roleDefaults');
 const createRoleRefresh = require('./roleRefresh');
+const { reachableChannel } = require('./channelAccess');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -18,6 +19,11 @@ module.exports = function register(socket, ctx) {
 
   // A role color is a short hex code (#abc or #aabbcc); anything else is
   // stored as no color.
+  const reachableNonDm = (channelId) => {
+    const ch = reachableChannel(ctx, socket.user, channelId);
+    return !!ch && !ch.is_dm;
+  };
+
   const safeRoleColor = (c) => (isString(c, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(c)) ? c : null;
 
   // ── Helper: apply role-linked channel access ────────────
@@ -1115,6 +1121,9 @@ module.exports = function register(socket, ctx) {
     }
 
     const channelId = isInt(data.channelId) ? data.channelId : null;
+    // A channel-scoped change only in a channel the caller can reach, never a
+    // DM, with one answer for every refusal so ids cannot be walked.
+    if (channelId !== null && !reachableNonDm(channelId)) return cb({ error: 'Channel not found' });
     if (!canActOnUser(userId, channelId)) {
       return cb({ error: 'You can only change roles for people ranked below you' });
     }
@@ -1236,6 +1245,9 @@ module.exports = function register(socket, ctx) {
     }
 
     const channelId = isInt(data.channelId) ? data.channelId : null;
+    // A channel-scoped change only in a channel the caller can reach, never a
+    // DM, with one answer for every refusal so ids cannot be walked.
+    if (channelId !== null && !reachableNonDm(channelId)) return cb({ error: 'Channel not found' });
     if (!canActOnUser(userId, channelId)) {
       return cb({ error: 'You can only change roles for people ranked below you' });
     }
@@ -1422,6 +1434,9 @@ module.exports = function register(socket, ctx) {
     }
 
     const channelId = isInt(data.channelId) ? data.channelId : null;
+    // A channel-scoped change only in a channel the caller can reach, never a
+    // DM, with one answer for every refusal so ids cannot be walked.
+    if (channelId !== null && !reachableNonDm(channelId)) return cb({ error: 'Channel not found' });
     if (!canActOnUser(userId, channelId)) {
       return cb({ error: 'You can only change roles for people ranked below you' });
     }

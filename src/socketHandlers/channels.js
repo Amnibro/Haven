@@ -33,6 +33,7 @@ function moveUploadToDeleted(relPath) {
 }
 const { isString, isInt, releasableUploads, CHANNEL_NAME_RE } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
+const { reachableChannel } = require('./channelAccess');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -1807,6 +1808,10 @@ module.exports = function register(socket, ctx) {
     const channelId = isInt(data.channelId) ? data.channelId : null;
     if (!targetUserId || !channelId) return cb({ error: 'Invalid data' });
     if (targetUserId === socket.user.id) return cb({ error: 'You can\'t remove yourself' });
+    // Only from a channel the remover can reach themselves, and the same
+    // answer for one that does not exist, so ids cannot be walked for names.
+    const reach = reachableChannel(ctx, socket.user, channelId);
+    if (!reach || reach.is_dm) return cb({ error: 'Channel not found' });
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'kick_user', channelId)) {
       return cb({ error: 'You don\'t have permission to remove users from channels' });
     }
