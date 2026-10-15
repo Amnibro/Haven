@@ -76,6 +76,14 @@ module.exports = function register(socket, ctx) {
     return null;
   }
 
+  // In a DM only its members; elsewhere the admin, or someone the gate lets in.
+  function canTouchChannel(channelId) {
+    const ch = db.prepare('SELECT is_dm FROM channels WHERE id = ?').get(channelId);
+    if (!ch) return false;
+    if (socket.user.isAdmin && !ch.is_dm) return true;
+    return hasChannelAccess(channelId);
+  }
+
   function hasChannelAccess(channelId) {
     if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
     if (socket.user.isAdmin) return true;
@@ -2274,6 +2282,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // currentChannel is where the person last was, not proof they still
+    // reach it: a gate, a role or going private can have taken it away.
+    if (!canTouchChannel(channel.id)) return;
 
     const msg = db.prepare(
       'SELECT id, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
@@ -2329,6 +2340,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // currentChannel is where the person last was, not proof they still
+    // reach it: a gate, a role or going private can have taken it away.
+    if (!canTouchChannel(channel.id)) return;
 
     const pin = db.prepare(
       'SELECT id FROM pinned_messages WHERE message_id = ? AND channel_id = ?'
@@ -2364,6 +2378,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // currentChannel is where the person last was, not proof they still
+    // reach it: a gate, a role or going private can have taken it away.
+    if (!canTouchChannel(channel.id)) return;
 
     const msg = db.prepare('SELECT id, is_archived, destruct_at FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
     if (!msg) return socket.emit('error-msg', 'Message not found');
@@ -2401,6 +2418,9 @@ module.exports = function register(socket, ctx) {
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // currentChannel is where the person last was, not proof they still
+    // reach it: a gate, a role or going private can have taken it away.
+    if (!canTouchChannel(channel.id)) return;
 
     const msg = db.prepare('SELECT id, is_archived FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
     if (!msg) return socket.emit('error-msg', 'Message not found');
