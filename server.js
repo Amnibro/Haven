@@ -1304,23 +1304,17 @@ app.get('/app', (req, res) => {
 });
 
 // ── Vanity invite link (/invite/:code) ────────────────
-app.get('/invite/:vanityCode', (req, res) => {
+// The answer is the same redirect whether or not the code exists, so this
+// page cannot be used to test guesses at short custom invite slugs; the app
+// passes ?invite= to join-channel, which checks the code (and its enabled,
+// expiry and use-limit rules) for a signed-in member. The limit is per IP,
+// generous for people following links and tight for a guessing script.
+const inviteLinkLimiter = require('express-rate-limit')({ windowMs: 60 * 1000, max: 30, message: 'Too many invite links, try again in a minute' });
+app.get('/invite/:vanityCode', inviteLinkLimiter, (req, res) => {
   const vanityCode = req.params.vanityCode;
   if (!vanityCode || typeof vanityCode !== 'string' || !/^[a-zA-Z0-9_-]{3,32}$/.test(vanityCode)) {
     return res.status(400).send('Invalid invite link');
   }
-  const { getDb } = require('./src/database');
-  const db = getDb();
-  // Accept either the legacy single vanity_code setting or any managed invite
-  // code (from the invite-link menu). The frontend auto-joins from ?invite=;
-  // enabled/expiry/use-limit are enforced server-side when join-channel fires.
-  const row = db.prepare("SELECT value FROM server_settings WHERE key = 'vanity_code'").get();
-  const isLegacyVanity = row && row.value === vanityCode;
-  const managed = isLegacyVanity ? null : db.prepare('SELECT 1 FROM invite_codes WHERE code = ?').get(vanityCode);
-  if (!isLegacyVanity && !managed) {
-    return res.status(404).send('Invite link not found or expired');
-  }
-  // Redirect to /app with the code as a query param; the frontend will auto-join
   res.redirect(`/app?invite=${encodeURIComponent(vanityCode)}`);
 });
 
