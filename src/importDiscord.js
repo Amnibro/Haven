@@ -195,7 +195,7 @@ function buildDCEResult(data) {
       timestamp: msg.timestamp,
       isPinned: msg.isPinned || false,
       reactions: (msg.reactions || []).map(r => ({
-        emoji: typeof r.emoji === 'string' ? r.emoji : (r.emoji?.name || '❓'),
+        emoji: importedReactionEmoji(r.emoji),
         count: r.count || 1
       })).filter(r => isReactionEmoji(r.emoji)),
       replyTo: msg.reference?.messageId || null
@@ -294,4 +294,12 @@ function isReactionEmoji(emoji) {
     && (REACTION_EMOJI_RE.test(emoji) || CUSTOM_REACTION_RE.test(emoji));
 }
 
-module.exports = { parseDiscordExport, isReactionEmoji };
+// Discord exports name a server's own emoji bare ("pepe"). Haven writes those
+// as :pepe:, so they survive the check above instead of being dropped.
+function importedReactionEmoji(raw) {
+  const name = typeof raw === 'string' ? raw : (raw && typeof raw.name === 'string' ? raw.name : '');
+  if (/^[a-zA-Z0-9_-]{1,30}$/.test(name) && !REACTION_EMOJI_RE.test(name)) return `:${name}:`;
+  return name || '\u2753';
+}
+
+module.exports = { parseDiscordExport, isReactionEmoji, importedReactionEmoji };
