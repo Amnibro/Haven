@@ -35,15 +35,19 @@ const post = (p, body) => new Promise((res, rej) => {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const register = (username) => post('/api/auth/register', { username, password: 'presence-test-123', eulaVersion: '2.0', ageVerified: true });
 
-// The same fill-in and merge the web client does (app-socket.js).
+// The same fill-in and merge the web client does (app-socket-channels.js).
 const fillMember = (u) => ({
   highScore: 0, statusText: '', avatar: null, avatarShape: 'circle', border: null,
-  borderTransform: null, animateProfile: 'trigger', isGuest: false, role: null, activity: null,
+  borderTransform: null, animateProfile: 'trigger', isGuest: false, role: null, activity: null, birthday: null,
   ...u,
 });
 
+// Every socket opened, so a failed assertion still closes them and the run exits.
+const sockets = [];
+
 function client(token, deltas) {
   const s = io(BASE, { auth: deltas ? { token, presenceDeltas: 1 } : { token }, transports: ['websocket'], forceNew: true });
+  sockets.push(s);
   s.lists = new Map();
   s.deltas = 0;
   s.slimSeen = false;
@@ -89,7 +93,11 @@ test.before(async () => {
   }
   throw new Error('server did not start');
 });
-test.after(() => { server?.kill(); try { fs.rmSync(DATA, { recursive: true, force: true }); } catch {} });
+test.after(() => {
+  for (const s of sockets) s.disconnect();
+  server?.kill();
+  try { fs.rmSync(DATA, { recursive: true, force: true }); } catch { /* the server may still hold the db open; a leftover temp dir is harmless */ }
+});
 
 test('changes-only member lists match the full lists older clients get', async () => {
   const [admin, bob, carol, dave] = [await register('admin'), await register('bob'), await register('carol'), await register('dave')];
