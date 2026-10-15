@@ -55,7 +55,11 @@ function baseUrl(req) {
   //   'haven.example.com:8443'  → https://haven.example.com:8443
   // This is more reliable than extracting a port from the raw Host
   // header, which often carries an internal address (localhost:3000).
-  const isTrusted = req.app ? req.app.get('trust proxy') : false;
+  // Believe X-Forwarded-Host only from a peer the trust proxy setting trusts,
+  // the same rule req.ip follows. The setting being on is not enough: by
+  // default it trusts private addresses, and any LAN client has one.
+  const trustFn = req.app ? req.app.get('trust proxy fn') : null;
+  const isTrusted = typeof trustFn === 'function' && !!trustFn(req.socket?.remoteAddress || '', 0);
   if (isTrusted) {
     const fwdHost = req.get('X-Forwarded-Host');
     if (fwdHost) {
