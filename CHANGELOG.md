@@ -6,6 +6,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.24.0] - 2026-10-15
+
+Security fixes, zoom in the picture viewer, birthdays, a full Chinese
+translation, and a batch of fixes. Updating is recommended for every server.
+
+### Security
+- Security fixes across the server and the web client. Updating is recommended for everyone.
+- Downloading or restoring a backup now asks for your password again, and your two-factor code if you use one.
+- Turning on two-factor sign-in asks for your password.
+- Linking Steam or Spotify opens a page that shows which Haven account it will be linked to, and starts only when you press Continue.
+- Behind a reverse proxy: Haven now trusts forwarded addresses only from a proxy on the same machine (or, in Docker and Podman, on the container network). If your proxy runs on a different machine, set `TRUST_PROXY` to its address in `.env`. Haven prints a `[proxy]` line at startup telling you the value to use when it sees an untrusted proxy.
+
+### Added
+- Zoom in the picture viewer: scroll to zoom where your cursor is, double-click to zoom in on a spot, drag to look around, pinch on phones, and +, - and 0 on the keyboard. Works everywhere pictures open.
+- Birthdays: add yours under Edit Profile. On the day, a 🎉 shows by your name and your profile card celebrates. A birthday is set once and can't be changed afterwards; you can hide it, or just the year, at any time (#5788, thanks Bo0sted).
+- A complete Simplified Chinese translation (#5787, thanks TianLaiEric).
+- Master volume for voice and for notifications, with an option to show volumes in dB.
+- Admins can set the largest profile picture and border size, from 1 to 10 MB.
+- Pinned forum topics get a folded corner, and topics with new replies get a glowing ring.
+- Threads and reply lists show each person's avatar shape, and names and avatars there open the profile card.
+- The startup banner shows the server's LAN address (#5572).
+- A security policy, with private vulnerability reporting on GitHub.
+
+### Changed
+- Protected messages are kept from every kind of deletion: by their author, moderators, the admin, bots, bulk deletes, cleanup timers and account removal. They can't be edited either. To remove one, unprotect it first. A channel that still holds protected messages can't be deleted, and an automatic deletion timer clears only its other messages. The label is now simply "Protected".
+- Update Now works on installer and zip installs, and starts Haven again afterwards.
+- Discord import reads channels in the background, so a proxy can't cut a long import off.
+- Ferry uploads Haven pictures and files to Discord instead of sending their addresses.
+- Clicking the thread that is already open closes it.
+- Plugin and theme switches in Settings look like the other switches.
+- Deleting a topic, thread or sub-channel also clears its pictures and files from uploads (#5783).
+
+### Fixed
+- A theme turned on with its switch in Settings went back to the old theme after a refresh.
+- Haven Desktop, and any second open copy of Haven, could miss who was in voice (#5782).
+- Opening Settings cleared the highlight on the Channels and DMs tabs in the Channel Tabs layout (#5786).
+- Group DMs full of older messages showed "Slow down: too many requests" (#5785, thanks Amnibro).
+- Clicking a picture that hadn't finished loading in the chat opened a blank viewer.
+- Community themes with long file names were lost on refresh.
+- Imported Discord reactions with a server's own emoji are kept.
+- Reply lines show pictures and files by name instead of their stored address.
+- The Transfer Admin, password reset and bulk cleanup dialogs had no styling on their header and buttons.
+- Some success messages showed in red.
+- The setup wizard's Get Started button could sit off screen on short displays.
+- `start.sh` points to NodeSource for Node 22 or newer and creates the certificate without OpenSSL.
+- Fresh installs no longer warn about install scripts.
+- Garbled box lines and emojis in the server console.
+- Random crashes at exit on Node 26 (better-sqlite3 12.11.1).
+
+Haven Desktop 1.7.1 ships alongside this release.
+
 ## [4.23.0] - 2026-10-14
 
 Server mute and Mute for me, Timeout for moderators, an Accessibility
