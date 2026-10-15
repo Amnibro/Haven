@@ -13,6 +13,7 @@ const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
+const { installGuard: installProtectedGuard } = require('./protectedMessages');
 
 let db;
 
@@ -1676,6 +1677,10 @@ function initDatabase() {
         SELECT value FROM json_each(OLD.e2e_files) WHERE type = 'text';
     END;
   `);
+
+  // Protected messages survive every delete, cascades included; see
+  // src/protectedMessages.js.
+  installProtectedGuard(db);
 
   // ── Audit log ───────────────────────────────────────────
   // Tracks admin/moderator actions: channel CRUD, role changes,
