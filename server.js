@@ -1968,8 +1968,8 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
 
   // Insert non-ephemeral messages into the DB/history.
   const result = db.prepare(
-    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?)'
-  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId);
+    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id, webhook_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)'
+  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId, webhook.id);
   message.id = result.lastInsertRowid;
 
   // Broadcast to all clients in this channel
@@ -2286,12 +2286,13 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   const mid = parseInt(messageId, 10);
   if (!Number.isInteger(mid) || mid < 1) return res.status(400).json({ error: 'Invalid message ID' });
 
-  const msg = db.prepare('SELECT id, content, channel_id, is_webhook FROM messages WHERE id = ? AND channel_id = ?').get(mid, webhook.channel_id);
+  const msg = db.prepare('SELECT id, content, channel_id, is_webhook, webhook_id FROM messages WHERE id = ? AND channel_id = ?').get(mid, webhook.channel_id);
   if (!msg) return res.status(404).json({ error: 'Message not found in this channel' });
-  // A bot deletes bot messages. People's messages need a bot with moderation
-  // permission, as the bulk delete below already required.
-  if (!msg.is_webhook && !webhook.can_moderate) {
-    return res.status(403).json({ error: 'This bot can only delete bot messages' });
+  // A bot deletes its own messages. Anyone else's, people's or another
+  // bot's, needs a bot with moderation permission, as the bulk delete below
+  // already required.
+  if (!webhook.can_moderate && !(msg.is_webhook && msg.webhook_id === webhook.id)) {
+    return res.status(403).json({ error: 'This bot can only delete its own messages' });
   }
 
   const replies = db.prepare('SELECT content FROM messages WHERE thread_id = ?').all(mid);

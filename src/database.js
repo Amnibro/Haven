@@ -800,6 +800,10 @@ function initDatabase() {
   // ── Migration: webhook message tracking ─────────────────
   addColumn('messages', 'is_webhook', "INTEGER DEFAULT 0");
   addColumn('messages', 'webhook_username', "TEXT DEFAULT NULL");
+  // Which bot posted it, so a bot without moderation permission can delete
+  // its own messages and not every other bot's. Ids are AUTOINCREMENT, so a
+  // deleted bot's id is never handed to a new one.
+  addColumn('messages', 'webhook_id', "INTEGER DEFAULT NULL");
 
   // ── Migration: personas (proxy feature) (#86, #5349) ────
   // Per-user personas: name + avatar override stored on the message so the
