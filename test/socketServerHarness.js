@@ -83,7 +83,7 @@ function createHarness(port, name) {
     return (await list) || [];
   }
 
-  return { start, stop, register, connect, next, ask, channels, post };
+  return { start, stop, register, connect, next, ask, channels, post, dataDir: DATA };
 }
 
 module.exports = { createHarness, wait };
