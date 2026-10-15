@@ -708,6 +708,33 @@ test('unpublished tweak themes still stack on a built-in theme', async () => {
   assert.equal(result.links[0].id, 'haven-theme-fonts.theme.css');
 });
 
+test('turning a palette theme on in Settings saves it as the account theme', async () => {
+  const emitted = [];
+  const socket = {
+    connected: true,
+    on() {},
+    off() {},
+    emit(event, payload) { emitted.push(JSON.stringify([event, payload])); },
+  };
+  const result = await runPluginLoader({
+    theme: 'matrix',
+    socket,
+    themes: [{
+      file: 'neon.theme.css',
+      published: false,
+      palette: true,
+      compatible: true,
+      compatibility: 'compatible',
+      themeApi: 1,
+    }],
+  });
+
+  result.loader.enableTheme('neon.theme.css');
+
+  assert.equal(result.localStorage.getItem('haven_theme'), 'file:neon.theme.css');
+  assert.deepEqual(emitted, [JSON.stringify(['set-preference', { key: 'theme', value: 'file:neon.theme.css' }])]);
+});
+
 test('admin theme settings accept only installed themes and clear an unpublished default', t => {
   const { db, handlers, outgoing } = createAdminThemeHarness();
   t.after(() => db.close());

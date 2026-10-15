@@ -448,8 +448,10 @@ window.HavenPluginLoader = (function () {
     if (!t || t.enabled || suppressExtensions || !t.compatible) return;
     // A published theme is one of the picker's choices, not a stackable tweak:
     // turning it on means selecting it, so the two surfaces stay in agreement.
+    // The account's saved theme has to follow, the same as a picker click,
+    // or the server's older choice replaces this one on the next load.
     if (isExclusiveMeta({ ...t.meta, file })) {
-      applyFileTheme(file);
+      if (applyFileTheme(file)) void persistThemePreference(`file:${file}`);
       return;
     }
     t.enabled = true;
