@@ -71,7 +71,12 @@ module.exports = function register(socket, ctx) {
     pushUserRoleState(userId);
     pushUploadCap(userId);
     syncRoleGateRooms(userId);
-    for (const [code] of channelUsers) { emitOnlineUsers(code); }
+    // Only the member lists this person appears in: rebuilding every channel's
+    // list on each change let anyone keep the whole server rebuilding.
+    const theirs = new Set(db.prepare(
+      'SELECT c.code FROM channels c JOIN channel_members cm ON cm.channel_id = c.id WHERE cm.user_id = ?'
+    ).all(userId).map(r => r.code));
+    for (const [code] of channelUsers) { if (theirs.has(code)) emitOnlineUsers(code); }
   }
 
   // The client sizes its upload pre-checks from this; a role change can move it.
@@ -1542,6 +1547,13 @@ module.exports = function register(socket, ctx) {
 
       const toAdd = groupIds.filter(id => !currentGroupIds.has(id));
       const toRemove = [...currentGroupIds].filter(id => !selectedGroupIds.has(id));
+      const groupsNow = () => db.prepare(`
+        SELECT r.* FROM roles r JOIN user_roles ur ON ur.role_id = r.id
+        WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.level = 0
+        ORDER BY r.name COLLATE NOCASE
+      `).all(socket.user.id);
+      // Nothing changed, so nothing to refresh for anyone.
+      if (!toAdd.length && !toRemove.length) return cb({ success: true, groups: groupsNow() });
 
       const txn = db.transaction(() => {
         for (const roleId of toRemove) {
