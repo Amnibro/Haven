@@ -16,7 +16,7 @@ const os = require('node:os');
 const { spawn } = require('node:child_process');
 const Database = require('better-sqlite3');
 
-const PORT = 3397;
+const PORT = 3441;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA = path.join(os.tmpdir(), `haven-upload-perm-${Date.now()}`);
 
