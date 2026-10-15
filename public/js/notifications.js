@@ -17,6 +17,8 @@ class NotificationManager {
     this.popupCooldownMs = this._loadPref('haven_notif_popup_cooldown_ms', 0);
     this._lastPopupAt = 0;
     this.volume = this._loadPref('haven_notif_volume', 0.5);
+    // One level over every sound, applied on top of each sound's own volume.
+    this.master = this._loadPref('haven_notif_master_volume', 1);
     this.mentionVolume = this._loadPref('haven_notif_mention_volume', 0.8);
     this.replyVolume = this._loadPref('haven_notif_reply_volume', 0.8);
     this.joinVolume = this._loadPref('haven_notif_join_volume', 0.8);
@@ -44,6 +46,17 @@ class NotificationManager {
     return isNaN(n) ? v : n;
   }
 
+  // The level a sound plays at: its own volume times the master volume.
+  _level() {
+    const m = typeof this.master === 'number' ? this.master : 1;
+    return Math.max(0, Math.min(1, this.volume * m));
+  }
+
+  setMasterVolume(val) {
+    this.master = Math.max(0, Math.min(1, val));
+    this._savePref('haven_notif_master_volume', this.master);
+  }
+
   _savePref(key, value) {
     localStorage.setItem(key, String(value));
   }
@@ -59,7 +72,7 @@ class NotificationManager {
   // ── Synth Tone Engine ───────────────────────────────────
 
   _playTone(frequencies, durations, type = 'sine') {
-    if (this.volume <= 0) return;
+    if (this._level() <= 0) return;
     try {
       const ctx = this._getCtx();
       const masterGain = ctx.createGain();
@@ -75,7 +88,7 @@ class NotificationManager {
         gain.connect(masterGain);
 
         const dur = durations[i] || 0.15;
-        const vol = this.volume * this.volume; // exponential curve for natural feel
+        const vol = this._level() * this._level(); // exponential curve for natural feel
         gain.gain.setValueAtTime(Math.max(vol, 0.001), time);
         gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
         osc.start(time);
@@ -109,14 +122,14 @@ class NotificationManager {
   // ── Custom Sound File Playback ──────────────────────────
 
   _playFile(url) {
-    if (this.volume <= 0) return;
+    if (this._level() <= 0) return;
     try {
       let audio = this._audioCache[url];
       if (!audio) {
         audio = new Audio(url);
         this._audioCache[url] = audio;
       }
-      audio.volume = Math.max(0, Math.min(1, this.volume * this.volume));
+      audio.volume = Math.max(0, Math.min(1, this._level() * this._level()));
       audio.currentTime = 0;
       audio.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
     } catch { /* audio not available */ }
@@ -136,7 +149,7 @@ class NotificationManager {
       // Strip @mentions so TTS doesn't read "at username"
       cleaned = cleaned.replace(/@(\w+)/g, '$1');
       const utter = new SpeechSynthesisUtterance(cleaned);
-      utter.volume = Math.max(0, Math.min(1, this.volume));
+      utter.volume = this._level();
       utter.rate = 1;
       utter.pitch = 1;
       speechSynthesis.speak(utter);
@@ -204,7 +217,7 @@ class NotificationManager {
 
   /** Play a named tone directly (bypasses event→sound mapping). Used for UI cues. */
   playDirect(toneName) {
-    if (this.volume <= 0) return;
+    if (this._level() <= 0) return;
     if (/^(mute|deafen)_(on|off)$/.test(toneName) && !this.voiceActionCuesEnabled) return;
     if (typeof this[toneName] === 'function') this[toneName]();
   }

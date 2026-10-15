@@ -1810,9 +1810,9 @@ app.post('/api/high-scores', express.json(), (req, res) => {
   res.json({ game, leaderboard });
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 // WEBHOOK / BOT INTEGRATION: incoming message endpoint
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 const rateLimit = require('express-rate-limit');
 const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Rate limit exceeded' } });
 const webhookAudioLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Audio rate limit exceeded' } });
@@ -2427,9 +2427,9 @@ app.post('/api/webhooks/:token/sounds', webhookLimiter, express.json({ limit: '1
   res.json({ success: true });
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 // MODERATION REST API
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 const modLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Rate limit exceeded' } });
 
 // Helper: get authenticated user from Bearer token with admin/mod check
@@ -2641,9 +2641,9 @@ app.get('/api/moderation/mutes', modLimiter, (req, res) => {
   res.json({ mutes });
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 // BOT SLASH COMMANDS API
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 
 // Helper: authenticate webhook bot by token
 function getWebhookByToken(token) {
@@ -2701,13 +2701,13 @@ function requireWebhookVoice(req, res, next) {
   return next();
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 // BOT MODERATION REST API (#5397): webhook-token authenticated.
 // Each endpoint requires the bot's `can_moderate` flag to be enabled
 // by an admin via the Bot Manager. Mirrors /api/moderation/* but uses
 // webhook tokens instead of JWT bearer tokens so bots don't need a
 // user login. Audit log records the bot as actor.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 function requireModBot(req, res) {
   const webhook = getWebhookByToken(req.params.token);
   if (!webhook) { res.status(404).json({ error: 'Webhook not found or inactive' }); return null; }
@@ -2957,9 +2957,9 @@ app.get('/api/bot-commands', (req, res) => {
   res.json({ commands });
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 // DISCORD IMPORT: upload, preview, execute
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 const os = require('os');
 const { parseDiscordExport } = require('./src/importDiscord');
 
@@ -3237,7 +3237,7 @@ if (useSSL) {
       console.warn(`⚠️  HTTP→HTTPS redirect server could not bind port ${HTTP_REDIRECT_PORT} (${(err && err.code) || err}). HTTPS continues on port ${safePort}.`);
     });
     httpRedirectServer.listen(HTTP_REDIRECT_PORT, process.env.HOST || '0.0.0.0', () => {
-      console.log(`â†ªï¸  HTTP redirect running on port ${HTTP_REDIRECT_PORT} → HTTPS`);
+      console.log(`↪️  HTTP redirect running on port ${HTTP_REDIRECT_PORT} → HTTPS`);
     });
   } catch (err) {
     console.error('Failed to load SSL certs, falling back to HTTP:', err.message);
@@ -3245,7 +3245,7 @@ if (useSSL) {
   }
 } else {
   server = createServer(app);
-  console.log('âš ï¸  Running HTTP: voice chat requires HTTPS for remote connections');
+  console.log('⚠️  Running HTTP: voice chat requires HTTPS for remote connections');
 }
 
 // Socket.IO: locked down
@@ -3306,7 +3306,7 @@ if (process.env.ADMIN_RESET_PASSWORD) {
       console.error(`   Could not remove ADMIN_RESET_PASSWORD from ${ENV_PATH}; delete that line by hand:`, err.message);
     }
   } else {
-    console.warn(`âš ï¸  ADMIN_RESET_PASSWORD set but no user "${adminName}" found, skipping`);
+    console.warn(`⚠️  ADMIN_RESET_PASSWORD set but no user "${adminName}" found, skipping`);
   }
   delete process.env.ADMIN_RESET_PASSWORD;
 }
@@ -3597,7 +3597,7 @@ function logCrash(label, detail) {
                  `  RSS=${Math.round(mem.rss / 1048576)}MB Heap=${Math.round(mem.heapUsed / 1048576)}/${Math.round(mem.heapTotal / 1048576)}MB\n`;
     if (!_consolePipeBroken) {
       try {
-        console.error(`âš ï¸  ${label}:`, detail);
+        console.error(`⚠️  ${label}:`, detail);
       } catch (e) {
         if (isBrokenPipeError(e)) _consolePipeBroken = true;
       }
@@ -3739,15 +3739,17 @@ server.listen(PORT, HOST, () => {
     }
   } catch { /* leave the placeholder */ }
   const networkLine = `${protocol}://${lanIps[0] || 'YOUR_IP'}:${PORT}`;
+  // Every row is 42 columns inside the box, so the right edge lines up.
+  const row = (label, value) => `║  ${label.padEnd(9)}${String(value).padEnd(31)}║`;
   console.log(`
-â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•╗
-║       ðŸ   HAVEN is running               ║
-â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•╣
-║  Name:    ${(process.env.SERVER_NAME || 'Haven').padEnd(29)}║
-║  Local:   ${protocol}://localhost:${PORT}             ║
-║  Network: ${protocol}://YOUR_IP:${PORT}              ║
-║  Admin:   ${(process.env.ADMIN_USERNAME || 'admin').padEnd(29)}║
-â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+╔══════════════════════════════════════════╗
+║       🏠  HAVEN is running               ║
+╠══════════════════════════════════════════╣
+${row('Name:', process.env.SERVER_NAME || 'Haven')}
+${row('Local:', `${protocol}://localhost:${PORT}`)}
+${row('Network:', networkLine)}
+${row('Admin:', process.env.ADMIN_USERNAME || 'admin')}
+╚══════════════════════════════════════════╝
   `);
   if (lanIps.length > 1) {
     console.log(`  Also reachable on: ${lanIps.slice(1).map(ip => `${protocol}://${ip}:${PORT}`).join(', ')}`);

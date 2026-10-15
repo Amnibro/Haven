@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.22.25">
+  <link rel="stylesheet" href="/css/style.css?v=4.23.8">
   <script src="/js/theme-compat.js?v=4.18.3"></script>
   <script src="/js/theme-init.js?v=4.22.9"></script>
 </head>
@@ -1987,6 +1987,19 @@
       <div class="settings-section" id="section-sounds">
         <h5 class="settings-section-title">🔔 <span data-i18n="settings.sounds_section.title">Sounds</span></h5>
         <div class="notif-settings">
+          <label class="volume-row">
+            <span data-i18n="settings.sounds_section.master_voice">Voice volume (everyone)</span>
+            <input type="range" id="voice-master-volume" min="0" max="200" value="100" class="slider-sm" data-curve="linear">
+          </label>
+          <label class="volume-row">
+            <span data-i18n="settings.sounds_section.master_notifications">Notification volume (all sounds)</span>
+            <input type="range" id="notif-master-volume" min="0" max="100" value="100" class="slider-sm">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.sounds_section.master_hint">Applied on top of each person's own volume and each sound's own volume below.</small>
+          <label class="toggle-row">
+            <span data-i18n="settings.sounds_section.show_db">Show volumes in dB</span>
+            <input type="checkbox" id="volume-show-db">
+          </label>
           <label class="toggle-row">
             <span data-i18n="settings.sounds_section.notifications">Notifications</span>
             <input type="checkbox" id="notif-enabled">
@@ -3454,6 +3467,11 @@
           </label>
           <small class="settings-hint" data-i18n="settings.admin.max_sound_hint">Max soundboard upload size (256-10240 KB, default 1024 / 1 MB)</small>
           <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_avatar">Max Profile Picture Size (MB)</span>
+            <input type="number" id="max-avatar-mb" min="1" max="10" value="2" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_avatar_hint">Largest profile picture, border or persona picture someone can upload (1 to 10 MB, default 2). Animated GIFs are often over 2 MB, but every picture is loaded next to every message its owner sends, so keep this as low as you can.</small>
+          <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_emoji">Max Emoji File Size (KB)</span>
             <input type="number" id="max-emoji-kb" min="64" max="1024" value="256" class="settings-number-input">
           </label>
@@ -3557,7 +3575,7 @@
               <div class="restore-progress-track"><div class="restore-progress-fill" id="restore-progress-fill"></div></div>
               <small class="settings-hint restore-progress-label" id="restore-progress-label" data-i18n="header.uploading">Uploading…</small>
             </div>
-            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_restore_full_note">Only full backups can be restored here, which means the backup must have had both Messages and Uploaded files checked when it was made. Smaller channels/users/settings backups have to be re-imported by hand.</small>
+            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_restore_full_note">A backup can be restored here when it was made with Messages ticked: that is the whole database. Uploaded files is optional; when the backup has none, the uploads folder is left as it is. A channels/users/settings-only backup has no database to restore from.</small>
             <small class="settings-hint" style="margin-top:6px;display:block;color:var(--danger,#e84a4a)" data-i18n-html="settings.admin.backup_restore_warning"><strong>Warning:</strong> Restoring overwrites the current server data. The server will restart automatically, so your hosting setup must support auto-restart (Docker, systemd, the Haven installer service, etc.). The previous database is preserved as <code>haven.db.pre-restore</code> for one cycle.</small>
           </div>
           <div class="settings-group" style="margin-top:14px">
@@ -5199,17 +5217,17 @@
     </div>
   </div>
   <script src="/js/theme.js?v=4.22.9"></script>
-  <script src="/js/notifications.js?v=4.21.1"></script>
+  <script src="/js/notifications.js?v=4.23.6"></script>
   <script src="/js/servers.js?v=4.21.0"></script>
   <script src="/js/voice-relay.js?v=4.14.2"></script>
-  <script src="/js/voice.js?v=4.21.1"></script>
+  <script src="/js/voice.js?v=4.23.6"></script>
   <script src="/js/modmode.js?v=4.21.0"></script>
   <script src="/js/e2e-group.js?v=4.21.0"></script>
   <script src="/js/e2e.js?v=4.21.0"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
-  <script type="module" src="/js/app.js?v=4.23.1"></script>
+  <script type="module" src="/js/app.js?v=4.23.7"></script>
   <script src="/js/plugin-loader.js?v=4.21.0"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

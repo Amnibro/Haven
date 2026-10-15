@@ -434,6 +434,42 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     assert.strictEqual(roots.length, 1, 'the next reply reuses the same line');
   });
 
+  // A picture or file sent in Haven goes to Discord as an upload, not as a
+  // /uploads/ path Discord cannot open. One past Discord's 10 MB stays behind.
+  await t.test('Haven uploads go to Discord as attachments', async () => {
+    const uploads = path.join(DATA, 'uploads');
+    fs.mkdirSync(uploads, { recursive: true });
+    fs.writeFileSync(path.join(uploads, '1790000000000-aaaa1111.png'), Buffer.alloc(2048, 7));
+    fs.writeFileSync(path.join(uploads, '1790000000001-bbbb2222.pdf'), Buffer.alloc(4096, 3));
+    fs.writeFileSync(path.join(uploads, '1790000000002-cccc3333.mp4'), Buffer.alloc(11 * 1024 * 1024, 1));
+    // Mirror everything from the chat pairing, so a plain message goes out.
+    const got = next(A, 'ferry:config');
+    A.emit('ferry:get-config');
+    const chatLink = (await got).links.find((l) => l.discord_channel_id === TEXT_ID);
+    const updated = next(A, 'ferry:config', (c) => c.links.some((l) => l.id === chatLink.id && l.out_mode === 'all'));
+    A.emit('ferry:update-link', { id: chatLink.id, outMode: 'all' });
+    assert.ok(await updated, 'the pairing mirrors every message');
+    A.emit('enter-channel', { code: chat.code });
+    await wait(200);
+    const before = discord.executions.length;
+    A.emit('send-message', { code: chat.code, content: 'Image send test.\n/uploads/1790000000000-aaaa1111.png' });
+    const pic = await until(() => discord.executions.slice(before).find((e) => e.body && e.body.content === 'Image send test.'));
+    assert.ok(pic, 'the text went without the path');
+    assert.deepStrictEqual(pic.body.files.map((f) => [f.filename, f.size]), [['1790000000000-aaaa1111.png', 2048]]);
+    assert.deepStrictEqual(pic.body.attachments, [{ id: 0, filename: '1790000000000-aaaa1111.png' }]);
+
+    A.emit('send-message', { code: chat.code, content: '[file:Quarterly report.pdf](/uploads/1790000000001-bbbb2222.pdf|4 KB)' });
+    const doc = await until(() => discord.executions.slice(before).find((e) => e.body && e.body.files && e.body.files.some((f) => f.filename === 'Quarterly report.pdf')));
+    assert.ok(doc, 'a file goes under its own name');
+    assert.strictEqual(doc.body.content, '');
+
+    A.emit('send-message', { code: chat.code, content: 'big one /uploads/1790000000002-cccc3333.mp4' });
+    const big = await until(() => discord.executions.slice(before).find((e) => e.body && /^big one/.test(e.body.content || '')));
+    assert.ok(big, 'the message still went');
+    assert.ok(!big.body.files, 'nothing over 10 MB was uploaded');
+    assert.strictEqual(big.body.content, 'big one (too large to send to Discord)');
+  });
+
   assert.deepStrictEqual(errors.filter((e) => !/forum/i.test(e)), [], 'no unexpected errors');
   A.close();
 });

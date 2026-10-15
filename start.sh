@@ -27,23 +27,29 @@ echo ""
 # ── Check Node.js ──────────────────────────────────────────
 if ! command -v node &> /dev/null; then
     echo -e "${RED}  [ERROR] Node.js is not installed.${NC}"
-    echo "  Install it from https://nodejs.org or:"
-    echo "    Ubuntu/Debian:  sudo apt install nodejs npm"
+    echo "  Haven needs Node.js 22 or newer. Install it from https://nodejs.org or:"
+    echo "    Ubuntu/Debian:  curl -fsSL https://deb.nodesource.com/setup_26.x | sudo -E bash -"
+    echo "                    sudo apt install nodejs"
     echo "    macOS (brew):   brew install node"
     echo "    Fedora:         sudo dnf install nodejs"
     echo "    Arch:           sudo pacman -S nodejs npm"
+    echo "  (Plain 'apt install nodejs' gives Node 18 on Ubuntu 24.04, which is too old.)"
     exit 1
 fi
 
 NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
 echo "  [✓] Node.js $(node -v) detected"
 
-if [ "$NODE_VER" -lt 18 ]; then
-    echo -e "${YELLOW}  [!] Node.js 18+ recommended. You have v${NODE_VER}.${NC}"
+if [ "$NODE_VER" -lt 22 ]; then
+    echo -e "${RED}  [ERROR] Haven needs Node.js 22 or newer. You have $(node -v).${NC}"
+    echo "  Install a current version from https://nodejs.org or NodeSource:"
+    echo "    Ubuntu/Debian:  curl -fsSL https://deb.nodesource.com/setup_26.x | sudo -E bash -"
+    echo "                    sudo apt install nodejs"
+    exit 1
 fi
 
 if [ "$NODE_VER" -ge 27 ]; then
-    echo -e "${YELLOW}  [!] Node.js v${NODE_VER} detected. Haven is tested on Node 18-26.${NC}"
+    echo -e "${YELLOW}  [!] Node.js v${NODE_VER} detected. Haven is tested on Node 22-26.${NC}"
     echo "  Continuing. Native modules are verified functionally below."
 elif [ "$NODE_VER" -ge 24 ]; then
     echo "  [*] Node.js v${NODE_VER}: verifying native modules load (below)."
@@ -98,26 +104,14 @@ if [ "${FORCE_HTTP:-false}" = "true" ]; then
     echo "  [*] FORCE_HTTP=true, skipping SSL certificate generation"
 elif [ ! -f "$HAVEN_DATA/certs/cert.pem" ]; then
     echo "  [*] Generating self-signed SSL certificate..."
-    mkdir -p "$HAVEN_DATA/certs"
-
-    # Detect local IP (Linux vs macOS)
-    if command -v hostname &> /dev/null && hostname -I &> /dev/null; then
-        LOCAL_IP=$(hostname -I | awk '{print $1}')
-    elif command -v ipconfig &> /dev/null; then
-        LOCAL_IP=$(ipconfig getifaddr en0 2>/dev/null || echo "127.0.0.1")
-    else
-        LOCAL_IP="127.0.0.1"
-    fi
-
-    openssl req -x509 -newkey rsa:2048 \
-        -keyout "$HAVEN_DATA/certs/key.pem" -out "$HAVEN_DATA/certs/cert.pem" \
-        -days 3650 -nodes -subj "/CN=Haven" \
-        -addext "subjectAltName=IP:127.0.0.1,IP:${LOCAL_IP},DNS:localhost"
+    # Made with Node (scripts/gen-cert.js), the same as Start Haven.bat, so
+    # OpenSSL is not needed and its progress output stays off the screen.
+    HAVEN_DATA_DIR="$HAVEN_DATA" node scripts/gen-cert.js || true
 
     if [ -f "$HAVEN_DATA/certs/cert.pem" ]; then
-        echo "  [✓] SSL cert generated (covers ${LOCAL_IP})"
+        echo "  [✓] SSL cert generated"
     else
-        echo -e "${RED}  [!] SSL certificate generation failed. Check OpenSSL output above.${NC}"
+        echo -e "${RED}  [!] SSL certificate generation failed. See the output above.${NC}"
         echo "      Haven will run in HTTP mode."
     fi
     echo ""

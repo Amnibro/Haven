@@ -95,6 +95,27 @@ module.exports = function register(socket, ctx) {
     } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
   }
 
+  // Thread replies go with the message they hang from (ON DELETE CASCADE), so
+  // a forum topic takes its replies, and a blog gallery every picture, with
+  // it. Their files go too, each author's own, the same rule as any delete
+  // (#5783). Read the replies before the delete; release after it.
+  function repliesUnder(ids) {
+    const out = [];
+    const q = db.prepare('SELECT user_id, content FROM messages WHERE thread_id = ?');
+    for (const id of ids) out.push(...q.all(id));
+    return out;
+  }
+  function releaseReplyUploads(replies) {
+    for (const r of replies) {
+      if (!Number.isInteger(r.user_id)) continue;
+      const rels = [];
+      UPLOAD_PATH_RE.lastIndex = 0;
+      let m;
+      while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) rels.push(m[1]);
+      for (const rel of releasableUploads(db, rels, [r.user_id])) moveUploadToDeleted(rel);
+    }
+  }
+
   // Reply banners must match message rendering: bots live in webhook_* with
   // user_id NULL, so a users-table COALESCE alone becomes "[Deleted User]".
   const REPLY_CONTEXT_SELECT = `
@@ -996,6 +1017,7 @@ module.exports = function register(socket, ctx) {
     const delPin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
     const delRx  = db.prepare('DELETE FROM reactions WHERE message_id = ?');
     const delMsg = db.prepare('DELETE FROM messages WHERE id = ?');
+    const bulkReplies = repliesUnder(deletable.map(r => r.id));
     const purge = db.transaction(() => {
       for (const r of deletable) {
         delPin.run(r.id);
@@ -1032,6 +1054,7 @@ module.exports = function register(socket, ctx) {
       }
       for (const rel of releasableUploads(db, toRelease, [r.user_id])) moveUploadToDeleted(rel);
     }
+    releaseReplyUploads(bulkReplies);
 
     // Broadcast individual deletes so all clients' message lists, pin lists,
     // and open Files & Media views stay consistent.
@@ -1086,9 +1109,11 @@ module.exports = function register(socket, ctx) {
       // keys; pins are cleared by hand, the way the bulk delete does it.
       const delPin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
       const delMsg = db.prepare('DELETE FROM messages WHERE id = ?');
+      const othersReplies = repliesUnder(rows.map(r => r.id)).filter(r => r.user_id !== uid);
       db.transaction(() => {
         for (const r of rows) { delPin.run(r.id); delMsg.run(r.id); }
       })();
+      releaseReplyUploads(othersReplies);
 
       const toRelease = [];
       for (const r of rows) {
@@ -2079,6 +2104,7 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    const replies = repliesUnder([msg.id]);
     try {
       db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
       db.prepare('DELETE FROM reactions WHERE message_id = ?').run(data.messageId);
@@ -2087,6 +2113,7 @@ module.exports = function register(socket, ctx) {
       console.error('Delete message error:', err);
       return socket.emit('error-msg', 'Failed to delete message');
     }
+    releaseReplyUploads(replies);
     // Deleted before its timer ran out: the self-destruct timer may have been
     // waiting for this one, so let it move on to the next, or sleep.
     if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);

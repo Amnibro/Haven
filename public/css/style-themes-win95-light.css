@@ -383,7 +383,8 @@
   background: none;
 }
 [data-theme="win95"] .settings-close-btn,
-[data-theme="win95"] .modal-close {
+[data-theme="win95"] .modal-close,
+[data-theme="win95"] .modal-close-btn {
   width: 1.125rem; height: 1.125rem;
   background: #bfbfbf;
   border: 2px outset #fff;
@@ -394,7 +395,8 @@
   line-height: 1;
 }
 [data-theme="win95"] .settings-close-btn:hover,
-[data-theme="win95"] .modal-close:hover { background: #dfdfdf; }
+[data-theme="win95"] .modal-close:hover,
+[data-theme="win95"] .modal-close-btn:hover { background: #dfdfdf; }
 
 /* Win95 admin save bar: beveled gray box with black text */
 [data-theme="win95"] .admin-save-bar {

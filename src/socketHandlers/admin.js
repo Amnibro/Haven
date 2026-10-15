@@ -130,7 +130,7 @@ module.exports = function register(socket, ctx) {
       'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
-      'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'hide_disabled_channel_badges',
+      'max_sound_kb', 'max_avatar_mb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'hide_disabled_channel_badges',
       'category_layout', 'category_short_names', // (#5756) category tabs and short names
       'allow_self_purge', // (#5686) members may delete every message they wrote
       'default_theme', 'published_themes', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
@@ -268,6 +268,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'max_poll_options') { const n = parseInt(value); if (isNaN(n) || n < 2 || n > 25) return; }
     if (key === 'max_message_chars') { const n = parseInt(value); if (isNaN(n) || n < 200 || n > 100000) return; }
     if (key === 'max_sound_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
+    if (key === 'max_avatar_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 10) return; }
     if (key === 'max_emoji_kb') { const n = parseInt(value); if (isNaN(n) || n < 64 || n > 1024) return; }
     if (key === 'max_sticker_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
     if (key === 'session_duration_days') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 365) return; } // 0 = never expire (#5391)
@@ -1007,7 +1008,7 @@ module.exports = function register(socket, ctx) {
         ORDER BY w.created_at DESC
       `).all());
       socket.emit('webhooks-list', { webhooks });
-      socket.emit('error-msg', `Webhook "${name}" created for #${channel.name}`);
+      socket.emit('toast', { message: `Webhook "${name}" created for #${channel.name}`, type: 'success' });
     }
   });
 

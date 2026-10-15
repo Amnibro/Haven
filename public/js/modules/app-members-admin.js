@@ -987,9 +987,9 @@ _confirmTransferAdmin(userId, username) {
         </div>
         <p id="transfer-admin-error" class="transfer-admin-error"></p>
       </div>
-      <div class="modal-footer">
-        <button class="btn-secondary transfer-admin-cancel">${t('modals.common.cancel')}</button>
-        <button class="btn-danger-fill transfer-admin-confirm">${t('modals.transfer_admin.confirm_btn')}</button>
+      <div class="modal-actions">
+        <button class="btn-sm transfer-admin-cancel">${t('modals.common.cancel')}</button>
+        <button class="btn-sm btn-danger transfer-admin-confirm">${t('modals.transfer_admin.confirm_btn')}</button>
       </div>
     </div>
   `;

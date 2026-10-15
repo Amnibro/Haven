@@ -15,7 +15,7 @@ import VoiceControlMethods from './modules/app-voice-controls.js?v=4.21.0';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.22.2';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.23.1';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.22.22';
-import PeopleMethods from './modules/app-people.js?v=4.23.1';
+import PeopleMethods from './modules/app-people.js?v=4.23.5';
 import SettingsMethods from './modules/app-settings.js?v=4.22.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.21.0';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
@@ -24,7 +24,7 @@ import MobileMethods from './modules/app-mobile.js?v=4.21.0';
 import MediaMethods    from './modules/app-media.js?v=4.22.21';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.22.18';
 import AttachmentMethods from './modules/app-attachments.js?v=4.22.14';
-import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.22.9';
+import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.23.5';
 import AppearanceMethods from './modules/app-appearance.js?v=4.22.9';
 import AccessibilityMethods from './modules/app-accessibility.js?v=4.22.3';
 import SoundMethods from './modules/app-sounds.js?v=4.21.0';
@@ -44,16 +44,16 @@ import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.22.21';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.21.0';
 import MusicMethods from './modules/app-music.js?v=4.22.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.21.0';
-import MessageContentMethods from './modules/app-message-content.js?v=4.22.22';
+import MessageContentMethods from './modules/app-message-content.js?v=4.23.7';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.22.10';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.22.1';
 import ThreadMethods from './modules/app-threads.js?v=4.23.1';
-import AdminMethods    from './modules/app-admin.js?v=4.22.15';
+import AdminMethods    from './modules/app-admin.js?v=4.23.5';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
-import MembersAdminMethods from './modules/app-members-admin.js?v=4.22.20';
+import MembersAdminMethods from './modules/app-members-admin.js?v=4.23.7';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.21.0';
 import StatusMethods from './modules/app-status.js?v=4.21.0';
-import DiscordImportMethods from './modules/app-discord-import.js?v=4.22.17';
+import DiscordImportMethods from './modules/app-discord-import.js?v=4.23.2';
 import RoleMethods from './modules/app-roles.js?v=4.21.1';
 import RoleAssignMethods from './modules/app-role-assign.js?v=4.21.1';
 import ModerationMethods from './modules/app-moderation.js?v=4.21.1';
@@ -67,11 +67,12 @@ import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.22.15';
 import CallMethods from './modules/app-calls.js?v=4.22.24';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
-import GroupMethods from './modules/app-groups.js?v=4.22.25';
+import GroupMethods from './modules/app-groups.js?v=4.23.10';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.22.9';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
+import MasterVolumeMethods from './modules/app-master-volume.js?v=4.23.6';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.22.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
@@ -367,6 +368,7 @@ class HavenApp {
     this._setupServerBar();
     this._applyGuestMode(); // (#5381) hide DM UI / lock down features for guests
     this._setupNotifications();
+    this._setupMasterVolume();
     this._setupPushNotifications();
     this._resyncDesktopBadgeOnFocus?.();
     this._setupImageUpload();
@@ -584,6 +586,7 @@ Object.assign(HavenApp.prototype,
   MessageHighlightMethods,
   ModCaseMethods,
   ServerMuteMethods,
+  MasterVolumeMethods,
   ForumUnreadMethods,
   ChannelCategoryMethods,
   ChannelPersonalOrderMethods,

@@ -756,10 +756,21 @@
   border-color: var(--accent);
 }
 .settings-close-btn { margin-left: 0; }
-.modal-close { margin-left: auto; }
+.modal-close,
+.modal-close-btn { margin-left: auto; }
+
+/* Header row of the dialogs built in app-members-admin.js (Transfer Admin,
+   password reset, bulk cleanup): title on the left, close button on the right. */
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
 
 .settings-header h3,
-.forum-modal-header h3 {
+.forum-modal-header h3,
+.modal-header h4 {
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-primary);
@@ -768,7 +779,8 @@
 }
 
 .settings-close-btn,
-.modal-close {
+.modal-close,
+.modal-close-btn {
   width: 2rem;
   height: 2rem;
   display: flex;
@@ -783,7 +795,8 @@
   transition: all 0.15s ease;
 }
 .settings-close-btn:hover,
-.modal-close:hover {
+.modal-close:hover,
+.modal-close-btn:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }

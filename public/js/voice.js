@@ -3709,7 +3709,7 @@ class VoiceManager {
     } else {
       // Fallback: HTMLAudioElement volume (capped at 1.0, no boost)
       const audioEl = document.getElementById(`voice-audio-${userId}`);
-      if (audioEl) audioEl.volume = Math.max(0, Math.min(1, volume));
+      if (audioEl) audioEl.volume = Math.max(0, Math.min(1, volume * this._voiceMasterLevel()));
     }
   }
 
@@ -3776,6 +3776,37 @@ class VoiceManager {
       const vols = JSON.parse(localStorage.getItem('haven_voice_volumes') || '{}');
       return (vols[userId] ?? 100) / 100;
     } catch { return 1; }
+  }
+
+  // Everyone's voice passes one master level (Settings, Sounds) on its way to
+  // the speakers, after each person's own volume. 0 to 2 (200%).
+  _voiceMasterLevel() {
+    let n = NaN;
+    try { n = parseFloat(localStorage.getItem('haven_voice_master_volume')); } catch { /* storage blocked: full volume */ }
+    return Number.isFinite(n) ? Math.max(0, Math.min(2, n)) : 1;
+  }
+
+  _voiceOut() {
+    const ctx = this._ensureAudioCtx();
+    if (!this._voiceMaster || this._voiceMaster.context !== ctx) {
+      this._voiceMaster = ctx.createGain();
+      this._voiceMaster.gain.value = this._voiceMasterLevel();
+      this._voiceMaster.connect(ctx.destination);
+    }
+    return this._voiceMaster;
+  }
+
+  setVoiceMasterVolume(level) {
+    const v = Math.max(0, Math.min(2, level));
+    try { localStorage.setItem('haven_voice_master_volume', String(v)); } catch (err) { console.warn('[Voice] could not save the voice volume', err); }
+    if (this._voiceMaster) this._voiceMaster.gain.value = v;
+    if (this.isDeafened) return;
+    // People played straight from their <audio> element (iOS, or no Web Audio).
+    document.querySelectorAll('#audio-container audio[id^="voice-audio-"]').forEach((el) => {
+      const userId = el.id.slice('voice-audio-'.length);
+      if (this.gainNodes.has(userId) || this.gainNodes.has(Number(userId))) return;
+      el.volume = Math.max(0, Math.min(1, this._getSavedVolume(userId) * v));
+    });
   }
 
   // ── Live Device Switching ────────────────────────────────
@@ -4538,7 +4569,7 @@ class VoiceManager {
     // audio actually plays, which is the whole point. Local mic talk
     // detection still works because that's getUserMedia-side, not PC-side.
     if (_IS_IOS_WEBKIT) {
-      const savedVolume = Math.min(1, this._getSavedVolume(userId));
+      const savedVolume = Math.min(1, this._getSavedVolume(userId) * this._voiceMasterLevel());
       if (this.isDeafened) {
         audioEl.dataset.prevVolume = String(savedVolume);
         audioEl.volume = 0;
@@ -4572,14 +4603,14 @@ class VoiceManager {
       const gainNode = this.audioCtx.createGain();
       gainNode.gain.value = this._getAppliedIncomingVolume(this._getSavedVolume(userId));
       source.connect(gainNode);
-      gainNode.connect(this.audioCtx.destination);
+      gainNode.connect(this._voiceOut());
       this.gainNodes.set(userId, gainNode);
 
       // Mute element playback; audio routes through GainNode instead
       audioEl.volume = 0;
     } catch {
       // Fallback: use element volume directly (no boost beyond 100%)
-      const savedVolume = Math.min(1, this._getSavedVolume(userId));
+      const savedVolume = Math.min(1, this._getSavedVolume(userId) * this._voiceMasterLevel());
       if (this.isDeafened) {
         audioEl.dataset.prevVolume = String(savedVolume);
         audioEl.volume = 0;

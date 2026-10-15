@@ -35,6 +35,8 @@
  * Haven author's name in the body.
  */
 
+const fs = require('fs');
+const path = require('path');
 const WebSocket = require('ws');
 const { agentFor } = require('./outboundProxy');
 const automod = require('./automod');
@@ -84,6 +86,11 @@ const DISALLOWED_INTENT = 4014;
 
 // Discord's own limits, enforced here so we fail loudly instead of eating a 400.
 const MAX_DISCORD_CONTENT = 2000;
+// What any Discord server takes from a webhook: 10 MB a file (boosted servers
+// take more, but Ferry cannot tell), ten files a message.
+const DISCORD_FILE_MAX = 10 * 1024 * 1024;
+const DISCORD_FILES_PER_MESSAGE = 10;
+const DISCORD_UPLOAD_TOTAL = 25 * 1024 * 1024;
 const MAX_WEBHOOK_USERNAME = 80;
 
 // Discord ids are numeric strings. Anything else must never reach an API path.
@@ -267,13 +274,23 @@ async function discordRequest(method, path, body, attempt = 0) {
  * `threadId` posts into one thread of the webhook's channel, which is how a
  * reply reaches a forum post. Discord unarchives the thread on the way in.
  */
-async function executeWebhook(webhookId, webhookToken, payload, { threadId = null } = {}, attempt = 0) {
+async function executeWebhook(webhookId, webhookToken, payload, { threadId = null, files = [] } = {}, attempt = 0) {
   const thread = threadId && SNOWFLAKE.test(String(threadId)) ? `&thread_id=${threadId}` : '';
+  // Files go up with the message as multipart, the way Discord takes uploads.
+  let body = JSON.stringify(payload);
+  const headers = { 'User-Agent': USER_AGENT };
+  if (files.length) {
+    body = new FormData();
+    body.append('payload_json', JSON.stringify({ ...payload, attachments: files.map((f, i) => ({ id: i, filename: f.name })) }));
+    files.forEach((f, i) => body.append(`files[${i}]`, new Blob([fs.readFileSync(f.path)]), f.name));
+  } else {
+    headers['Content-Type'] = 'application/json';
+  }
   const res = await fetch(`${API}/webhooks/${webhookId}/${webhookToken}?wait=true${thread}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(15000),
+    headers,
+    body,
+    signal: AbortSignal.timeout(files.length ? 60000 : 15000),
   });
 
   if (res.status === 429) {
@@ -281,7 +298,7 @@ async function executeWebhook(webhookId, webhookToken, payload, { threadId = nul
     console.warn(`[ferry] Discord rate limit on webhook ${webhookId}: retry after ${Math.ceil(wait / 1000)}s`);
     if (attempt < RATE_LIMIT_ATTEMPTS - 1 && wait <= RATE_LIMIT_MAX_WAIT_MS) {
       await sleep(wait);
-      return executeWebhook(webhookId, webhookToken, payload, { threadId }, attempt + 1);
+      return executeWebhook(webhookId, webhookToken, payload, { threadId, files }, attempt + 1);
     }
     throw rateLimitError(wait);
   }
@@ -1483,6 +1500,53 @@ function absoluteAvatarUrl(avatar) {
   return base + (avatar.startsWith('/') ? avatar : '/' + avatar);
 }
 
+// A name Discord shows for an attachment: the file's own name, kept short and
+// to characters that cannot break the upload.
+function attachmentName(name) {
+  const clean = String(name || '').replace(/[^\w.\- ()]+/g, '_').replace(/^[._ ]+/, '').slice(-100);
+  return clean || 'file';
+}
+
+/**
+ * The files in a Haven message, taken out of its text so they can be uploaded
+ * to Discord with it. Haven writes a picture as "/uploads/<name>" and any other
+ * file as "[file:Name](/uploads/<name>|size)". Discord cannot open those paths,
+ * so a file it can take is sent along, and one it cannot (too big, past ten)
+ * stays as a link when PUBLIC_URL is set, or becomes a short note.
+ */
+function takeUploads(content) {
+  const { UPLOADS_DIR } = require('./paths');
+  const files = [];
+  let total = 0;
+  // Returns null when the file goes along, or why it cannot.
+  const take = (stored, shownName) => {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(stored)) return '(file not found)';
+    const full = path.join(UPLOADS_DIR, stored);
+    let size;
+    try { size = fs.statSync(full).size; } catch { return '(file not found)'; } // deleted since it was posted
+    if (files.length >= DISCORD_FILES_PER_MESSAGE || size > DISCORD_FILE_MAX || total + size > DISCORD_UPLOAD_TOTAL) {
+      return '(too large to send to Discord)';
+    }
+    total += size;
+    files.push({ path: full, name: attachmentName(shownName || stored) });
+    return null;
+  };
+  const base = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  let text = String(content || '')
+    .replace(/\[file:([^\]]*)\]\(\/uploads\/([^)|\s]+)(?:\|[^)]*)?\)/g, (m, name, stored) => {
+      const why = take(stored, name);
+      if (!why) return '';
+      return `📎 ${name || stored} ${base ? `${base}/uploads/${stored}` : why}`;
+    })
+    .replace(/(^|\s)\/uploads\/([^\s]+)/g, (m, pre, stored) => {
+      const why = take(stored);
+      if (!why) return pre;
+      return base ? m : `${pre}${why}`;
+    });
+  text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { text, files };
+}
+
 function absolutizeUploads(content) {
   const base = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
   if (!base) return content;
@@ -1616,14 +1680,15 @@ async function ensureLinkWebhook(link) {
  */
 async function sendToDiscord(link, { username, avatar, content }) {
   const guild = guilds.get(String(link.guild_id || ''));
-  const body = outboundBody(content, guild);
-  if (!body.trim()) return;
+  const { text, files } = takeUploads(content);
+  const body = outboundBody(text, guild);
+  if (!body.trim() && !files.length) return;
   if (isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
 
   return enqueue(`ch:${link.discord_channel_id}`, async () => {
     try {
       const hook = await ensureLinkWebhook(link);
-      await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }));
+      await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { files });
       touchLink(link.id, null);
     } catch (err) {
       throw sendFailure(link, err);
@@ -1719,8 +1784,9 @@ function discordForumIsNsfw(guild, link) {
  */
 async function sendTopicToDiscord(link, { username, avatar, content, title, tags, topicId, nsfw = false }) {
   const guild = guilds.get(String(link.guild_id || ''));
-  const body = outboundBody(content, guild);
-  if (!body.trim()) return;
+  const { text, files } = takeUploads(content);
+  const body = outboundBody(text, guild);
+  if (!body.trim() && !files.length) return;
   if (!isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
   // An NSFW topic only goes to a Discord forum that is age-restricted too.
   // Held back, it has no Discord post, so its replies stay in Haven as well.
@@ -1737,7 +1803,7 @@ async function sendTopicToDiscord(link, { username, avatar, content, title, tags
       const forum = guild && guild.channels.get(String(link.discord_channel_id));
       const tagIds = discordTagIdsFor(tags, forum && forum.tags);
       if (tagIds.length) payload.applied_tags = tagIds;
-      const sent = await executeWebhook(hook.id, hook.token, payload);
+      const sent = await executeWebhook(hook.id, hook.token, payload, { files });
       const threadId = String((sent && (sent.channel_id || sent.id)) || '');
       if (SNOWFLAKE.test(threadId) && Number.isInteger(topicId)) {
         deps.db.prepare(`
@@ -1762,8 +1828,9 @@ async function sendTopicToDiscord(link, { username, avatar, content, title, tags
  */
 async function sendReplyToDiscord(link, { username, avatar, content, topicId }) {
   const guild = guilds.get(String(link.guild_id || ''));
-  const body = outboundBody(content, guild);
-  if (!body.trim()) return;
+  const { text, files } = takeUploads(content);
+  const body = outboundBody(text, guild);
+  if (!body.trim() && !files.length) return;
   if (!isForumType(link.discord_channel_type)) return;
 
   return enqueue(`ch:${link.discord_channel_id}`, async () => {
@@ -1780,7 +1847,7 @@ async function sendReplyToDiscord(link, { username, avatar, content, topicId }) 
       const hook = await ensureLinkWebhook(link);
       await executeWebhook(hook.id, hook.token,
         await webhookPayload(link, guild, { username, avatar, body }),
-        { threadId: row.discord_thread_id });
+        { threadId: row.discord_thread_id, files });
       touchLink(link.id, null);
     } catch (err) {
       // 10003 is "unknown channel": the post is gone, so forget it.
@@ -2128,6 +2195,7 @@ module.exports = {
   matchForumTags,
   discordTagIdsFor,
   forumThreadName,
+  takeUploads,
   applySettings,
   reconnectFerry,
   stopFerry: stop,

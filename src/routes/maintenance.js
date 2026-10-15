@@ -397,8 +397,11 @@ module.exports = function registerMaintenance(deps) {
   // Detects how Haven was installed and returns the right command (or runs it).
   // Docker is intentionally NOT auto-runnable from inside the container; we just
   // surface the right command for the operator to run on the host.
+  // The code folder, which is where the updater works, whatever folder Haven
+  // was started from.
+  const CODE_DIR = path.resolve(__dirname, '..', '..');
   function detectInstallMethod() {
-    const cwd = process.cwd();
+    const cwd = CODE_DIR;
     const inDocker = fs.existsSync('/.dockerenv') || process.env.HAVEN_IN_DOCKER === 'true';
     if (inDocker) return 'docker';
     if (fs.existsSync(path.join(cwd, '.git'))) return 'git';
@@ -416,18 +419,18 @@ module.exports = function registerMaintenance(deps) {
       };
       case 'git': return {
         runnable: true,
-        command: 'git pull --ff-only && npm install --omit=dev',
-        message: 'Pull latest from GitHub and reinstall dependencies. The server will exit after the update so your supervisor (systemd / Docker / installer service) restarts it on the new code.',
+        mode: 'git',
+        command: 'node scripts/update.js git',
+        message: 'Haven pulls the latest code from GitHub, reinstalls dependencies and starts again. It is offline for a minute or two; this page reconnects by itself.',
       };
-      case 'windows-installer': return {
-        runnable: true,
-        command: '"Install Haven.bat" /update',
-        message: 'Re-run the Windows installer in update mode. The server will exit so the installer can replace files and restart the service.',
-      };
+      // Install Haven.bat, install.sh and release zips have no git history, so
+      // the updater downloads the latest release and copies it over the code.
+      case 'windows-installer':
       case 'shell-installer': return {
         runnable: true,
-        command: 'bash install.sh --update',
-        message: 'Re-run the install script in update mode. The server will exit so the installer can refresh files and restart the service.',
+        mode: 'release',
+        command: 'node scripts/update.js release',
+        message: 'Haven downloads the latest release, installs it and starts again. It is offline for a minute or two; this page reconnects by itself. Your data folder is not touched.',
       };
       default: return {
         runnable: false,
@@ -494,27 +497,41 @@ module.exports = function registerMaintenance(deps) {
 
     res.json({ ok: true, method, message: instructions.message });
 
-    // Run the update command in a detached child process so the parent can exit cleanly.
+    // scripts/update.js does the work and writes to update.log in the data
+    // folder. Under systemd or pm2 it updates in place and Haven exits after it,
+    // so the service manager starts the new code. Otherwise Haven exits first,
+    // which frees files Windows keeps locked while they are loaded (the SQLite
+    // module), and the script starts Haven again when it is done.
     const { spawn } = require('child_process');
-    console.log(`🔄 [Update] Running update command for method=${method}: ${instructions.command}`);
+    const supervised = !!(process.env.INVOCATION_ID || process.env.pm_id || process.env.HAVEN_SUPERVISED === 'true');
+    const updArgs = [path.join(CODE_DIR, 'scripts', 'update.js'), instructions.mode, '--port', String(process.env.PORT || 3000)];
+    if (supervised) updArgs.push('--no-restart');
+    else updArgs.push('--wait-pid', String(process.pid));
+    const shutdown = () => {
+      console.log('🔄 [Update] Exiting so the updated Haven can start…');
+      late.botAudioManager?.shutdown();
+      process.exit(0);
+    };
+    console.log(`🔄 [Update] Updating (${method}), log: ${path.join(DATA_DIR, 'update.log')}`);
     setTimeout(() => {
+      let child;
       try {
-        const child = spawn(instructions.command, {
-          cwd: process.cwd(),
-          shell: true,
-          detached: true,
-          stdio: 'ignore',
-        });
-        child.unref();
+        const logFd = fs.openSync(path.join(DATA_DIR, 'update.log'), 'a');
+        child = spawn(process.execPath, updArgs, { cwd: CODE_DIR, detached: !supervised, windowsHide: true, stdio: ['ignore', logFd, logFd] });
+        fs.closeSync(logFd);
       } catch (err) {
-        console.error('[Update] Failed to spawn update command:', err);
+        console.error('[Update] Could not start the updater, so Haven keeps running:', err);
+        return;
       }
-      // Give the child a moment to start, then exit so the supervisor restarts us.
-      setTimeout(() => {
-        console.log('🔄 [Update] Exiting so supervisor restarts on new code…');
-        late.botAudioManager?.shutdown();
-        process.exit(0);
-      }, 1500);
+      if (supervised) {
+        child.on('exit', (code) => {
+          if (code === 0) return shutdown();
+          console.error(`[Update] Update failed (exit ${code}), so Haven keeps running. See update.log.`);
+        });
+      } else {
+        child.unref();
+        setTimeout(shutdown, 1500);
+      }
     }, 1500);
   });
 

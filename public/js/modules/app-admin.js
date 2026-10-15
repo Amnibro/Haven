@@ -435,6 +435,8 @@ _applyServerSettings() {
     if (maxSoundKb) {
       maxSoundKb.value = this.serverSettings.max_sound_kb || '1024';
     }
+    const maxAvatarMb = document.getElementById('max-avatar-mb');
+    if (maxAvatarMb) maxAvatarMb.value = this.serverSettings.max_avatar_mb || '2';
     const maxEmojiKb = document.getElementById('max-emoji-kb');
     if (maxEmojiKb) {
       maxEmojiKb.value = this.serverSettings.max_emoji_kb || '256';
@@ -906,6 +908,7 @@ _snapshotAdminSettings() {
     max_tags_per_attachment: this.serverSettings.max_tags_per_attachment || '3',
     max_tag_len: this.serverSettings.max_tag_len || '20',
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
+    max_avatar_mb: this.serverSettings.max_avatar_mb || '2',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_sticker_kb: this.serverSettings.max_sticker_kb || '1024',
     max_poll_options: this.serverSettings.max_poll_options || '10',
@@ -1088,6 +1091,12 @@ _saveAdminSettings() {
   const maxSoundKb = String(Math.max(256, Math.min(10240, parseInt(document.getElementById('max-sound-kb')?.value) || 1024)));
   if (maxSoundKb !== (snap.max_sound_kb || '1024')) {
     this.socket.emit('update-server-setting', { key: 'max_sound_kb', value: maxSoundKb });
+    changed = true;
+  }
+
+  const maxAvatarMb = String(Math.max(1, Math.min(10, parseInt(document.getElementById('max-avatar-mb')?.value) || 2)));
+  if (maxAvatarMb !== (snap.max_avatar_mb || '2')) {
+    this.socket.emit('update-server-setting', { key: 'max_avatar_mb', value: maxAvatarMb });
     changed = true;
   }
 
@@ -1332,6 +1341,8 @@ _cancelAdminSettings() {
     if (mtl) mtl.value = snap.max_tag_len || '20';
     const msk = document.getElementById('max-sound-kb');
     if (msk) msk.value = snap.max_sound_kb || '1024';
+    const mam = document.getElementById('max-avatar-mb');
+    if (mam) mam.value = snap.max_avatar_mb || '2';
     const mek = document.getElementById('max-emoji-kb');
     if (mek) mek.value = snap.max_emoji_kb || '256';
     const mstk = document.getElementById('max-sticker-kb');

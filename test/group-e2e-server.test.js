@@ -17,7 +17,7 @@ const os = require('node:os');
 const { spawn } = require('node:child_process');
 const { io } = require('socket.io-client');
 
-const PORT = 3399;
+const PORT = 3444;
 const BASE = `http://localhost:${PORT}`;
 const DATA = path.join(os.tmpdir(), `haven-group-e2e-${Date.now()}`);
 

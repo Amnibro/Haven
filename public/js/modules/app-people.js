@@ -3,6 +3,12 @@
 
 export default {
 
+// The profile picture size limit the admin set (1 to 10 MB, 2 by default).
+_avatarMaxMb() {
+  const n = parseInt(this.serverSettings?.max_avatar_mb, 10);
+  return n >= 1 && n <= 10 ? n : 2;
+},
+
 _bindPeople() {
   // Rename username
   document.getElementById('rename-btn').addEventListener('click', () => {
@@ -811,8 +817,9 @@ _showPersonaEditor(id) {
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      this._showToast?.(t('personas.avatar_too_large'), 'error');
+    const maxMb = this._avatarMaxMb();
+    if (file.size > maxMb * 1024 * 1024) {
+      this._showToast?.(t('toasts.image_too_large', { max: maxMb }), 'error');
       return;
     }
     const fd = new FormData();

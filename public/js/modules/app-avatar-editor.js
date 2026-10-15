@@ -242,7 +242,8 @@ _applyAvatarEdits() {
   try {
     canvas.toBlob((blob) => {
       if (!blob) return fail();
-      if (blob.size > 2 * 1024 * 1024) return this._showToast(t('toasts.image_too_large', { max: 2 }), 'error');
+      const maxMb = this._avatarMaxMb();
+      if (blob.size > maxMb * 1024 * 1024) return this._showToast(t('toasts.image_too_large', { max: maxMb }), 'error');
       const ext = { 'image/jpeg': 'jpg', 'image/webp': 'webp' }[blob.type] || 'png';
       this._pendingAvatarFile = new File([blob], `avatar.${ext}`, { type: blob.type });
       this._pendingAvatarRemoved = false;

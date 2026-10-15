@@ -14,7 +14,7 @@ const os = require('node:os');
 const { spawn } = require('node:child_process');
 const { io } = require('socket.io-client');
 
-const PORT = 3397;
+const PORT = 3440;
 const BASE = `http://localhost:${PORT}`;
 const DATA = path.join(os.tmpdir(), `haven-roles-${Date.now()}`);
 

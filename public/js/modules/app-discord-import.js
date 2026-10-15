@@ -571,8 +571,22 @@ async _importConnectFetch() {
         channels: selected
       })
     });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || t('settings.admin.import_fetch_failed'));
+    const started = await this._importReadJson(res);
+    if (!res.ok) throw new Error(started.error || t('settings.admin.import_fetch_failed'));
+    // The server reads in the background; ask how it is going until it is done.
+    let result = started;
+    while (started.jobId) {
+      await new Promise(r => setTimeout(r, 2000));
+      const poll = await fetch('/api/import/discord/fetch/' + encodeURIComponent(started.jobId), { headers: { 'Authorization': 'Bearer ' + this.token } });
+      const data = await this._importReadJson(poll);
+      if (!poll.ok) throw new Error(data.error || t('settings.admin.import_fetch_failed'));
+      if (data.state === 'running') {
+        fetchStatus.textContent = t('settings.admin.import_fetch_progress', { messages: data.messages.toLocaleString(), done: data.channelsDone, total: data.channelsTotal });
+        continue;
+      }
+      result = data;
+      break;
+    }
     if (result.skipped?.length) {
       this._showToast(t('modals.discord_import.skipped_channels', { names: result.skipped.join(', ') }), 'error');
     }
@@ -615,6 +629,18 @@ async _importConnectFetch() {
   }
 },
 
+// A proxy or tunnel in front of Haven can answer with its own HTML error page
+// (a timeout, say) instead of Haven's JSON. Say so instead of showing a
+// JSON parse error.
+async _importReadJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(t('settings.admin.import_bad_response', { status: res.status }));
+  }
+},
+
 async _importExecute(importId, selectedChannels) {
   const executeBtn = document.getElementById('import-execute-btn');
   const stepPreview = document.getElementById('import-step-preview');
@@ -633,7 +659,7 @@ async _importExecute(importId, selectedChannels) {
       },
       body: JSON.stringify({ importId, selectedChannels })
     });
-    const data = await res.json();
+    const data = await this._importReadJson(res);
     if (!res.ok) throw new Error(data.error || t('settings.admin.import_failed'));
 
     // Show done step
