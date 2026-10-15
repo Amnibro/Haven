@@ -106,8 +106,9 @@ module.exports = function registerLinkPreview(deps) {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    if (!mediaProxyEnabled()) return res.json({ enabled: false, token: null });
-    res.json({ enabled: true, token: mediaProxy.issueToken(user.id) });
+    // Issued even with the proxy off: Discord emotes from the Ferry bridge are
+    // served only to holders of a media token.
+    res.json({ enabled: mediaProxyEnabled(), token: mediaProxy.issueToken(user.id) });
   });
 
   // Per-user rate limit. Generous, because opening a busy channel legitimately

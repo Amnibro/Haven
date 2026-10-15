@@ -516,7 +516,13 @@ _discordEmoteHtml(name, id, animated) {
   const label = this._escapeHtml(`:${name}:`);
   const own = this._findNamedEmoji(name);
   if (own) return `<img src="${this._escapeHtml(own.url)}" alt="${label}" title="${label}" class="custom-emoji">`;
-  return `<img src="/api/ferry/emote/${id}.${animated ? 'gif' : 'png'}" alt="${label}" title="${label}" class="custom-emoji discord-emote">`;
+  // The emote cache answers only holders of a media token. Until it arrives the
+  // address waits in data-emote-src, and _flushPendingMedia fills it in.
+  const path = `/api/ferry/emote/${encodeURIComponent(id)}.${animated ? 'gif' : 'png'}`;
+  const src = this._mediaToken
+    ? `src="${path}?mt=${encodeURIComponent(this._mediaToken)}"`
+    : `data-emote-src="${path}"`;
+  return `<img ${src} alt="${label}" title="${label}" class="custom-emoji discord-emote">`;
 },
 
 // Resolve a `:name:` shortcode to an image emoji. Checks the bundled
@@ -1232,7 +1238,8 @@ _refreshMediaToken() {
 _startMediaTokenRefresh() {
   if (this._mediaTokenTimer) return;
   this._mediaTokenTimer = setInterval(() => {
-    if (this._mediaProxyEnabled !== false) this._refreshMediaToken();
+    // Refreshed with the proxy off too: Discord emotes need the token.
+    this._refreshMediaToken();
   }, 6 * 60 * 60 * 1000);
 },
 
@@ -1329,6 +1336,12 @@ _flushPendingMedia() {
     if (p === null) return;            // still not ready
     el.removeAttribute('data-mp-src');
     el.setAttribute('src', p);
+  });
+  if (!this._mediaToken) return;
+  document.querySelectorAll('img[data-emote-src]').forEach(el => {
+    const path = el.getAttribute('data-emote-src');
+    el.removeAttribute('data-emote-src');
+    if (path.startsWith('/api/ferry/emote/')) el.setAttribute('src', `${path}?mt=${encodeURIComponent(this._mediaToken)}`);
   });
 },
 
