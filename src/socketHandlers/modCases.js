@@ -76,6 +76,7 @@ module.exports = function register(socket, ctx) {
     if (!canModerate()) return done({ ok: false, error: 'You don\'t have permission to add notes' });
     const target = targetOf(data);
     if (!target) return done({ ok: false, error: 'Member not found' });
+    if (!outranks(target.id)) return done({ ok: false, error: 'You can\'t add notes on someone at or above your own rank' });
     const text = typeof data.text === 'string' ? data.text.trim().slice(0, 500) : '';
     if (!text) return done({ ok: false, error: 'The note is empty' });
     try {
@@ -119,6 +120,15 @@ module.exports = function register(socket, ctx) {
     const row = id ? modCases.get(db, id) : null;
     if (!row) return done({ ok: false, error: 'Record not found' });
     if (row.user_id === socket.user.id) return done({ ok: false, error: 'You can\'t revoke your own record' });
+    // The same lines as giving one: not on someone at or above your rank, and
+    // not a record placed by the admin or by someone at or above your rank.
+    if (!outranks(row.user_id)) return done({ ok: false, error: 'You can\'t revoke records of someone at or above your own rank' });
+    if (!socket.user.isAdmin && row.actor_id && row.actor_id !== socket.user.id) {
+      const placer = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(row.actor_id);
+      if (placer && (placer.is_admin || getUserEffectiveLevel(row.actor_id) >= getUserEffectiveLevel(socket.user.id))) {
+        return done({ ok: false, error: 'You can\'t revoke a record placed by someone of equal or higher rank' });
+      }
+    }
     try {
       modCases.revoke(db, id, socket.user.displayName || socket.user.username);
       logAudit?.({ actor: socket.user, action: 'mod_case_revoke', target_type: 'user', target_id: row.user_id,
