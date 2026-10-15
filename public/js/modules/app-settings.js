@@ -81,8 +81,10 @@ _bindSettings() {
     const adminNav = document.querySelector('.settings-nav-admin-group');
     const saveBar = document.querySelector('.admin-save-bar');
 
-    document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`.settings-tab[data-tab="${tab}"]`)?.classList.add('active');
+    // Only the Settings modal's own tabs: plugins reuse the settings-tab
+    // look for buttons of their own (Channel Tabs, #5786).
+    document.querySelectorAll('#settings-tab-bar .settings-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`#settings-tab-bar .settings-tab[data-tab="${tab}"]`)?.classList.add('active');
 
     if (tab === 'admin') {
       // Defensive gate: refuse switching to the admin tab if the user has no
@@ -111,7 +113,7 @@ _bindSettings() {
     }
   };
 
-  document.querySelectorAll('.settings-tab').forEach(tab => {
+  document.querySelectorAll('#settings-tab-bar .settings-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       this._switchSettingsTab(tab.dataset.tab);
     });
