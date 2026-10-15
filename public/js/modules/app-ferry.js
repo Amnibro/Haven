@@ -238,7 +238,7 @@ export default {
       } else {
         rows = this._ferryUserResults.slice(0, 8).map((u, i) => `
           <div class="mention-item${i === 0 ? ' active' : ''}" data-ferry-dm-id="${esc(u.id)}" data-ferry-dm-name="${esc(u.name)}">
-            <img src="${esc(u.avatar)}" class="persona-dd-avatar" alt="">
+            <img ${u.avatar ? this._imgSrcAttr(u.avatar) : ''} class="persona-dd-avatar" alt="">
             <strong>${esc(u.name)}</strong>
             <span class="mention-item-handle">${esc(t('modals.ferry.dm_on_discord'))}</span>
           </div>`);

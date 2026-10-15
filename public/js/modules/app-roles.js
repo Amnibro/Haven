@@ -744,8 +744,12 @@ _renderChannelRolesMembers() {
 
   list.innerHTML = sorted.map(m => {
     const sel = this._channelRolesSelectedUser === m.id ? ' selected' : '';
-    const avatarSrc = m.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(m.loginName)}`;
     const shapeClass = m.avatarShape === 'square' ? ' square' : '';
+    // No avatar: the initial letter, as in the role assignment list, so no
+    // login name is sent to an outside avatar service.
+    const avatarHtml = m.avatar
+      ? `<img class="channel-roles-member-avatar${shapeClass}" src="${this._escapeHtml(m.avatar)}" alt="">`
+      : `<span class="channel-roles-member-avatar${shapeClass}" style="display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:600;background-color:${this._getUserColor(m.loginName || '')}">${this._escapeHtml((m.displayName || m.loginName || '?').charAt(0).toUpperCase())}</span>`;
     const badges = m.isAdmin
       ? `<span class="channel-roles-badge badge-admin"><span class="badge-dot" style="background:#e74c3c"></span>${t('settings.admin.badge_admin')}</span>`
       : (m.roles || []).map(r =>
@@ -753,7 +757,7 @@ _renderChannelRolesMembers() {
         ).join('') || `<span class="channel-roles-no-role">${t('settings.admin.roles_no_roles')}</span>`;
 
     return `<div class="channel-roles-member${sel}" data-uid="${m.id}">
-      <img class="channel-roles-member-avatar${shapeClass}" src="${avatarSrc}" alt="">
+      ${avatarHtml}
       <div class="channel-roles-member-info">
         <span class="channel-roles-member-name">${this._escapeHtml(m.displayName)}</span>
         <span class="channel-roles-member-login">@${this._escapeHtml(m.loginName)}</span>

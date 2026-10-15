@@ -209,7 +209,7 @@ _setupDiscordImport() {
           ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64`
           : '';
         card.innerHTML = `
-          ${iconUrl ? `<img src="${iconUrl}" alt="" class="import-server-icon">` : '<span class="import-server-icon-placeholder">🏠</span>'}
+          ${iconUrl ? `<img ${this._imgSrcAttr(iconUrl)} alt="" class="import-server-icon">` : '<span class="import-server-icon-placeholder">🏠</span>'}
           <span class="import-server-name">${this._escapeHtml(g.name)}</span>
         `;
         card.addEventListener('click', () => this._importPickGuild(g));
