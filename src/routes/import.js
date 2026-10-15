@@ -7,7 +7,7 @@ const express = require('express');
 const crypto = require('crypto');
 const os = require('os');
 const { verifyToken } = require('../auth');
-const { parseDiscordExport } = require('../importDiscord');
+const { parseDiscordExport, isReactionEmoji } = require('../importDiscord');
 
 module.exports = function registerImport(deps) {
   const { uploadDiskGuard, app, verifyAdminFromDb, uploadLimiter, importUpload } = deps;
@@ -352,7 +352,7 @@ module.exports = function registerImport(deps) {
               reactions: (msg.reactions || []).map(r => ({
                 emoji: r.emoji?.name || '❓',
                 count: r.count || 1
-              })),
+              })).filter(r => isReactionEmoji(r.emoji)),
               replyTo: msg.message_reference?.message_id || null
             });
           }

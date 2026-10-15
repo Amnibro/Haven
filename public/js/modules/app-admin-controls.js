@@ -368,7 +368,7 @@ _bindAdminControls() {
         });
       });
     } catch (err) {
-      listEl.innerHTML = `<small class="settings-hint" style="color:var(--danger)">${t('settings.admin.auto_backup_load_failed', { error: err.message })}</small>`;
+      listEl.innerHTML = `<small class="settings-hint" style="color:var(--danger)">${t('settings.admin.auto_backup_load_failed', { error: this._escapeHtml(err.message) })}</small>`;
     }
   };
   document.getElementById('auto-backup-save-btn')?.addEventListener('click', () => {
@@ -495,7 +495,7 @@ _bindAdminControls() {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      if (status) status.innerHTML = `<div>${t('settings.admin.update_started')}</div><div style="margin-top:6px"><small>${data.message || ''}</small></div>`;
+      if (status) status.innerHTML = `<div>${t('settings.admin.update_started')}</div><div style="margin-top:6px"><small>${this._escapeHtml(data.message || '')}</small></div>`;
       if (updRunBtn()) updRunBtn().disabled = true;
     } catch (err) {
       if (status) status.textContent = t('settings.admin.update_failed', { error: err.message });
@@ -1033,6 +1033,17 @@ async _copyInviteCard(card) {
   const input = card.querySelector('[data-role="invite-link"]');
   const inviteUrl = input?.value || '';
   if (!inviteUrl) return;
+  // The card is HTML pasted into mail: only an http(s) link goes in it.
+  let inviteHref;
+  try {
+    const parsed = new URL(inviteUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+    inviteHref = parsed.href;
+  } catch (err) {
+    console.warn('[invites] not copying a card for an unreadable link:', err.message);
+    return;
+  }
+  const esc = (v) => this._escapeHtml(String(v ?? ''));
 
   // Find the invite code data for this card.
   const id = parseInt(card.dataset.id, 10);
@@ -1083,8 +1094,8 @@ async _copyInviteCard(card) {
   }
 
   const iconHtml = iconSrc
-    ? `<img src="${iconSrc}" alt="${brandText}" style="display:block;width:96px;height:96px;margin:0 auto 16px; border-radius:${radius};object-fit:contain">`
-    : `<div style="margin:0 auto 16px;font-size:84px;line-height:96px;color:${accent}">${defaultLogo}</div>`;
+    ? `<img src="${esc(iconSrc)}" alt="${esc(brandText)}" style="display:block;width:96px;height:96px;margin:0 auto 16px; border-radius:${radius};object-fit:contain">`
+    : `<div style="margin:0 auto 16px;font-size:84px;line-height:96px;color:${accent}">${esc(defaultLogo)}</div>`;
 
   // Format invite expiration.
   let expiryText = '';
@@ -1098,6 +1109,9 @@ async _copyInviteCard(card) {
   const registerText = t('settings.admin.invite_links.card_register');
   const joinText = t('settings.admin.invite_links.card_join', { server: brandText });
   const copyLinkText = t('settings.admin.invite_links.card_copy_link');
+  // The server name is set by an admin; in the HTML card it is text, not markup.
+  const invitedHtml = t('settings.admin.invite_links.card_invited', { server: esc(brandText) });
+  const joinHtml = t('settings.admin.invite_links.card_join', { server: esc(brandText) });
 
   const expiryHtml = expiryText
     ? `<p style="margin:24px 0 0;padding-top:16px;border-top:1px solid ${border};color:${textSecondary}; font-size:13px">${t('settings.admin.invite_links.card_expires', { date: expiryText })}</p>`
@@ -1109,18 +1123,18 @@ async _copyInviteCard(card) {
           border:1px solid ${border};border-radius:${radius}">
         ${iconHtml}
         <h2 style="margin:0 0 16px;font-family:${fontMain};font-size:24px;color:${textPrimary}">
-          ${invitedText}
+          ${invitedHtml}
         </h2>
         <p style="margin:0 0 24px;color:${textSecondary};font-size:16px">
           ${registerText}
         </p>
-        <a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background:${accent};color:${accentText};
+        <a href="${esc(inviteHref)}" style="display:inline-block;padding:12px 24px;background:${accent};color:${accentText};
             text-decoration:none;border-radius:${radius};font-size:16px;font-weight:bold">
-          ${joinText}
+          ${joinHtml}
         </a>
         <p style="margin:24px 0 8px;color:${textSecondary};font-size:14px">${copyLinkText}</p>
         <p style="margin:0;word-break:break-all;font-size:14px">
-          <a href="${inviteUrl}" style="color:${textLink};text-decoration:none">${inviteUrl}</a>
+          <a href="${esc(inviteHref)}" style="color:${textLink};text-decoration:none">${esc(inviteUrl)}</a>
         </p>
         ${expiryHtml}
       </div>

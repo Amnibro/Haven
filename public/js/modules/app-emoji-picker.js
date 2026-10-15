@@ -564,7 +564,7 @@ _showReactionPopout(badge) {
 
   const emoji = badge.dataset.emoji;
   const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-  let emojiDisplay = emoji;
+  let emojiDisplay = this._escapeHtml(emoji);
   if (customMatch && this.customEmojis) {
     const ce = this.customEmojis.find(e => e.name === customMatch[1]);
     if (ce) emojiDisplay = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji reaction-custom-emoji">`;

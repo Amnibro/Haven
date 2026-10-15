@@ -77,6 +77,20 @@ test('typed placeholders for every kind stay plain text', () => {
   }
 });
 
+test('a colour span or timestamp inside a link URL never lands in the href', () => {
+  const app = loadApp();
+  for (const input of ['[x](https://a.com/c#112233y#c)', '[x](https://a.com/<t:1>)', '![x](https://a.com/<t:1>.png)', 'https://a.com/c#112233y#c']) {
+    const html = app._formatContent(input);
+    assert.ok(!html.includes('\u0000'), input + ': no NUL survives');
+    for (const m of html.matchAll(/(?:href|src)="([^"]*)"/g)) {
+      assert.ok(!/[<>]/.test(m[1]), input + ': no markup inside the URL: ' + html);
+    }
+    for (const tag of html.match(/<a\b[^>]*>/g) || []) {
+      assert.ok(!/<a\b[^>]*</.test(tag), input + ': link tag holds no markup: ' + tag);
+    }
+  }
+});
+
 test('other control characters are stripped, line breaks and tabs kept', () => {
   const app = loadApp();
   const html = app._formatContent('one\u0001\u0007\u001B\u007Ftwo\nthree\tfour');

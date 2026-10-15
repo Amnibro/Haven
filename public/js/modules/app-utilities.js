@@ -388,9 +388,12 @@ _isImageUrl(str) {
 // strings arrive as `?ex=…&amp;is=…`. Feed those straight to the media proxy
 // and Discord (Ferry attachments) 404s. The phone client never HTML-escapes
 // the URL, which is why the same photo shows on mobile and vanishes on desktop.
+// A control character means a renderer placeholder (colour, timestamp) ended
+// up inside the URL; restoring it there would put markup into the href.
 _rawHttpUrl(escapedOrRaw) {
   if (typeof escapedOrRaw !== 'string' || !escapedOrRaw) return null;
   const decoded = this._decodeHtmlEntities(escapedOrRaw).replace(/['"<>]/g, '');
+  if (/[\u0000-\u001F\u007F]/.test(decoded)) return null;
   try { new URL(decoded); } catch { return null; }
   return decoded;
 },

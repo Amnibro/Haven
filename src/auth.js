@@ -1875,7 +1875,15 @@ router.get('/SSO', (req, res) => {
   }
 
   const safeAuthCode = authCode.replace(/[^a-fA-F0-9]/g, '');
-  const safeOrigin = origin.replace(/[<>"'&]/g, '');
+  // Only a real http(s) origin is shown and handed to the page script, which
+  // gets it as a JSON string so no character can end the string early.
+  let safeOrigin = '';
+  try {
+    const u = new URL(origin);
+    if (u.protocol === 'http:' || u.protocol === 'https:') safeOrigin = u.origin;
+  } catch { /* missing or unreadable origin: the page names none and posts to none */ }
+  const htmlOrigin = safeOrigin.replace(/[<>"'&]/g, '');
+  const jsOrigin = JSON.stringify(safeOrigin).replace(/</g, '\\u003c');
 
   const nonce = crypto.randomBytes(16).toString('base64');
   res.set('Content-Security-Policy',
@@ -1923,7 +1931,7 @@ router.get('/SSO', (req, res) => {
     </div>
     <div id="consent" style="display:none">
       <p>Another Haven server wants to use your identity to pre-fill registration.</p>
-      ${safeOrigin ? `<p>Requesting server: <span class="origin">${safeOrigin}</span></p>` : ''}
+      ${htmlOrigin ? `<p>Requesting server: <span class="origin">${htmlOrigin}</span></p>` : ''}
       <div class="info">
         <div class="info-row"><span class="info-label">Username</span><span class="info-value" id="sso-username">-</span></div>
         <div class="info-row"><span class="info-label">Profile picture</span><span class="info-value" id="sso-avatar">-</span></div>
@@ -1940,7 +1948,7 @@ router.get('/SSO', (req, res) => {
     document.getElementById('login-btn').addEventListener('click', () => { window.location.href = '/'; });
     document.getElementById('cancel-btn').addEventListener('click', () => window.close());
     const authCode = '${safeAuthCode}';
-    const origin = '${safeOrigin}';
+    const origin = ${jsOrigin};
     let approvedProfile = null;
 
     (async function() {

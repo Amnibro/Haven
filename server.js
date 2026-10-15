@@ -3073,7 +3073,7 @@ app.get('/api/bot-commands', (req, res) => {
 // DISCORD IMPORT: upload, preview, execute
 // ═══════════════════════════════════════════════════════════
 const os = require('os');
-const { parseDiscordExport } = require('./src/importDiscord');
+const { parseDiscordExport, isReactionEmoji } = require('./src/importDiscord');
 
 // Multer instance for import uploads (ZIP/JSON up to 500 MB)
 const importUpload = multer({
@@ -3173,7 +3173,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
         }
         if (Array.isArray(msg.reactions)) {
           for (const r of msg.reactions) {
-            if (!r.emoji) continue;
+            if (!r || !isReactionEmoji(r.emoji)) continue;
             try {
               db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)')
                 .run(result.lastInsertRowid, user.id, r.emoji);

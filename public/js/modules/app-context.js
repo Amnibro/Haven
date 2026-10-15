@@ -60,7 +60,7 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
   addBtn(`💬 ${t('users.direct_message')}`, () => {
     this._hideUserContextMenu();
     this.socket.emit('start-dm', { targetUserId });
-    this._showToast(t('users.opening_dm', { name: this._escapeHtml(targetName) }), 'info');
+    this._showToast(t('users.opening_dm', { name: targetName }), 'info');
   });
 
   // Invite to Channel (submenu)
@@ -306,7 +306,7 @@ _renderOnlineOverlay() {
 },
 
 _renderOverlayUserItem(u) {
-  const initial = (u.username || '?')[0].toUpperCase();
+  const initial = this._escapeHtml((u.username || '?')[0].toUpperCase());
   // Member list entries carry their role as `role`; roleColor is the flat
   // shape some older callers used.
   const role = u.role || (u.roleColor ? u : null);

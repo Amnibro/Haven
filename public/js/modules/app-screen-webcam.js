@@ -515,7 +515,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       // prompt has gone (#5636).
       if (!this._pendingStreamOffers) this._pendingStreamOffers = new Map();
       this._pendingStreamOffers.set(userId, stream);
-      this._showToast(t('voice.sharing_started', { who: this._escapeHtml(who) }), 'info', {
+      this._showToast(t('voice.sharing_started', { who }), 'info', {
         label: t('voice_runtime.join'),
         onClick: () => this._handleScreenStream(userId, stream, { force: true })
       }, 8000);

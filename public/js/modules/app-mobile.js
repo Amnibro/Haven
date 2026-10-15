@@ -225,10 +225,10 @@ _renderMobileServerList() {
     return;
   }
   list.innerHTML = servers.map(s => {
-    const initial = s.name.charAt(0).toUpperCase();
+    const initial = this._escapeHtml(s.name.charAt(0).toUpperCase());
     const online = s.status.online;
     const dotClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
-    const iconUrl = s.icon || (s.status.icon || null);
+    const iconUrl = this.serverManager.iconFor(s);
     const bustedIcon = iconUrl ? this._withCacheBust(iconUrl) : null;
     const iconHtml = bustedIcon
       ? `<img src="${this._escapeHtml(bustedIcon)}" class="msrv-icon" alt="" crossorigin="anonymous">`
@@ -266,7 +266,7 @@ _renderMobileSidebarServers() {
     const initial = s.name.charAt(0).toUpperCase();
     const online = s.status.online;
     const dotClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
-    const iconUrl = s.icon || (s.status.icon || null);
+    const iconUrl = this.serverManager.iconFor(s);
     const bustedIcon = iconUrl ? this._withCacheBust(iconUrl) : null;
     const iconHtml = bustedIcon
       ? `<img src="${this._escapeHtml(bustedIcon)}" alt="${this._escapeHtml(initial)}" class="mobile-srv-icon-img" crossorigin="anonymous">`

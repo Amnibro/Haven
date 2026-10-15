@@ -379,7 +379,8 @@ _formatContent(str) {
     // A role, unless a member shares the name, in which case the person wins.
     const role = roleByName.get(lower);
     if (role && !nameToUserId.has(lower) && !isSelf) {
-      const style = role.color ? ` style="--role-color:${this._escapeHtml(role.color)}"` : '';
+      const roleColor = this._safeColor(role.color);
+      const style = roleColor ? ` style="--role-color:${roleColor}"` : '';
       return `<span class="mention mention-role${role.mine ? ' mention-self' : ''}"${style}>${this._roleNameHtml(role, '@' + role.name)}</span>`;
     }
     // Prefer the viewer's personal nickname for that user, then the

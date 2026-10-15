@@ -145,7 +145,7 @@ _renderUserItem(u, scoreLookup) {
 
   // Avatar: image or letter fallback
   const color = this._getUserColor(u.username);
-  const initial = u.username.charAt(0).toUpperCase();
+  const initial = this._escapeHtml(u.username.charAt(0).toUpperCase());
   const shapeClass = 'avatar-' + (u.avatarShape || 'circle');
   const avatarImg = u.avatar
     ? `<img class="user-item-avatar user-item-avatar-img ${shapeClass}"${this._animAttr(u.animateProfile)} src="${this._escapeHtml(u.avatar)}" alt="${initial}"><div class="user-item-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
@@ -801,7 +801,7 @@ _showProfilePopup(profile) {
   const isSelf = profile.id === this.user.id;
   const currentNick = !isSelf ? (this._nicknames[profile.id] || '') : '';
   const color = this._getUserColor(profile.username);
-  const initial = profile.username.charAt(0).toUpperCase();
+  const initial = this._escapeHtml(profile.username.charAt(0).toUpperCase());
   const shapeClass = 'avatar-' + (profile.avatarShape || 'circle');
 
   const avatarHtml = profile.avatar

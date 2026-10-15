@@ -427,8 +427,8 @@ _renderManageServersList() {
     const online = s.status.online;
     const statusClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
     const statusText = online === true ? t('servers.online') : online === false ? t('servers.offline') : t('servers.checking');
-    const initial = s.name.charAt(0).toUpperCase();
-    const iconUrl = s.icon || (s.status.icon || null);
+    const initial = this._escapeHtml(s.name.charAt(0).toUpperCase());
+    const iconUrl = this.serverManager.iconFor(s);
     const iconContent = iconUrl
       ? `<img src="${this._escapeHtml(iconUrl)}" alt="" class="manage-srv-icon-img">`
       : initial;
@@ -729,7 +729,7 @@ _renderServerBar() {
     const statusClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
     const statusText = online === true ? '● ' + t('servers.online') : online === false ? '○ ' + t('servers.offline') : '◌ ' + t('servers.checking');
     // Use custom icon, auto-pulled icon from health check, or letter initial
-    const iconUrl = s.icon || (s.status.icon || null);
+    const iconUrl = this.serverManager.iconFor(s);
     // Append a stable cache-buster so browsers don't reuse a bad pre-CORS
     // cached response (which causes "No Access-Control-Allow-Origin" errors
     // on icons that were loaded once without the crossorigin attribute). See #5240.

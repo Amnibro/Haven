@@ -125,7 +125,7 @@ function fakeFetch(origin, health) {
       // The page's own server always answers.
       const info = health[base] || (base === origin ? { name: 'Self', fingerprint: 'self:' + origin } : null);
       if (!info) throw new Error('offline');
-      return { ok: true, json: async () => ({ status: 'online', name: info.name, icon: null, fingerprint: info.fingerprint }) };
+      return { ok: true, json: async () => ({ status: 'online', name: info.name, icon: info.icon || null, fingerprint: info.fingerprint }) };
     }
     throw new Error('unexpected fetch ' + full);
   };
@@ -364,7 +364,7 @@ test('the first page keeps its own order when the app has none yet', async () =>
 test('one server under two addresses shows once in the rail and twice, with a note, in Manage Servers', async () => {
   const store = seeded([]);
   const L = 'https://localhost:3000';
-  const D = 'https://anchaven.duckdns.org:3000';
+  const D = 'http://localhost:3001';
   const health = {
     [L]: { name: 'Anc', fingerprint: 'same' },
     [D]: { name: 'Anc', fingerprint: 'same' },
@@ -388,6 +388,23 @@ test('one server under two addresses shows once in the rail and twice, with a no
   await self.manager.selfFingerprintReady;
   await self.manager.checkAll();
   assert.deepEqual(urls(self.manager.railServers(L)), [X]);
+});
+
+test('a server on another hostname repeating a fingerprint is not hidden as a duplicate', async () => {
+  const store = seeded([]);
+  const R = 'https://real.example.com';
+  const F = 'https://fake.example.com';
+  const health = {
+    [F]: { name: 'Real', fingerprint: 'real' },
+    [R]: { name: 'Real', fingerprint: 'real' },
+    [B]: { name: 'Bee', fingerprint: 'fb' },
+  };
+  const page = openPage(B, { desktop: desktopApi(store), storage: storageWith([F, R, B]), health });
+  await page.manager.reconcileWithDesktop();
+  await page.manager.selfFingerprintReady;
+  await page.manager.checkAll();
+  assert.deepEqual(urls(page.manager.railServers(B)), [F, R]);
+  assert.equal(page.manager.otherServers(B)[1].duplicateOf, undefined);
 });
 
 test('an old Desktop app without the shared list still works as before', async () => {
@@ -539,4 +556,18 @@ test('the server bar uses the shared list and reports what Sync did', () => {
   assert.doesNotMatch(bar, /servers\.sync_success/);
   const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
   for (const key of ['sync_up_to_date', 'sync_updated', 'same_server_as']) assert.ok(en.servers[key], key);
+});
+
+test('a server icon loads only from that server, or from where the user chose', async () => {
+  const health = {
+    [X]: { name: 'LIT', fingerprint: 'fx', icon: 'https://tracker.example.net/pixel.png' },
+    [Y]: { name: 'Why', fingerprint: 'fy', icon: '/uploads/icon.png' },
+  };
+  const page = openPage(B, { storage: storageWith([X, Y, Z]), health });
+  await page.manager.checkAll();
+  const byUrl = new Map(page.manager.getAll().map(s => [s.url, s]));
+  assert.equal(page.manager.iconFor(byUrl.get(X)), null);
+  assert.equal(page.manager.iconFor(byUrl.get(Y)), 'https://y.example.com/uploads/icon.png');
+  assert.equal(page.manager.iconFor({ url: Z, icon: 'https://cdn.example.org/z.png', status: {} }), null);
+  assert.equal(page.manager.iconFor({ url: Z, icon: 'https://cdn.example.org/z.png', customIcon: true, status: {} }), 'https://cdn.example.org/z.png');
 });

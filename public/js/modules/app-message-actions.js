@@ -108,22 +108,24 @@ _bindMessageClicks() {
     this._showMessageContextMenu(e, msgEl);
   });
 
-  // Risky file download warning: intercept clicks on potentially harmful files
-  document.getElementById('messages').addEventListener('click', (e) => {
-    const link = e.target.closest('a.risky-file');
-    if (!link) return;
-    e.preventDefault();
-    const fileName = link.getAttribute('download') || 'this file';
-    const ext = fileName.split('.').pop().toLowerCase();
-    this._showRiskyDownloadWarning(fileName, ext, link.href);
-  });
-
-  // Masked markdown link warning: show URL confirmation before navigating
-  document.getElementById('messages').addEventListener('click', (e) => {
-    const link = e.target.closest('a[data-masked-link]');
-    if (!link) return;
-    e.preventDefault();
-    this._showExternalLinkWarning(link.textContent, link.href);
+  // Risky file download and masked link warnings. Delegated on document so
+  // threads, the DM PiP, pins, search and forum views get them too; one
+  // listener each, so a click never prompts twice.
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented || !e.target.closest) return;
+    const risky = e.target.closest('a.risky-file');
+    if (risky) {
+      e.preventDefault();
+      const fileName = risky.getAttribute('download') || 'this file';
+      const ext = fileName.split('.').pop().toLowerCase();
+      this._showRiskyDownloadWarning(fileName, ext, risky.href);
+      return;
+    }
+    const masked = e.target.closest('a[data-masked-link]');
+    if (masked) {
+      e.preventDefault();
+      this._showExternalLinkWarning(masked.textContent, masked.href);
+    }
   });
 
   // Reply banner click: scroll to the original message. A quote that leads
