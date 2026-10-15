@@ -98,6 +98,11 @@ _formatContent(str) {
   // Render file attachments [file:name](url|size)
   const fileMatch = str.match(/^\[file:(.+?)\]\((.+?)\|(.+?)\)$/);
   if (fileMatch) {
+    // Real attachments always live in this server's /uploads. Any other URL
+    // would make every viewer fetch it directly (leaking their IP past the
+    // media proxy) or dress a foreign link up as an attachment, so it stays
+    // plain text.
+    if (!/^\/uploads\//.test(fileMatch[2])) return this._escapeHtml(str);
     const fileName = this._escapeHtml(fileMatch[1]);
     const fileUrl = this._escapeHtml(fileMatch[2]);
     const fileSize = this._escapeHtml(fileMatch[3]);

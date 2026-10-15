@@ -92,3 +92,13 @@ test('ordinary markdown still renders', () => {
   assert.ok(html.includes('<code class="inline-code">code</code>'));
   assert.ok(html.includes('<span style="color:#00ff00">green</span>'));
 });
+
+test('a file card only renders for this server\'s uploads', () => {
+  const app = loadApp();
+  const local = app._formatContent('[file:song.mp3](/uploads/abc.mp3|1 MB)');
+  assert.ok(local.includes('<audio') && local.includes('src="/uploads/abc.mp3"'), local);
+  for (const url of ['https://evil.example/x.mp3', '//evil.example/x.mp4', 'data:audio/mp3;base64,AAAA', 'https://evil.example/x.pdf']) {
+    const html = app._formatContent(`[file:a.${url.split('.').pop()}](${url}|1 MB)`);
+    assert.ok(!/<(audio|video|a)\b/.test(html) && !html.includes('file-attachment'), url + ' renders as text: ' + html);
+  }
+});
