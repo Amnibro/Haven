@@ -5,6 +5,7 @@ const fs   = require('fs');
 const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
+const { saveFcmToken } = require('../fcm');
 
 // A personal sidebar order (#5779): category keys and, per category, channel
 // codes. Only that shape is kept, within limits, so the value cannot carry
@@ -449,15 +450,9 @@ module.exports = function register(socket, ctx) {
       // endpoint dies on resubscribe and the 410 handler prunes it, but an FCM
       // token stays valid across an account switch, so a stale row never
       // cleans itself up.
-      const fcmToken = data.token.trim();
-      db.transaction(() => {
-        db.prepare('DELETE FROM fcm_tokens WHERE token = ? AND user_id != ?').run(fcmToken, socket.user.id);
-        db.prepare(`
-          INSERT INTO fcm_tokens (user_id, token)
-          VALUES (?, ?)
-          ON CONFLICT(user_id, token) DO NOTHING
-        `).run(socket.user.id, fcmToken);
-      })();
+      // saveFcmToken claims the token for this account and applies the
+      // length and per-account caps.
+      saveFcmToken(db, socket.user.id, data.token.trim());
     } catch (err) {
       console.error('FCM token register error:', err);
     }
