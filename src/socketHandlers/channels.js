@@ -39,9 +39,13 @@ module.exports = function register(socket, ctx) {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence, resetPresenceSync,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
-    applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
+    logAudit, fireWebhookEvent, enforceAutomod,
     rotateChannelCode, rotatePrivateCodesAfterRemoval, botAudioManager
   } = ctx;
+  // roles.js puts this on ctx after this file has read it, so look it up at
+  // call time. Read once above, it was always undefined: the auto-role loops
+  // threw after the first role and the rest were never granted.
+  const applyRoleChannelAccess = (...args) => (typeof ctx.applyRoleChannelAccess === 'function' ? ctx.applyRoleChannelAccess(...args) : undefined);
   const { refuseYoungAccount } = require('./postingWait')(socket, ctx);
   // New one to one conversations a member may start per hour. A new DM lands
   // in the other person's list, so without a cap one account could message
