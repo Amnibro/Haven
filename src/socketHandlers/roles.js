@@ -1490,7 +1490,7 @@ module.exports = function register(socket, ctx) {
             period: 30,
             secret: OTPAuth.Secret.fromBase32(adminUser.totp_secret)
           });
-          validCode = totp.validate({ token: code, window: 1 }) !== null;
+          validCode = require('../auth').acceptTotpCode(adminUser.id, totp, code);
         } catch (err) {
           console.error('Transfer admin code verification error:', err);
           transferAdminRef.value = false;

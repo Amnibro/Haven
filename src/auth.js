@@ -70,6 +70,35 @@ function verifyTotpChallengeToken(token) {
   } catch { return null; }
 }
 
+// A two-factor code works once. totp.validate accepts the codes either side
+// of now, so without remembering the last step used, a code someone watched
+// being typed kept working for about a minute and a half.
+const _totpLastStep = new Map();
+function acceptTotpCode(userId, totp, code) {
+  const delta = totp.validate({ token: code, window: 1 });
+  if (delta === null) return false;
+  const step = Math.floor(Date.now() / 1000 / 30) + delta;
+  if ((_totpLastStep.get(userId) ?? -1) >= step) return false;
+  _totpLastStep.set(userId, step);
+  return true;
+}
+
+// A bcrypt hash to compare against when the username does not exist.
+let _dummy = null;
+function _dummyHash() {
+  if (!_dummy) _dummy = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 12);
+  return _dummy;
+}
+
+// Logging in with the original password cancels an admin's reset. The
+// sessions opened with the temporary password go with it.
+function _cancelTempReset(db, user) {
+  const pwv = (user.password_version || 1) + 1;
+  db.prepare('UPDATE users SET temp_password_hash = NULL, must_change_password = 0, password_version = ? WHERE id = ?').run(pwv, user.id);
+  _forgetPwv(user.id);
+  return pwv;
+}
+
 function generateBackupCodes(count = 8) {
   const codes = [];
   for (let i = 0; i < count; i++) {
@@ -159,81 +188,35 @@ async function verifyTurnstile(secret, token, remoteIp) {
 // ── SSO Avatar Download ─────────────────────────────────
 // Downloads a profile picture from a remote Haven server and saves it locally.
 // Returns the local /uploads/ path, or throws on failure.
-function downloadSSOAvatar(url) {
-  return new Promise((resolve, reject) => {
-    // Validate URL
-    let parsed;
-    try {
-      parsed = new URL(url);
-    } catch {
-      return reject(new Error('Invalid URL'));
-    }
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return reject(new Error('Invalid protocol'));
-    }
+// The URL comes from whoever is registering, so it goes through safeGet:
+// no private or loopback addresses, every redirect checked. Fetched directly,
+// it let anyone who could sign up make the server read its own network.
+async function downloadSSOAvatar(url) {
+  let parsed;
+  try { parsed = new URL(url); } catch { throw new Error('Invalid URL'); }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Invalid protocol');
 
-    const fetcher = parsed.protocol === 'https:' ? https : http;
-    const request = fetcher.get(url, { timeout: 10000, agent: agentFor(parsed) }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        return reject(new Error(`HTTP ${res.statusCode}`));
-      }
+  const { safeGet } = require('./safeFetch');
+  const res = await safeGet(url, { timeoutMs: 10000, maxBytes: 2 * 1024 * 1024, maxRedirects: 3 });
+  if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
 
-      const contentType = (res.headers['content-type'] || '').toLowerCase();
-      const validTypes = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const ext = validTypes[contentType.split(';')[0].trim()];
-      if (!ext) {
-        res.resume();
-        return reject(new Error('Not a supported image type'));
-      }
+  const contentType = String(res.headers['content-type'] || '').toLowerCase();
+  const validTypes = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
+  const ext = validTypes[contentType.split(';')[0].trim()];
+  if (!ext) throw new Error('Not a supported image type');
 
-      // Limit to 2 MB
-      let size = 0;
-      const maxSize = 2 * 1024 * 1024;
-      const chunks = [];
+  const buffer = res.body;
+  let validMagic = false;
+  if (ext === '.jpg') validMagic = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+  else if (ext === '.png') validMagic = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+  else if (ext === '.gif') validMagic = buffer.slice(0, 6).toString().startsWith('GIF8');
+  else if (ext === '.webp') validMagic = buffer.slice(0, 4).toString() === 'RIFF' && buffer.slice(8, 12).toString() === 'WEBP';
+  if (!validMagic) throw new Error('File content does not match image type');
 
-      res.on('data', (chunk) => {
-        size += chunk.length;
-        if (size > maxSize) {
-          res.destroy();
-          return reject(new Error('Image too large'));
-        }
-        chunks.push(chunk);
-      });
-
-      res.on('end', () => {
-        try {
-          const buffer = Buffer.concat(chunks);
-
-          // Validate magic bytes
-          let validMagic = false;
-          if (ext === '.jpg') validMagic = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
-          else if (ext === '.png') validMagic = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
-          else if (ext === '.gif') validMagic = buffer.slice(0, 6).toString().startsWith('GIF8');
-          else if (ext === '.webp') validMagic = buffer.slice(0, 4).toString() === 'RIFF' && buffer.slice(8, 12).toString() === 'WEBP';
-          if (!validMagic) return reject(new Error('File content does not match image type'));
-
-          const filename = Date.now() + crypto.randomBytes(8).toString('hex') + ext;
-          const { UPLOADS_DIR } = require('./paths');
-          const path = require('path');
-          const fs = require('fs');
-          const filePath = path.join(UPLOADS_DIR, filename);
-          fs.writeFileSync(filePath, buffer);
-          resolve(`/uploads/${filename}`);
-        } catch (err) {
-          reject(err);
-        }
-      });
-
-      res.on('error', reject);
-    });
-
-    request.on('error', reject);
-    request.on('timeout', () => {
-      request.destroy();
-      reject(new Error('Download timed out'));
-    });
-  });
+  const filename = Date.now() + crypto.randomBytes(8).toString('hex') + ext;
+  const { UPLOADS_DIR } = require('./paths');
+  require('fs').writeFileSync(require('path').join(UPLOADS_DIR, filename), buffer);
+  return `/uploads/${filename}`;
 }
 
 // ── Register ──────────────────────────────────────────────
@@ -611,9 +594,24 @@ router.post('/register', authLimiter, async (req, res) => {
       }
     }
 
-    const result = db.prepare(
-      'INSERT INTO users (username, password_hash, is_admin, avatar) VALUES (?, ?, ?, ?)'
-    ).run(username, hash, isAdmin, avatarPath);
+    // An invite's use is taken in the same step that creates the account: the
+    // check above ran before several awaits, so simultaneous sign-ups could
+    // all pass it and go past max_uses.
+    let result;
+    try {
+      result = db.transaction(() => {
+        if (inviteRow) {
+          const took = db.prepare('UPDATE invite_codes SET spent = spent + 1 WHERE id = ? AND (max_uses <= 0 OR spent < max_uses)').run(inviteRow.id);
+          if (!took.changes) throw Object.assign(new Error('invite used up'), { inviteUsedUp: true });
+        }
+        return db.prepare(
+          'INSERT INTO users (username, password_hash, is_admin, avatar) VALUES (?, ?, ?, ?)'
+        ).run(username, hash, isAdmin, avatarPath);
+      })();
+    } catch (err) {
+      if (err.inviteUsedUp) return res.status(403).json({ error: 'This invite link has reached its use limit.' });
+      throw err;
+    }
     if (isAdmin) grantAdminRole(db, result.lastInsertRowid);
     _regTimestamps.push(Date.now()); // feed the opt-in global registration rate limit
 
@@ -622,7 +620,6 @@ router.post('/register', authLimiter, async (req, res) => {
       db.prepare(
         'INSERT INTO invite_code_uses (invite_code_id, user_id) VALUES (?, ?)'
       ).run(inviteRow.id, result.lastInsertRowid);
-      db.prepare('UPDATE invite_codes SET spent = spent + 1 WHERE id = ?').run(inviteRow.id);
     }
 
     provisionNewUser(db, result.lastInsertRowid, username, req.app.get('io'));
@@ -676,6 +673,9 @@ router.post('/login', authLimiter, async (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 
     if (!user) {
+      // Spend the time a real check would, so how fast "invalid" comes back
+      // does not tell which usernames exist.
+      await bcrypt.compare(password, _dummyHash());
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -746,7 +746,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
     // No TOTP gate: apply the temp-reset state mutation now.
     if (okWithOriginal && user.temp_password_hash) {
-      db.prepare('UPDATE users SET temp_password_hash = NULL, must_change_password = 0 WHERE id = ?').run(user.id);
+      user.password_version = _cancelTempReset(db, user);
       user.must_change_password = 0;
     }
 
@@ -979,8 +979,7 @@ router.post('/totp/validate', authLimiter, async (req, res) => {
       secret: OTPAuth.Secret.fromBase32(user.totp_secret)
     });
 
-    const delta = totp.validate({ token: code, window: 1 });
-    let valid = delta !== null;
+    let valid = acceptTotpCode(user.id, totp, code);
 
     // If not a valid TOTP code, check backup codes
     if (!valid) {
@@ -1016,7 +1015,7 @@ router.post('/totp/validate', authLimiter, async (req, res) => {
     // the temp password, the must_change_password flag stays set so the
     // client routes them to the forced change-password screen.
     if (challenge.cancelTempReset) {
-      db.prepare('UPDATE users SET temp_password_hash = NULL, must_change_password = 0 WHERE id = ?').run(user.id);
+      user.password_version = _cancelTempReset(db, user);
     }
 
     const displayName = user.display_name || user.username;
@@ -1098,6 +1097,14 @@ router.post('/totp/verify-setup', authLimiter, async (req, res) => {
 
     if (user.totp_enabled) {
       return res.status(400).json({ error: '2FA is already enabled' });
+    }
+    // Turning 2FA on asks for the password, as turning it off does. Without
+    // it, someone holding a stolen session could put their own authenticator
+    // on the account and shut the real owner out for good.
+    if (hasLocalPassword(user)) {
+      const password = typeof req.body.password === 'string' ? req.body.password : '';
+      if (!password) return res.status(400).json({ error: 'Enter your password to turn on 2FA' });
+      if (!(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: 'Incorrect password' });
     }
     if (!user.totp_secret) {
       return res.status(400).json({ error: 'No 2FA setup in progress. Start setup first.' });
@@ -1431,9 +1438,8 @@ function _currentPwv(userId) {
   let pwv = null;
   try {
     const row = getDb().prepare('SELECT password_version FROM users WHERE id = ?').get(userId);
-    // No row means the account is gone. Leave that to the routes, which
-    // already handle a missing user, rather than changing it from here.
-    pwv = row ? (row.password_version || 1) : null;
+    // No row means the account is gone: its tokens are no longer sessions.
+    pwv = row ? (row.password_version || 1) : 'gone';
   } catch { return null; }
   _pwvCache.set(userId, { pwv, at: now });
   return pwv;
@@ -1450,6 +1456,9 @@ function verifyToken(token, opts = {}) {
     if (decoded && (decoded.purpose || decoded.scope) && !opts.allowScoped) return null;
     if (decoded && decoded.id && !decoded.purpose) {
       const current = _currentPwv(decoded.id);
+      // A deleted account's token stops working everywhere, not only at the
+      // socket handshake.
+      if (current === 'gone') return null;
       if (current !== null && (decoded.pwv || 1) !== current) return null;
     }
     return decoded;
@@ -1574,6 +1583,17 @@ router.post('/recover-account', authLimiter, async (req, res) => {
 
     console.log(`🔑 Account recovery used for "${user.username}" from ${req.ip || 'unknown'}; E2E keys cleared`);
     res.json({ success: true });
+    // Whoever was signed in before the recovery is signed out now, not at
+    // their next reconnect.
+    const io = req.app.get('io');
+    if (io) {
+      for (const [, s] of io.sockets.sockets) {
+        if (s.user && s.user.id === user.id) {
+          s.emit('force-logout', { reason: 'password_changed' });
+          s.disconnect(true);
+        }
+      }
+    }
   } catch (err) {
     console.error('Account recovery error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -1617,7 +1637,7 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
       const code = typeof req.body.code === 'string' ? req.body.code.replace(/\s/g, '') : '';
       if (!code) return res.status(401).json({ error: 'Enter your two-factor code', needsCode: true });
       const totp = new OTPAuth.TOTP({ issuer: 'Haven', label: user.username, algorithm: 'SHA1', digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(user.totp_secret) });
-      let ok = totp.validate({ token: code, window: 1 }) !== null;
+      let ok = acceptTotpCode(user.id, totp, code);
       if (!ok) {
         const norm = code.toUpperCase().replace(/-/g, '');
         const asBackup = norm.slice(0, 4) + '-' + norm.slice(4);
@@ -1630,6 +1650,15 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
         return res.status(401).json({ error: 'Invalid code', needsCode: true });
       }
       _totpFails.delete(user.id);
+    }
+
+    // Recovery restores this account's own admin, or makes it admin when the
+    // server has none. After admin has been handed to someone else, it does
+    // not take it back: that would leave two admins, and the handover could
+    // be undone by anyone who still knew the old password.
+    const otherAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 AND id != ? LIMIT 1').get(user.id);
+    if (otherAdmin) {
+      return res.status(403).json({ error: 'Admin now belongs to another account, so this one cannot take it back' });
     }
 
     // Restore admin status
@@ -1678,7 +1707,7 @@ function generateConnectToken(userId, provider) {
   // Carrying the real value also keeps the property that check is there for,
   // since a password change mid-flow still invalidates the link in progress.
   return jwt.sign(
-    { id: userId, scope: 'connect', provider, pwv: _currentPwv(userId) || 1 },
+    { id: userId, scope: 'connect', provider, pwv: typeof _currentPwv(userId) === 'number' ? _currentPwv(userId) : 1 },
     JWT_SECRET,
     { expiresIn: '5m' }
   );
@@ -2275,4 +2304,4 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
   }
 });
 
-module.exports = { router, verifyToken, generateChannelCode, generateToken, generateConnectToken, authLimiter };
+module.exports = { router, verifyToken, generateChannelCode, generateToken, generateConnectToken, authLimiter, acceptTotpCode };

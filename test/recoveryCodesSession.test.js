@@ -29,6 +29,11 @@ const call = (method, p, body, token) => new Promise((res, rej) => {
   r.on('error', rej); if (d) r.write(d); r.end();
 });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Wait until the 30 second code changes.
+const waitForNextStep = async () => {
+  const step = Math.floor(Date.now() / 30000);
+  while (Math.floor(Date.now() / 30000) === step) await wait(250);
+};
 const code = (secret) => new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(secret), digits: 6, period: 30 }).generate();
 
 test.before(async () => {
@@ -55,13 +60,18 @@ test.after(async () => {
   fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 5 });
 });
 
-test('the two-factor challenge token cannot get recovery codes', async () => {
+test('the two-factor challenge token cannot get recovery codes', { timeout: 120000 }, async () => {
   const PW = 'recoverytest123';
   const reg = await call('POST', '/api/auth/register', { username: 'victim', password: PW, eulaVersion: '2.0', ageVerified: true });
   assert.ok(reg.body.token, 'registered');
   const setup = await call('POST', '/api/auth/totp/setup', {}, reg.body.token);
   assert.ok(setup.body.base32Secret, 'two-factor setup started: ' + JSON.stringify(setup.body));
-  const verified = await call('POST', '/api/auth/totp/verify-setup', { code: code(setup.body.base32Secret) }, reg.body.token);
+  const noPw = await call('POST', '/api/auth/totp/verify-setup', { code: code(setup.body.base32Secret) }, reg.body.token);
+  assert.strictEqual(noPw.status, 400, 'turning 2FA on asks for the password');
+  const wrongPw = await call('POST', '/api/auth/totp/verify-setup', { code: code(setup.body.base32Secret), password: 'not-it-123' }, reg.body.token);
+  assert.strictEqual(wrongPw.status, 401, 'and checks it');
+  await wait(1100);
+  const verified = await call('POST', '/api/auth/totp/verify-setup', { code: code(setup.body.base32Secret), password: PW }, reg.body.token);
   assert.strictEqual(verified.status, 200, 'two-factor on: ' + JSON.stringify(verified.body));
 
   const login = await call('POST', '/api/auth/login', { username: 'victim', password: PW, eulaVersion: '2.0', ageVerified: true });
@@ -73,10 +83,16 @@ test('the two-factor challenge token cannot get recovery codes', async () => {
   const status = await call('GET', '/api/auth/recovery-codes/status', null, login.body.challengeToken);
   assert.strictEqual(status.status, 401);
 
-  // Past the code prompt, it works as before.
-  await wait(1100);
-  const full = await call('POST', '/api/auth/totp/validate', { challengeToken: login.body.challengeToken, code: code(setup.body.base32Secret) });
+  // Past the code prompt, it works as before. The code used to turn 2FA on
+  // was spent, so wait for the next one.
+  await waitForNextStep();
+  const used = code(setup.body.base32Secret);
+  const full = await call('POST', '/api/auth/totp/validate', { challengeToken: login.body.challengeToken, code: used });
   assert.ok(full.body.token, 'second factor accepted: ' + JSON.stringify(full.body));
+  // The same code does not work a second time.
+  const again = await call('POST', '/api/auth/login', { username: 'victim', password: PW, eulaVersion: '2.0', ageVerified: true });
+  const replay = await call('POST', '/api/auth/totp/validate', { challengeToken: again.body.challengeToken, code: used });
+  assert.strictEqual(replay.status, 401, 'a used code is refused: ' + JSON.stringify(replay.body));
   const ok = await call('POST', '/api/auth/recovery-codes/generate', { password: PW }, full.body.token);
   assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
 });

@@ -432,6 +432,8 @@ _bindSettings() {
     totpSetupArea.style.display = 'block';
     if (totpSetupStatus) { totpSetupStatus.textContent = ''; totpSetupStatus.className = 'settings-hint'; }
     document.getElementById('totp-verify-code').value = '';
+    const pwField = document.getElementById('totp-setup-password');
+    if (pwField) pwField.value = '';
 
     try {
       const res = await fetch('/api/auth/totp/setup', {
@@ -485,11 +487,12 @@ _bindSettings() {
       if (totpSetupStatus) totpSetupStatus.textContent = t('settings.two_factor_section.verify_prompt');
       return;
     }
+    const password = document.getElementById('totp-setup-password')?.value || '';
     try {
       const res = await fetch('/api/auth/totp/verify-setup', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ code, password })
       });
       const data = await res.json();
       if (!res.ok) {

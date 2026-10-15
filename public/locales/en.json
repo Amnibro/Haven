@@ -1945,6 +1945,7 @@
       "setup_hint": "Scan this QR code with your authenticator app:",
       "manual_hint": "Or enter this secret manually:",
       "verify_placeholder": "Enter 6-digit code to confirm",
+      "password_placeholder": "Your password",
       "verify_btn": "Verify & Activate",
       "backup_title": "Backup Codes",
       "backup_hint": "Save these codes somewhere safe. Each can be used once if you lose access to your authenticator.",
