@@ -17,3 +17,52 @@ html.reduce-motion .lightbox-img.lightbox-img-animate { transition: none; }
 .image-lightbox.is-zoomed .lightbox-img { cursor: grab; }
 .image-lightbox.is-panning,
 .image-lightbox.is-panning .lightbox-img { cursor: grabbing; }
+
+/* Zoom out, the zoom level (a click fits the picture again) and zoom in,
+   bottom centre, in the same dark glass as the arrows. */
+.lightbox-zoom {
+  position: absolute;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+.lightbox-zoom:hover,
+.lightbox-zoom:focus-within { opacity: 1; }
+.lightbox-zoom-btn,
+.lightbox-zoom-level {
+  height: 2rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lightbox-zoom-btn { width: 2rem; padding: 0; }
+.lightbox-zoom-level {
+  min-width: 3.5rem;
+  padding: 0 0.5rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.lightbox-zoom-btn:hover,
+.lightbox-zoom-level:hover { background: rgba(255, 255, 255, 0.12); }
+.lightbox-zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
