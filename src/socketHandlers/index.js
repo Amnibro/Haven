@@ -899,10 +899,14 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // The channels a user belongs to, for the voice counts sent on request:
   // members only, for the same reason broadcastVoiceUsers sends to members.
+  // Through each channel's role gate too: a membership row alone (joining
+  // with the server code adds gated channels) does not open a gated room.
   function voiceCodesVisibleTo(userId) {
-    return new Set(db.prepare(
-      'SELECT c.code FROM channels c JOIN channel_members cm ON cm.channel_id = c.id WHERE cm.user_id = ?'
-    ).all(userId).map(r => r.code));
+    const rows = db.prepare(
+      'SELECT c.id, c.code, c.is_dm, c.role_gate FROM channels c JOIN channel_members cm ON cm.channel_id = c.id WHERE cm.user_id = ?'
+    ).all(userId);
+    const admin = !!db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId)?.is_admin;
+    return new Set(rows.filter(r => admin || r.is_dm || roleGateAllows(userId, r)).map(r => r.code));
   }
 
   // ── broadcastVoiceUsers ─────────────────────────────────
