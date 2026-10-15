@@ -786,7 +786,15 @@ no_proxy=localhost,127.0.0.1
 
 Link previews, the media proxy, bot callbacks, push notifications and Haven's other outgoing requests then go through the proxy. Hosts listed in `no_proxy` (names, subdomains, IP addresses or CIDR ranges) connect directly. Only `http://` proxy addresses are supported. Voice traffic is UDP and does not use the proxy.
 
-> ⚠️ **Your proxy becomes part of Haven's security.** For a request through the proxy, Haven can't pin the connection to the address it checked, and names it can't resolve itself are passed to the proxy. Haven still refuses private, loopback and cloud metadata addresses it can see, but a proxy that can reach your internal network could let members use link previews to reach hosts behind it. Restrict the proxy to the destinations Haven needs, ideally with whole-hostname allowlist rules.
+For a link a member posts (link previews, the media proxy, bot callbacks, push), Haven looks the name up itself, refuses private, loopback and cloud metadata addresses, and then sends the proxy to the address it checked: a `CONNECT` to that IP for `https://` sites, and the IP in the request line (with the site's name in the `Host` header) for `http://` sites. The proxy never has to look the name up again, so it can't be steered to a different address.
+
+A name the server can't resolve on its own is refused. If your server has no DNS of its own and only the proxy can resolve names, set:
+
+```env
+OUTBOUND_PROXY_RESOLVES_NAMES=true
+```
+
+> ⚠️ **With that setting, your proxy becomes part of Haven's security.** Names Haven can't resolve are then passed to the proxy unchecked, and the proxy decides where they go. A proxy that can reach your internal network could let members use link previews to reach hosts behind it. Restrict the proxy to the destinations Haven needs, ideally with whole-hostname allowlist rules.
 
 ---
 

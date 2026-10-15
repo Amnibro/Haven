@@ -19,7 +19,7 @@
 const http = require('node:http');
 const https = require('node:https');
 const zlib = require('node:zlib');
-const { resolveCallbackDestination, createPinnedLookup } = require('./webhookCallback');
+const { resolveCallbackDestination, createPinnedLookup, proxyPin } = require('./webhookCallback');
 const outboundProxy = require('./outboundProxy');
 
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
@@ -99,10 +99,10 @@ function requestOnce(destination, headers, deadlineAt, maxBytes, truncate) {
       source.on('error', (err) => finish(err));
       incoming.on('error', (err) => finish(err));
     };
-    // Through a proxy the proxy picks the address; otherwise connect to
-    // exactly the address that was checked.
+    // Connect to exactly the address that was checked, directly or by
+    // sending the proxy there (unless the host let the proxy resolve names).
     request = destination.proxy
-      ? outboundProxy.request(destination.url, requestOptions, onResponse, destination.proxy)
+      ? outboundProxy.request(destination.url, requestOptions, onResponse, destination.proxy, proxyPin(destination))
       : transport.request(destination.url, {
         ...requestOptions,
         agent: false,

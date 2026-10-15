@@ -213,17 +213,21 @@ function openTunnel(proxy, host, port, signal) {
 }
 
 // An https.Agent whose connections are CONNECT tunnels through the proxy,
-// with TLS to the site running inside the tunnel.
+// with TLS to the site running inside the tunnel. With a pinned address the
+// tunnel is opened to that IP, so the proxy cannot look the name up again and
+// land somewhere else, while TLS still checks the certificate against the name.
 class TunnelAgent extends https.Agent {
-  constructor(proxy, signal) {
+  constructor(proxy, signal, pin) {
     super({ keepAlive: false });
     this.proxy = proxy;
     this.signal = signal;
+    this.pin = pin || null;
   }
 
   createConnection(options, callback) {
     const host = options.host || 'localhost';
-    openTunnel(this.proxy, host, options.port || 443, this.signal).then((socket) => {
+    const connectTo = this.pin ? this.pin.address : host;
+    openTunnel(this.proxy, connectTo, options.port || 443, this.signal).then((socket) => {
       callback(null, tls.connect({
         socket,
         host,
@@ -238,16 +242,21 @@ class TunnelAgent extends https.Agent {
 
 // An http.Agent that hands each request to the proxy in absolute form
 // (GET http://site/path), which is how plain http:// goes through a proxy.
+// With a pinned address the absolute URL names that IP and the Host header
+// keeps the site's name, so the proxy is not left to resolve the name itself.
 class ForwardAgent extends http.Agent {
-  constructor(proxy) {
+  constructor(proxy, pin) {
     super({ keepAlive: false });
     this.proxy = proxy;
+    this.pin = pin || null;
   }
 
   addRequest(req, options) {
     const port = Number(options.port) || 80;
-    const host = net.isIPv6(options.host) ? `[${options.host}]` : options.host;
-    const authority = req.getHeader('host') || (port === 80 ? host : `${host}:${port}`);
+    const target = this.pin ? this.pin.address : options.host;
+    const host = net.isIPv6(target) ? `[${target}]` : target;
+    const hostPort = port === 80 ? host : `${host}:${port}`;
+    const authority = this.pin ? hostPort : (req.getHeader('host') || hostPort);
     req.path = `http://${authority}${req.path}`;
     const auth = proxyAuthorization(this.proxy);
     if (auth) req.setHeader('Proxy-Authorization', auth);
@@ -255,8 +264,9 @@ class ForwardAgent extends http.Agent {
   }
 }
 
-function agentThrough(url, proxy, signal) {
-  return isSecure(url) ? new TunnelAgent(proxy, signal) : new ForwardAgent(proxy);
+// `pin` ({ address }) is the address Haven already checked for this name.
+function agentThrough(url, proxy, signal, pin) {
+  return isSecure(url) ? new TunnelAgent(proxy, signal, pin) : new ForwardAgent(proxy, pin);
 }
 
 /**
@@ -272,13 +282,14 @@ function agentFor(target) {
 
 /**
  * http.request / https.request through `proxy`. Same options and callback as
- * those, minus anything about picking an address (the proxy does that).
+ * those, minus anything about picking an address: the proxy connects to
+ * `pin.address` when one is given, and otherwise picks the address itself.
  */
-function request(target, options, onResponse, proxy = proxyFor(target)) {
+function request(target, options, onResponse, proxy = proxyFor(target), pin = null) {
   const url = toUrl(target);
   const { lookup, agent, ...rest } = options;
   const transport = url.protocol === 'https:' ? https : http;
-  return transport.request(url, { ...rest, agent: agentThrough(url, proxy, rest.signal) }, onResponse);
+  return transport.request(url, { ...rest, agent: agentThrough(url, proxy, rest.signal, pin) }, onResponse);
 }
 
 // ── fetch ───────────────────────────────────────────────
