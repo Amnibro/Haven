@@ -640,7 +640,9 @@ module.exports = function register(socket, ctx) {
       'server_mute', 'muted_users',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
-    const maxLen = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : 50;
+    // A theme is saved as file:<file name>, and a community theme's file name
+    // can run long; at 50 it was dropped without a word and lost on reload.
+    const maxLen = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'theme' ? 200 : 50;
     if (!allowedKeys.includes(key) || !value || value.length > maxLen) return;
     let stored = value;
     if (key === 'channel_order') {
