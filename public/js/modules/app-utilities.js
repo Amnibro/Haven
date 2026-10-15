@@ -1262,18 +1262,26 @@ _setupMediaTokenRetry() {
   }, true);
 },
 
-// Returns a URL safe to put in a src attribute, or null when proxying is on
-// but the token has not arrived yet (caller must defer).
+// Returns a URL safe to put in a src attribute, '' when the URL must not be
+// loaded at all, or null when proxying is on but the token has not arrived
+// yet (caller must defer).
+// The URL is resolved the way the browser would resolve it, so spellings
+// like //host/x.png, /\host/x.png or https:\\host/x.png, which the browser
+// sends to another host, are proxied like any other remote URL.
 _proxyMediaUrl(url) {
   if (typeof url !== 'string' || !url) return url;
-  // Local paths, data: URIs and blobs never leave the origin.
-  if (!/^https?:\/\//i.test(url)) return url;
-  if (this._mediaProxyEnabled === false) return url;
-  try {
-    if (new URL(url, location.href).origin === location.origin) return url;
-  } catch { return url; }
+  let u;
+  try { u = new URL(url, location.href); } catch (err) {
+    console.warn('[media] dropped unreadable media URL:', err.message);
+    return '';
+  }
+  // data: URIs and blobs never leave the browser; same-origin paths stay local.
+  if (u.protocol === 'data:' || u.protocol === 'blob:') return url;
+  if (u.origin === location.origin) return url;
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+  if (this._mediaProxyEnabled === false) return u.href;
   if (!this._mediaToken) return null;   // enabled but not ready, so defer
-  return `/api/media-proxy?url=${encodeURIComponent(url)}&mt=${encodeURIComponent(this._mediaToken)}`;
+  return `/api/media-proxy?url=${encodeURIComponent(u.href)}&mt=${encodeURIComponent(this._mediaToken)}`;
 },
 
 // Builds the src attribute for an <img>, deferring when necessary. Returns an
@@ -1283,7 +1291,14 @@ _proxyMediaUrl(url) {
 // always points back at us. (#5483)
 _imgSrcAttr(url) {
   const p = this._proxyMediaUrl(url);
-  const origin = /^https?:\/\//i.test(url || '') ? ` data-mp-origin="${this._escapeHtml(url)}"` : '';
+  let remote = '';
+  if (typeof url === 'string' && url) {
+    try {
+      const u = new URL(url, location.href);
+      if (u.origin !== location.origin && /^https?:$/.test(u.protocol)) remote = u.href;
+    } catch { /* unreadable URL: _proxyMediaUrl already dropped it */ }
+  }
+  const origin = remote ? ` data-mp-origin="${this._escapeHtml(remote)}"` : '';
   return (p !== null
     ? `src="${this._escapeHtml(p)}"`
     : `data-mp-src="${this._escapeHtml(url)}"`) + origin;
