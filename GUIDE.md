@@ -1482,8 +1482,8 @@ Content-Type: application/json
 ```
 
 - `content` (required): message text, max 4000 characters
-- `username` (optional): override the bot's display name for this message
-- `avatar_url` (optional): override the bot's avatar for this message
+- `username` (optional): override the bot's display name for this message (max 32 characters; control characters and `<` `>` are removed)
+- `avatar_url` (optional): override the bot's avatar for this message. It must be an `https://` link or one of this server's `/uploads/` files; anything else is dropped and the message posts with no avatar
 - `ephemeral` (optional): when `true`, deliver only to `recipient_id` and do not store in history
 - `recipient_id` (required when `ephemeral` is `true`): user id that should receive the private bot message
 - `reply_to` (optional): id of a message in the same channel to reply to
