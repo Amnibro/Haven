@@ -1061,7 +1061,6 @@ async _e2eSetupListeners() {
   // conflict means this device holds a stale key, which must not be used to
   // open or replace the signing key backup until it has synced below.
   const result = await this.e2e.publishKey(this.socket, this.e2e.keysWereReset);
-  this.e2e.initSigning(this.socket).catch(() => {});
 
   // Handle publish conflict: server has a different key (another device changed it).
   // Sync from the server backup instead of overwriting.

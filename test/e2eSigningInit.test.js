@@ -29,7 +29,7 @@ function loadE2E() {
 // One account on a stand-in server: the same rules as publish-signing-key
 // and get-encrypted-key, with replies arriving after a random delay.
 function makeServer() {
-  const state = { signingKey: null, signingBackup: null, publishes: 0 };
+  const state = { publicKey: null, signingKey: null, signingBackup: null, publishes: 0 };
   const later = (fn) => setTimeout(fn, Math.random() * 20);
   function socket() {
     const handlers = new Map();
@@ -41,7 +41,7 @@ function makeServer() {
       emit(ev, data) {
         later(() => {
           if (ev === 'get-encrypted-key') {
-            deliver('encrypted-key-result', { signingKey: state.signingKey, signingBackup: state.signingBackup });
+            deliver('encrypted-key-result', { publicKey: state.publicKey, signingKey: state.signingKey, signingBackup: state.signingBackup });
           } else if (ev === 'publish-signing-key') {
             const jwk = data.jwk;
             if (state.signingKey && !data.force && (state.signingKey.x !== jwk.x || state.signingKey.y !== jwk.y)) {
@@ -101,4 +101,80 @@ test('two devices racing on a new account end up with the same key', async () =>
     await third.initSigning(server.socket());
     assert.equal(third.signingPublicJwk.x, server.state.signingKey.x, 'the backup holds the pinned key');
   }
+});
+
+const pub = async (keys) => { const j = await webcrypto.subtle.exportKey('jwk', keys.publicKey); return { kty: j.kty, crv: j.crv, x: j.x, y: j.y }; };
+
+// One device left with an old encryption key used to answer an unreadable
+// backup by forcing in a signing key of its own, replacing the account's
+// signing key for every device. These pin down that it now refuses instead,
+// and that a healthy device behaves exactly as before.
+async function account(HavenE2E) {
+  const server = makeServer();
+  const keys = await ecdh();
+  server.state.publicKey = await pub(keys);
+  const first = await makeClient(HavenE2E, keys);
+  assert.equal(await first.initSigning(server.socket()), true);
+  return { server, keys, pinned: { ...server.state.signingKey }, backup: server.state.signingBackup };
+}
+
+test('a healthy device restores the account key and changes nothing', async () => {
+  const HavenE2E = loadE2E();
+  const { server, keys, pinned, backup } = await account(HavenE2E);
+  const before = server.state.publishes;
+  const again = await makeClient(HavenE2E, keys);
+  assert.equal(await again.initSigning(server.socket()), true);
+  assert.equal(again.signingPublicJwk.x, pinned.x);
+  assert.equal(again.signingBlock, null);
+  assert.equal(server.state.publishes, before, 'nothing is published');
+  assert.equal(server.state.signingBackup, backup, 'the backup is untouched');
+  // A message it signed before verifies with the key it signs with now.
+  const epochKey = await HavenGroupCrypto.generateEpochKey();
+  const env = await HavenGroupCrypto.encryptGroupMessage('before the update', { epochKey, epoch: 1, channelId: 4, senderId: 1, prev: null, signingPrivateKey: again.signingPrivateKey });
+  const r = await HavenGroupCrypto.decryptGroupMessage(env, { epochKey, channelId: 4, senderId: 1, signingPublicJwk: pinned });
+  assert.equal(r.plaintext, 'before the update');
+});
+
+test('a device with an outdated encryption key refuses and leaves the account alone', async () => {
+  const HavenE2E = loadE2E();
+  const { server, pinned, backup } = await account(HavenE2E);
+  const before = server.state.publishes;
+  const stale = await makeClient(HavenE2E, await ecdh());
+  assert.equal(await stale.initSigning(server.socket()), false);
+  assert.equal(stale.signingBlock, 'out-of-sync');
+  assert.equal(stale.signingPrivateKey, null);
+  assert.equal(await stale.initSigning(server.socket(), { force: true }), false, 'not even a reset from a stale device');
+  assert.equal(server.state.publishes, before);
+  assert.equal(server.state.signingKey.x, pinned.x);
+  assert.equal(server.state.signingBackup, backup);
+});
+
+test('a backup this device cannot open locks signing instead of replacing the key', async () => {
+  const HavenE2E = loadE2E();
+  const { server, keys, pinned } = await account(HavenE2E);
+  server.state.signingBackup = JSON.stringify({ v: 1, iv: 'AAAAAAAAAAAAAAAA', ct: 'AAAA' });
+  const before = server.state.publishes;
+  const dev = await makeClient(HavenE2E, keys);
+  assert.equal(await dev.initSigning(server.socket()), false);
+  assert.equal(dev.signingBlock, 'locked');
+  assert.equal(server.state.publishes, before);
+  assert.equal(server.state.signingKey.x, pinned.x);
+  // Only when the person asks for it is a new key made.
+  assert.equal(await dev.initSigning(server.socket(), { force: true }), true);
+  assert.notEqual(server.state.signingKey.x, pinned.x);
+  assert.equal(dev.signingBlock, null);
+});
+
+test('the rule matches the apps', () => {
+  const HavenE2E = loadE2E();
+  const p = (o) => HavenE2E.signingPlan(o.local ?? 'E1', 'published' in o ? o.published : 'E1', 'pinned' in o ? o.pinned : 'S1', 'opened' in o ? o.opened : 'S1', !!o.reset);
+  assert.equal(p({}), 'use');
+  assert.equal(p({ pinned: null }), 'adopt');
+  assert.equal(p({ pinned: null, opened: null }), 'create');
+  assert.equal(p({ published: null, pinned: null, opened: null }), 'create');
+  assert.equal(p({ opened: null }), 'locked');
+  assert.equal(p({ opened: 'S2' }), 'locked');
+  assert.equal(p({ local: 'OLD' }), 'out-of-sync');
+  assert.equal(p({ local: 'OLD', reset: true }), 'out-of-sync');
+  assert.equal(p({ opened: null, reset: true }), 'replace');
 });
