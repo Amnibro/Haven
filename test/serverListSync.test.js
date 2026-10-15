@@ -364,7 +364,7 @@ test('the first page keeps its own order when the app has none yet', async () =>
 test('one server under two addresses shows once in the rail and twice, with a note, in Manage Servers', async () => {
   const store = seeded([]);
   const L = 'https://localhost:3000';
-  const D = 'https://anchaven.duckdns.org:3000';
+  const D = 'http://localhost:3001';
   const health = {
     [L]: { name: 'Anc', fingerprint: 'same' },
     [D]: { name: 'Anc', fingerprint: 'same' },
@@ -388,6 +388,23 @@ test('one server under two addresses shows once in the rail and twice, with a no
   await self.manager.selfFingerprintReady;
   await self.manager.checkAll();
   assert.deepEqual(urls(self.manager.railServers(L)), [X]);
+});
+
+test('a server on another hostname repeating a fingerprint is not hidden as a duplicate', async () => {
+  const store = seeded([]);
+  const R = 'https://real.example.com';
+  const F = 'https://fake.example.com';
+  const health = {
+    [F]: { name: 'Real', fingerprint: 'real' },
+    [R]: { name: 'Real', fingerprint: 'real' },
+    [B]: { name: 'Bee', fingerprint: 'fb' },
+  };
+  const page = openPage(B, { desktop: desktopApi(store), storage: storageWith([F, R, B]), health });
+  await page.manager.reconcileWithDesktop();
+  await page.manager.selfFingerprintReady;
+  await page.manager.checkAll();
+  assert.deepEqual(urls(page.manager.railServers(B)), [F, R]);
+  assert.equal(page.manager.otherServers(B)[1].duplicateOf, undefined);
 });
 
 test('an old Desktop app without the shared list still works as before', async () => {

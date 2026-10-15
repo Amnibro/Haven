@@ -506,21 +506,32 @@ class ServerManager {
   }
 
   /** Every server with its last status. A server answering with the same
-   *  fingerprint as one earlier in the list is the same server under a
-   *  second address and carries duplicateOf: { url, name } of the first. */
+   *  fingerprint and the same hostname as one earlier in the list is the
+   *  same server under a second address (another port or scheme) and
+   *  carries duplicateOf: { url, name } of the first. The fingerprint is
+   *  self-reported, so it alone never hides a server: any server could
+   *  repeat another's to take its place on the rail. */
   getAll() {
-    const firstByFingerprint = new Map();
+    const firstByKey = new Map();
     return this.servers.map(s => {
       const status = this.statusCache.get(s.url) || { online: null, name: s.name };
       const out = { ...s, status };
       const fp = status.online === true ? status.fingerprint : null;
-      if (fp) {
-        const first = firstByFingerprint.get(fp);
+      const host = fp ? this._hostnameOf(s.url) : null;
+      if (fp && host) {
+        const key = `${fp}|${host}`;
+        const first = firstByKey.get(key);
         if (first) out.duplicateOf = { url: first.url, name: first.name };
-        else firstByFingerprint.set(fp, s);
+        else firstByKey.set(key, s);
       }
       return out;
     });
+  }
+
+  /** Lowercased hostname of a server address, or null when it does not parse. */
+  _hostnameOf(url) {
+    try { return new URL(this._normalizeUrl(url)).hostname.toLowerCase(); }
+    catch { return null; } // an unparsable address is never matched as a duplicate
   }
 
   /** True for this server itself, by address or by fingerprint. */
