@@ -1816,6 +1816,7 @@ module.exports = function register(socket, ctx) {
           WHERE m.burn_seconds > 0
             AND m.burning_started_at IS NOT NULL
             AND datetime(m.burning_started_at, '+' || m.burn_seconds || ' seconds') <= datetime('now')
+            AND ${protectedMessages.deletableSql('m')}
         `).all();
         for (const row of expired) {
           db.prepare('DELETE FROM messages WHERE id = ?').run(row.id);
@@ -2396,9 +2397,9 @@ module.exports = function register(socket, ctx) {
     if (msg.is_archived) return socket.emit('error-msg', 'Message is already archived');
 
     try {
-      // A protected message is kept, self-destruct timer included, the
-      // same as auto-cleanup and self-purge leave it alone.
-      db.prepare('UPDATE messages SET is_archived = 1, destruct_at = NULL WHERE id = ?').run(data.messageId);
+      // A protected message is kept: its self-destruct and burn-after-read
+      // timers stop, the same as auto-cleanup and self-purge leave it alone.
+      db.prepare('UPDATE messages SET is_archived = 1, destruct_at = NULL, burn_seconds = 0, burning_started_at = NULL WHERE id = ?').run(data.messageId);
       if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);
     } catch (err) {
       console.error('Archive message error:', err);

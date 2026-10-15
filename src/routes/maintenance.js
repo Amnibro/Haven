@@ -9,6 +9,12 @@ const { DATA_DIR, DB_PATH, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('../deletedAttachments');
 const { trimUploadsToLimit } = require('../uploadsTrim');
 const { findOrphanDms } = require('../orphanDms');
+const protectedMessages = require('../protectedMessages');
+
+// What auto-cleanup may remove from a message table aliased m: not protected
+// (nor a thread head holding a protected reply), not pinned, and not in a
+// channel exempt from cleanup.
+const CLEANABLE = `${protectedMessages.deletableSql('m')} AND m.id NOT IN (SELECT message_id FROM pinned_messages) AND m.channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)`;
 const { verifyToken } = require('../auth');
 const { takeTicket } = require('../adminReauth');
 const { getDdnsStatus, triggerDdnsNow } = require('../ddns');
@@ -73,28 +79,21 @@ module.exports = function registerMaintenance(deps) {
         }
       };
 
-      // 1. Delete messages older than N days (skip archived/pinned messages
-      // and exempt channels)
+      // 1. Delete messages older than N days (skip protected and pinned
+      // messages, thread heads holding a protected reply, and exempt channels)
       if (maxAgeDays > 0) {
+        const oldSql = `SELECT m.id FROM messages m WHERE m.created_at < datetime('now', ?) AND ${CLEANABLE}`;
         // Capture the attachments of the messages we're about to delete first,
         // so their files can follow them into deleted-attachments afterward.
         const doomed = db.prepare(
-          "SELECT content FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
+          `SELECT content FROM messages WHERE id IN (${oldSql})`
         ).all(`-${maxAgeDays} days`);
         const doomedAttachments = new Set();
         for (const row of doomed) for (const p of extractUploadRelPaths(row.content)) doomedAttachments.add(p);
 
         // Delete reactions for old messages first
-        db.prepare(`
-        DELETE FROM reactions WHERE message_id IN (
-          SELECT id FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0
-          AND id NOT IN (SELECT message_id FROM pinned_messages)
-          AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)
-        )
-      `).run(`-${maxAgeDays} days`);
-        const result = db.prepare(
-          "DELETE FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
-        ).run(`-${maxAgeDays} days`);
+        db.prepare(`DELETE FROM reactions WHERE message_id IN (${oldSql})`).run(`-${maxAgeDays} days`);
+        const result = db.prepare(`DELETE FROM messages WHERE id IN (${oldSql})`).run(`-${maxAgeDays} days`);
         totalDeleted += result.changes;
 
         relocateOrphanAttachments(doomedAttachments);
@@ -109,10 +108,10 @@ module.exports = function registerMaintenance(deps) {
         if (sizeMb > maxSizeMb) {
           // Delete oldest 10% of non-archived, non-pinned messages to bring
           // size down.
-          const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)').get().cnt;
+          const totalCount = db.prepare(`SELECT COUNT(*) as cnt FROM messages m WHERE ${CLEANABLE}`).get().cnt;
           const deleteCount = Math.max(Math.floor(totalCount * 0.1), 100);
           const oldestRows = db.prepare(
-            'SELECT id, content FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1) ORDER BY created_at ASC LIMIT ?'
+            `SELECT m.id, m.content FROM messages m WHERE ${CLEANABLE} ORDER BY m.created_at ASC LIMIT ?`
           ).all(deleteCount);
           const oldestIds = oldestRows.map(r => r.id);
           const trimmedAttachments = new Set();
