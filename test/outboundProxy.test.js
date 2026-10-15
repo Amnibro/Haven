@@ -18,7 +18,7 @@ const outboundProxy = require('../src/outboundProxy');
 const { resolveCallbackDestination } = require('../src/webhookCallback');
 const { safeGet } = require('../src/safeFetch');
 
-const PROXY_VARS = ['http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY', 'no_proxy', 'NO_PROXY'];
+const PROXY_VARS = ['http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY', 'no_proxy', 'NO_PROXY', 'OUTBOUND_PROXY_RESOLVES_NAMES'];
 
 async function withEnv(vars, fn) {
   const saved = {};
@@ -306,9 +306,19 @@ test('a tunnel the proxy refuses fails with the reason', async () => {
   }
 });
 
-test('member URLs through the proxy: refused when they point inward, allowed when only the proxy can resolve them', async () => {
-  await withEnv({ HTTPS_PROXY: 'http://tinyproxy:8888', HTTP_PROXY: 'http://tinyproxy:8888' }, async () => {
-    const unresolvable = async () => { throw Object.assign(new Error('queryA ESERVFAIL'), { code: 'ESERVFAIL' }); };
+test('member URLs through the proxy: refused when they point inward, pinned when they resolve, proxy-resolved only on opt-in', async () => {
+  const unresolvable = async () => { throw Object.assign(new Error('queryA ESERVFAIL'), { code: 'ESERVFAIL' }); };
+  await withEnv({ HTTPS_PROXY: 'http://tinyproxy:8888' }, async () => {
+    // A name this machine cannot resolve is refused unless the host opts in.
+    await assert.rejects(resolveCallbackDestination('https://x.com/user/status/1', { lookup: unresolvable }), { code: 'ERR_UNSAFE_CALLBACK_URL' });
+    // A name that resolves goes through the proxy, pinned to the checked address.
+    const pinned = await resolveCallbackDestination('https://x.com/user/status/1', { lookup: async () => [{ address: '93.184.216.34', family: 4 }] });
+    assert.equal(pinned.proxy.host, 'tinyproxy:8888');
+    assert.equal(pinned.address, '93.184.216.34');
+    assert.equal(pinned.pinned, true);
+  });
+
+  await withEnv({ HTTPS_PROXY: 'http://tinyproxy:8888', HTTP_PROXY: 'http://tinyproxy:8888', OUTBOUND_PROXY_RESOLVES_NAMES: 'true' }, async () => {
     const dest = await resolveCallbackDestination('https://x.com/user/status/1', { lookup: unresolvable });
     assert.equal(dest.proxy.host, 'tinyproxy:8888');
     assert.equal(dest.address, undefined);
@@ -344,12 +354,61 @@ test('link previews (safeGet) go through the proxy when one is set', async () =>
   const proxy = await startProxy();
   const target = `http://preview.test:${site.address().port}/page`;
   try {
-    await withEnv({ HTTP_PROXY: proxy.url }, async () => {
+    // preview.test only resolves at the proxy, so this needs the opt-in.
+    await withEnv({ HTTP_PROXY: proxy.url, OUTBOUND_PROXY_RESOLVES_NAMES: 'true' }, async () => {
       const got = await safeGet(target, { timeoutMs: 5000 });
       assert.equal(got.status, 200);
       assert.match(got.body.toString(), /Proxied/);
     });
     assert.deepEqual(proxy.seen.map((s) => s.target), [target]);
+  } finally {
+    await close(proxy.server);
+    await close(site);
+  }
+});
+
+test('a pinned http request names the checked IP to the proxy and keeps the Host name', async () => {
+  let hostHeader = null;
+  const site = await listen(http.createServer((req, res) => { hostHeader = req.headers.host; res.end('pinned'); }));
+  const proxy = await startProxy();
+  const port = site.address().port;
+  try {
+    const body = await new Promise((resolve, reject) => {
+      const req = outboundProxy.request(`http://pinned.example:${port}/p`, { method: 'GET' }, (res) => {
+        let data = '';
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => resolve(data));
+      }, new URL(proxy.url), { address: '127.0.0.1', family: 4 });
+      req.on('error', reject);
+      req.end();
+    });
+    assert.equal(body, 'pinned');
+    assert.deepEqual(proxy.seen.map((s) => s.target), [`http://127.0.0.1:${port}/p`]);
+    assert.equal(hostHeader, `pinned.example:${port}`);
+  } finally {
+    await close(proxy.server);
+    await close(site);
+  }
+});
+
+test('a pinned https request tunnels to the checked IP and verifies the certificate for the name', async (t) => {
+  const pair = selfSignedCert();
+  if (!pair) return t.skip('openssl not available');
+  const site = await listen(https.createServer(pair, (req, res) => res.end(`tls ${req.headers.host}`)));
+  const proxy = await startProxy();
+  const port = site.address().port;
+  try {
+    const body = await new Promise((resolve, reject) => {
+      const req = outboundProxy.request(`https://localhost:${port}/`, { method: 'GET', ca: pair.cert }, (res) => {
+        let data = '';
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => resolve(data));
+      }, new URL(proxy.url), { address: '127.0.0.1', family: 4 });
+      req.on('error', reject);
+      req.end();
+    });
+    assert.equal(body, `tls localhost:${port}`);
+    assert.deepEqual(proxy.seen.map((s) => `${s.method} ${s.target}`), [`CONNECT 127.0.0.1:${port}`]);
   } finally {
     await close(proxy.server);
     await close(site);

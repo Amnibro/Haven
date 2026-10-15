@@ -137,6 +137,9 @@ const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTran
 const { initFerry, stopFerry } = require('./src/ferry');
 const { threadExtras: forumBlogThreadExtras } = require('./src/forumBlog');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
+const { CREATOR_NOT_BANNED_SQL } = require('./src/botAccess');
+const { cleanWebhookName, cleanWebhookAvatarUrl } = require('./src/webhookFields');
+const { validHighScore } = require('./src/highScores');
 const {
   BotAudioManager,
   inspectAudioFile,
@@ -1301,23 +1304,17 @@ app.get('/app', (req, res) => {
 });
 
 // ── Vanity invite link (/invite/:code) ────────────────
-app.get('/invite/:vanityCode', (req, res) => {
+// The answer is the same redirect whether or not the code exists, so this
+// page cannot be used to test guesses at short custom invite slugs; the app
+// passes ?invite= to join-channel, which checks the code (and its enabled,
+// expiry and use-limit rules) for a signed-in member. The limit is per IP,
+// generous for people following links and tight for a guessing script.
+const inviteLinkLimiter = require('express-rate-limit')({ windowMs: 60 * 1000, max: 30, message: 'Too many invite links, try again in a minute' });
+app.get('/invite/:vanityCode', inviteLinkLimiter, (req, res) => {
   const vanityCode = req.params.vanityCode;
   if (!vanityCode || typeof vanityCode !== 'string' || !/^[a-zA-Z0-9_-]{3,32}$/.test(vanityCode)) {
     return res.status(400).send('Invalid invite link');
   }
-  const { getDb } = require('./src/database');
-  const db = getDb();
-  // Accept either the legacy single vanity_code setting or any managed invite
-  // code (from the invite-link menu). The frontend auto-joins from ?invite=;
-  // enabled/expiry/use-limit are enforced server-side when join-channel fires.
-  const row = db.prepare("SELECT value FROM server_settings WHERE key = 'vanity_code'").get();
-  const isLegacyVanity = row && row.value === vanityCode;
-  const managed = isLegacyVanity ? null : db.prepare('SELECT 1 FROM invite_codes WHERE code = ?').get(vanityCode);
-  if (!isLegacyVanity && !managed) {
-    return res.status(404).send('Invite link not found or expired');
-  }
-  // Redirect to /app with the code as a query param; the frontend will auto-join
   res.redirect(`/app?invite=${encodeURIComponent(vanityCode)}`);
 });
 
@@ -1803,9 +1800,10 @@ app.post('/api/high-scores', express.json(), (req, res) => {
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
   const game = typeof req.body.game === 'string' ? req.body.game.trim() : '';
-  const score = Number(req.body.score);
   if (!game || !/^[a-z0-9_-]{1,32}$/.test(game)) return res.status(400).json({ error: 'Invalid game id' });
-  if (!Number.isInteger(score) || score < 0) return res.status(400).json({ error: 'Invalid score' });
+  // A JSON number only: no strings, and nothing past the game's ceiling.
+  const score = typeof req.body.score === 'number' ? validHighScore(game, req.body.score) : null;
+  if (score === null) return res.status(400).json({ error: 'Invalid score' });
 
   const { getDb } = require('./src/database');
   const db = getDb();
@@ -1845,8 +1843,9 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     return res.status(400).json({ error: 'Invalid token' });
   }
 
+  // Same rule as getWebhookByToken: a banned person's bots stop posting.
   const webhook = db.prepare(
-    'SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0'
+    `SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0 AND ${CREATOR_NOT_BANNED_SQL}`
   ).get(token);
 
   if (!webhook) {
@@ -1859,12 +1858,11 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   }
 
   // Optional overrides per-message
-  const username = typeof req.body.username === 'string' ? sanitizeText(req.body.username.trim().slice(0, 32)) : webhook.name;
+  const username = (typeof req.body.username === 'string' && cleanWebhookName(sanitizeText(req.body.username))) || webhook.name;
+  // Only this server's uploads or https images (loaded through the media
+  // proxy), never a plain http or other scheme URL every reader fetches.
   let avatarUrl = webhook.avatar_url;
-  if (typeof req.body.avatar_url === 'string') {
-    const trimmed = req.body.avatar_url.trim().slice(0, 512);
-    avatarUrl = /^https?:\/\//i.test(trimmed) ? trimmed : null;
-  }
+  if (typeof req.body.avatar_url === 'string') avatarUrl = cleanWebhookAvatarUrl(req.body.avatar_url);
 
   // Optional reply_to: bot replying to a message in the same channel (3.13.0)
   let replyTo = null;
@@ -1966,8 +1964,8 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
 
   // Insert non-ephemeral messages into the DB/history.
   const result = db.prepare(
-    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?)'
-  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId);
+    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id, webhook_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)'
+  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId, webhook.id);
   message.id = result.lastInsertRowid;
 
   // Broadcast to all clients in this channel
@@ -2284,12 +2282,19 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   const mid = parseInt(messageId, 10);
   if (!Number.isInteger(mid) || mid < 1) return res.status(400).json({ error: 'Invalid message ID' });
 
-  const msg = db.prepare('SELECT id, content, channel_id, is_webhook FROM messages WHERE id = ? AND channel_id = ?').get(mid, webhook.channel_id);
+  const msg = db.prepare('SELECT id, content, channel_id, is_webhook, webhook_id FROM messages WHERE id = ? AND channel_id = ?').get(mid, webhook.channel_id);
   if (!msg) return res.status(404).json({ error: 'Message not found in this channel' });
-  // A bot deletes bot messages. People's messages need a bot with moderation
-  // permission, as the bulk delete below already required.
-  if (!msg.is_webhook && !webhook.can_moderate) {
-    return res.status(403).json({ error: 'This bot can only delete bot messages' });
+  // A bot deletes its own messages. Anyone else's, people's or another
+  // bot's, needs a bot with moderation permission, as the bulk delete below
+  // already required.
+  if (!webhook.can_moderate && !(msg.is_webhook && msg.webhook_id === webhook.id)) {
+    return res.status(403).json({ error: 'This bot can only delete its own messages' });
+  }
+  // Someone else's message also needs the bot's creator to still hold
+  // delete_message here, as for the kick, ban and mute routes.
+  const ownMessage = !!msg.is_webhook && msg.webhook_id === webhook.id;
+  if (!ownMessage && !botModAuth(webhook, 'delete_message', webhook.channel_id)) {
+    return res.status(403).json({ error: BOT_MOD_DENIED });
   }
 
   const replies = db.prepare('SELECT content FROM messages WHERE thread_id = ?').all(mid);
@@ -2342,6 +2347,8 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
   const db = getDb();
   const channel = db.prepare('SELECT id, code FROM channels WHERE id = ?').get(webhook.channel_id);
   if (!channel) return res.status(404).json({ error: 'Channel not found' });
+  // The creator must still hold delete_message in this channel.
+  if (!botModAuth(webhook, 'delete_message', channel.id)) return res.status(403).json({ error: BOT_MOD_DENIED });
 
   const selectMessages = db.prepare(`
     WITH RECURSIVE
@@ -2694,7 +2701,7 @@ function getWebhookByToken(token) {
     FROM webhooks w
     LEFT JOIN channels c ON c.id = w.channel_id
     WHERE w.token = ? AND w.is_active = 1 AND COALESCE(c.is_dm, 0) = 0
-      AND NOT EXISTS (SELECT 1 FROM bans b WHERE b.user_id = w.created_by)
+      AND ${CREATOR_NOT_BANNED_SQL}
   `).get(token);
 }
 
@@ -2758,11 +2765,15 @@ function requireModBot(req, res) {
 // do no more than they could themselves: nobody at or above them, and no
 // undoing an admin's or a higher-ranked moderator's ban or mute. A bot with
 // no creator on record acts with no rank at all.
-function botModAuth(webhook) {
-  if (!webhook || !webhook.created_by) return null;
+// It also needs the creator to hold, today, the permission the route uses:
+// a bot keeps no power its maker has since lost.
+const BOT_MOD_DENIED = 'The person who made this bot no longer has this moderation permission';
+function botModAuth(webhook, permission, channelId = null) {
+  if (!webhook || !webhook.created_by || !permission) return null;
   const { getDb } = require('./src/database');
   const creator = getDb().prepare('SELECT id, username, display_name, is_admin FROM users WHERE id = ?').get(webhook.created_by);
   if (!creator) return null;
+  if (!creator.is_admin && !(socketRuntime && socketRuntime.userHasPermission(creator.id, permission, channelId))) return null;
   return { user: { id: creator.id, username: creator.username, displayName: creator.display_name || creator.username }, isAdmin: !!creator.is_admin, bot: webhook };
 }
 function httpModAudit(auth, action, targetId, targetName, details) {
@@ -2790,7 +2801,8 @@ app.post('/api/webhooks/:token/moderation/kick', webhookLimiter, express.json({ 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot kick an admin' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'kick_user', channel.id);
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   if (!modOutranks(botAuth, userId)) return res.status(403).json({ error: 'This bot can only act on people ranked below the person who made it' });
   httpModAudit(botAuth, 'user_kick', userId, target.username, { channel: channelCode });
 
@@ -2820,7 +2832,8 @@ app.post('/api/webhooks/:token/moderation/ban', webhookLimiter, express.json({ l
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot ban an admin' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'ban_user');
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   if (!modOutranks(botAuth, userId)) return res.status(403).json({ error: 'This bot can only act on people ranked below the person who made it' });
   const priorBan = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(userId);
   if (priorBan && !modMayUndo(botAuth, priorBan.banned_by)) return res.status(403).json({ error: 'That ban was placed by someone of equal or higher rank' });
@@ -2848,7 +2861,8 @@ app.post('/api/webhooks/:token/moderation/unban', webhookLimiter, express.json({
   const db = getDb();
   const { userId } = req.body || {};
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'ban_user');
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   const existingBan = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(userId);
   if (existingBan && !modMayUndo(botAuth, existingBan.banned_by)) {
     return res.status(403).json({ error: 'You can\'t undo a ban placed by an admin or by someone of equal or higher rank' });
@@ -2871,7 +2885,8 @@ app.post('/api/webhooks/:token/moderation/mute', webhookLimiter, express.json({ 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot mute an admin' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'mute_user');
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   if (!modOutranks(botAuth, userId)) return res.status(403).json({ error: 'This bot can only act on people ranked below the person who made it' });
   for (const { muted_by: by } of db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(userId)) {
     if (!modMayUndo(botAuth, by)) return res.status(403).json({ error: 'That timeout was given by someone of equal or higher rank' });
@@ -2901,7 +2916,8 @@ app.post('/api/webhooks/:token/moderation/unmute', webhookLimiter, express.json(
   const db = getDb();
   const { userId } = req.body || {};
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
-  const botAuth = botModAuth(webhook);
+  const botAuth = botModAuth(webhook, 'mute_user');
+  if (!botAuth) return res.status(403).json({ error: BOT_MOD_DENIED });
   for (const { muted_by: by } of db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(userId)) {
     if (!modMayUndo(botAuth, by)) return res.status(403).json({ error: 'You can\'t undo a timeout given by an admin or by someone of equal or higher rank' });
   }
@@ -3015,7 +3031,7 @@ app.get('/api/bot-commands', (req, res) => {
     JOIN webhooks w ON bc.webhook_id = w.id
     JOIN channels c ON c.id = w.channel_id
     JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
-    WHERE w.is_active = 1
+    WHERE w.is_active = 1 AND ${CREATOR_NOT_BANNED_SQL}
   `).all(user.id).filter(r => isAdmin || !socketRuntime || socketRuntime.roleGateAllows(user.id, { id: r.channel_id, role_gate: r.role_gate }));
   const commands = [];
   for (const row of rows) {

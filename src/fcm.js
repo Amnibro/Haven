@@ -164,7 +164,12 @@ async function sendDirect(tokens, title, body, dataPayload) {
         results.failure++;
         const errBody = await resp.json().catch(() => ({}));
         const errCode = errBody?.error?.details?.[0]?.errorCode || '';
-        if (errCode === 'UNREGISTERED' || resp.status === 404) {
+        const errMessage = String(errBody?.error?.message || '');
+        // A dead or malformed token is dropped. INVALID_ARGUMENT also covers a
+        // bad message, which would fail for every token alike, so only the
+        // answer that names the token counts.
+        const badToken = errCode === 'INVALID_ARGUMENT' && /registration token/i.test(errMessage);
+        if (errCode === 'UNREGISTERED' || resp.status === 404 || badToken) {
           results.failedTokens.push(token);
         }
       }
@@ -252,4 +257,29 @@ function getRelayKey() {
   return process.env.HAVEN_PUSH_KEY || null;
 }
 
-module.exports = { initFcm, sendFcm, isFcmEnabled, setFcmAdminEnabled, getRelayKey };
+// Real FCM tokens are a few hundred characters. The caps keep one account
+// from filling the table, or from making every push fan out to thousands of
+// junk tokens; the oldest device drops off first, so a reinstall still
+// registers. Returns false when the token is refused.
+const FCM_TOKEN_MAX_LENGTH = 4096;
+const FCM_TOKENS_PER_USER = 10;
+
+function saveFcmToken(db, userId, token) {
+  if (typeof token !== 'string' || !token || token.length > FCM_TOKEN_MAX_LENGTH) return false;
+  db.transaction(() => {
+    db.prepare('DELETE FROM fcm_tokens WHERE token = ? AND user_id != ?').run(token, userId);
+    db.prepare(`
+      INSERT INTO fcm_tokens (user_id, token)
+      VALUES (?, ?)
+      ON CONFLICT(user_id, token) DO NOTHING
+    `).run(userId, token);
+    db.prepare(`
+      DELETE FROM fcm_tokens WHERE user_id = ? AND id NOT IN (
+        SELECT id FROM fcm_tokens WHERE user_id = ? ORDER BY id DESC LIMIT ?
+      )
+    `).run(userId, userId, FCM_TOKENS_PER_USER);
+  })();
+  return true;
+}
+
+module.exports = { initFcm, sendFcm, isFcmEnabled, setFcmAdminEnabled, getRelayKey, saveFcmToken, FCM_TOKENS_PER_USER, FCM_TOKEN_MAX_LENGTH };

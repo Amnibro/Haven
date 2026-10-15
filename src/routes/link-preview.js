@@ -3,6 +3,7 @@
 
 const { verifyToken } = require('../auth');
 const { youTubeVideoId } = require('../youtubeLink');
+const { absoluteHttpUrl, cleanPreviewUrls } = require('../previewUrls');
 
 module.exports = function registerLinkPreview(deps) {
   const { app } = deps;
@@ -69,6 +70,17 @@ module.exports = function registerLinkPreview(deps) {
       throw err;
     }
     return parsed;
+  }
+
+  const PREVIEW_FAILED = 'Could not load that link';
+  // Throttled: a member can trigger these as fast as the rate limit allows.
+  // Only the reason is logged, never the URL a member posted.
+  const _previewFailureLoggedAt = new Map();
+  function logPreviewFailure(tag, err) {
+    const now = Date.now();
+    if (now - (_previewFailureLoggedAt.get(tag) || 0) < 10000) return;
+    _previewFailureLoggedAt.set(tag, now);
+    console.warn(`[${tag}] fetch refused or failed: ${String(err?.message || err).slice(0, 200)}`);
   }
 
   // ── Media proxy (v3.43.0) ─────────────────────────────────
@@ -144,8 +156,10 @@ module.exports = function registerLinkPreview(deps) {
       return send(item);
     } catch (err) {
       // A transparent 1x1 would silently hide broken images; a status code lets
-      // the client fall back to its own placeholder.
-      return res.status(502).json({ error: String(err.message || 'fetch failed').slice(0, 120) });
+      // the client fall back to its own placeholder. The body never says why
+      // (private address, DNS failure, refused port); the log does.
+      logPreviewFailure('media-proxy', err);
+      return res.status(502).json({ error: PREVIEW_FAILED });
     }
   });
 
@@ -179,7 +193,10 @@ module.exports = function registerLinkPreview(deps) {
     try {
       parsed = await validateUrlSafe(url);
     } catch (err) {
-      return res.status(400).json({ error: err.message || 'Invalid URL' });
+      // One answer for every refusal, so the reply never says whether a host
+      // exists, resolves, or sits on a private network. The reason is logged.
+      logPreviewFailure('link-preview', err);
+      return res.status(400).json({ error: PREVIEW_FAILED });
     }
 
     // ── Auto-mod domain gate (v3.42.0) ──────────────────────
@@ -210,8 +227,15 @@ module.exports = function registerLinkPreview(deps) {
 
     try {
       let data = null;
+      // The page URL relative image links resolve against: the final URL
+      // after redirects for the generic scrape, otherwise the link itself.
+      let previewBase = null;
 
       // ── Site-specific handlers ───────────────────────────
+      // These call fixed public APIs, not the member's URL, so they skip
+      // safeGet, but none of them follows a redirect: the URL is built from
+      // the member's link, and a redirect could point anywhere. Any 3xx
+      // answer is not ok, so it counts as a failure and falls through.
       // Native twitter.com / x.com: their HTML requires JS rendering so the generic
       // scraper gets blank OG tags. The fxtwitter public JSON API returns structured
       // post data (author, avatar, text, media, engagement counts) with no auth, so
@@ -223,7 +247,7 @@ module.exports = function registerLinkPreview(deps) {
         try {
           const fxApi = await fetch(
             `https://api.fxtwitter.com/${twitterMatch[1]}/status/${twitterMatch[2]}`,
-            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
+            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA }, redirect: 'manual' }
           );
           if (fxApi.ok) {
             const tw = (await fxApi.json())?.tweet;
@@ -297,7 +321,8 @@ module.exports = function registerLinkPreview(deps) {
           const jsonUrl = url.replace(/\/?(?:\?.*)?$/, '/.json');
           const rResp = await fetch(jsonUrl, {
             signal: AbortSignal.timeout(6000),
-            headers: { 'User-Agent': PREVIEW_UA }
+            headers: { 'User-Agent': PREVIEW_UA },
+            redirect: 'manual'
           });
           if (rResp.ok) {
             const rJson = await rResp.json();
@@ -344,7 +369,7 @@ module.exports = function registerLinkPreview(deps) {
           const watch = `https://www.youtube.com/watch?v=${ytId}`;
           const yResp = await fetch(
             `https://www.youtube.com/oembed?url=${encodeURIComponent(watch)}&format=json`,
-            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'application/json' } }
+            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'application/json' }, redirect: 'manual' }
           );
           if (yResp.ok) {
             const oj = await yResp.json();
@@ -365,7 +390,7 @@ module.exports = function registerLinkPreview(deps) {
         try {
           const poEmbed = await fetch(
             `https://embed.pixiv.net/oembed.php?url=${encodeURIComponent(url)}&format=json`,
-            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
+            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA }, redirect: 'manual' }
           );
           if (poEmbed.ok) {
             const oj = await poEmbed.json();
@@ -390,7 +415,7 @@ module.exports = function registerLinkPreview(deps) {
           if (!did.startsWith('did:')) {
             const rh = await fetch(
               `https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(did)}`,
-              { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
+              { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA }, redirect: 'manual' }
             );
             if (rh.ok) did = (await rh.json()).did || did;
           }
@@ -398,7 +423,7 @@ module.exports = function registerLinkPreview(deps) {
             const atUri = `at://${did}/app.bsky.feed.post/${m[2]}`;
             const pResp = await fetch(
               `https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(atUri)}`,
-              { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
+              { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA }, redirect: 'manual' }
             );
             if (pResp.ok) {
               const post = (await pResp.json())?.posts?.[0];
@@ -466,6 +491,7 @@ module.exports = function registerLinkPreview(deps) {
           return res.json({ title: null, description: null, image: null, siteName: null });
         }
         const currentUrl = resp.url;
+        previewBase = currentUrl;
 
         const contentType = String(resp.headers['content-type'] || '');
         if (resp.status < 200 || resp.status >= 300 ||
@@ -545,7 +571,7 @@ module.exports = function registerLinkPreview(deps) {
               if (oResp.status >= 200 && oResp.status < 300) {
                 const oj = JSON.parse(oResp.body.toString('utf8'));
                 data.title = data.title || oj.title || null;
-                data.image = data.image || oj.thumbnail_url || null;
+                data.image = data.image || absoluteHttpUrl(oj.thumbnail_url, currentUrl);
                 if (!data.siteName || data.siteName === parsed.hostname) {
                   data.siteName = oj.provider_name || data.siteName;
                 }
@@ -560,17 +586,19 @@ module.exports = function registerLinkPreview(deps) {
           ? url.replace(/^https?:\/\/(?:www\.|mobile\.)?(?:twitter|x)\.com/i, 'https://fxtwitter.com')
           : url;
         try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 5000);
-          const resp = await fetch(imageSource, {
-            signal: controller.signal,
-            headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'text/html' },
-            redirect: 'manual'  // no blind redirect following
+          // The member's own link can land here, so it goes through safeGet
+          // (checked and pinned address) and follows no redirect at all.
+          const resp = await safeGet(imageSource, {
+            allowPrivate: allowPrivatePreviews,
+            timeoutMs: 5000,
+            maxBytes: PREVIEW_MAX_SIZE,
+            truncate: true,
+            maxRedirects: 0,
+            headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'text/html' }
           });
-          clearTimeout(timeout);
           // Only scrape if we got a direct 200 (no redirect chasing for image-only pass)
           if (resp.status === 200) {
-            const html = (await resp.text()).slice(0, PREVIEW_MAX_SIZE);
+            const html = resp.body.toString('utf8');
             const imgMatch = html.match(/<meta[^>]*?(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*?content=["']([^"']+)["']/is)
                           || html.match(/<meta[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["'](?:og:image|twitter:image)["']/is);
             if (imgMatch) data.image = decodeHtmlEntities(imgMatch[1].trim());
@@ -578,6 +606,7 @@ module.exports = function registerLinkPreview(deps) {
         } catch { /* image is optional */ }
       }
 
+      data = cleanPreviewUrls(data, previewBase || url);
       linkPreviewCache.set(url, { data, ts: Date.now() });
 
       // Prune old cache entries if over 500

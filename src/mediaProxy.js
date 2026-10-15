@@ -98,8 +98,26 @@ function issueToken(userId) {
   return `${userId}.${_sign(userId, _today())}`;
 }
 
-// Returns the user id the token belongs to, or null.
-function verifyToken(token) {
+// A token outlives the session it came from by up to two days, so it is only
+// honoured while the account still exists and is not banned. A failed check
+// refuses the token rather than serving a possibly banned account.
+let _accountCheckWarnedAt = 0;
+function _accountActive(userId, db) {
+  try {
+    const conn = db || require('./database').getDb();
+    if (!conn.prepare('SELECT 1 FROM users WHERE id = ?').get(userId)) return false;
+    return !conn.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(userId);
+  } catch (err) {
+    if (Date.now() - _accountCheckWarnedAt > 60000) {
+      _accountCheckWarnedAt = Date.now();
+      console.warn('[media-proxy] account check failed, refusing token:', err.message);
+    }
+    return false;
+  }
+}
+
+// Returns the user id the token belongs to, or null. `db` is for tests.
+function verifyToken(token, db = null) {
   if (typeof token !== 'string' || token.length > 128) return null;
   const dot = token.indexOf('.');
   if (dot <= 0) return null;
@@ -112,7 +130,7 @@ function verifyToken(token) {
     // Constant-time compare; lengths already match by construction.
     if (sig.length === expected.length &&
         crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
-      return userId;
+      return _accountActive(userId, db) ? userId : null;
     }
   }
   return null;

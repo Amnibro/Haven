@@ -20,10 +20,12 @@ const highlights = require('../messageHighlights');
 const { grantAdminRole } = require('../roleDefaults');
 const {
   UnsafeCallbackError,
+  agentForDestination,
   postWebhookCallback,
-  validateCallbackUrl
+  resolveCallbackDestination,
+  validateCallbackUrl,
+  withDeadline
 } = require('../webhookCallback');
-const { agentFor } = require('../outboundProxy');
 const {
   clearChannelRuntimeState,
   createTempChannelDeleteCallback,
@@ -40,6 +42,8 @@ const {
   reconcileBotVoiceAccess,
   registerBotVoiceSocket
 } = require('../botVoice');
+const { creatorCanReachChannel } = require('../botAccess');
+const { ipBanRefusal } = require('../ipBanGuard');
 
 const { createActivity } = require('../activity');
 const createDmCalls = require('../dmCalls');
@@ -1397,6 +1401,27 @@ function setupSocketHandlers(io, db, opts = {}) {
     pumpPushQueue();
   }
 
+  // The endpoint is whatever URL the subscribing browser sent, so every send
+  // looks the name up again, refuses a private or blocked address (private
+  // ones are allowed with HAVEN_ALLOW_PRIVATE_CALLBACKS, as at subscribe
+  // time, for a self-hosted ntfy), and connects to exactly the address it
+  // checked. A name that later moves to an internal address gets nothing.
+  // A push service that never answers must not hold a queue slot forever,
+  // or a handful of them would stop every notification, so the lookup and
+  // the send each have a deadline.
+  async function sendOnePush(job) {
+    const destination = await withDeadline(
+      resolveCallbackDestination(job.sub.endpoint, { allowPrivateCallbacks: process.env.HAVEN_ALLOW_PRIVATE_CALLBACKS === 'true' }),
+      Date.now() + 10000,
+      'Push endpoint lookup timed out'
+    );
+    return webpush.sendNotification(
+      { endpoint: job.sub.endpoint, keys: { p256dh: job.sub.p256dh, auth: job.sub.auth } },
+      job.payload,
+      { timeout: 10000, agent: agentForDestination(destination) }
+    );
+  }
+
   function pumpPushQueue() {
     if (pushPumping) return;
     pushPumping = true;
@@ -1407,15 +1432,12 @@ function setupSocketHandlers(io, db, opts = {}) {
         const job = pushQueue.shift();
         pushWaiting.delete(job.key);
         pushActive++;
-        let sending;
-        try {
-          // A push service that never answers must not hold a queue slot
-          // forever, or a handful of them would stop every notification.
-          sending = webpush.sendNotification({ endpoint: job.sub.endpoint, keys: { p256dh: job.sub.p256dh, auth: job.sub.auth } }, job.payload, { timeout: 10000, agent: agentFor(job.sub.endpoint) });
-        } catch (err) {
-          sending = Promise.reject(err);
-        }
+        const sending = sendOnePush(job);
         sending.catch((err) => {
+          if (err instanceof UnsafeCallbackError || err?.code === 'ERR_UNSAFE_CALLBACK_URL') {
+            throttledWarn('push endpoint refused', err);
+            return;
+          }
           if (err.statusCode === 410 || err.statusCode === 404) {
             try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(job.sub.endpoint); } catch { /* the next push to this dead endpoint tries the cleanup again */ }
           }
@@ -1612,11 +1634,13 @@ function setupSocketHandlers(io, db, opts = {}) {
   function fireWebhookEvent(channelId, channelCode, eventType, body) {
     try {
       // DMs are between their two people; no bot callback ever hears them.
-      const _whCh = db.prepare('SELECT is_dm FROM channels WHERE id = ?').get(channelId);
+      const _whCh = db.prepare('SELECT id, is_dm, role_gate FROM channels WHERE id = ?').get(channelId);
       if (!_whCh || _whCh.is_dm) return;
+      // A bot hears only what its creator could still read here: once they
+      // are banned, leave, or lose the channel's required role, it goes quiet.
       const bots = db.prepare(
-        'SELECT id, callback_url, callback_secret, subscribed_events FROM webhooks WHERE channel_id = ? AND is_active = 1 AND callback_url IS NOT NULL'
-      ).all(channelId);
+        'SELECT id, callback_url, callback_secret, subscribed_events, created_by FROM webhooks WHERE channel_id = ? AND is_active = 1 AND callback_url IS NOT NULL'
+      ).all(channelId).filter(bot => creatorCanReachChannel(db, bot.created_by, _whCh));
       if (!bots.length) return;
 
       const payload = JSON.stringify({
@@ -2557,10 +2581,25 @@ function setupSocketHandlers(io, db, opts = {}) {
             const { normalizeIp } = require('../clientIp');
             const ips = db.prepare('SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 3').all(socket.user.id);
             const stmt = db.prepare('INSERT OR REPLACE INTO ip_bans (ip, banned_by, reason) VALUES (?, ?, ?)');
+            // Never this machine, and never an address used by anyone automod
+            // would leave alone: an admin, a moderator (50) or anyone at the
+            // configured exempt level. A spammer on the same CGNAT address or
+            // home network as staff loses the account, not the address.
+            const exemptLevel = parseInt(automod.settings().automod_link_exempt_level, 10);
+            const guard = {
+              getUserEffectiveLevel,
+              protectAdmins: true,
+              protectLevel: Number.isFinite(exemptLevel) && exemptLevel >= 0 ? Math.min(50, exemptLevel) : 50,
+            };
             let banned = 0;
             for (const r of ips) {
               const norm = normalizeIp(r.ip);
               if (!norm) continue;
+              const refusal = ipBanRefusal(db, norm, guard);
+              if (refusal) {
+                console.warn(`automod: IP ban skipped (${refusal})`);
+                continue;
+              }
               stmt.run(norm, actorId, reason);
               banned++;
             }
@@ -2653,11 +2692,18 @@ function setupSocketHandlers(io, db, opts = {}) {
       // callback URL), making per-bot callback URLs behave server-wide. (#5398)
       try {
         const botCmd = db.prepare(`
-          SELECT bc.command, bc.description, w.id as webhook_id, w.callback_url, w.callback_secret, w.token, w.name as bot_name
+          SELECT bc.command, bc.description, w.id as webhook_id, w.callback_url, w.callback_secret, w.token, w.name as bot_name,
+                 w.created_by, c.id AS channel_id, c.is_dm, c.role_gate
           FROM bot_commands bc
           JOIN webhooks w ON bc.webhook_id = w.id
+          JOIN channels c ON c.id = w.channel_id
           WHERE bc.command = ? AND w.channel_id = ? AND w.is_active = 1 AND w.callback_url IS NOT NULL
         `).get(cmd, channelId);
+        // Same reach as event delivery: nothing for a bot whose creator was
+        // banned or can no longer read this channel.
+        if (botCmd && !creatorCanReachChannel(db, botCmd.created_by, { id: botCmd.channel_id, is_dm: botCmd.is_dm, role_gate: botCmd.role_gate })) {
+          return null;
+        }
         if (botCmd) {
           if (!isSafeCallbackUrl(botCmd.callback_url)) {
             console.error(`Bot command /${cmd}: callback URL blocked by SSRF guard`);

@@ -267,14 +267,63 @@ module.exports = function registerMediaLibrary(deps) {
   const discordEmoteInflight = new Map();  // file -> download in progress, so a burst of renders is one fetch
   const discordEmoteLimiter = require('express-rate-limit')({ windowMs: 60 * 1000, max: 300, message: { error: 'Rate limit exceeded' } });
 
+  // A file's modified time doubles as its last use, refreshed at most daily,
+  // so a full cache drops the emotes nobody has looked at for longest.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  function touchEmote(full) {
+    try {
+      if (Date.now() - fs.statSync(full).mtimeMs < DAY_MS) return;
+      const now = new Date();
+      fs.utimesSync(full, now, now);
+    } catch (err) {
+      // Only the eviction order suffers; the emote is still served.
+      console.warn('[ferry-emote] could not mark an emote as used:', err.code || err.message);
+    }
+  }
+  function evictOldEmotes() {
+    const entries = [];
+    for (const name of fs.readdirSync(DISCORD_EMOTE_DIR)) {
+      try {
+        entries.push({ name, used: fs.statSync(path.join(DISCORD_EMOTE_DIR, name)).mtimeMs });
+      } catch (err) {
+        // Removed between the listing and the stat: nothing to evict.
+        if (err.code !== 'ENOENT') console.warn('[ferry-emote] stat failed:', err.code || err.message);
+      }
+    }
+    if (entries.length < DISCORD_EMOTE_MAX_FILES) return;
+    // Free a little headroom at once, so a full cache is not swept per miss.
+    entries.sort((a, b) => a.used - b.used);
+    const drop = entries.length - DISCORD_EMOTE_MAX_FILES + Math.ceil(DISCORD_EMOTE_MAX_FILES * 0.05);
+    for (const { name } of entries.slice(0, drop)) {
+      try { fs.unlinkSync(path.join(DISCORD_EMOTE_DIR, name)); } catch (err) {
+        if (err.code !== 'ENOENT') console.warn('[ferry-emote] eviction failed:', err.code || err.message);
+      }
+    }
+  }
+
+  // Signed in (Authorization header) or holding a media token (?mt=, for
+  // <img> tags that cannot send headers). Open to anyone, the route let a
+  // stranger make the server fetch and store thousands of files.
+  function emoteViewer(req) {
+    const bearer = req.headers.authorization?.split(' ')[1];
+    if (bearer && verifyToken(bearer)) return true;
+    const mt = typeof req.query.mt === 'string' ? req.query.mt.trim() : '';
+    return !!(mt && require('../mediaProxy').verifyToken(mt));
+  }
+
   app.get('/api/ferry/emote/:file', discordEmoteLimiter, async (req, res) => {
+    if (!emoteViewer(req)) return res.status(401).end();
     const m = /^(\d{15,25})\.(png|gif)$/.exec(String(req.params.file || ''));
     if (!m) return res.status(400).end();
     const file = m[0];
     const full = path.join(DISCORD_EMOTE_DIR, file);
     // An emote id never changes what it points at, so a copy is good forever.
-    const sendOpts = { maxAge: 365 * 24 * 60 * 60 * 1000, immutable: true };
-    if (fs.existsSync(full)) return res.sendFile(full, sendOpts);
+    // Private: the URL now carries a member's media token.
+    const sendOpts = { cacheControl: false, headers: { 'Cache-Control': 'private, max-age=31536000, immutable' } };
+    if (fs.existsSync(full)) {
+      touchEmote(full);
+      return res.sendFile(full, sendOpts);
+    }
 
     let ferryOn = false;
     try { ferryOn = !!require('../ferry').getFerryState().enabled; } catch { /* bridge not loaded */ }
@@ -286,7 +335,7 @@ module.exports = function registerMediaLibrary(deps) {
     if (!job) {
       job = (async () => {
         fs.mkdirSync(DISCORD_EMOTE_DIR, { recursive: true });
-        if (fs.readdirSync(DISCORD_EMOTE_DIR).length >= DISCORD_EMOTE_MAX_FILES) return false;
+        if (fs.readdirSync(DISCORD_EMOTE_DIR).length >= DISCORD_EMOTE_MAX_FILES) evictOldEmotes();
         const r = await fetch(`https://cdn.discordapp.com/emojis/${file}?size=64`, { signal: AbortSignal.timeout(8000) });
         if (!r.ok || !/^image\//i.test(r.headers.get('content-type') || '')) return false;
         const buf = Buffer.from(await r.arrayBuffer());

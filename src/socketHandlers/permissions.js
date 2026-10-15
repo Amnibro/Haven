@@ -1,4 +1,6 @@
 // ── Permission system helpers (factory, closes over db) ──
+const roleGate = require('../roleGate');
+const { parseRoleGate } = roleGate;
 
 // A failed read of the per-user overrides (user_role_perms) means an explicit
 // deny cannot be ruled out, so callers fail closed. The read runs on every
@@ -284,29 +286,9 @@ module.exports = function createPermissions(db) {
   }
 
   // ── Role gate ───────────────────────────────────────────
-  // A channel's role_gate is JSON {mode:'any'|'all', roles:[ids]}. Empty or
-  // malformed means no gate. Roles held server-wide count, and so does a
-  // channel-scoped grant of the same role inside this very channel.
-  function parseRoleGate(raw) {
-    if (!raw) return null;
-    try {
-      const g = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      const roles = Array.isArray(g && g.roles)
-        ? [...new Set(g.roles.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0))]
-        : [];
-      if (!roles.length) return null;
-      return { mode: g.mode === 'all' ? 'all' : 'any', roles };
-    } catch { return null; }
-  }
-
+  // The rule itself lives in src/roleGate.js so bot code shares it.
   function roleGateAllows(userId, channel) {
-    const gate = parseRoleGate(channel && channel.role_gate);
-    if (!gate) return true;
-    const held = new Set(
-      db.prepare('SELECT role_id FROM user_roles WHERE user_id = ? AND (channel_id IS NULL OR channel_id = ?)')
-        .all(userId, channel.id || 0).map(r => r.role_id)
-    );
-    return gate.mode === 'all' ? gate.roles.every(r => held.has(r)) : gate.roles.some(r => held.has(r));
+    return roleGate.roleGateAllows(db, userId, channel);
   }
 
   // ── Required roles are membership (#5649) ───────────────

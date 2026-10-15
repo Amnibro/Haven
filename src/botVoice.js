@@ -1,9 +1,14 @@
 'use strict';
 
+const { CREATOR_NOT_BANNED_SQL, isCreatorBanned } = require('./botAccess');
+const { roleGateAllows } = require('./roleGate');
+
 const BOT_SOCKET_ROOM = 'bot-sockets';
 
 function getAccessibleVoiceChannels(db, webhook) {
   if (!webhook) return [];
+  // A banned creator's bot reaches no voice channel at all.
+  if (isCreatorBanned(db, webhook.created_by)) return [];
   const creator = webhook.created_by
     ? db.prepare('SELECT is_admin FROM users WHERE id = ?').get(webhook.created_by)
     : null;
@@ -17,14 +22,19 @@ function getAccessibleVoiceChannels(db, webhook) {
     `).all();
   }
 
+  // A membership row is not enough on a role-gated channel: the creator has
+  // to pass its gate too, as they would to join that voice room themselves.
+  // A bot with no creator on record gets no gated channel.
   return db.prepare(`
-    SELECT DISTINCT c.id, c.code, c.name, c.voice_enabled, c.voice_user_limit, c.voice_bitrate
+    SELECT DISTINCT c.id, c.code, c.name, c.voice_enabled, c.voice_user_limit, c.voice_bitrate, c.role_gate
     FROM channels c
     LEFT JOIN channel_members cm
       ON cm.channel_id = c.id AND cm.user_id = ?
     WHERE c.is_dm = 0 AND (c.id = ? OR cm.user_id IS NOT NULL)
     ORDER BY c.position ASC, c.id ASC
-  `).all(webhook.created_by || -1, webhook.channel_id);
+  `).all(webhook.created_by || -1, webhook.channel_id)
+    .filter(channel => !channel.role_gate || (creator && roleGateAllows(db, webhook.created_by, channel)))
+    .map(({ role_gate, ...channel }) => channel);
 }
 
 function canAccessVoiceChannel(db, webhook, channelCode) {
@@ -38,7 +48,7 @@ function getBotVoiceWebhookByToken(db, token) {
            c.code AS channel_code
     FROM webhooks w
     JOIN channels c ON c.id = w.channel_id
-    WHERE w.token = ? AND w.is_active = 1
+    WHERE w.token = ? AND w.is_active = 1 AND ${CREATOR_NOT_BANNED_SQL}
   `).get(token) || null;
 }
 
@@ -57,6 +67,9 @@ function getBotVoiceAccessFailure(db, webhookId, channelCodes = [], expectedToke
   if (!webhook) return 'Webhook was deleted or disabled';
   if (expectedToken && webhook.token !== expectedToken) return 'Bot token was rotated';
   if (!webhook.can_use_voice) return 'Bot voice permission was revoked';
+  // Checked on every packet and by the periodic sweep, so banning the
+  // creator drops a connected bot within seconds.
+  if (isCreatorBanned(db, webhook.created_by)) return 'The person who made this bot is banned';
   for (const code of channelCodes) {
     const channel = canAccessVoiceChannel(db, webhook, code);
     if (!channel) return 'Bot no longer has access to this channel';

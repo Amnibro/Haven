@@ -50,6 +50,14 @@ for (const [address, prefix] of [
   ['ff00::', 8]
 ]) alwaysBlocked.addSubnet(address, prefix, 'ipv6');
 
+// Cloud metadata and host agent services that sit outside the link-local
+// range: Alibaba (100.100.100.200), AWS over IPv6 (fd00:ec2::254) and Azure's
+// wire server (168.63.129.16). They hand out instance credentials, so they
+// stay blocked even when private callbacks are allowed.
+alwaysBlocked.addAddress('100.100.100.200', 'ipv4');
+alwaysBlocked.addAddress('168.63.129.16', 'ipv4');
+alwaysBlocked.addAddress('fd00:ec2::254', 'ipv6');
+
 privateBlocked.addSubnet('::1', 128, 'ipv6');
 privateBlocked.addSubnet('fc00::', 7, 'ipv6');
 globalIpv6.addSubnet('2000::', 3, 'ipv6');
@@ -155,16 +163,24 @@ async function resolveCallbackDestination(urlString, options = {}) {
   };
 }
 
-// Through a proxy it is the proxy that looks the name up and connects, so
-// there is no address to pin. Refuse what can be refused from here: a blocked
-// literal address, or a name that this machine resolves to a blocked network.
-// A name that does not resolve here is normal when the proxy is the only way
-// out, and the proxy's own rules decide where it may go. A name that resolves
-// only to private addresses the host allowed (a bot next to Haven) is on this
-// machine's own network, which a proxy usually cannot reach, so it stays a
-// direct connection to the checked address, as it was before proxy support.
+// Through a proxy, the name is still looked up and checked here, and the
+// proxy is then sent to the checked address (CONNECT to the IP for https, an
+// absolute URL with the IP for http, the Host header keeping the name), so it
+// cannot resolve the name again and land on an internal address.
+// A name that resolves only to private addresses the host allowed (a bot next
+// to Haven) is on this machine's own network, which a proxy usually cannot
+// reach, so it stays a direct connection to the checked address, as it was
+// before proxy support.
+// A name that does not resolve here at all (a container whose only way out
+// is the proxy) is refused, unless the host sets
+// OUTBOUND_PROXY_RESOLVES_NAMES=true: then the proxy resolves it and the
+// proxy's own rules are all that decide where it may go.
 // The lookup is not cut short (every caller has its own deadline), so a slow
 // answer is still checked instead of being handed to the proxy unchecked.
+function proxyResolvesNames() {
+  return process.env.OUTBOUND_PROXY_RESOLVES_NAMES === 'true';
+}
+
 async function checkProxiedDestination(url, hostname, literalFamily, proxy, lookup, allowPrivateCallbacks) {
   let addresses = [];
   if (literalFamily) {
@@ -172,8 +188,11 @@ async function checkProxiedDestination(url, hostname, literalFamily, proxy, look
   } else {
     try {
       addresses = await lookup(hostname, { all: true, verbatim: true });
-    } catch {
+    } catch (err) {
+      // Not resolving here is the expected answer behind a proxy-only egress;
+      // what that means is decided just below.
       addresses = [];
+      if (!proxyResolvesNames()) throw new UnsafeCallbackError(`Callback hostname did not resolve (${err?.code || 'lookup failed'})`);
     }
   }
   const usable = (Array.isArray(addresses) ? addresses : []).filter(entry => entry.address && net.isIP(entry.address));
@@ -182,10 +201,16 @@ async function checkProxiedDestination(url, hostname, literalFamily, proxy, look
       throw new UnsafeCallbackError('Callback URL resolves to a blocked network');
     }
   }
-  if (usable.length && usable.every(entry => isBlockedAddress(entry.address, net.isIP(entry.address), false))) {
-    return { url, address: usable[0].address, family: net.isIP(usable[0].address) };
+  if (!usable.length) {
+    if (proxyResolvesNames()) return { url, proxy };
+    throw new UnsafeCallbackError('Callback hostname did not resolve');
   }
-  return { url, proxy };
+  const selected = usable[0];
+  const family = net.isIP(selected.address);
+  if (usable.every(entry => isBlockedAddress(entry.address, net.isIP(entry.address), false))) {
+    return { url, address: selected.address, family };
+  }
+  return { url, proxy, address: selected.address, family, pinned: true };
 }
 
 function createPinnedLookup(address, family) {
@@ -193,6 +218,21 @@ function createPinnedLookup(address, family) {
     if (options?.all) callback(null, [{ address, family }]);
     else callback(null, address, family);
   };
+}
+
+// The checked address a proxied request must go to, or null when the host
+// let the proxy resolve the name (OUTBOUND_PROXY_RESOLVES_NAMES).
+function proxyPin(destination) {
+  return destination.pinned ? { address: destination.address, family: destination.family } : null;
+}
+
+// An agent for libraries that take one instead of a lookup (web-push): it
+// connects to exactly the address resolveCallbackDestination checked, or
+// through the proxy when the destination goes that way.
+function agentForDestination(destination) {
+  if (destination.proxy) return outboundProxy.agentThrough(destination.url, destination.proxy, undefined, proxyPin(destination));
+  const Agent = destination.url.protocol === 'https:' ? https.Agent : http.Agent;
+  return new Agent({ keepAlive: false, lookup: createPinnedLookup(destination.address, destination.family) });
 }
 
 function withDeadline(promise, deadlineAt, message) {
@@ -234,7 +274,7 @@ function postResolvedCallback(destination, payload, headers, deadlineAt) {
       incoming.resume();
     };
     const request = destination.proxy
-      ? outboundProxy.request(destination.url, requestOptions, onResponse, destination.proxy)
+      ? outboundProxy.request(destination.url, requestOptions, onResponse, destination.proxy, proxyPin(destination))
       : transport.request(destination.url, {
         ...requestOptions,
         agent: false,
@@ -263,9 +303,12 @@ async function postWebhookCallback(urlString, payload, headers, options = {}) {
 
 module.exports = {
   UnsafeCallbackError,
+  agentForDestination,
   createPinnedLookup,
   isBlockedAddress,
   postWebhookCallback,
+  proxyPin,
   resolveCallbackDestination,
-  validateCallbackUrl
+  validateCallbackUrl,
+  withDeadline
 };

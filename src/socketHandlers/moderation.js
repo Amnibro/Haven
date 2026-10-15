@@ -3,6 +3,7 @@
 const bcrypt = require('bcryptjs');
 const { utcStamp, isInt } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
+const { ipBanRefusal } = require('../ipBanGuard');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
@@ -561,7 +562,18 @@ module.exports = function register(socket, ctx) {
       if (data.banIp && (socket.user.isAdmin || userHasPermission(socket.user.id, 'ban_ip'))) {
         try {
           const ipStmt = db.prepare('INSERT OR REPLACE INTO ip_bans (ip, banned_by, reason) VALUES (?, ?, ?)');
-          const { normalizeIp } = require('../clientIp');
+          const { normalizeIp, socketClientIp } = require('../clientIp');
+          // A cleaned-up account may share an address (CGNAT, a household)
+          // with staff. Those addresses, this machine and the person running
+          // the cleanup stay open: anyone at moderator level (50) or above,
+          // and for a moderator also anyone at or above their own rank.
+          const guard = {
+            getUserEffectiveLevel,
+            actorId: socket.user.id,
+            actorIp: socketClientIp(socket),
+            protectAdmins: true,
+            protectLevel: socket.user.isAdmin ? 50 : Math.min(50, getUserEffectiveLevel(socket.user.id)),
+          };
           const banIps = db.transaction((idList) => {
             const seen = new Set();
             for (const uid of idList) {
@@ -569,6 +581,7 @@ module.exports = function register(socket, ctx) {
                 const norm = normalizeIp(r.ip);
                 if (!norm || seen.has(norm)) continue;
                 seen.add(norm);
+                if (ipBanRefusal(db, norm, guard)) continue;
                 ipStmt.run(norm, socket.user.id, `[Bulk cleanup] ${reason}`.slice(0, 200));
                 ipBanned++;
               }
@@ -912,7 +925,7 @@ module.exports = function register(socket, ctx) {
   // whole server, the admin included. The widest range is /16 (IPv4) or /48
   // (IPv6) for a moderator and /8 or /32 for the admin.
   function _ipBanRefusal(entry) {
-    const { ipMatches, socketClientIp, isIPv4 } = require('../clientIp');
+    const { socketClientIp, isIPv4 } = require('../clientIp');
     const slash = entry.indexOf('/');
     if (slash !== -1) {
       const v4 = isIPv4(entry.slice(0, slash));
@@ -921,22 +934,15 @@ module.exports = function register(socket, ctx) {
         return `That range is too wide. The widest you can ban is /${widest}.`;
       }
     }
-    if (ipMatches('127.0.0.1', entry) || ipMatches('::1', entry)) return 'That would ban the server\'s own machine.';
-    const mine = socketClientIp(socket);
-    if (mine && ipMatches(mine, entry)) return 'That would ban your own address.';
     // Staff who have used an address in the range. The admin may ban anyone
     // but themselves; a moderator nobody at or above their own rank.
-    const myLevel = socket.user.isAdmin ? Infinity : getUserEffectiveLevel(socket.user.id);
-    const seen = db.prepare('SELECT ui.user_id, ui.ip, u.is_admin FROM user_ips ui JOIN users u ON u.id = ui.user_id').all();
-    for (const r of seen) {
-      if (!ipMatches(r.ip, entry)) continue;
-      if (r.user_id === socket.user.id) return 'That would ban an address you use.';
-      if (r.is_admin && !socket.user.isAdmin) return 'That address is used by the admin.';
-      if (!socket.user.isAdmin && getUserEffectiveLevel(r.user_id) >= myLevel) {
-        return 'That address is used by someone of equal or higher rank.';
-      }
-    }
-    return null;
+    return ipBanRefusal(db, entry, {
+      getUserEffectiveLevel,
+      actorId: socket.user.id,
+      actorIp: socketClientIp(socket),
+      protectAdmins: !socket.user.isAdmin,
+      protectLevel: socket.user.isAdmin ? Infinity : getUserEffectiveLevel(socket.user.id),
+    });
   }
 
   // Validation and canonicalisation now live in src/clientIp.js so that the
