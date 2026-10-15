@@ -843,8 +843,7 @@ _setupSettingsSearch() {
   const input = wrap.querySelector('input');
   const apply = () => {
     const q = input.value.trim().toLowerCase();
-    const sections = modal.querySelectorAll('.settings-section');
-    sections.forEach(sec => {
+    modal.querySelectorAll('.settings-section:not(#admin-mod-panel), #admin-mod-panel > .admin-settings').forEach(sec => {
       const hit = !q || sec.textContent.toLowerCase().includes(q);
       sec.classList.toggle('settings-search-hidden', !hit);
       const navItem = sec.id ? nav.querySelector(`.settings-nav-item[data-target="${sec.id}"]`) : null;
@@ -855,6 +854,7 @@ _setupSettingsSearch() {
       while (sib && !sib.classList.contains('settings-nav-group-label')) { if (sib.classList.contains('settings-nav-item') && !sib.classList.contains('settings-search-hidden')) any = true; sib = sib.nextElementSibling; }
       label.classList.toggle('settings-search-hidden', !any && !!q);
     });
+    modal.querySelectorAll('.settings-body').forEach(body => { body.scrollTop = 0; });
   };
   input.addEventListener('input', apply);
   modal.addEventListener('keydown', (e) => {
