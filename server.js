@@ -2269,9 +2269,15 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   const mid = parseInt(messageId, 10);
   if (!Number.isInteger(mid) || mid < 1) return res.status(400).json({ error: 'Invalid message ID' });
 
-  const msg = db.prepare('SELECT id, content, channel_id FROM messages WHERE id = ? AND channel_id = ?').get(mid, webhook.channel_id);
+  const msg = db.prepare('SELECT id, content, channel_id, is_webhook FROM messages WHERE id = ? AND channel_id = ?').get(mid, webhook.channel_id);
   if (!msg) return res.status(404).json({ error: 'Message not found in this channel' });
+  // A bot deletes bot messages. People's messages need a bot with moderation
+  // permission, as the bulk delete below already required.
+  if (!msg.is_webhook && !webhook.can_moderate) {
+    return res.status(403).json({ error: 'This bot can only delete bot messages' });
+  }
 
+  const replies = db.prepare('SELECT content FROM messages WHERE thread_id = ?').all(mid);
   try {
     db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(mid);
     db.prepare('DELETE FROM reactions WHERE message_id = ?').run(mid);
@@ -2281,11 +2287,14 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
     return res.status(500).json({ error: 'Failed to delete message' });
   }
 
-  // Move any uploaded attachments to the deleted folder
-  const uploadRe = UPLOAD_PATH_RE;
-  let m;
-  while ((m = uploadRe.exec(msg.content || '')) !== null) {
-    moveUploadToDeleted(m[1], uploadDir);
+  // Its files, and its replies' files, go only when nothing else uses them
+  // and they were uploaded to a channel. Moving every /uploads/ path the text
+  // named let a message that quoted someone's avatar or an emoji take that
+  // file away from everyone.
+  try {
+    relocateUnreferencedUploads(db, collectUploadRelPaths([msg.content, ...replies.map(r => r.content)]));
+  } catch (err) {
+    console.error('Bot delete attachment cleanup error:', err);
   }
 
   // Find channel code for broadcasting

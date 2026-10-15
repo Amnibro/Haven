@@ -758,15 +758,23 @@ module.exports = function register(socket, ctx) {
     // uploaded file sitting in uploads/ forever, while deleting a single message
     // has always cleaned up after itself, and deleting a whole channel is
     // the same thing in bulk. (#5487)
-    const doomedUploads = new Set();
+    // Kept per author: a file goes only if the person whose message named it
+    // uploaded it to a channel, and nothing else uses it (releasableUploads).
+    // Moving every path the messages named let someone post another member's
+    // avatar or an emoji's file in a channel of their own, delete the channel,
+    // and take that file away from everyone.
+    const doomedUploads = new Map();
     try {
-      const msgs = db.prepare(`SELECT content FROM messages WHERE channel_id IN (${idMarks})`).all(...ids);
+      const msgs = db.prepare(`SELECT user_id, content FROM messages WHERE channel_id IN (${idMarks})`).all(...ids);
       for (const row of msgs) {
+        if (!Number.isInteger(row.user_id)) continue;
         const text = row.content || '';
         UPLOAD_PATH_RE.lastIndex = 0;
         let m;
         while ((m = UPLOAD_PATH_RE.exec(text)) !== null) {
-          if (isSafeUploadRelPath(m[1])) doomedUploads.add(m[1]);
+          if (!isSafeUploadRelPath(m[1])) continue;
+          if (!doomedUploads.has(row.user_id)) doomedUploads.set(row.user_id, new Set());
+          doomedUploads.get(row.user_id).add(m[1]);
         }
       }
     } catch (err) {
@@ -790,14 +798,10 @@ module.exports = function register(socket, ctx) {
     // The same file can be linked from more than one message (a copy-pasted
     // image URL), so only relocate the ones nothing else points at anymore.
     // Mirrors what auto-cleanup does. (#5423)
-    for (const rel of doomedUploads) {
+    for (const [authorId, rels] of doomedUploads) {
       try {
-        const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
-        const still = db.prepare(
-          "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
-        ).get(like);
-        if (!still) moveUploadToDeleted(rel);
-      } catch { /* this one file stays in uploads/; nothing is lost and the delete goes on */ }
+        for (const rel of releasableUploads(db, [...rels], [authorId])) moveUploadToDeleted(rel);
+      } catch (err) { console.warn('delete-channel attachment cleanup failed:', err.message); /* the files stay in uploads/; nothing is lost */ }
     }
 
     for (const deletedCode of deletedCodes) {

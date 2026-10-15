@@ -371,17 +371,25 @@ test('webhook bulk delete enforces moderation and cleans related data end to end
     'message-deleted',
     payload => payload?.messageId === Number(singleMessage.lastInsertRowid)
   );
-  const singleDelete = await fetch(
+  // A bot without moderation permission deletes only bot messages.
+  const refusedSingle = await fetch(
     `${baseUrl}/api/webhooks/${noModToken}/messages/${singleMessage.lastInsertRowid}`,
+    { method: 'DELETE' }
+  );
+  assert.equal(refusedSingle.status, 403);
+  assert.ok(db.prepare('SELECT 1 FROM messages WHERE id = ?').get(singleMessage.lastInsertRowid), 'the person\'s message stays');
+  const singleDelete = await fetch(
+    `${baseUrl}/api/webhooks/${modToken}/messages/${singleMessage.lastInsertRowid}`,
     { method: 'DELETE' }
   );
   assert.equal(singleDelete.status, 200);
   assert.deepEqual(await singleDelete.json(), { success: true });
   await singleEvent;
-  assert.equal(fs.existsSync(path.join(uploads, 'global-shared.txt')), false);
-  assert.equal(fs.existsSync(path.join(uploads, 'protected.mp3')), false);
-  assert.equal(fs.existsSync(path.join(uploads, 'private.txt')), false);
-  assert.equal(fs.existsSync(path.join(uploads, 'legacy.txt')), false);
+  // Only files nothing else uses, uploaded to a channel, go with it: a custom
+  // sound, a DM file and a file with no recorded owner all stay.
+  assert.equal(fs.existsSync(path.join(uploads, 'protected.mp3')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'private.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'legacy.txt')), true);
 
   const crossParent = db.prepare(
     "INSERT INTO messages (channel_id, user_id, content, created_at) VALUES (?, ?, 'cross parent', '2027-01-01 00:00:00')"
