@@ -13,6 +13,7 @@ const { MEDIA_GROUP_LAYOUTS } = require('../mediaGroup');
 
 const PUSH_SCOPES = ['all', 'mentions'];
 const { validateCallbackUrl } = require('../webhookCallback');
+const e2eStale = require('../e2eStale');
 
 // A personal sidebar order (#5779): category keys and, per category, channel
 // codes. Only that shape is kept, within limits, so the value cannot carry
@@ -599,6 +600,10 @@ module.exports = function register(socket, ctx) {
         const existing = JSON.parse(current.public_key);
         if (existing.x !== publicJwk.x || existing.y !== publicJwk.y) {
           console.warn(`[E2E] User ${socket.user.id} (${socket.user.username}) tried to overwrite public key, blocked`);
+          // A device holds an encryption key the account no longer uses: for
+          // a while the account's signing key and backup are not replaced
+          // without proof of the current key (see src/e2eStale.js).
+          e2eStale.mark(socket.user.id);
           socket.emit('public-key-conflict', { existing });
           return;
         }
@@ -608,6 +613,13 @@ module.exports = function register(socket, ctx) {
       }
       db.prepare('UPDATE users SET public_key = ? WHERE id = ?')
         .run(JSON.stringify(publicJwk), socket.user.id);
+      // Only a new key (an explicit reset) clears the mark. Re-publishing the
+      // key a device just synced does not: older apps decided to replace the
+      // signing key while still holding the old one, and that can arrive after.
+      if (keyChanged) e2eStale.clear(socket.user.id);
+      // This connection has shown it holds the account's current key, which
+      // every app does as soon as it connects (see publish-signing-key).
+      socket.e2eKeyProven = true;
       socket.emit('public-key-published');
 
       if (keyChanged) {
@@ -681,6 +693,9 @@ module.exports = function register(socket, ctx) {
   socket.on('store-signing-backup', (data) => {
     const backup = typeof data?.backup === 'string' ? data.backup : '';
     if (!backup || backup.length > 4096) return socket.emit('error-msg', 'Invalid signing key backup');
+    // A backup sealed by a connection holding an outdated encryption key could
+    // never be opened by the account's other devices.
+    if (e2eStale.isStale(socket.user.id) || !socket.e2eKeyProven) return socket.emit('error-msg', 'Encryption key out of sync: sync it before changing the signing key');
     db.prepare('UPDATE users SET signing_backup = ? WHERE id = ?').run(backup, socket.user.id);
     socket.emit('signing-backup-stored');
   });
