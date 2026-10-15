@@ -90,7 +90,16 @@ test('backups leave out two-factor secrets and codes', async () => {
   assert.strictEqual(on.status, 200, JSON.stringify(on.body));
 
   const zip = path.join(DATA, 'backup.zip');
-  await download('/api/admin/backup?include=messages', admin.token, zip);
+  // A download needs the password again, for a one-time ticket.
+  const noPw = await call('POST', '/api/admin/download-ticket', { purpose: 'backup', include: 'messages' }, admin.token);
+  assert.strictEqual(noPw.status, 401, 'no ticket without the password');
+  const old = await new Promise((r) => http.get({ host: 'localhost', port: PORT, path: `/api/admin/backup?include=messages&token=${admin.token}` }, (x) => { x.resume(); r(x.statusCode); }));
+  assert.strictEqual(old, 401, 'the session token in the URL no longer downloads a backup');
+  const ticket = (await call('POST', '/api/admin/download-ticket', { purpose: 'backup', include: 'messages', password: PW }, admin.token)).body.ticket;
+  assert.ok(ticket, 'ticket issued');
+  await download(`/api/admin/backup?ticket=${ticket}`, admin.token, zip);
+  const reused = await new Promise((r) => http.get({ host: 'localhost', port: PORT, path: `/api/admin/backup?ticket=${ticket}` }, (x) => { x.resume(); r(x.statusCode); }));
+  assert.strictEqual(reused, 401, 'a ticket works once');
   const dbFile = path.join(DATA, 'restored.db');
   assert.ok(await extract(zip, 'haven.db', dbFile), 'the backup has a database');
 

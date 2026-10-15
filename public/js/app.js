@@ -17,7 +17,8 @@ import MessageActionMethods from './modules/app-message-actions.js?v=4.23.1';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.22.22';
 import PeopleMethods from './modules/app-people.js?v=4.23.5';
 import SettingsMethods from './modules/app-settings.js?v=4.22.9';
-import AdminControlMethods from './modules/app-admin-controls.js?v=4.21.0';
+import AdminControlMethods from './modules/app-admin-controls.js?v=4.23.8';
+import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.22.24';
 import MobileMethods from './modules/app-mobile.js?v=4.21.0';
@@ -586,6 +587,7 @@ Object.assign(HavenApp.prototype,
   MessageHighlightMethods,
   ModCaseMethods,
   ServerMuteMethods,
+  AdminReauthMethods,
   MasterVolumeMethods,
   ForumUnreadMethods,
   ChannelCategoryMethods,

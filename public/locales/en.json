@@ -1,4 +1,13 @@
 {
+  "admin_reauth": {
+    "title": "Confirm it is you",
+    "hint": "Backups and restores ask for your password again, and your two-factor code if you use one.",
+    "password": "Your password",
+    "code": "Two-factor code (if you use one)",
+    "continue": "Continue",
+    "need_password": "Enter your password",
+    "failed": "Could not start the download"
+  },
   "_meta": {
     "locale": "en",
     "language": "English",

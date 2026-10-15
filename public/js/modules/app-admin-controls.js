@@ -177,12 +177,14 @@ _bindAdminControls() {
   }
 
   // ── Server backup / restore (admin) ──────────────────
-  const startBackupDownload = (include) => {
+  const startBackupDownload = async (include) => {
     const token = localStorage.getItem('haven_token');
     if (!token) return this._showToast(t('toasts.not_logged_in'), 'error');
-    const url = `/api/admin/backup?include=${encodeURIComponent(include)}&token=${encodeURIComponent(token)}`;
+    // Password (and two-factor code) for a one-time download ticket.
+    const ticket = await this._adminDownloadTicket({ purpose: 'backup', include });
+    if (!ticket) return;
     const a = document.createElement('a');
-    a.href = url;
+    a.href = `/api/admin/backup?ticket=${encodeURIComponent(ticket)}`;
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
@@ -231,6 +233,8 @@ _bindAdminControls() {
       if (!confirm(t('confirm.backup_restore'))) return;
       const token = localStorage.getItem('haven_token');
       if (!token) return this._showToast(t('toasts.not_logged_in'), 'error');
+      const reauth = await this._askAdminReauth();
+      if (!reauth) return;
 
       restoreBtn.disabled = true;
       const origText = restoreBtn.innerHTML;
@@ -262,6 +266,8 @@ _bindAdminControls() {
           const xhr = new XMLHttpRequest();
           xhr.open('POST', '/api/admin/restore');
           xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.setRequestHeader('X-Haven-Password', encodeURIComponent(reauth.password || ''));
+          if (reauth.code) xhr.setRequestHeader('X-Haven-Code', reauth.code);
           xhr.timeout = 0; // multi-GB uploads can run for many minutes
           xhr.upload.onprogress = (e) => {
             if (!e.lengthComputable) return;
@@ -339,9 +345,11 @@ _bindAdminControls() {
         </div>`;
       }).join('');
       listEl.querySelectorAll('.auto-backup-dl-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
           const name = btn.dataset.name;
-          const url = `/api/admin/auto-backups/${encodeURIComponent(name)}?token=${encodeURIComponent(token)}`;
+          const ticket = await this._adminDownloadTicket({ purpose: 'auto-backup', name });
+          if (!ticket) return;
+          const url = `/api/admin/auto-backups/${encodeURIComponent(name)}?ticket=${encodeURIComponent(ticket)}`;
           const a = document.createElement('a');
           a.href = url; a.download = name; a.style.display = 'none';
           document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 1000);

@@ -10,6 +10,7 @@ const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('../del
 const { trimUploadsToLimit } = require('../uploadsTrim');
 const { findOrphanDms } = require('../orphanDms');
 const { verifyToken } = require('../auth');
+const { takeTicket } = require('../adminReauth');
 const { getDdnsStatus, triggerDdnsNow } = require('../ddns');
 
 module.exports = function registerMaintenance(deps) {
@@ -329,11 +330,12 @@ module.exports = function registerMaintenance(deps) {
     }
   });
 
+  // Downloaded with a one-time ticket (POST /api/admin/download-ticket),
+  // not the session token in the URL.
   app.get('/api/admin/auto-backups/:name', (req, res) => {
-    const token = req.query.token || req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
+    const entry = takeTicket(req.query.ticket, 'auto-backup');
+    if (!entry || entry.data.name !== req.params.name) return res.status(401).json({ error: 'This download link has expired. Try again.' });
+    if (!verifyAdminFromDb({ id: entry.userId })) return res.status(403).json({ error: 'Admin only' });
     const name = req.params.name;
     // Path traversal guard: backups are flat zip files only.
     if (!/^[\w.-]+\.zip$/.test(name)) return res.status(400).json({ error: 'Invalid name' });
@@ -437,7 +439,7 @@ module.exports = function registerMaintenance(deps) {
   }
 
   app.get('/api/admin/update/check', async (req, res) => {
-    const token = req.query.token || req.headers.authorization?.split(' ')[1];
+    const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
