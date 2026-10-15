@@ -6,7 +6,7 @@ const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayNam
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 const { saveFcmToken } = require('../fcm');
-const { validHighScore } = require('../highScores');
+const { validHighScore, isKnownGame } = require('../highScores');
 
 // A personal sidebar order (#5779): category keys and, per category, channel
 // codes. Only that shape is kept, within limits, so the value cannot carry
@@ -915,6 +915,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const game = typeof data.game === 'string' ? data.game.trim() : '';
     if (!game || !/^[a-z0-9_-]{1,32}$/.test(game)) return;
+    if (!isKnownGame(game)) return;
     // Same rule as POST /api/high-scores: a safe integer under the game's ceiling.
     const score = validHighScore(game, data.score);
     if (score === null) return;
@@ -923,7 +924,8 @@ module.exports = function register(socket, ctx) {
       'SELECT score FROM high_scores WHERE user_id = ? AND game = ?'
     ).get(socket.user.id, game);
 
-    if (!current || score > current.score) {
+    const improved = !current || score > current.score;
+    if (improved) {
       db.prepare(
         'INSERT OR REPLACE INTO high_scores (user_id, game, score, updated_at) VALUES (?, ?, ?, datetime(\'now\'))'
       ).run(socket.user.id, game, score);
@@ -948,7 +950,9 @@ module.exports = function register(socket, ctx) {
         )
       ORDER BY hs.score DESC LIMIT 50
     `).all(game);
-    io.except('bot-sockets').emit('high-scores', { game, leaderboard });
+    // Everyone hears about a new best; an unchanged board goes only to the
+    // sender, so repeating a score is not a broadcast to the whole server.
+    (improved ? io.except('bot-sockets') : socket).emit('high-scores', { game, leaderboard });
   });
 
   socket.on('get-high-scores', (data) => {
@@ -990,6 +994,14 @@ module.exports = function register(socket, ctx) {
 
       if (signups.some(s => s.email === email)) {
         return callback({ ok: true });
+      }
+      // One entry per account, and a ceiling on the file: it is read and
+      // rewritten whole on each signup.
+      if (signups.some(s => s.username === socket.user.username)) {
+        return callback({ ok: false, error: 'You are already signed up.' });
+      }
+      if (signups.length >= 5000) {
+        return callback({ ok: false, error: 'The beta list is full.' });
       }
 
       signups.push({
