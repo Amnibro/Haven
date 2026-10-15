@@ -33,6 +33,7 @@ function startFakeDiscord(port) {
   const sockets = new Set();
   const webhooks = new Map();      // id -> { id, token, channelId }
   const executions = [];           // { webhookId, threadId, body }
+  const botMessages = [];
   let seq = 0;
   let identified = 0;
 
@@ -125,6 +126,12 @@ function startFakeDiscord(port) {
           return json(res, 200, { id: hook.id, token: hook.token, application_id: BOT_ID });
         }
       }
+      if (req.method === 'POST' && url.pathname === '/users/@me/channels') return json(res, 200, { id: newId(), type: 1, recipient_id: body && body.recipient_id });
+      if (req.method === 'GET' && parts[0] === 'guilds' && parts[2] === 'members' && parts.length === 4) return json(res, 200, { user: { id: parts[3], username: 'member', bot: false } });
+      if (req.method === 'POST' && parts[0] === 'channels' && parts[2] === 'messages') {
+        botMessages.push({ channelId: parts[1], body });
+        return json(res, 200, { id: newId(), channel_id: parts[1], content: body && body.content });
+      }
       // /webhooks/:id/:token
       if (req.method === 'POST' && parts[0] === 'webhooks' && parts.length === 3) {
         const hook = webhooks.get(parts[1]);
@@ -173,6 +180,7 @@ function startFakeDiscord(port) {
       dispatch,
       forumChannel,
       executions,
+      botMessages,
       webhooks,
       newId,
       get identified() { return identified; },

@@ -377,6 +377,14 @@ export default {
     const rest = body.slice(trigger.length);
     return (rest === chosen.label || rest.startsWith(chosen.label + ' ')) ? chosen.id : undefined;
   },
+  _ferryPrefix(content) {
+    const ch = this.channels?.find(c => c.code === this.currentChannel), data = this._ferryTargets?.[this.currentChannel], trigger = this._ferryTrigger(), body = String(content || '').replace(/^::[^\s:]+[: ]\s*/, '');
+    if (!ch || ch.is_dm || !body.startsWith(trigger)) return '';
+    const rest = body.slice(trigger.length), lower = rest.toLowerCase();
+    const labels = this._ferryPendingDm(content) ? [this._ferryDm.label] : (data?.enabled ? data.targets || [] : []).flatMap(l => [l.guild_name && l.discord_channel_name ? `${l.guild_name}#${l.discord_channel_name}` : '', l.discord_channel_name ? `#${l.discord_channel_name}` : '']).filter(Boolean).sort((a, b) => b.length - a.length);
+    const hit = labels.find(l => lower === l.toLowerCase() || lower.startsWith(l.toLowerCase() + ' '));
+    return hit ? `${trigger}${rest.slice(0, hit.length)} ` : '';
+  },
 
   // ══════════════════════════════════════════════════════════
   // Admin panel

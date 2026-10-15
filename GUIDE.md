@@ -1239,7 +1239,9 @@ To DM a Discord user (when the admin has enabled it), type `=>@` and search by n
 - **Pings are off by default.** Relayed messages do not ping anyone on Discord unless an
   admin turns on **Allow pings**. Even then `@everyone` and role pings stay blocked
 - **Pictures and files sent in Haven are uploaded to Discord** with the message, up to
-  Discord's 10 MB a file and ten files a message. A bigger one shows as a note instead
+  Discord's 10 MB a file and ten files a message. A bigger one shows as a note instead.
+  Attachments sent with a `=>` target go to that target (or that Discord DM) too, and a
+  spoilered picture arrives as a Discord spoiler
 - **Set `PUBLIC_URL`** in your `.env` if you want Haven avatars to appear on the Discord
   side, and files too big for Discord to show as links. Discord has to be able to reach
   them over the internet. Without it names still come through, just without avatars

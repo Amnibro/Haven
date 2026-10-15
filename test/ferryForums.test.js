@@ -479,6 +479,42 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     assert.strictEqual(big.body.content, 'big one (too large to send to Discord)');
   });
 
-  assert.deepStrictEqual(errors.filter((e) => !/forum/i.test(e)), [], 'no unexpected errors');
+  await t.test('attachments addressed to Discord in an on-command pairing go along', async () => {
+    const uploads = path.join(DATA, 'uploads');
+    fs.writeFileSync(path.join(uploads, '1790000000003-dddd4444.png'), Buffer.alloc(1024, 5));
+    fs.writeFileSync(path.join(uploads, '1790000000004-eeee5555.png'), Buffer.alloc(512, 6));
+    const got = next(A, 'ferry:config');
+    A.emit('ferry:get-config');
+    const chatLink = (await got).links.find((l) => l.discord_channel_id === TEXT_ID);
+    const updated = next(A, 'ferry:config', (c) => c.links.some((l) => l.id === chatLink.id && l.out_mode === 'command'));
+    A.emit('ferry:update-link', { id: chatLink.id, outMode: 'command' });
+    assert.ok(await updated, 'the pairing only sends what is addressed to it');
+    const before = discord.executions.length;
+    A.emit('send-message', { code: chat.code, content: '/uploads/1790000000003-dddd4444.png', isImage: true });
+    A.emit('send-message', { code: chat.code, content: '=>Test Guild#general /uploads/1790000000003-dddd4444.png', isImage: true, bundled: true });
+    const pic = await until(() => discord.executions.slice(before).find((e) => e.body && e.body.files && e.body.files.some((f) => f.filename === '1790000000003-dddd4444.png')));
+    assert.ok(pic, 'the addressed picture was uploaded');
+    assert.strictEqual(discord.executions.slice(before).filter((e) => e.body && e.body.files).length, 1, 'the unaddressed one stayed in Haven');
+    A.emit('send-message', { code: chat.code, content: '=>#general spoiler-img:/uploads/1790000000004-eeee5555.png', isImage: true });
+    const spoiler = await until(() => discord.executions.slice(before).find((e) => e.body && e.body.files && e.body.files.some((f) => f.filename === 'SPOILER_1790000000004-eeee5555.png')));
+    assert.ok(spoiler, 'a spoilered picture goes as a Discord spoiler');
+    assert.strictEqual(spoiler.body.content, '');
+  });
+
+  await t.test('a Discord DM carries Haven attachments as uploads', async () => {
+    const reconnected = discord.identified;
+    A.emit('ferry:set-option', { key: 'ferry_allow_dms', value: true });
+    await until(() => discord.identified > reconnected, 8000);
+    await wait(300);
+    const before = discord.botMessages.length;
+    A.emit('send-message', { code: chat.code, content: '=>@Alice here it is /uploads/1790000000003-dddd4444.png', ferryDiscordUserId: ALICE.id });
+    const dm = await until(() => discord.botMessages.slice(before)[0]);
+    assert.ok(dm, 'the DM was sent');
+    assert.match(dm.body.content, /here it is/);
+    assert.doesNotMatch(dm.body.content, /\/uploads\//, 'no Haven path in the DM text');
+    assert.deepStrictEqual(dm.body.files.map((f) => [f.filename, f.size]), [['1790000000003-dddd4444.png', 1024]]);
+  });
+
+  assert.deepStrictEqual(errors.filter((e) => !/forum|Sent to Discord/i.test(e)), [], 'no unexpected errors');
   A.close();
 });
