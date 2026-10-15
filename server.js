@@ -140,6 +140,7 @@ const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/bot
 const { CREATOR_NOT_BANNED_SQL } = require('./src/botAccess');
 const { cleanWebhookName, cleanWebhookAvatarUrl } = require('./src/webhookFields');
 const { validHighScore, isKnownGame } = require('./src/highScores');
+const protectedMessages = require('./src/protectedMessages');
 const {
   BotAudioManager,
   inspectAudioFile,
@@ -2317,6 +2318,8 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   if (!ownMessage && !botModAuth(webhook, 'delete_message', webhook.channel_id)) {
     return res.status(403).json({ error: BOT_MOD_DENIED });
   }
+  const kept = protectedMessages.refusal(db, mid);
+  if (kept) return res.status(409).json({ error: kept });
 
   const replies = db.prepare('SELECT content FROM messages WHERE thread_id = ?').all(mid);
   try {
@@ -2351,6 +2354,7 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
 });
 
 // ── Bot: Delete recent messages and their replies ─────────
+// Protected messages, and thread heads holding one, are left out.
 app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
   const webhook = requireModBot(req, res);
   if (!webhook) return;
@@ -2395,6 +2399,7 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
     SELECT m.id, m.channel_id, m.content
     FROM messages m
     JOIN doomed d ON d.id = m.id
+    WHERE ${protectedMessages.deletableSql('m')}
     ORDER BY m.id DESC
   `);
   const deletePin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');

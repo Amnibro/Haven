@@ -43,6 +43,7 @@ const {
   registerBotVoiceSocket
 } = require('../botVoice');
 const { creatorCanReachChannel } = require('../botAccess');
+const protectedMessages = require('../protectedMessages');
 const { ipBanRefusal } = require('../ipBanGuard');
 
 const { createActivity } = require('../activity');
@@ -1887,11 +1888,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           // fall back to disabling the timer to avoid getting stuck firing
           // a zero-second loop. Protected messages stay, as with every other
           // bulk delete: a timer is no way around a moderator saving them.
-          db.transaction(() => {
-            db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ? AND is_archived = 0)').run(ch.id);
-            db.prepare('DELETE FROM pinned_messages WHERE channel_id = ? AND message_id IN (SELECT id FROM messages WHERE channel_id = ? AND is_archived = 0)').run(ch.id, ch.id);
-            db.prepare('DELETE FROM messages WHERE channel_id = ? AND is_archived = 0').run(ch.id);
-          })();
+          db.transaction(() => protectedMessages.clearUnprotected(db, ch.id))();
           const interval = ch.auto_delete_interval_hours;
           if (interval && interval > 0) {
             const nextExpiry = new Date(Date.now() + interval * 3600000).toISOString();
@@ -1903,6 +1900,12 @@ function setupSocketHandlers(io, db, opts = {}) {
           // Refresh channel lists so the new expires_at propagates to clients.
           broadcastChannelLists();
           console.log(`[Temporary] Channel "${ch.code}" messages cleared (auto-clear mode)`);
+        } else if (protectedMessages.protectedCount(db, [ch.id])) {
+          // A timer does not delete protected messages, so the channel
+          // stays: the rest of its messages go and its timer is turned off.
+          protectedMessages.keepChannel(db, ch, 'expired');
+          io.to(`channel:${ch.code}`).emit('channel-messages-cleared', { code: ch.code, reason: 'auto-clear' });
+          broadcastChannelLists();
         } else {
           db.transaction(() => {
             db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
@@ -2878,7 +2881,12 @@ function setupSocketHandlers(io, db, opts = {}) {
           }
           if (stillOnline) return;
           try {
-            db.prepare('DELETE FROM users WHERE id = ? AND is_guest = 1').run(guestId);
+            // Protected messages outlive the guest, unattributed, the way an
+            // account deletion keeps them.
+            db.transaction(() => {
+              db.prepare(`UPDATE messages SET user_id = NULL WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${protectedMessages.keptSql('m')})`).run(guestId);
+              db.prepare('DELETE FROM users WHERE id = ? AND is_guest = 1').run(guestId);
+            })();
             console.log(`👤 guest ${guestName} (id=${guestId}) cleaned up, username freed`);
           } catch (err) {
             console.warn(`[guest-cleanup] failed for ${guestName}:`, err.message);

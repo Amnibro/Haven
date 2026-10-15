@@ -428,7 +428,7 @@ _showForumTopicContextMenu(e, msg) {
   if (canShareLink) more.push(item('copy-link', '🔗', t('msg_toolbar.copy_link')));
   if (canArchive) more.push(msg.is_archived ? item('unarchive', '🛡️', t('app.messages.unprotect_btn')) : item('archive', '🛡️', t('app.messages.protect_btn')));
   if (more.length) items.push('<hr class="channel-ctx-sep">', ...more);
-  if (canDelete) items.push('<hr class="channel-ctx-sep">', item('delete', '🗑️', t('msg_toolbar.delete'), ' danger'));
+  if (canDelete && !msg.is_archived) items.push('<hr class="channel-ctx-sep">', item('delete', '🗑️', t('msg_toolbar.delete'), ' danger'));
 
   const menu = document.createElement('div');
   menu.id = 'message-context-menu';

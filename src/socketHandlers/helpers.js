@@ -273,7 +273,8 @@ function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null 
   if (!owners.size) return [];
   const ownership = db.prepare('SELECT user_id, scope FROM upload_ownership WHERE rel_path = ?');
   const before = Number.isInteger(ignoreMessagesAfter) ? ignoreMessagesAfter : Number.MAX_SAFE_INTEGER;
-  const inMessages = db.prepare('SELECT 1 FROM messages WHERE instr(content, ?) > 0 AND id < ? LIMIT 1');
+  // A protected message keeps its files whenever it was posted.
+  const inMessages = db.prepare('SELECT 1 FROM messages WHERE instr(content, ?) > 0 AND (id < ? OR is_archived = 1) LIMIT 1');
   const inProfiles = db.prepare(`
     SELECT 1 WHERE
          EXISTS(SELECT 1 FROM users WHERE instr(COALESCE(avatar, ''), @p) > 0 OR instr(COALESCE(border, ''), @p) > 0)

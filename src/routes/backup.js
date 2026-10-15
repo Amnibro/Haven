@@ -157,6 +157,10 @@ module.exports = function registerBackup(deps) {
             // doesn't ship encrypted-but-still-private DM ciphertext (or attachment
             // refs) to wherever the admin stores their backup files.
             if (!has('dms')) {
+              // This is the backup's own copy, not the live database, so the
+              // trigger that keeps protected messages must not stop leaving
+              // DMs out. A restore installs it again at startup.
+              tmp.exec('DROP TRIGGER IF EXISTS messages_keep_protected');
               tmp.exec('DELETE FROM messages WHERE channel_id IN (SELECT id FROM channels WHERE is_dm = 1)');
               tmp.exec('DELETE FROM channels WHERE is_dm = 1');
             }

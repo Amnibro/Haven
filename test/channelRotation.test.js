@@ -230,7 +230,7 @@ test('a temporary-channel timer deletes by stable id after code rotation', () =>
   try {
     db.exec(`
       CREATE TABLE channels (id INTEGER PRIMARY KEY, code TEXT UNIQUE, is_temp_voice INTEGER);
-      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER, is_archived INTEGER DEFAULT 0, thread_id INTEGER);
       CREATE TABLE reactions (message_id INTEGER);
       CREATE TABLE pinned_messages (channel_id INTEGER);
       CREATE TABLE channel_members (channel_id INTEGER);
@@ -281,7 +281,7 @@ test('temporary-channel deletion rolls back completely on failure', () => {
   try {
     db.exec(`
       CREATE TABLE channels (id INTEGER PRIMARY KEY, code TEXT UNIQUE, is_temp_voice INTEGER);
-      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER, is_archived INTEGER DEFAULT 0, thread_id INTEGER);
       CREATE TABLE reactions (message_id INTEGER);
       CREATE TABLE pinned_messages (channel_id INTEGER);
       CREATE TABLE channel_members (channel_id INTEGER);
@@ -325,7 +325,7 @@ test('an expired temp-delete timer clears its marker when the room is occupied',
   try {
     db.exec(`
       CREATE TABLE channels (id INTEGER PRIMARY KEY, code TEXT UNIQUE, is_temp_voice INTEGER);
-      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER, is_archived INTEGER DEFAULT 0, thread_id INTEGER);
       CREATE TABLE reactions (message_id INTEGER);
       CREATE TABLE pinned_messages (channel_id INTEGER);
       CREATE TABLE channel_members (channel_id INTEGER);
@@ -365,4 +365,41 @@ test('temporary-channel grace is armed before stale-user pruning', () => {
   assert.match(source, /pendingVoiceLeave\.has\(`\$\{userId\}:\$\{ch\.code\}`\)/);
   assert.match(voiceSource, /if \(pendingTempDelete\?\.has\(code\)\)[\s\S]+Grace-period deletion cancelled/);
   assert.match(source, /persistChannelCodeRotation\([\s\S]+automod\.invalidate\(\)/);
+});
+
+test('a temporary channel holding protected messages is kept, and only the rest is cleared', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE channels (id INTEGER PRIMARY KEY, code TEXT UNIQUE, is_temp_voice INTEGER, expires_at TEXT);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER, is_archived INTEGER DEFAULT 0, thread_id INTEGER);
+      CREATE TABLE reactions (message_id INTEGER);
+      CREATE TABLE pinned_messages (message_id INTEGER, channel_id INTEGER);
+      CREATE TABLE channel_members (channel_id INTEGER);
+      INSERT INTO channels (id, code, is_temp_voice, expires_at) VALUES (1, '11111111', 1, '2026-01-01 00:00:00');
+      INSERT INTO messages (id, channel_id, is_archived) VALUES (1, 1, 1), (2, 1, 0);
+      INSERT INTO channel_members (channel_id) VALUES (1);
+    `);
+    const pendingTempDelete = new Map([['11111111', { id: 'timer' }]]);
+    const emitted = [];
+    const callback = createTempChannelDeleteCallback({
+      db,
+      io: {
+        emit: (event) => emitted.push(event),
+        to: () => ({ emit: (event) => emitted.push(event) }),
+      },
+      state: { channelUsers: new Map(), voiceUsers: new Map(), pendingTempDelete },
+      channelId: 1,
+      log: () => {}
+    });
+
+    assert.equal(callback(), false);
+    const ch = db.prepare('SELECT is_temp_voice, expires_at FROM channels WHERE id = 1').get();
+    assert.deepEqual({ ...ch }, { is_temp_voice: 0, expires_at: null });
+    assert.deepEqual(db.prepare('SELECT id FROM messages ORDER BY id').all().map(r => r.id), [1]);
+    assert.equal(pendingTempDelete.has('11111111'), false);
+    assert.ok(!emitted.includes('channel-deleted'));
+  } finally {
+    db.close();
+  }
 });

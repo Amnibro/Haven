@@ -16,6 +16,7 @@
 // came due while the server was down goes first.
 
 const { releasableUploads } = require('./socketHandlers/helpers');
+const { keptSql, deletableSql } = require('./protectedMessages');
 
 const MAX_DESTRUCT_SECONDS = 24 * 60 * 60;
 // When a due message could not be deleted, try again after this instead of
@@ -56,8 +57,14 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload }) {
   const due = db.prepare(`
     SELECT m.id, m.user_id, m.content, c.code
     FROM messages m JOIN channels c ON c.id = m.channel_id
-    WHERE m.destruct_at IS NOT NULL AND m.destruct_at <= ?
+    WHERE m.destruct_at IS NOT NULL AND m.destruct_at <= ? AND ${deletableSql('m')}
     ORDER BY m.destruct_at ASC LIMIT 200
+  `);
+  // A protected message, or a thread head holding one, is kept: its timer
+  // stops instead of firing again and again.
+  const spare = db.prepare(`
+    UPDATE messages SET destruct_at = NULL WHERE id IN (
+      SELECT m.id FROM messages m WHERE m.destruct_at IS NOT NULL AND m.destruct_at <= ? AND ${keptSql('m')})
   `);
   const next = db.prepare('SELECT MIN(destruct_at) AS at FROM messages WHERE destruct_at IS NOT NULL');
   const keepSetting = db.prepare("SELECT value FROM server_settings WHERE key = 'keep_self_destructed_attachments'");
@@ -69,6 +76,9 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload }) {
 
   const sweep = () => {
     let rows;
+    try { spare.run(new Date().toISOString()); } catch (err) {
+      console.error('[self-destruct] could not stop a protected message timer:', err.message);
+    }
     try { rows = due.all(new Date().toISOString()); } catch (err) {
       console.error('[self-destruct] query error:', err.message);
       return 0;

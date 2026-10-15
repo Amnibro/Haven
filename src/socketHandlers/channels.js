@@ -34,6 +34,7 @@ function moveUploadToDeleted(relPath) {
 const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { reachableChannel } = require('./channelAccess');
+const protectedMessages = require('../protectedMessages');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -762,6 +763,9 @@ module.exports = function register(socket, ctx) {
     const deletedCodes = doomed.map(c => c.code);
     const idMarks = doomed.map(() => '?').join(',');
     const ids = doomed.map(c => c.id);
+    // Protected messages outlive any delete, so a channel (or a sub-channel)
+    // still holding one stays until they are unprotected.
+    if (protectedMessages.protectedCount(db, ids)) return socket.emit('error-msg', protectedMessages.CHANNEL_REFUSAL);
 
     // Collect the attachments these channels' messages point at, before the
     // rows go away. Deleting a channel dropped the messages but left every
@@ -996,6 +1000,7 @@ module.exports = function register(socket, ctx) {
     if (!_canDeleteSub) {
       return socket.emit('error-msg', 'You don\'t have permission to delete sub-channels');
     }
+    if (protectedMessages.protectedCount(db, [channel.id])) return socket.emit('error-msg', protectedMessages.CHANNEL_REFUSAL);
 
     try {
       db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(channel.id);
@@ -1942,7 +1947,9 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // Returns false, deleting nothing, when the DM holds protected messages.
   function purgeDmChannel(channel, attachments, extraOwners = []) {
+    if (protectedMessages.protectedCount(db, [channel.id])) return false;
     // Collect attachment filenames before we drop the message rows. We
     // scan plaintext message content server-side, and also accept a
     // `data.attachments` list from the client for E2E-encrypted DM
@@ -1988,6 +1995,7 @@ module.exports = function register(socket, ctx) {
     deleteAll(channel.id);
 
     for (const name of releasableUploads(db, filenames, participants)) moveUploadToDeleted(name);
+    return true;
   }
   ctx.purgeDmChannel = purgeDmChannel;
   socket.on('delete-dm', (data) => {
@@ -2002,7 +2010,7 @@ module.exports = function register(socket, ctx) {
     // An admin outside a group deletes it for everyone, with the same checks and notices as from its menu.
     if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? ctx.deleteGroupDmForEveryone(code, data.attachments) : socket.emit('error-msg', 'Not authorized'));
 
-    purgeDmChannel(channel, data.attachments);
+    if (!purgeDmChannel(channel, data.attachments)) return socket.emit('error-msg', protectedMessages.CONVERSATION_REFUSAL);
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
     clearChannelRuntimeState(state, code);

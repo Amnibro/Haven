@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { deletableSql } = require('./protectedMessages');
 
 const SKIP_TOP_DIRS = new Set(['deleted-attachments']);
 const BATCH = 200;
@@ -61,10 +62,10 @@ async function trimUploadsToLimit({ db, uploadsDir, maxBytes, extractPaths, move
     if (size <= maxBytes) return { deleted, before, after: size };
 
     const pick = db.prepare(`
-      SELECT id, content, e2e_files, created_at FROM messages
-      WHERE (content LIKE '%/uploads/%' OR e2e_files IS NOT NULL)
-        AND is_archived = 0
-        AND id NOT IN (SELECT message_id FROM pinned_messages)
+      SELECT m.id, m.content, m.e2e_files, m.created_at FROM messages m
+      WHERE (m.content LIKE '%/uploads/%' OR m.e2e_files IS NOT NULL)
+        AND ${deletableSql('m')}
+        AND m.id NOT IN (SELECT message_id FROM pinned_messages)
         AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)
         AND (created_at > ? OR (created_at = ? AND id > ?))
       ORDER BY created_at ASC, id ASC LIMIT ?`);

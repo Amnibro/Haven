@@ -1,5 +1,7 @@
 'use strict';
 
+const { protectedCount, keepChannel } = require('./protectedMessages');
+
 function persistChannelCodeRotation(db, channelId, oldCode, newCode) {
   if (oldCode === newCode) throw new Error('New channel code must differ from the current code');
   const rotate = db.transaction(() => {
@@ -108,6 +110,14 @@ function createTempChannelDeleteCallback({ db, io, state, channelId, log = conso
       const currentRoom = voiceUsers.get(code);
       if (currentRoom?.size > 0) {
         pendingTempDelete.delete(code);
+        return false;
+      }
+      if (protectedCount(db, [channel.id])) {
+        // Protected messages outlive the channel's timer: it stays as an
+        // ordinary channel and only the rest of its messages go.
+        pendingTempDelete.delete(code);
+        keepChannel(db, channel, 'temporary voice channel emptied');
+        io.to(`channel:${code}`).emit('channel-messages-cleared', { code, reason: 'auto-clear' });
         return false;
       }
       db.transaction(() => {

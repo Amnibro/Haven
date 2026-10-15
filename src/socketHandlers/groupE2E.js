@@ -13,6 +13,7 @@
 const { isInt, NEW_DMS_PER_HOUR } = require('./helpers');
 
 const { clearChannelRuntimeState } = require('../channelRotation');
+const { CONVERSATION_REFUSAL } = require('../protectedMessages');
 module.exports = function register(socket, ctx) {
   ctx.leaveGroupDm = (code, userId, attachments) => { const ch = groupOf(code); if (ch && isMember(ch.id, userId)) { leaveGroup(ch, userId, attachments); return true; } return false; };
   const { io, db, generateUniqueSharedCode } = ctx;
@@ -357,9 +358,10 @@ module.exports = function register(socket, ctx) {
     if (!left.length) {
       // Only the last member's own uploads are released. Earlier members'
       // files may still be linked from encrypted messages elsewhere, which the
-      // server cannot read to check.
-      ctx.purgeDmChannel(ch, attachments, [userId]);
-      clearChannelRuntimeState(ctx.state, ch.code);
+      // server cannot read to check. A group holding protected messages is
+      // kept; the auto-cleanup sweep clears the rest of it.
+      if (ctx.purgeDmChannel(ch, attachments, [userId])) clearChannelRuntimeState(ctx.state, ch.code);
+      else console.log(`[protected] Kept group DM "${ch.code}" after its last member left: it holds protected messages`);
     } else {
       const user = db.prepare('SELECT COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(userId);
       io.to(`channel:${ch.code}`).emit('group-dm-member-left', { code: ch.code, user: { id: userId, username: user && user.username }, members: groupPayload(ch).members });
@@ -413,7 +415,9 @@ module.exports = function register(socket, ctx) {
     // Every member's own uploads go with it. Encrypted files the members sent
     // are also released by the messages they were attached to (#5699); the
     // list from the admin's app covers files from before that.
-    ctx.purgeDmChannel(ch, Array.isArray(attachments) ? attachments : []);
+    if (!ctx.purgeDmChannel(ch, Array.isArray(attachments) ? attachments : [])) {
+      return void socket.emit('error-msg', CONVERSATION_REFUSAL);
+    }
     clearChannelRuntimeState(ctx.state, ch.code);
     // group-dm-deleted goes first, while their app still knows the group's
     // name; channel-deleted then removes it, the pop-out DM window included.

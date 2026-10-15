@@ -12,6 +12,7 @@ const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
 const forumUnread = require('../forumUnread');
+const protectedMessages = require('../protectedMessages');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -1038,12 +1039,16 @@ module.exports = function register(socket, ctx) {
 
     const placeholders = ids.map(() => '?').join(',');
     const rows = db.prepare(
-      `SELECT id, user_id, content FROM messages WHERE channel_id = ? AND id IN (${placeholders})`
+      `SELECT m.id, m.user_id, m.content, ${protectedMessages.keptSql('m')} AS kept
+       FROM messages m WHERE m.channel_id = ? AND m.id IN (${placeholders})`
     ).all(channel.id, ...ids);
 
     const deletable = [];
     const skipped = [];
+    let kept = 0;
     for (const r of rows) {
+      // Protected messages stay, and so does a thread head holding one.
+      if (r.kept) { skipped.push(r.id); kept++; continue; }
       let ok = false;
       if (r.user_id === socket.user.id) {
         ok = allowOwnDelete;
@@ -1058,7 +1063,8 @@ module.exports = function register(socket, ctx) {
     }
 
     if (deletable.length === 0) {
-      return cb({ error: 'You don\'t have permission to delete the selected items', deleted: 0, skipped: skipped.length });
+      if (kept && kept === rows.length) return cb({ error: protectedMessages.REFUSAL, deleted: 0, skipped: skipped.length, kept });
+      return cb({ error: 'You don\'t have permission to delete the selected items', deleted: 0, skipped: skipped.length, kept });
     }
 
     const delPin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
@@ -1112,7 +1118,7 @@ module.exports = function register(socket, ctx) {
       });
     }
 
-    cb({ success: true, deleted: deletable.length, skipped: skipped.length });
+    cb({ success: true, deleted: deletable.length, skipped: skipped.length, kept });
   };
 
   // ── Delete every message you wrote (#5686) ────────────────
@@ -1147,9 +1153,9 @@ module.exports = function register(socket, ctx) {
       const rows = db.prepare(`
         SELECT m.id, m.content, c.code, c.is_dm
         FROM messages m JOIN channels c ON c.id = m.channel_id
-        WHERE m.user_id = ? AND m.is_archived = 0
+        WHERE m.user_id = ? AND ${protectedMessages.deletableSql('m')}
       `).all(uid);
-      const kept = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE user_id = ? AND is_archived = 1').get(uid).n;
+      const kept = db.prepare(`SELECT COUNT(*) AS n FROM messages m WHERE m.user_id = ? AND ${protectedMessages.keptSql('m')}`).get(uid).n;
       if (!rows.length) return cb({ success: true, deleted: 0, kept });
 
       // Reactions, votes, tags and thread replies follow through the foreign
@@ -1810,6 +1816,7 @@ module.exports = function register(socket, ctx) {
           WHERE m.burn_seconds > 0
             AND m.burning_started_at IS NOT NULL
             AND datetime(m.burning_started_at, '+' || m.burn_seconds || ' seconds') <= datetime('now')
+            AND ${protectedMessages.deletableSql('m')}
         `).all();
         for (const row of expired) {
           db.prepare('DELETE FROM messages WHERE id = ?').run(row.id);
@@ -2124,6 +2131,9 @@ module.exports = function register(socket, ctx) {
       'SELECT id, user_id, content, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
     ).get(data.messageId, channel.id);
     if (!msg) return;
+    // Protected means kept, whoever asks, the admin included.
+    const kept = protectedMessages.refusal(db, msg.id);
+    if (kept) return socket.emit('error-msg', kept);
 
     if (msg.user_id === socket.user.id) {
       if (!socket.user.isAdmin) {
@@ -2387,9 +2397,9 @@ module.exports = function register(socket, ctx) {
     if (msg.is_archived) return socket.emit('error-msg', 'Message is already archived');
 
     try {
-      // A protected message is kept, self-destruct timer included, the
-      // same as auto-cleanup and self-purge leave it alone.
-      db.prepare('UPDATE messages SET is_archived = 1, destruct_at = NULL WHERE id = ?').run(data.messageId);
+      // A protected message is kept: its self-destruct and burn-after-read
+      // timers stop, the same as auto-cleanup and self-purge leave it alone.
+      db.prepare('UPDATE messages SET is_archived = 1, destruct_at = NULL, burn_seconds = 0, burning_started_at = NULL WHERE id = ?').run(data.messageId);
       if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);
     } catch (err) {
       console.error('Archive message error:', err);
