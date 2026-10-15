@@ -188,6 +188,10 @@ class HavenE2E {
     try {
       this._sharedKeys = {};
       this._signingPair = null;
+      this._signingBlock = null;
+      // An explicit reset is the one time the signing key is replaced: its
+      // backup is sealed to the encryption key being thrown away.
+      this._signingResetPending = true;
       this._keyPair = await this._generate();
       await this._saveLocal(this._keyPair);
       this._publicKeyJwk = await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
@@ -543,15 +547,34 @@ class HavenE2E {
     }
     return this._signingInit;
   }
+  /**
+   * What a device may do with the account's signing key. Only a device whose
+   * encryption key is the one the account publishes may sign at all, and only
+   * an explicit key reset replaces a signing key that is already pinned. A
+   * device that cannot open the backup must not answer that by making a key
+   * of its own: that silently replaces the account's signing key everywhere.
+   * Fingerprints are "x.y" strings. Same rule as SigningRules in the apps.
+   */
+  static signingPlan(local, published, pinned, opened, reset) {
+    if (published && published !== local) return 'out-of-sync';
+    if (reset) return 'replace';
+    if (opened && !pinned) return 'adopt';
+    if (opened && opened === pinned) return 'use';
+    if (!pinned) return 'create';
+    return 'locked';
+  }
+  /** 'out-of-sync' or 'locked' while this device may not sign group messages, else null. */
+  get signingBlock() { return this._signingBlock || null; }
   async _initSigningOnce(socket, force, retried = false) {
     if (!this._ready || !this._keyPair || !socket || typeof HavenGroupCrypto === 'undefined') return false;
     const reply = await this._request(socket, 'get-encrypted-key', undefined, 'encrypted-key-result');
     const probe = reply && reply.data;
     if (!probe) return false;
     const wrapKey = await this._signingWrapKey();
+    const reset = !!(force || this._signingResetPending);
     const pinned = probe.signingKey || null;
     let pair = null;
-    if (probe.signingBackup && !force) {
+    if (probe.signingBackup && !reset) {
       try {
         const o = JSON.parse(probe.signingBackup);
         const raw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: this._fromB64(o.iv) }, wrapKey, this._fromB64(o.ct));
@@ -560,15 +583,22 @@ class HavenE2E {
         const publicKey = await crypto.subtle.importKey('jwk', { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']);
         pair = { privateKey, publicKey };
       } catch (err) {
-        // Sealed to an encryption key this account no longer has (a key reset).
-        console.warn('[E2E] Signing key backup could not be opened, making a new signing key:', err.message);
+        // Sealed to an encryption key this device does not hold.
+        console.warn('[E2E] Signing key backup could not be opened:', err.message);
         pair = null;
       }
     }
     let publicJwk = pair ? await HavenGroupCrypto.exportPublicJwk(pair.publicKey) : null;
-    const matchesPin = !!(pinned && publicJwk && pinned.x === publicJwk.x && pinned.y === publicJwk.y);
+    const local = this._publicKeyJwk || await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
+    const fp = (j) => (j && j.x ? `${j.x}.${j.y}` : null);
+    const plan = HavenE2E.signingPlan(fp(local), fp(probe.publicKey), fp(pinned), fp(publicJwk), reset);
+    this._signingBlock = plan === 'out-of-sync' || plan === 'locked' ? plan : null;
+    if (this._signingBlock) {
+      console.warn(`[E2E] Group signing unavailable on this device (${plan}); nothing was changed`);
+      return false;
+    }
     let backup;
-    if (!pair || (pinned && !matchesPin)) {
+    if (plan === 'create' || plan === 'replace') {
       const fresh = await HavenGroupCrypto.generateSigningKeyPair();
       const privateJwk = await crypto.subtle.exportKey('jwk', fresh.privateKey);
       const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -577,16 +607,20 @@ class HavenE2E {
       pair = fresh;
       publicJwk = await HavenGroupCrypto.exportPublicJwk(fresh.publicKey);
     }
-    if (!matchesPin) {
+    if (plan !== 'use') {
       // The key and its backup are stored in one step, so the server can never
-      // pin one key while the backup holds another.
-      const res = await this._request(socket, 'publish-signing-key', { jwk: publicJwk, backup, force: !!pinned }, ['signing-key-published', 'signing-key-conflict']);
+      // pin one key while the backup holds another. `ecdh` names the
+      // encryption key the backup is sealed to, so the server can refuse it
+      // from a device whose key is out of date.
+      const ecdh = { kty: local.kty, crv: local.crv, x: local.x, y: local.y };
+      const res = await this._request(socket, 'publish-signing-key', { jwk: publicJwk, backup, force: plan === 'replace', ecdh }, ['signing-key-published', 'signing-key-conflict']);
       if (!res) return false;
       if (res.event === 'signing-key-conflict') {
         // Another tab or device got there first. Its key and backup are on the
         // server now, so load those instead of fighting over it.
         return retried ? false : this._initSigningOnce(socket, false, true);
       }
+      if (plan === 'replace') this._signingResetPending = false;
     }
     this._signingPair = pair;
     this._signingPublicJwk = publicJwk;
@@ -684,6 +718,7 @@ class HavenE2E {
    */
   async syncFromServer(socket, wrappingKey) {
     this._signingPair = null;
+    this._signingBlock = null;
     if (!wrappingKey) return { ok: false, reason: 'bad-password' };
     try {
       await this._openDB();
