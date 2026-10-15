@@ -59,7 +59,6 @@ _setupGroupListeners() {
     const st = this._groups.get(d.code);
     if (!st || st.keys.has(d.epoch)) return;
     st.ready = false;
-    st.missing.clear();
     this._groupFetchKeys(d.code).catch(err => console.warn('[Groups] could not load the new group key:', err.message));
   });
   s.on('group-rewrap-requested', (d) => this._groupRewrap(d).catch(err => console.warn('[Groups] could not re-share the group key:', err.message)));
@@ -69,14 +68,16 @@ _setupGroupListeners() {
     if (!st) return;
     st.rewrapAsked = false;
     st.ready = false;
-    st.missing.clear();
-    this._groupFetchKeys(d.code).then(() => this._groupRerender(d.code), err => console.warn('[Groups] could not load the re-shared key:', err.message));
+    this._groupFetchKeys(d.code, { all: true }).then(() => this._groupRerender(d.code), err => console.warn('[Groups] could not load the re-shared key:', err.message));
   });
   s.on('connect', () => {
     s.emit('get-group-invites');
     // Events may have been missed while disconnected.
-    this._groups.forEach(st => { st.ready = false; st.missing.clear(); });
+    this._groups.forEach(st => { st.ready = false; st.fresh = false; });
   });
+  // The server drops requests over its rate limit without answering them, so
+  // key lookups pause instead of adding to the pile.
+  s.on('error-msg', (m) => { if (typeof m === 'string' && m.startsWith('Slow down: too many requests')) this._groupThrottle(10000); });
   if (s.connected) s.emit('get-group-invites');
 },
 _isGroupDm(code) {
@@ -89,8 +90,28 @@ _isGroupEnvelope(content) {
 },
 _groupState(code) {
   if (!this._groups) this._groups = new Map();
-  if (!this._groups.has(code)) this._groups.set(code, { keys: new Map(), epoch: 0, roster: null, needsRotation: false, lastHash: null, lastId: 0, busy: null, changed: new Set(), pendingRewraps: new Map(), reviewing: null, missing: new Set(), keyFetch: null });
+  if (!this._groups.has(code)) this._groups.set(code, { keys: new Map(), epoch: 0, roster: null, needsRotation: false, lastHash: null, lastId: 0, busy: null, changed: new Set(), pendingRewraps: new Map(), reviewing: null, fresh: false, fetching: null });
   return this._groups.get(code);
+},
+/**
+ * Whether opening a message from `epoch` is worth asking the server for keys.
+ * Once a fetch has answered, a key we still lack for an epoch we already know
+ * about is one we were never given (sent before we joined) or one we are
+ * waiting for someone to share; asking again for every such message is what
+ * flooded the server. Events that can bring a new key (a new epoch, a
+ * re-shared key, a reconnect) fetch on their own.
+ */
+_groupNeedsKeys(st, epoch) {
+  return !st.keys.has(epoch) && (!st.fresh || epoch > st.epoch);
+},
+/** Hold off key lookups after an unanswered request or a rate-limit warning. */
+_groupThrottle(ms) {
+  const fails = Math.min((this._groupBackoff?.fails || 0) + 1, 6);
+  const wait = ms || Math.min(60000, 2000 * 2 ** (fails - 1));
+  this._groupBackoff = { fails, until: Math.max(this._groupBackoff?.until || 0, Date.now() + wait) };
+},
+_groupThrottled() {
+  return Date.now() < (this._groupBackoff?.until || 0);
 },
 _groupReq(emitEvent, payload, results, ms = 8000) {
   return new Promise(resolve => {
@@ -119,20 +140,30 @@ async _groupPublicKey(userId, roster) {
   const m = roster?.members?.find(x => x.id === userId);
   return m?.publicKey || this._dmPublicKeys?.[userId] || await this.e2e.requestPartnerKey(this.socket, userId);
 },
-// One key fetch at a time per group: a page of history decrypting at once
-// shares it instead of sending a request per message.
-_groupFetchKeys(code, opts = {}) {
+_groupFetchKeys(code, { all = false } = {}) {
   const st = this._groupState(code);
-  if (st.keyFetch && !opts.all) return st.keyFetch;
-  const run = this._groupFetchKeysNow(code, opts).finally(() => { if (st.keyFetch === run) st.keyFetch = null; });
-  if (!opts.all) st.keyFetch = run;
+  // Paused by a rate-limit warning (which may have come from something else
+  // entirely): come back once the pause ends, or a group opened meanwhile
+  // would show "no key" rows until it was reopened.
+  if (this._groupThrottled()) {
+    if (!st.fresh) this._groupRetryLater(code, st);
+    return Promise.resolve(st);
+  }
+  // Every locked message on a page asks at once; they share one request.
+  if (st.fetching && !all) return st.fetching;
+  const run = this._groupLoadKeys(code, st, all).finally(() => { if (st.fetching === run) st.fetching = null; });
+  st.fetching = run;
   return run;
 },
-async _groupFetchKeysNow(code, { all = false } = {}) {
-  const st = this._groupState(code);
+async _groupLoadKeys(code, st, all) {
   const since = st.keys.size && !all ? Math.max(...st.keys.keys()) : 0;
   const r = await this._groupReq('get-group-keys', { code, sinceEpoch: since }, { 'group-keys': d => d.code === code });
-  if (!r) return st;
+  if (!r) {
+    this._groupThrottle();
+    this._groupRetryLater(code, st);
+    return st;
+  }
+  this._groupBackoff = null;
   st.epoch = r.data.currentEpoch;
   st.needsRotation = !!r.data.needsRotation;
   if (st.needsRotation) st.ready = false;
@@ -151,7 +182,20 @@ async _groupFetchKeysNow(code, { all = false } = {}) {
     st.rewrapAsked = true;
     this.socket.emit('request-group-rewrap', { code });
   }
+  st.fresh = true;
   return st;
+},
+/** After a lookup went unanswered, try once more when the pause is over and
+ *  redraw the group if that brought keys. */
+_groupRetryLater(code, st) {
+  if (st.retryTimer) return;
+  const wait = Math.max(0, (this._groupBackoff?.until || 0) - Date.now()) + 250;
+  st.retryTimer = setTimeout(async () => {
+    st.retryTimer = null;
+    if (st.fresh || this._groups?.get(code) !== st) return;
+    await this._groupFetchKeys(code);
+    if (st.fresh) this._groupRerender(code);
+  }, wait);
 },
 /**
  * Open one wrapped epoch key, and accept it only when both hold:
@@ -265,7 +309,7 @@ async _groupMembershipChanged(code) {
 async _groupRewrap(d) {
   if (!d || d.userId === this.user?.id) return;
   const st = this._groupState(d.code);
-  if (!st.keys.has(d.epoch)) await this._groupFetchKeys(d.code);
+  if (this._groupNeedsKeys(st, d.epoch)) await this._groupFetchKeys(d.code);
   const key = st.keys.get(d.epoch);
   if (!key) return;
   const r = await this._groupReq('get-public-key', { userId: d.userId }, { 'public-key-result': x => x.userId === d.userId });
@@ -299,8 +343,20 @@ async _groupEncrypt(code, text) {
 async _groupSignerKeys(userId) {
   if (!this._signerKeys) this._signerKeys = new Map();
   if (this._signerKeys.has(userId)) return this._signerKeys.get(userId);
+  // One lookup per user at a time, shared by every message waiting on it.
+  if (!this._signerKeyFetches) this._signerKeyFetches = new Map();
+  if (this._signerKeyFetches.has(userId)) return this._signerKeyFetches.get(userId);
+  const run = this._groupLoadSignerKeys(userId).finally(() => this._signerKeyFetches.delete(userId));
+  this._signerKeyFetches.set(userId, run);
+  return run;
+},
+async _groupLoadSignerKeys(userId) {
+  // Wait out a rate-limit pause instead of answering with no keys: no keys
+  // reads as "cannot verify", which is alarming for a message that is fine.
+  const pauseEnd = this._groupBackoff?.until || 0;
+  if (pauseEnd > Date.now()) await new Promise(r => setTimeout(r, Math.min(60000, pauseEnd - Date.now() + 250)));
   const r = await this._groupReq('get-signing-key', { userId }, { 'signing-key-result': d => d.userId === userId });
-  if (!r) return [];
+  if (!r) { this._groupThrottle(); return []; }
   const all = [r.data.jwk, ...(r.data.keys || [])].filter(k => k && k.x && k.y);
   const keys = all.filter((k, i) => all.findIndex(o => o.x === k.x && o.y === k.y) === i);
   this._signerKeys.set(userId, keys);
@@ -365,12 +421,7 @@ async _groupDecrypt(code, content, senderId, msgId = 0) {
   const st = this._groupState(code);
   let env;
   try { env = JSON.parse(content); } catch { return { ok: false, reason: 'malformed' }; }
-  // An epoch from before you joined has no key for you, ever. Ask once, not
-  // once per message, or a page of old history ran into "too many requests".
-  if (!st.keys.has(env.e) && !st.missing.has(env.e)) {
-    await this._groupFetchKeys(code);
-    if (!st.keys.has(env.e)) st.missing.add(env.e);
-  }
+  if (this._groupNeedsKeys(st, env.e)) await this._groupFetchKeys(code);
   const key = st.keys.get(env.e);
   if (!key) return { ok: false, reason: 'no-key' };
   const channelId = this._groupChannelId(code);
@@ -430,7 +481,7 @@ async _groupDecryptBytes(code, data) {
   if (data[0] !== 0x47) throw new Error('Not a group attachment');
   const epoch = new DataView(data.buffer, data.byteOffset).getUint32(1);
   const st = this._groupState(code);
-  if (!st.keys.has(epoch)) await this._groupFetchKeys(code);
+  if (this._groupNeedsKeys(st, epoch)) await this._groupFetchKeys(code);
   const key = st.keys.get(epoch);
   if (!key) throw new Error('No key for this attachment');
   return crypto.subtle.decrypt({ name: 'AES-GCM', iv: data.slice(5, 17) }, key, data.slice(17));
