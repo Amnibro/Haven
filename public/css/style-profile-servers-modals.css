@@ -677,9 +677,14 @@
   max-width: 35rem;
   padding: 0;
   overflow: hidden;
+  /* Header and footer stay put and the steps scroll between them, so the
+     Next / Get Started button is never pushed below a short screen. */
+  display: flex;
+  flex-direction: column;
 }
 
 .wizard-header {
+  flex-shrink: 0;
   text-align: center;
   padding: 2rem 1.75rem 1.25rem;
   border-bottom: 1px solid var(--border-light);
@@ -706,7 +711,9 @@
 
 .wizard-steps {
   padding: 1.5rem 1.75rem;
-  min-height: 17.5rem;
+  min-height: min(17.5rem, 30vh);
+  flex: 1 1 auto;
+  overflow-y: auto;
 }
 
 .wizard-step-indicators {
@@ -881,6 +888,7 @@
 }
 
 .wizard-footer {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   padding: 1rem 1.75rem;
