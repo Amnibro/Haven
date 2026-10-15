@@ -443,6 +443,9 @@ function isIpBanned(ip) {
   if (Date.now() > _ipBanCache.expires) _refreshIpBanCache();
   const norm = _clientIp.normalizeIp(ip);
   if (!norm) return false;
+  // This machine always gets in, so whoever runs the server can lift a ban
+  // that went too far, even one placed before ban-ip refused them.
+  if (norm === '127.0.0.1' || norm === '::1') return false;
   if (_ipBanCache.set.has(norm)) return true;
   return _ipBanCache.cidrs.some(c => _clientIp.ipMatches(norm, c));
 }

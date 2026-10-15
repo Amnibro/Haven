@@ -335,6 +335,9 @@ module.exports = function register(socket, ctx) {
             const norm = normalizeIp(r.ip);
             if (!norm || seenIps.has(norm)) continue;
             seenIps.add(norm);
+            // An address the target shares with staff, or with this machine,
+            // stays open: banning it would lock out more than the target.
+            if (_ipBanRefusal(norm)) continue;
             stmt.run(norm, socket.user.id, ipReason.slice(0, 200));
             count++;
           }
@@ -889,6 +892,39 @@ module.exports = function register(socket, ctx) {
     return socket.user.isAdmin || userHasPermission(socket.user.id, 'ban_ip');
   }
 
+  // Why an IP ban may not go in, or null. A ban that covers this machine, the
+  // person placing it, or anyone ranked at or above them locks out the people
+  // who would have to lift it, and one wide enough (0.0.0.0/0) locked out the
+  // whole server, the admin included. The widest range is /16 (IPv4) or /48
+  // (IPv6) for a moderator and /8 or /32 for the admin.
+  function _ipBanRefusal(entry) {
+    const { ipMatches, socketClientIp, isIPv4 } = require('../clientIp');
+    const slash = entry.indexOf('/');
+    if (slash !== -1) {
+      const v4 = isIPv4(entry.slice(0, slash));
+      const widest = socket.user.isAdmin ? (v4 ? 8 : 32) : (v4 ? 16 : 48);
+      if (parseInt(entry.slice(slash + 1), 10) < widest) {
+        return `That range is too wide. The widest you can ban is /${widest}.`;
+      }
+    }
+    if (ipMatches('127.0.0.1', entry) || ipMatches('::1', entry)) return 'That would ban the server\'s own machine.';
+    const mine = socketClientIp(socket);
+    if (mine && ipMatches(mine, entry)) return 'That would ban your own address.';
+    // Staff who have used an address in the range. The admin may ban anyone
+    // but themselves; a moderator nobody at or above their own rank.
+    const myLevel = socket.user.isAdmin ? Infinity : getUserEffectiveLevel(socket.user.id);
+    const seen = db.prepare('SELECT ui.user_id, ui.ip, u.is_admin FROM user_ips ui JOIN users u ON u.id = ui.user_id').all();
+    for (const r of seen) {
+      if (!ipMatches(r.ip, entry)) continue;
+      if (r.user_id === socket.user.id) return 'That would ban an address you use.';
+      if (r.is_admin && !socket.user.isAdmin) return 'That address is used by the admin.';
+      if (!socket.user.isAdmin && getUserEffectiveLevel(r.user_id) >= myLevel) {
+        return 'That address is used by someone of equal or higher rank.';
+      }
+    }
+    return null;
+  }
+
   // Validation and canonicalisation now live in src/clientIp.js so that the
   // ban gates, the user_ips recorder and this handler all agree on what an
   // address is. v3.42.0 also accepts CIDR ranges: a single IPv6 subscriber is
@@ -910,6 +946,8 @@ module.exports = function register(socket, ctx) {
     const input = (data.ip || '').trim();
     if (!isValidIpOrCidr(input)) return socket.emit('error-msg', 'Invalid IP address or CIDR range');
     const ip = _canonicalBanEntry(input);
+    const refusal = _ipBanRefusal(ip);
+    if (refusal) return socket.emit('error-msg', refusal);
     const reason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : '';
     try {
       db.prepare('INSERT OR REPLACE INTO ip_bans (ip, banned_by, reason) VALUES (?, ?, ?)').run(ip, socket.user.id, reason);
@@ -947,6 +985,16 @@ module.exports = function register(socket, ctx) {
     // Try the canonical form first, then the literal string, so entries stored
     // by older versions (pre-normalisation) can still be lifted from the UI.
     const ip = _canonicalBanEntry(raw);
+    if (!socket.user.isAdmin) {
+      const placed = db.prepare('SELECT banned_by FROM ip_bans WHERE ip = ? OR ip = ?').get(ip, raw);
+      if (placed && placed.banned_by && placed.banned_by !== socket.user.id) {
+        const banner = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(placed.banned_by);
+        if (banner && banner.is_admin) return socket.emit('error-msg', 'You can\'t undo an IP ban placed by an admin');
+        if (getUserEffectiveLevel(placed.banned_by) >= getUserEffectiveLevel(socket.user.id)) {
+          return socket.emit('error-msg', 'You can\'t undo an IP ban placed by someone of equal or higher rank');
+        }
+      }
+    }
     try {
       let info = db.prepare('DELETE FROM ip_bans WHERE ip = ?').run(ip);
       if (info.changes === 0 && raw !== ip) info = db.prepare('DELETE FROM ip_bans WHERE ip = ?').run(raw);
