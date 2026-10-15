@@ -10,6 +10,7 @@
 // vote ('topic-vote-mine').
 
 const { MODES, MODE_NAMES, setVote } = require('../forumVotes');
+const { reachableChannel } = require('./channelAccess');
 
 module.exports = function register(socket, ctx) {
   const { io, db, userHasPermission, broadcastChannelLists } = ctx;
@@ -22,7 +23,10 @@ module.exports = function register(socket, ctx) {
     if (!Object.prototype.hasOwnProperty.call(MODES, data.mode)) return cb({ error: 'Invalid setting' });
     const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel || channel.is_dm) return cb({ error: 'Channel not found' });
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_channel_settings', channel.id)) {
+    // Changed only from inside the channel, through its gate, as the other
+    // channel settings are.
+    if (!socket.user.isAdmin && (!reachableChannel(ctx, socket.user, channel.id)
+        || !userHasPermission(socket.user.id, 'manage_channel_settings', channel.id))) {
       return cb({ error: 'You don\'t have permission to change this channel\'s settings' });
     }
     const mode = MODES[data.mode];

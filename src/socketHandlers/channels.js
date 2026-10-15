@@ -846,6 +846,8 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
 
+    // Only a channel the renamer is in, through its gate.
+    if (!socket.user.isAdmin && !reachableChannel(ctx, socket.user, channel.id)) return socket.emit('error-msg', 'Channel not found');
     const permChannel = channel.parent_channel_id || channel.id;
     const renamePermission = channel.parent_channel_id ? 'rename_sub_channel' : 'rename_channel';
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, renamePermission, permChannel)) {
@@ -882,6 +884,7 @@ module.exports = function register(socket, ctx) {
 
     const parentChannel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(parentCode);
     if (!parentChannel) return socket.emit('error-msg', 'Parent channel not found');
+    if (!socket.user.isAdmin && !reachableChannel(ctx, socket.user, parentChannel.id)) return socket.emit('error-msg', 'Parent channel not found');
 
     // (#5467) Adding a sub-channel to an existing channel is that channel's
     // business, so it takes manage_sub_channels on the parent and nothing
@@ -1673,6 +1676,7 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return;
+    if (!socket.user.isAdmin && !reachableChannel(ctx, socket.user, channel.id)) return;
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'set_channel_topic', channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to set channel topics');
     }
