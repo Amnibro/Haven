@@ -2290,6 +2290,12 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   if (!webhook.can_moderate && !(msg.is_webhook && msg.webhook_id === webhook.id)) {
     return res.status(403).json({ error: 'This bot can only delete its own messages' });
   }
+  // Someone else's message also needs the bot's creator to still hold
+  // delete_message here, as for the kick, ban and mute routes.
+  const ownMessage = !!msg.is_webhook && msg.webhook_id === webhook.id;
+  if (!ownMessage && !botModAuth(webhook, 'delete_message', webhook.channel_id)) {
+    return res.status(403).json({ error: BOT_MOD_DENIED });
+  }
 
   const replies = db.prepare('SELECT content FROM messages WHERE thread_id = ?').all(mid);
   try {
@@ -2341,6 +2347,8 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
   const db = getDb();
   const channel = db.prepare('SELECT id, code FROM channels WHERE id = ?').get(webhook.channel_id);
   if (!channel) return res.status(404).json({ error: 'Channel not found' });
+  // The creator must still hold delete_message in this channel.
+  if (!botModAuth(webhook, 'delete_message', channel.id)) return res.status(403).json({ error: BOT_MOD_DENIED });
 
   const selectMessages = db.prepare(`
     WITH RECURSIVE

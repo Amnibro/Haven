@@ -131,6 +131,10 @@ test('bot and webhook hardening', async t => {
   assert.equal(refused.status, 403);
   assert.match((await refused.json()).error, /no longer has this moderation permission/);
   assert.equal((await ban(tokens.adminMod)).status, 200);
+  // The same goes for deleting other people's messages.
+  assert.equal((await del(tokens.memberMod, bId)).status, 403);
+  assert.equal((await fetch(`${base}/api/webhooks/${tokens.memberMod}/messages?limit=1`, { method: 'DELETE' })).status, 403);
+  assert.ok(db.prepare('SELECT 1 FROM messages WHERE id = ?').get(bId));
 
   // High scores: safe integers under the ceiling only.
   const score = value => fetch(`${base}/api/high-scores`, {
