@@ -26,6 +26,11 @@ async function checkAdminReauth(db, userId, { password, code } = {}) {
   const auth = require('./auth');
   const user = db.prepare('SELECT id, username, password_hash, totp_enabled, totp_secret FROM users WHERE id = ?').get(userId);
   if (!user) return 'Account not found';
+  // An SSO account has no password here and cannot turn on two-factor, so
+  // there would be nothing to ask for and a stolen session would be enough.
+  if (!hasLocalPassword(user) && !(user.totp_enabled && user.totp_secret)) {
+    return 'Backups and restores need an admin account with a password. Sign in with the local admin account to do this.';
+  }
   if (hasLocalPassword(user)) {
     if (typeof password !== 'string' || !password) return 'Enter your password';
     if (!(await bcrypt.compare(password, user.password_hash))) return 'Incorrect password';
