@@ -302,7 +302,10 @@ module.exports = function registerProfile(deps) {
       const webhookId = parseInt(req.body?.webhookId || req.query?.webhookId);
       if (!isNaN(webhookId)) {
         try {
-          getDb().prepare('UPDATE webhooks SET avatar_url = ? WHERE id = ?').run(avatarUrl, webhookId);
+          // Only a bot of their own, or any bot for the admin, the same rule
+          // as editing a bot's other details.
+          getDb().prepare('UPDATE webhooks SET avatar_url = ? WHERE id = ? AND (created_by = ? OR ?)')
+            .run(avatarUrl, webhookId, user.id, verifyAdminFromDb(user) ? 1 : 0);
         } catch (dbErr) {
           console.error('Webhook avatar DB error:', dbErr);
         }

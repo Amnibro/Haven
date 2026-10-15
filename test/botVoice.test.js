@@ -31,7 +31,8 @@ function createDb() {
       position INTEGER DEFAULT 0,
       voice_enabled INTEGER DEFAULT 1,
       voice_user_limit INTEGER DEFAULT 0,
-      voice_bitrate INTEGER DEFAULT 0
+      voice_bitrate INTEGER DEFAULT 0,
+      role_gate TEXT DEFAULT NULL
     );
     CREATE TABLE channel_members (channel_id INTEGER, user_id INTEGER);
     CREATE TABLE webhooks (
@@ -197,6 +198,7 @@ function createAdminHarness(db, user, io = null) {
     automod: { invalidate() {}, settings: () => ({}) },
     getIdleOnlineUsers: () => [],
     getUploadUsage: () => ({ byUser: new Map() }),
+    roleGateAllows: () => true,
     revokeBotVoiceAccess(webhookId, reason) { revoked.push({ webhookId, reason }); }
   });
   return { handlers, outgoing, revoked };
