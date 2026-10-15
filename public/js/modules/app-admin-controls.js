@@ -368,7 +368,7 @@ _bindAdminControls() {
         });
       });
     } catch (err) {
-      listEl.innerHTML = `<small class="settings-hint" style="color:var(--danger)">${t('settings.admin.auto_backup_load_failed', { error: err.message })}</small>`;
+      listEl.innerHTML = `<small class="settings-hint" style="color:var(--danger)">${t('settings.admin.auto_backup_load_failed', { error: this._escapeHtml(err.message) })}</small>`;
     }
   };
   document.getElementById('auto-backup-save-btn')?.addEventListener('click', () => {
@@ -495,7 +495,7 @@ _bindAdminControls() {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      if (status) status.innerHTML = `<div>${t('settings.admin.update_started')}</div><div style="margin-top:6px"><small>${data.message || ''}</small></div>`;
+      if (status) status.innerHTML = `<div>${t('settings.admin.update_started')}</div><div style="margin-top:6px"><small>${this._escapeHtml(data.message || '')}</small></div>`;
       if (updRunBtn()) updRunBtn().disabled = true;
     } catch (err) {
       if (status) status.textContent = t('settings.admin.update_failed', { error: err.message });
