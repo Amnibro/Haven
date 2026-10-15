@@ -50,6 +50,14 @@ for (const [address, prefix] of [
   ['ff00::', 8]
 ]) alwaysBlocked.addSubnet(address, prefix, 'ipv6');
 
+// Cloud metadata and host agent services that sit outside the link-local
+// range: Alibaba (100.100.100.200), AWS over IPv6 (fd00:ec2::254) and Azure's
+// wire server (168.63.129.16). They hand out instance credentials, so they
+// stay blocked even when private callbacks are allowed.
+alwaysBlocked.addAddress('100.100.100.200', 'ipv4');
+alwaysBlocked.addAddress('168.63.129.16', 'ipv4');
+alwaysBlocked.addAddress('fd00:ec2::254', 'ipv6');
+
 privateBlocked.addSubnet('::1', 128, 'ipv6');
 privateBlocked.addSubnet('fc00::', 7, 'ipv6');
 globalIpv6.addSubnet('2000::', 3, 'ipv6');

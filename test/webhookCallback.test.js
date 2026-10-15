@@ -146,3 +146,11 @@ test('an agent for a checked destination connects only to the checked address', 
   const answer = await new Promise(resolve => agent.options.lookup('evil.example', {}, (err, address) => resolve(address)));
   assert.equal(answer, '93.184.216.34');
 });
+
+test('cloud metadata addresses stay blocked even with private callbacks allowed', () => {
+  for (const url of ['http://100.100.100.200/latest/meta-data', 'http://168.63.129.16/machine', 'http://[fd00:ec2::254]/latest/meta-data', 'http://[::ffff:168.63.129.16]/']) {
+    assert.equal(validateCallbackUrl(url, true), false, url);
+    assert.equal(validateCallbackUrl(url, false), false, url);
+  }
+  assert.equal(validateCallbackUrl('http://100.100.100.201/', true), true);
+});
