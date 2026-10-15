@@ -1934,6 +1934,12 @@ function applyThemeFromServer(theme, persist = true, syncFallback = false) {
 
   document.documentElement.setAttribute('data-theme', theme);
   if (persist) localStorage.setItem('haven_theme', theme);
+  // A built-in theme replaces a file theme still on the page (the pre-paint
+  // copy from theme-init.js included), as a picker click does, so the page
+  // and the Settings toggles both show the theme the account has saved.
+  document.querySelectorAll('link[id^="haven-theme-"]').forEach(l => l.remove());
+  window.HavenPluginLoader?.reapplyEnabledThemes?.(null);
+  window.HavenPluginLoader?.renderPluginUI?.();
   document.querySelectorAll('.theme-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.theme === theme);
   });

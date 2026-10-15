@@ -735,6 +735,24 @@ test('turning a palette theme on in Settings saves it as the account theme', asy
   assert.deepEqual(emitted, [JSON.stringify(['set-preference', { key: 'theme', value: 'file:neon.theme.css' }])]);
 });
 
+test('a palette theme left in the enabled list is shown off while a built-in theme is active', async () => {
+  const result = await runPluginLoader({
+    theme: 'matrix',
+    enabledThemes: ['neon.theme.css'],
+    themes: [{
+      file: 'neon.theme.css',
+      published: false,
+      palette: true,
+      compatible: true,
+      compatibility: 'compatible',
+      themeApi: 1,
+    }],
+  });
+
+  assert.equal(result.links.length, 0);
+  assert.equal(result.loader.loadedThemes.get('neon.theme.css').enabled, false);
+});
+
 test('admin theme settings accept only installed themes and clear an unpublished default', t => {
   const { db, handlers, outgoing } = createAdminThemeHarness();
   t.after(() => db.close());

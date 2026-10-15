@@ -420,12 +420,12 @@ window.HavenPluginLoader = (function () {
       }
       return;
     }
-    const configured = getEnabledThemes().includes(meta.file);
-    // A published theme is only injected when it is the selected one; leaving a
-    // previously-selected one in the enabled list must not stack it on top of
-    // whatever theme is active now.
-    const shouldInject = configured && compatible && !suppressExtensions
+    // A published or palette theme is only on when it is the selected one;
+    // leaving a previously-selected one in the enabled list must not stack it
+    // on top of whatever theme is active now, or tick its Settings toggle.
+    const configured = getEnabledThemes().includes(meta.file)
       && (!isExclusiveMeta({ ...meta, file: meta.file }) || getActiveFileTheme() === meta.file);
+    const shouldInject = configured && compatible && !suppressExtensions;
     let linkEl = null;
     if (shouldInject) {
       linkEl = document.createElement('link');
