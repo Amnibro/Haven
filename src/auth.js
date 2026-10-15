@@ -591,6 +591,12 @@ router.post('/register', authLimiter, async (req, res) => {
     // top of the real one. First run and a genuine re-bootstrap still work,
     // because in both of those there is no admin to find. (#5539)
     const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
+    // While there is an admin, nobody new takes the ADMIN_USERNAME name: that
+    // name is what /admin-recover trusts, so a stranger holding it could make
+    // themselves admin with their own password.
+    if (anyAdmin && username.toLowerCase() === ADMIN_USERNAME) {
+      return res.status(400).json({ error: 'Registration could not be completed: invalid username', code: 'username_unavailable' });
+    }
     const isAdmin = (!anyAdmin && username.toLowerCase() === ADMIN_USERNAME) ? 1 : 0;
 
     // SSO profile picture: download from home server if provided
