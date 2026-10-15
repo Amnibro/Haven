@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+Data & privacy: delete your messages older than a chosen age, delete them
+automatically, download your data, and block people.
+
+### Added
+- Settings, Data & privacy, with the same four items on the web, Android and iOS:
+  - Delete my messages: all of them, or only those older than 1 day, 7 days, 30 days, 90 days or 1 year. Messages a moderator protected stay. Shown when the server allows members to delete their own messages, as before.
+  - Auto-delete my messages: Off, 1 day, 7 days, 30 days, 90 days or 1 year. Your messages are deleted once they pass that age, checked every 15 minutes. Turning it on asks for your password; it pauses, without forgetting your choice, while the server does not allow self-deletion.
+  - Export my data: one JSON file with your account, your settings and every message you wrote. Encrypted DMs are included as they are stored on the server, still encrypted. Three exports an hour.
+  - Blocked users, with Unblock.
+- Block from someone's profile or by right-clicking them. Their messages in channels and groups fold into a "Blocked message · Show" row, their typing is hidden, and they make no sound, pop-up, push or unread count. A 1:1 DM between you is closed both ways, calls included, and someone who blocked you cannot be added to a group by you. They are not told.
+- The session list names the Haven apps for Android and iOS, with the phone's model.
+
 ## [4.27.0] - Unreleased
 
 ### Added
