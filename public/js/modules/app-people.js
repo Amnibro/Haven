@@ -223,14 +223,6 @@ _bindPeople() {
 
   document.getElementById('save-rename-btn').addEventListener('click', () => this._saveRename());
 
-  const birthdayInput = document.getElementById('edit-profile-birthday');
-  const birthdayUnset = document.getElementById('edit-profile-birthday-unset');
-  birthdayInput.addEventListener('input', () => { birthdayUnset.style.display = birthdayInput.value ? '' : 'none'; });
-  birthdayUnset.addEventListener('click', () => {
-    birthdayInput.value = '';
-    birthdayUnset.style.display = 'none';
-  });
-
   // Add persona button (#86, #5349)
   const addPersonaBtn = document.getElementById('add-persona-btn');
   if (addPersonaBtn) addPersonaBtn.addEventListener('click', () => this._showPersonaEditor?.(null));
@@ -307,11 +299,13 @@ _saveRename() {
   if (bioInput) {
     this.socket.emit('set-bio', { bio: bioInput.value });
   }
-  // Only an actual birthday change goes out; the server enforces the lock.
-  const birthday = document.getElementById('edit-profile-birthday').value || null;
+  // Only an actual birthday change goes out. The date goes once, the first
+  // time; after that only the two toggles can change (the server holds it).
+  const birthday = this.user.birthday ? null : (document.getElementById('edit-profile-birthday').value || null);
+  const hidden = document.getElementById('edit-profile-birthday-hidden').checked;
   const hideYear = document.getElementById('edit-profile-birthday-hide-year').checked;
-  if (birthday !== (this.user.birthday || null) || hideYear !== (this.user.birthdayHideYear !== false)) {
-    this.socket.emit('set-birthday', { birthday, hideYear });
+  if (birthday || hidden !== (this.user.birthdayHidden === true) || hideYear !== (this.user.birthdayHideYear !== false)) {
+    this.socket.emit('set-birthday', birthday ? { birthday, hidden, hideYear } : { hidden, hideYear });
   }
   // Also commit any pending avatar and groups changes
   this._commitAvatarSettings();
@@ -319,23 +313,19 @@ _saveRename() {
   document.getElementById('rename-modal').style.display = 'none';
 },
 
-// The birthday field stays disabled for 30 days after a birthday is set.
-// Unsetting does not restart or end that, so Unset works while locked.
+// A birthday is set once and never changed, so the date field locks for good
+// once there is one. Hiding it keeps the date and takes it off the profile.
 _syncBirthdayEditor() {
   const input = document.getElementById('edit-profile-birthday');
-  const unset = document.getElementById('edit-profile-birthday-unset');
   const note = document.getElementById('edit-profile-birthday-note');
-  const setAt = Date.parse(this.user.birthdaySetAt || '');
-  const daysLocked = setAt ? Math.ceil((setAt + 30 * 86400000 - Date.now()) / 86400000) : 0;
+  const isSet = !!this.user.birthday;
   const now = this._nowZonedParts();
   input.max = `${now.year}-${String(now.monthIndex + 1).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`;
   input.value = this.user.birthday || '';
-  input.disabled = daysLocked > 0;
+  input.disabled = isSet;
+  document.getElementById('edit-profile-birthday-hidden').checked = this.user.birthdayHidden === true;
   document.getElementById('edit-profile-birthday-hide-year').checked = this.user.birthdayHideYear !== false;
-  unset.style.display = input.value ? '' : 'none';
-  note.textContent = daysLocked > 0
-    ? t(daysLocked === 1 ? 'modals.edit_profile.birthday_locked_one' : 'modals.edit_profile.birthday_locked_other', { count: daysLocked })
-    : t('modals.edit_profile.birthday_hint');
+  note.textContent = t(isSet ? 'modals.edit_profile.birthday_set_note' : 'modals.edit_profile.birthday_hint');
 },
 
 _loadGroupChannelAccess(roleIds, callback) {
