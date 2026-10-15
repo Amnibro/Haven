@@ -2473,9 +2473,10 @@ module.exports = function register(socket, ctx) {
         if (reactMute) return socket.emit('error-msg', reactMute);
       }
 
-      // Verify membership of the channel the message lives in.
+      // Verify membership of the channel the message lives in. Being the
+      // admin is no key to other people's DMs.
       const member = hasChannelAccess(msg.channel_id);
-      if (!member && !socket.user.isAdmin) return;
+      if (!member && (!socket.user.isAdmin || msg.is_dm)) return;
       if (msg.reactions_enabled === 0) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
@@ -2516,13 +2517,13 @@ module.exports = function register(socket, ctx) {
 
       // Look up the channel from the message (see add-reaction comment).
       const msgRow = db.prepare(
-        'SELECT m.id, c.code, c.id as channel_id, c.reactions_enabled FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+        'SELECT m.id, c.code, c.id as channel_id, c.is_dm, c.reactions_enabled FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
       ).get(data.messageId);
       if (!msgRow) return;
       const code = msgRow.code;
 
       const member = hasChannelAccess(msgRow.channel_id);
-      if (!member && !socket.user.isAdmin) return;
+      if (!member && (!socket.user.isAdmin || msgRow.is_dm)) return;
       if (msgRow.reactions_enabled === 0) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
