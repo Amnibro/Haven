@@ -328,7 +328,7 @@ _applyShareAudioModeBadge(modeInfo) {
     default:
       return;
   }
-  badge.innerHTML = label;
+  badge.textContent = label;
   badge.classList.add(cls);
   badge.title = tip;
   // Also expose on the badge for tooltip-aware UIs
