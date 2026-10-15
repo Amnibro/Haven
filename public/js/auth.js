@@ -739,13 +739,28 @@
       const profileUsername = (typeof ssoProfileData.username === 'string' ? ssoProfileData.username.trim() : '');
       const previewName = (typeof ssoProfileData.displayName === 'string' ? ssoProfileData.displayName.trim() : '') || profileUsername;
 
-      if (ssoProfileData.profilePicture) {
-        let src = ssoProfileData.profilePicture;
-        if (src.startsWith('/')) {
-          const base = sourceOrigin || getSsoOrigin();
-          src = base + src;
+      // The picture comes from the other server, so it is never trusted as
+      // markup: only an http(s) URL, or a path on that server, becomes an
+      // <img> built with createElement.
+      let avatarSrc = null;
+      const pic = ssoProfileData.profilePicture;
+      if (typeof pic === 'string' && pic) {
+        const isPath = pic.startsWith('/') && !pic.startsWith('//') && !pic.startsWith('/\\');
+        if (isPath || /^https?:\/\//i.test(pic)) {
+          try {
+            const u = isPath ? new URL(pic, sourceOrigin || getSsoOrigin()) : new URL(pic);
+            if (u.protocol === 'https:' || u.protocol === 'http:') avatarSrc = u.href;
+          } catch (err) {
+            console.warn('[SSO] ignoring unreadable profile picture URL:', err.message);
+          }
         }
-        ssoPreviewAvatar.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:cover" alt="">`;
+      }
+      if (avatarSrc) {
+        const img = document.createElement('img');
+        img.src = avatarSrc;
+        img.alt = '';
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+        ssoPreviewAvatar.replaceChildren(img);
       } else {
         ssoPreviewAvatar.textContent = (previewName || '?')[0].toUpperCase();
       }
