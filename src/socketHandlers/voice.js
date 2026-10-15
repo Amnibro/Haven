@@ -686,10 +686,11 @@ module.exports = function register(socket, ctx) {
       // so other clients also reconcile, not just the requester.
       broadcastVoiceUsers(code);
     }
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, role_gate FROM channels WHERE code = ?').get(code);
     const channelId = channel ? channel.id : null;
-    // A voice roster is for the channel's own members.
+    // A voice roster is for the channel's own members, through its gate.
     if (!channel || !db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return;
+    if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, channel)) return;
     const room = voiceUsers.get(code);
     const users = room
       ? Array.from(room.values()).map(u => serializeVoiceRosterUser(u, channelId))
@@ -1145,8 +1146,10 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    // Through the channel's gate, as reading it is.
+    if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, channel)) return;
 
     const member = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'

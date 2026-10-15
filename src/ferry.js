@@ -1523,7 +1523,11 @@ function takeUploads(content) {
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(stored)) return '(file not found)';
     const full = path.join(UPLOADS_DIR, stored);
     let size;
-    try { size = fs.statSync(full).size; } catch { return '(file not found)'; } // deleted since it was posted
+    try {
+      const st = fs.statSync(full);
+      if (!st.isFile()) return '(file not found)';
+      size = st.size;
+    } catch { return '(file not found)'; } // deleted since it was posted
     if (files.length >= DISCORD_FILES_PER_MESSAGE || size > DISCORD_FILE_MAX || total + size > DISCORD_UPLOAD_TOTAL) {
       return '(too large to send to Discord)';
     }
