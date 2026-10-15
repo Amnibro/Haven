@@ -42,7 +42,7 @@ test.before(async () => {
   fs.mkdirSync(DATA, { recursive: true });
   server = spawn(process.execPath, ['server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT: String(PORT), HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin', FORCE_HTTP: 'true', STEAM_API_KEY: 'test-key' },
+    env: { ...process.env, PORT: String(PORT), HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin', FORCE_HTTP: 'true', STEAM_API_KEY: 'test-key', SPOTIFY_CLIENT_ID: 'test-id', SPOTIFY_CLIENT_SECRET: 'test-secret' },
     stdio: 'ignore',
   });
   for (let i = 0; i < 60; i++) {
@@ -100,4 +100,21 @@ test('a Steam link asks first, and only a click on that page starts it', async (
   });
   const cb = await request('GET', `/connect/steam/callback?${forged}`);
   assert.strictEqual(cb.status, 400, 'refused');
+});
+
+test('a Spotify consent link only finishes in the browser that pressed Continue', async () => {
+  const sam = await register('sam');
+  const s = io(BASE, { auth: { token: sam.token }, transports: ['websocket'], forceNew: true });
+  clients.push(s);
+  await new Promise((res, rej) => { s.on('connect', res); s.on('connect_error', rej); });
+  const got = new Promise((res) => s.once('connect-token', res));
+  s.emit('get-connect-token', { provider: 'spotify' });
+  const { token } = await got;
+  const go = await request('POST', '/connect/spotify/go', { body: `token=${encodeURIComponent(token)}`, headers: { 'Sec-Fetch-Site': 'same-origin' } });
+  assert.strictEqual(go.status, 303);
+  assert.match(go.headers.location, /^https:\/\/accounts\.spotify\.com\/authorize\?/);
+  assert.ok((go.headers['set-cookie'] || []).some((c) => c.startsWith('haven_spotify_bind=') && /HttpOnly/i.test(c)), 'the browser gets a cookie');
+  // Someone else's browser, with the consent link forwarded to it, has no cookie.
+  const elsewhere = await request('GET', `/connect/spotify/callback?state=${encodeURIComponent(token)}&code=abc`);
+  assert.strictEqual(elsewhere.status, 400, 'refused before any token exchange');
 });

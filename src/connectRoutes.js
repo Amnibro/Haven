@@ -178,6 +178,34 @@ Only continue if that is you and you started this from Haven.</p>
 </div></body></html>`);
 }
 
+// Spotify hands back listening data and tokens, so its link is also tied to
+// the browser that pressed Continue: otherwise someone could press Continue
+// themselves and send the provider's consent link on to someone else. Steam is
+// left out on purpose: its QR sign-in can finish in a different browser.
+const SPOTIFY_BIND_COOKIE = 'haven_spotify_bind';
+const _spotifyBinds = new Map(); // sha256(connect token) -> { bind, at }
+const _tokenKey = (token) => require('crypto').createHash('sha256').update(String(token)).digest('hex');
+function _bindCookie(req, value, maxAgeSec) {
+  const secure = req.secure || req.protocol === 'https';
+  return `${SPOTIFY_BIND_COOKIE}=${value}; Path=/connect/spotify; Max-Age=${maxAgeSec}; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+}
+function _cookieValue(req, name) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === name) return v.join('=');
+  }
+  return '';
+}
+function _takeSpotifyBind(req, token) {
+  const key = _tokenKey(token);
+  const entry = _spotifyBinds.get(key);
+  _spotifyBinds.delete(key);
+  if (!entry || Date.now() - entry.at > 10 * 60 * 1000) return false;
+  const got = _cookieValue(req, SPOTIFY_BIND_COOKIE);
+  return got.length === entry.bind.length
+    && require('crypto').timingSafeEqual(Buffer.from(got), Buffer.from(entry.bind));
+}
+
 /** True when the request came from a page on this server, not another site. */
 function fromThisSite(req) {
   const site = req.get('Sec-Fetch-Site');
@@ -346,6 +374,11 @@ function createConnectRoutes(getActivity) {
     req.query.token = req.body && req.body.token;
     const userId = connectUserId(req.query.token, 'spotify');
     if (!userId) return res.status(401).send('Link session expired. Close this tab and try again from Haven.');
+    const bind = require('crypto').randomBytes(32).toString('hex');
+    const now = Date.now();
+    for (const [k, v] of _spotifyBinds) if (now - v.at > 10 * 60 * 1000) _spotifyBinds.delete(k);
+    _spotifyBinds.set(_tokenKey(req.query.token), { bind, at: now });
+    res.set('Set-Cookie', _bindCookie(req, bind, 600));
 
     const params = new URLSearchParams({
       client_id: process.env.SPOTIFY_CLIENT_ID,
@@ -363,6 +396,12 @@ function createConnectRoutes(getActivity) {
     if (!req.activity.isSpotifyConfigured()) return finish(res, 'error', 'spotify');
     const userId = connectUserId(req.query.state, 'spotify');
     if (!userId) return finish(res, 'error', 'spotify');
+    const sameBrowser = _takeSpotifyBind(req, req.query.state);
+    res.set('Set-Cookie', _bindCookie(req, '', 0));
+    if (!sameBrowser) {
+      console.warn('[Haven activity] Spotify callback from a different browser than the one that started the link');
+      return finish(res, 'error', 'spotify');
+    }
     if (req.query.error || !req.query.code) return finish(res, 'error', 'spotify');
 
     try {
