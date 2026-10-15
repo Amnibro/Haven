@@ -86,6 +86,7 @@ import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import MasterVolumeMethods from './modules/app-master-volume.js?v=4.25.21';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
+import DataControlMethods from './modules/app-data-controls.js?v=4.23.0-afff018db';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.27.20';
 import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
@@ -438,6 +439,7 @@ class HavenApp {
     this._setupModCases();
     this._setupBadges();
     this._setupServerMute();
+    this._setupDataControls();
     this._setupForumUnread();
     this._setupThreadUnread();
     this._setupThreadScroll();
@@ -631,6 +633,7 @@ Object.assign(HavenApp.prototype,
   ServerMuteMethods,
   AdminReauthMethods,
   MasterVolumeMethods,
+  DataControlMethods,
   ForumUnreadMethods,
   ThreadUnreadMethods,
   ThreadDockMethods,
