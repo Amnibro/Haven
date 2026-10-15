@@ -1149,6 +1149,9 @@ const releaseOwnUploads = (urls, ownerId) => relocateUnreferencedUploads(
   require('./src/database').getDb(), collectUploadRelPaths(urls), { ownerId });
 require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, releaseOwnUploads, verifyAdminFromDb, userHasPermission, upload, uploadLimiter });
 
+// ── Export my data (Settings, Data & privacy): src/routes/dataExport.js ──
+require('./src/routes/dataExport')({ app });
+
 // ── Serve pages ──────────────────────────────────────────
 
 // ── Connection address (any signed-in user) ──────────────

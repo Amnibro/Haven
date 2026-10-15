@@ -14,6 +14,7 @@ const pingsEveryone = (text) => /(?<![\w@])@(everyone|here)\b/i.test(text);
 // Who gets no push for a message because of their own mutes
 // (public/js/modules/app-server-mute.js):
 //   - a member they muted for themselves sends them none at all;
+//   - nor does a member they blocked (src/userBlocks.js), DMs included;
 //   - a muted server sends none except for DMs, and with "except @mentions"
 //     also for messages that mention them (or @everyone / @here).
 // Returns a Set of user ids to leave out.
@@ -36,6 +37,12 @@ function quietRecipients(db, { channelId, senderUserId, messageContent }) {
     } else if (!isDm) {
       if (r.value === 'all' || (r.value === 'mentions' && !mentions(r))) quiet.add(r.user_id);
     }
+  }
+  // A database from before blocking existed has no user_blocks table; then
+  // nobody has blocked anyone.
+  const hasBlocks = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'user_blocks'").get();
+  if (hasBlocks) {
+    for (const r of db.prepare('SELECT blocker_id FROM user_blocks WHERE blocked_id = ?').all(senderUserId)) quiet.add(r.blocker_id);
   }
   return quiet;
 }
