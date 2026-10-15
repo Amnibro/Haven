@@ -1331,3 +1331,22 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   background: var(--accent);
   color: var(--accent-text);
 }
+/* A message from someone you blocked folds into one quiet row; Show opens
+   that one message (app-data-controls.js). */
+.msg-blocked > :not(.msg-blocked-row) { display: none !important; }
+.msg-blocked-row {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+.msg-blocked-show {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-style: normal;
+  color: var(--accent);
+  cursor: pointer;
+}
+.msg-blocked-show:hover { text-decoration: underline; }
