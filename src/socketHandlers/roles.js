@@ -207,6 +207,23 @@ module.exports = function register(socket, ctx) {
     return null;
   }
   ctx.roleGrantRefusal = (roleId) => roleGrantRefusal(roleId);
+  // Turning on a role's channel link puts every holder into its channels, so
+  // someone other than the admin may only do it when they can reach each of
+  // them. Any error refuses.
+  function linkRefusal(roleId) {
+    if (socket.user.isAdmin) return null;
+    try {
+      const rows = db.prepare('SELECT channel_id FROM role_channel_access WHERE role_id = ? AND grant_on_promote = 1').all(roleId);
+      for (const r of rows) {
+        const ch = reachableChannel(ctx, socket.user, r.channel_id);
+        if (!ch || ch.is_dm) return 'This role opens channels you are not in';
+      }
+      return null;
+    } catch (err) {
+      console.warn('[roles] link check failed, refusing:', err.message);
+      return 'Could not check this role\'s channels';
+    }
+  }
   // The highest level anyone holds a role at, per-person custom levels
   // included. Editing or deleting the role changes things for that person.
   function roleTopHolderLevel(roleId) {
@@ -511,6 +528,9 @@ module.exports = function register(socket, ctx) {
     const color2 = safeRoleColor(data.color2);
     const shimmer = color2 && data.shimmer ? 1 : 0;
     const autoAssign = data.autoAssign ? 1 : 0;
+    // An automatic role goes to every new account and every new member, so
+    // turning it on is the admin's call alone.
+    if (autoAssign && !socket.user.isAdmin) return cb({ error: 'Only the admin can make a role automatic' });
     const transparent = data.transparent ? 1 : 0;
     const icon = isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon) ? data.icon : null;
     const maxUploadMb = isInt(data.maxUploadMb) && data.maxUploadMb >= 1 && data.maxUploadMb <= 102400 ? data.maxUploadMb : null;
@@ -584,6 +604,13 @@ module.exports = function register(socket, ctx) {
       }
       // Level 0 makes a role a group anyone can join, and clears its
       // permissions. Neither is for someone who could not hand it out.
+      if (data.autoAssign !== undefined && !!data.autoAssign !== !!role.auto_assign) {
+        return cb({ error: 'Only the admin can change which role is automatic' });
+      }
+      if (data.linkChannelAccess && !role.link_channel_access) {
+        const refusal = linkRefusal(roleId);
+        if (refusal) return cb({ error: refusal });
+      }
       if (isInt(data.level) && data.level === 0 && role.level !== 0) {
         const refusal = roleGrantRefusal(roleId);
         if (refusal) return cb({ error: refusal });
@@ -1354,8 +1381,7 @@ module.exports = function register(socket, ctx) {
     const accessChannelOk = (chId) => {
       const ch = db.prepare('SELECT id, is_dm FROM channels WHERE id = ?').get(chId);
       if (!ch || ch.is_dm) return false;
-      if (socket.user.isAdmin) return true;
-      return !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(chId, socket.user.id);
+      return !!reachableChannel(ctx, socket.user, chId);
     };
 
     try {
@@ -1370,10 +1396,21 @@ module.exports = function register(socket, ctx) {
           if (grant || revoke) ins.run(roleId, chId, grant, revoke);
         });
         if (data.linkEnabled !== undefined) {
+          // Checked against the rows just written, inside the transaction, so
+          // a refusal leaves everything as it was.
+          if (data.linkEnabled && !socket.user.isAdmin) {
+            const refusal = linkRefusal(roleId);
+            if (refusal) throw Object.assign(new Error(refusal), { refusal });
+          }
           db.prepare('UPDATE roles SET link_channel_access = ? WHERE id = ?').run(data.linkEnabled ? 1 : 0, roleId);
         }
       });
-      txn();
+      try {
+        txn();
+      } catch (err) {
+        if (err.refusal) return cb({ error: err.refusal });
+        throw err;
+      }
       cb({ success: true });
     } catch (err) {
       console.error('Update role channel access error:', err);
