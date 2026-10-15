@@ -138,6 +138,7 @@ const { initFerry, stopFerry } = require('./src/ferry');
 const { threadExtras: forumBlogThreadExtras } = require('./src/forumBlog');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
 const { CREATOR_NOT_BANNED_SQL } = require('./src/botAccess');
+const { cleanWebhookName, cleanWebhookAvatarUrl } = require('./src/webhookFields');
 const {
   BotAudioManager,
   inspectAudioFile,
@@ -1861,12 +1862,11 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   }
 
   // Optional overrides per-message
-  const username = typeof req.body.username === 'string' ? sanitizeText(req.body.username.trim().slice(0, 32)) : webhook.name;
+  const username = (typeof req.body.username === 'string' && cleanWebhookName(sanitizeText(req.body.username))) || webhook.name;
+  // Only this server's uploads or https images (loaded through the media
+  // proxy), never a plain http or other scheme URL every reader fetches.
   let avatarUrl = webhook.avatar_url;
-  if (typeof req.body.avatar_url === 'string') {
-    const trimmed = req.body.avatar_url.trim().slice(0, 512);
-    avatarUrl = /^https?:\/\//i.test(trimmed) ? trimmed : null;
-  }
+  if (typeof req.body.avatar_url === 'string') avatarUrl = cleanWebhookAvatarUrl(req.body.avatar_url);
 
   // Optional reply_to: bot replying to a message in the same channel (3.13.0)
   let replyTo = null;

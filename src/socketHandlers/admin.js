@@ -12,6 +12,7 @@ const {
   validatedThemeDefault,
 } = require('../themeMetadata');
 const memberDefaults = require('../memberDefaults');
+const { cleanWebhookName, cleanWebhookAvatarUrl } = require('../webhookFields');
 
 const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
 
@@ -986,7 +987,7 @@ module.exports = function register(socket, ctx) {
       const channel = db.prepare('SELECT id, code FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
       if (!channel || !canBotChannel(channel.id)) return socket.emit('error-msg', 'Channel not found');
 
-      const name = typeof data.name === 'string' ? data.name.trim().slice(0, 32) : 'Bot';
+      const name = typeof data.name === 'string' ? cleanWebhookName(data.name) : 'Bot';
       if (!name) return socket.emit('error-msg', 'Webhook name is required');
 
       const token = crypto.randomBytes(32).toString('hex');
@@ -1006,10 +1007,14 @@ module.exports = function register(socket, ctx) {
       }
     } else {
       // Bot-manager variant
-      const name = typeof data.name === 'string' ? data.name.trim().slice(0, 32) : '';
+      const name = cleanWebhookName(data.name);
       const channelId = parseInt(data.channel_id);
-      const avatarUrl = typeof data.avatar_url === 'string' ? data.avatar_url.trim().slice(0, 512) : null;
+      // Only this server's uploads or https images, as for a message's avatar.
+      const avatarUrl = cleanWebhookAvatarUrl(data.avatar_url);
       if (!name || isNaN(channelId)) return socket.emit('error-msg', 'Name and channel required');
+      if (typeof data.avatar_url === 'string' && data.avatar_url.trim() && !avatarUrl) {
+        return socket.emit('error-msg', 'Bot avatar must be an uploaded image or an https link');
+      }
 
       const channel = db.prepare('SELECT id, name FROM channels WHERE id = ?').get(channelId);
       if (!channel || !canBotChannel(channel.id)) return socket.emit('error-msg', 'Channel not found');
@@ -1151,8 +1156,16 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    if (typeof data.name === 'string' && data.name.trim()) {
-      db.prepare('UPDATE webhooks SET name = ? WHERE id = ?').run(data.name.trim().slice(0, 32), webhookId);
+    // Checked before anything is written, so a refused avatar leaves the bot
+    // exactly as it was.
+    const newAvatar = data.avatar_url !== undefined ? cleanWebhookAvatarUrl(data.avatar_url) : null;
+    if (typeof data.avatar_url === 'string' && data.avatar_url.trim() && !newAvatar) {
+      return socket.emit('error-msg', 'Bot avatar must be an uploaded image or an https link');
+    }
+
+    const newName = cleanWebhookName(data.name);
+    if (newName) {
+      db.prepare('UPDATE webhooks SET name = ? WHERE id = ?').run(newName, webhookId);
     }
     if (data.channel_id !== undefined) {
       const channelId = parseInt(data.channel_id);
@@ -1165,8 +1178,7 @@ module.exports = function register(socket, ctx) {
       }
     }
     if (data.avatar_url !== undefined) {
-      const av = typeof data.avatar_url === 'string' ? data.avatar_url.trim().slice(0, 512) : null;
-      db.prepare('UPDATE webhooks SET avatar_url = ? WHERE id = ?').run(av || null, webhookId);
+      db.prepare('UPDATE webhooks SET avatar_url = ? WHERE id = ?').run(newAvatar, webhookId);
     }
     if (data.callback_url !== undefined) {
       let cbUrl = typeof data.callback_url === 'string' ? data.callback_url.trim().slice(0, 1024) : null;
