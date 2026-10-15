@@ -376,40 +376,78 @@
   border-radius: 0.1875rem;
   font-size: 0.6875rem;
 }
-/* Toggle switch */
+/* Plugin and theme on/off switch. Same size, colours and knob travel as
+   the settings switches in style-presence-connections.css, all in rem so the
+   knob stays inside the track at every interface scale. */
 .plugin-toggle {
   position: relative;
   display: inline-block;
-  width: 2.5rem;
-  height: 1.375rem;
+  width: 2.125rem;
+  height: 1.25rem;
   flex-shrink: 0;
   margin-left: 0.75rem;
 }
-.plugin-toggle input { opacity: 0; width: 0; height: 0; }
+.plugin-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
 .plugin-toggle-slider {
   position: absolute;
   cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: var(--bg-tertiary, #333);
-  border-radius: 0.6875rem;
-  transition: background 0.2s;
+  inset: 0;
+  background: var(--bg-tertiary);
+  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: 0.625rem;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
 }
 .plugin-toggle-slider::before {
   content: '';
   position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
   width: 1rem;
   height: 1rem;
-  left: 3px;
-  bottom: 3px;
-  background: #fff;
+  background: var(--text-muted);
   border-radius: 50%;
-  transition: transform 0.2s;
+  transition: left 0.18s ease, background 0.18s ease;
 }
 .plugin-toggle input:checked + .plugin-toggle-slider {
-  background: var(--accent, #7c5cfc);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 .plugin-toggle input:checked + .plugin-toggle-slider::before {
-  transform: translateX(18px);
+  left: 1rem;
+  background: #fff;
+}
+.plugin-toggle input:focus-visible + .plugin-toggle-slider {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.plugin-toggle input:disabled + .plugin-toggle-slider {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* Classic checkboxes (Settings > Toggle style) and Win95 show a plain box
+   here too, like every other on/off setting. */
+:root[data-toggle-style="box"] .plugin-toggle,
+[data-theme="win95"] .plugin-toggle {
+  width: auto;
+  height: auto;
+}
+:root[data-toggle-style="box"] .plugin-toggle input,
+[data-theme="win95"] .plugin-toggle input {
+  position: static;
+  opacity: 1;
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+:root[data-toggle-style="box"] .plugin-toggle-slider,
+[data-theme="win95"] .plugin-toggle-slider {
+  display: none;
 }
 
 /* One size for every number box in settings, with room for five digits
