@@ -142,7 +142,13 @@ async _groupPublicKey(userId, roster) {
 },
 _groupFetchKeys(code, { all = false } = {}) {
   const st = this._groupState(code);
-  if (this._groupThrottled()) return Promise.resolve(st);
+  // Paused by a rate-limit warning (which may have come from something else
+  // entirely): come back once the pause ends, or a group opened meanwhile
+  // would show "no key" rows until it was reopened.
+  if (this._groupThrottled()) {
+    if (!st.fresh) this._groupRetryLater(code, st);
+    return Promise.resolve(st);
+  }
   // Every locked message on a page asks at once; they share one request.
   if (st.fetching && !all) return st.fetching;
   const run = this._groupLoadKeys(code, st, all).finally(() => { if (st.fetching === run) st.fetching = null; });
@@ -337,7 +343,18 @@ async _groupEncrypt(code, text) {
 async _groupSignerKeys(userId) {
   if (!this._signerKeys) this._signerKeys = new Map();
   if (this._signerKeys.has(userId)) return this._signerKeys.get(userId);
-  if (this._groupThrottled()) return [];
+  // One lookup per user at a time, shared by every message waiting on it.
+  if (!this._signerKeyFetches) this._signerKeyFetches = new Map();
+  if (this._signerKeyFetches.has(userId)) return this._signerKeyFetches.get(userId);
+  const run = this._groupLoadSignerKeys(userId).finally(() => this._signerKeyFetches.delete(userId));
+  this._signerKeyFetches.set(userId, run);
+  return run;
+},
+async _groupLoadSignerKeys(userId) {
+  // Wait out a rate-limit pause instead of answering with no keys: no keys
+  // reads as "cannot verify", which is alarming for a message that is fine.
+  const pauseEnd = this._groupBackoff?.until || 0;
+  if (pauseEnd > Date.now()) await new Promise(r => setTimeout(r, Math.min(60000, pauseEnd - Date.now() + 250)));
   const r = await this._groupReq('get-signing-key', { userId }, { 'signing-key-result': d => d.userId === userId });
   if (!r) { this._groupThrottle(); return []; }
   const all = [r.data.jwk, ...(r.data.keys || [])].filter(k => k && k.x && k.y);
