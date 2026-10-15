@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const os = require('os');
 const { verifyToken } = require('../auth');
 const { parseDiscordExport, isReactionEmoji, importedReactionEmoji } = require('../importDiscord');
+const { accessContext, canReadHistory } = require('../discordPermissions');
 
 module.exports = function registerImport(deps) {
   const { uploadDiskGuard, app, verifyAdminFromDb, uploadLimiter, importUpload } = deps;
@@ -100,6 +101,24 @@ module.exports = function registerImport(deps) {
   // Discord ids are numbers; anything else never reaches a Discord URL.
   const DISCORD_ID = /^\d{5,25}$/;
 
+  // What the Ferry bot may read in a guild. Discord lists private channels to
+  // a bot but keeps them closed until its role is added, so the picker greys
+  // those out. Only a hint: when it can't be worked out, every channel is
+  // offered as before and a channel Discord refuses is still skipped by name.
+  async function ferryAccess(guildId, auth) {
+    if (!auth.ferry) return null;
+    try {
+      const me = await discordApiFetch('/users/@me', auth);
+      if (!me || !DISCORD_ID.test(String(me.id))) return null;
+      const guild = await discordApiFetch(`/guilds/${guildId}`, auth);
+      const member = await discordApiFetch(`/guilds/${guildId}/members/${me.id}`, auth);
+      return accessContext({ guild, member, userId: me.id });
+    } catch (err) {
+      console.warn('[import] Could not work out which channels the Ferry bot can read:', err.message);
+      return null;
+    }
+  }
+
   // Step A: validate token → list servers
   app.post('/api/import/discord/connect', express.json(), async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -138,6 +157,7 @@ module.exports = function registerImport(deps) {
 
     try {
       const allChannels = await discordApiFetch(`/guilds/${guildId}/channels`, auth);
+      const access = await ferryAccess(guildId, auth);
 
       // Build category map
       const categories = {};
@@ -155,7 +175,9 @@ module.exports = function registerImport(deps) {
           category: (c.parent_id && categories[c.parent_id]) || null,
           type: c.type === 5 ? 'announcement' : c.type === 15 ? 'forum' : c.type === 16 ? 'media' : 'text',
           // Forum tags (available on type 15 and 16)
-          tags: Array.isArray(c.available_tags) ? c.available_tags.map(t => ({ id: t.id, name: t.name })) : []
+          tags: Array.isArray(c.available_tags) ? c.available_tags.map(t => ({ id: t.id, name: t.name })) : [],
+          // Only present when it could be worked out; false greys the row out.
+          ...(access ? { readable: canReadHistory(access, c) } : {})
         }));
 
       // Fetch threads (active + archived public)
@@ -170,6 +192,7 @@ module.exports = function registerImport(deps) {
       // Archived threads per text/forum/announcement channel, a page of 100 at
       // a time (#5772), up to 2,000 per channel.
       for (const ch of channelsList) {
+        if (ch.readable === false) continue;
         let before = null;
         for (let page = 0; page < 20; page++) {
           try {
@@ -213,7 +236,9 @@ module.exports = function registerImport(deps) {
           type: 'thread',
           parentId: t.parent_id,
           parentName,
-          tags: tagNames
+          tags: tagNames,
+          // A public thread is open exactly when its parent channel is.
+          ...(parent && parent.readable === false ? { readable: false } : {})
         });
       }
 
@@ -244,6 +269,7 @@ module.exports = function registerImport(deps) {
     const auth = resolveImportAuth(req.body);
     if (auth.error) return res.status(400).json({ error: auth.error });
     const { guildName, channels: selected } = req.body;
+    const guildId = typeof req.body.guildId === 'string' && DISCORD_ID.test(req.body.guildId) ? req.body.guildId : null;
     if (!Array.isArray(selected) || !selected.length || !selected.every(ch => typeof ch?.id === 'string' && DISCORD_ID.test(ch.id))) {
       return res.status(400).json({ error: 'Missing params' });
     }
@@ -255,7 +281,7 @@ module.exports = function registerImport(deps) {
     const job = { userId: user.id, state: 'running', channelsDone: 0, channelsTotal: selected.length, messages: 0, updatedAt: Date.now() };
     fetchJobs.set(jobId, job);
     res.status(202).json({ jobId });
-    readDiscordChannels(job, auth, guildName, selected).catch((err) => {
+    readDiscordChannels(job, auth, guildName, selected, guildId).catch((err) => {
       console.warn('[import] Discord read failed:', err.message);
       Object.assign(job, { state: 'done', status: 400, body: { error: err.message }, updatedAt: Date.now() });
     });
@@ -274,7 +300,31 @@ module.exports = function registerImport(deps) {
     res.status(job.status).json({ state: 'done', ...job.body });
   });
 
-  async function readDiscordChannels(job, auth, guildName, selected) {
+  // Selected entries the Ferry bot can't read, worked out the same way as the
+  // picker, so one picked anyway is skipped by name instead of importing as an
+  // empty channel (Discord answers a channel without Read Message History
+  // with no messages rather than an error).
+  async function hiddenSelections(guildId, auth, selected) {
+    const hidden = new Set();
+    if (!auth.ferry || !guildId) return hidden;
+    const access = await ferryAccess(guildId, auth);
+    if (!access) return hidden;
+    let byId;
+    try {
+      byId = new Map((await discordApiFetch(`/guilds/${guildId}/channels`, auth)).map(c => [String(c.id), c]));
+    } catch (err) {
+      // The read below still skips, by name, any channel Discord refuses.
+      console.warn('[import] Could not list channels to check the Ferry bot can read them:', err.message);
+      return hidden;
+    }
+    for (const ch of selected) {
+      const own = byId.get(ch.id) || (typeof ch.parentId === 'string' ? byId.get(ch.parentId) : null);
+      if (own && !canReadHistory(access, own)) hidden.add(ch.id);
+    }
+    return hidden;
+  }
+
+  async function readDiscordChannels(job, auth, guildName, selected, guildId = null) {
     const finish = (status, body) => Object.assign(job, { state: 'done', status, body, updatedAt: Date.now() });
     const result = {
       format: 'Discord Direct',
@@ -284,6 +334,7 @@ module.exports = function registerImport(deps) {
     // Channels the reader can't open (a bot only sees what its roles allow)
     // are skipped and named, instead of failing the whole import.
     const skipped = [];
+    const hidden = await hiddenSelections(guildId, auth, selected);
     // A bot without the Message Content intent gets every message with an
     // empty body, which would import as nothing at all.
     let peopleMessages = 0, emptyPeopleMessages = 0;
@@ -307,6 +358,11 @@ module.exports = function registerImport(deps) {
         ? ch.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 20)
         : [];
       const isForum = kind === 'forum' || kind === 'media';
+      if (hidden.has(ch.id)) {
+        skipped.push(ch.name || ch.id);
+        job.channelsDone++;
+        continue;
+      }
 
       try {
         if (!isForum) do {
@@ -389,7 +445,7 @@ module.exports = function registerImport(deps) {
     }
     if (!result.channels.length) {
       return finish(400, { error: auth.ferry
-        ? "The Ferry bot can't read any of those channels. On Discord, give it a role that can see them, then try again."
+        ? "The Ferry bot can't read any of those channels. In Discord, add the bot's role to each one with View Channel and Read Message History, then try again."
         : "Couldn't read any of those channels." });
     }
 

@@ -979,6 +979,16 @@
   padding-left: 1.75rem;
   background: color-mix(in srgb, var(--bg-secondary) 40%, transparent);
 }
+/* A channel the Ferry bot can't read: greyed out, not tickable, with a hint */
+.import-channel-blocked { flex-wrap: wrap; }
+.import-channel-blocked label { cursor: not-allowed; opacity: 0.5; }
+.import-channel-blocked .import-ch-lock { font-size: 0.6875rem; }
+.import-ch-blocked-hint {
+  flex-basis: 100%;
+  padding-left: 1.375rem;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
 .import-type-badge {
   font-size: 0.5625rem;
   font-weight: 600;

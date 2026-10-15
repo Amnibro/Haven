@@ -263,7 +263,7 @@ _setupDiscordImport() {
   connectToggleAll?.addEventListener('click', (e) => {
     e.preventDefault();
     const cList = document.getElementById('import-connect-channel-list');
-    const boxes = cList.querySelectorAll('input[type="checkbox"]');
+    const boxes = cList.querySelectorAll('input[type="checkbox"]:not(:disabled)');
     const allChecked = [...boxes].every(cb => cb.checked);
     boxes.forEach(cb => cb.checked = !allChecked);
     connectToggleAll.textContent = allChecked ? t('settings.admin.select_all') : t('settings.admin.deselect_all');
@@ -428,6 +428,19 @@ async _importPickGuild(guild) {
 
     // Type icons for visual distinction
     const typeIcons = { text: '#', announcement: '📢', forum: '💬', media: '🖼️', thread: '🧵' };
+    // A channel the Ferry bot can't read (a private channel its role was never
+    // added to) is greyed out and can't be ticked, with what to do about it.
+    let hiddenCount = 0;
+    const blockedParts = (entry) => {
+      if (entry.readable !== false) return { cls: '', box: 'checked', lock: '', hint: '' };
+      hiddenCount++;
+      return {
+        cls: ' import-channel-blocked',
+        box: 'disabled',
+        lock: ' <span class="import-ch-lock" aria-hidden="true">🔒</span>',
+        hint: `<div class="import-ch-blocked-hint">${this._escapeHtml(t('modals.discord_import.channel_hidden'))}</div>`,
+      };
+    };
 
     // Render channels grouped by category
     data.channels.forEach(ch => {
@@ -442,8 +455,9 @@ async _importPickGuild(guild) {
       const tagHint = ch.tags && ch.tags.length
         ? ` <span class="muted-text" style="font-size:0.625rem">(${this._escapeHtml(ch.tags.map(tg => tg.name).join(', '))})</span>`
         : '';
+      const blocked = blockedParts(ch);
       const row = document.createElement('div');
-      row.className = 'import-channel-row';
+      row.className = 'import-channel-row' + blocked.cls;
       row.dataset.channelId = ch.id;
       row.dataset.channelName = ch.name;
       row.dataset.channelTopic = ch.topic || '';
@@ -452,10 +466,11 @@ async _importPickGuild(guild) {
       row.dataset.tags = JSON.stringify((ch.tags || []).map(tg => tg.name));
       row.innerHTML = `
         <label>
-          <input type="checkbox" checked>
-          <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">${icon}</span> ${this._escapeHtml(ch.name)}${tagHint}</span>
+          <input type="checkbox" ${blocked.box}>
+          <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">${icon}</span> ${this._escapeHtml(ch.name)}${tagHint}${blocked.lock}</span>
         </label>
         <span class="import-ch-count import-type-badge">${ch.type}</span>
+        ${blocked.hint}
       `;
       cList.appendChild(row);
 
@@ -466,8 +481,9 @@ async _importPickGuild(guild) {
           const tagStr = t.tags && t.tags.length
             ? ` <span class="muted-text" style="font-size:0.625rem">[${this._escapeHtml(t.tags.join(', '))}]</span>`
             : '';
+          const tBlocked = blockedParts(t);
           const tRow = document.createElement('div');
-          tRow.className = 'import-channel-row import-thread-row';
+          tRow.className = 'import-channel-row import-thread-row' + tBlocked.cls;
           tRow.dataset.channelId = t.id;
           tRow.dataset.channelName = t.name;
           tRow.dataset.channelTopic = '';
@@ -477,10 +493,11 @@ async _importPickGuild(guild) {
           tRow.dataset.tags = JSON.stringify(t.tags || []);
           tRow.innerHTML = `
             <label>
-              <input type="checkbox" checked>
-              <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">🧵</span> ${this._escapeHtml(t.name)}${tagStr}</span>
+              <input type="checkbox" ${tBlocked.box}>
+              <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">🧵</span> ${this._escapeHtml(t.name)}${tagStr}${tBlocked.lock}</span>
             </label>
             <span class="import-ch-count import-type-badge">${window.t('settings.admin.import_thread')}</span>
+            ${tBlocked.hint}
           `;
           cList.appendChild(tRow);
         });
@@ -497,8 +514,9 @@ async _importPickGuild(guild) {
         catDiv.textContent = t('settings.admin.import_other_threads');
         cList.appendChild(catDiv);
         orphans.forEach(t => {
+          const tBlocked = blockedParts(t);
           const tRow = document.createElement('div');
-          tRow.className = 'import-channel-row import-thread-row';
+          tRow.className = 'import-channel-row import-thread-row' + tBlocked.cls;
           tRow.dataset.channelId = t.id;
           tRow.dataset.channelName = t.name;
           tRow.dataset.channelTopic = '';
@@ -508,10 +526,11 @@ async _importPickGuild(guild) {
           tRow.dataset.tags = JSON.stringify(t.tags || []);
           tRow.innerHTML = `
             <label>
-              <input type="checkbox" checked>
-              <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">🧵</span> ${this._escapeHtml(t.name)}${t.parentName ? ` <span class="muted-text" style="font-size:0.625rem">${window.t('settings.admin.import_in_channel', { name: this._escapeHtml(t.parentName) })}</span>` : ''}</span>
+              <input type="checkbox" ${tBlocked.box}>
+              <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">🧵</span> ${this._escapeHtml(t.name)}${t.parentName ? ` <span class="muted-text" style="font-size:0.625rem">${window.t('settings.admin.import_in_channel', { name: this._escapeHtml(t.parentName) })}</span>` : ''}${tBlocked.lock}</span>
             </label>
             <span class="import-ch-count import-type-badge">${window.t('settings.admin.import_thread')}</span>
+            ${tBlocked.hint}
           `;
           cList.appendChild(tRow);
         });
@@ -519,7 +538,11 @@ async _importPickGuild(guild) {
     }
 
     this._connectGuild = guild;
-    fetchStatus.style.display = 'none';
+    if (hiddenCount) {
+      fetchStatus.textContent = '🔒 ' + t(hiddenCount === 1 ? 'modals.discord_import.channels_hidden_one' : 'modals.discord_import.channels_hidden_other', { count: hiddenCount });
+    } else {
+      fetchStatus.style.display = 'none';
+    }
   } catch (err) {
     fetchStatus.textContent = '❌ ' + err.message;
     fetchStatus.style.color = '#ed4245';
@@ -568,6 +591,8 @@ async _importConnectFetch() {
       body: JSON.stringify({
         ...this._importAuth,
         guildName: this._connectGuild?.name || 'Discord Import',
+        // Lets the server skip, by name, anything the Ferry bot can't read.
+        guildId: this._connectGuild?.id,
         channels: selected
       })
     });
@@ -588,7 +613,8 @@ async _importConnectFetch() {
       break;
     }
     if (result.skipped?.length) {
-      this._showToast(t('modals.discord_import.skipped_channels', { names: result.skipped.join(', ') }), 'error');
+      const skippedKey = this._importAuth?.useFerry ? 'modals.discord_import.skipped_channels_ferry' : 'modals.discord_import.skipped_channels';
+      this._showToast(t(skippedKey, { names: result.skipped.join(', ') }), 'error');
     }
 
     // Transition to the standard preview step (reuses existing execute flow)
