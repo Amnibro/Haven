@@ -17,6 +17,7 @@ const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
 const { takeSilent } = require('../silentMessages');
 const { tagAccess } = require('../uploadTagRoles');
+const { moveToChannel } = require('../moveMessages');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -2327,8 +2328,8 @@ module.exports = function register(socket, ctx) {
     if (!fromCode || !toCode || fromCode === toCode) return cb({ error: 'Invalid channels' });
     if (!/^[a-f0-9]{8}$/i.test(fromCode) || !/^[a-f0-9]{8}$/i.test(toCode)) return cb({ error: 'Invalid channel codes' });
 
-    const fromCh = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(fromCode);
-    const toCh   = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(toCode);
+    const fromCh = db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(fromCode);
+    const toCh   = db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(toCode);
     if (!fromCh || !toCh) return cb({ error: 'Channel not found' });
     if (fromCh.is_dm || toCh.is_dm) return cb({ error: 'Cannot move messages to or from DMs' });
 
@@ -2349,37 +2350,41 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    const placeholders = messageIds.map(() => '?').join(',');
-    const count = db.prepare(
-      `SELECT COUNT(*) as cnt FROM messages WHERE id IN (${placeholders}) AND channel_id = ?`
-    ).get(...messageIds, fromCh.id);
-    if (!count || count.cnt !== messageIds.length) return cb({ error: 'Some messages were not found in the source channel' });
-
+    // A thread comes along with its message; the rules are in moveMessages.js.
+    let result;
     try {
-      db.prepare(
-        `UPDATE messages SET channel_id = ? WHERE id IN (${placeholders}) AND channel_id = ?`
-      ).run(toCh.id, ...messageIds, fromCh.id);
-
-      db.prepare(
-        `UPDATE pinned_messages SET channel_id = ? WHERE message_id IN (${placeholders}) AND channel_id = ?`
-      ).run(toCh.id, ...messageIds, fromCh.id);
+      result = moveToChannel(db, { from: fromCh, to: toCh, messageIds });
     } catch (err) {
       console.error('Move messages error:', err);
       return cb({ error: 'Failed to move messages' });
     }
+    if (result.error) return cb({ error: result.error });
+    forumUnread.forget(fromCh.id);
+    forumUnread.forget(toCh.id);
 
+    // messageIds are the top-level messages: the source drops them from its
+    // feed and the destination reloads, which shows their threads' chips.
+    // No new-thread-message goes out for the replies, so no sounds or markers.
     io.to(`channel:${fromCode}`).emit('messages-moved', {
       channelCode: fromCode,
-      messageIds,
+      messageIds: result.moved,
       toChannel: toCode
     });
     io.to(`channel:${toCode}`).emit('messages-received', {
       channelCode: toCode,
       fromChannel: fromCode,
-      messageIds
+      messageIds: result.moved,
+      brought: result.brought
     });
 
-    cb({ success: true, moved: messageIds.length });
+    if (typeof logAudit === 'function') {
+      logAudit({
+        actor: socket.user, action: 'messages_move',
+        target_type: 'channel', target_id: toCh.id, target_name: toCh.name,
+        details: { fromChannel: fromCh.name, messages: result.moved.length, broughtReplies: result.brought.length, messageIds: result.moved },
+      });
+    }
+    cb({ success: true, moved: result.moved.length, brought: result.brought.length, kept: result.kept.length });
   });
 
   // ── Pin / Unpin message ─────────────────────────────────

@@ -73,6 +73,20 @@ function markCaughtUp(db, rootId, userIds) {
   for (const userId of userIds) upsert.run(userId, rootId, rootId);
 }
 
+// Before a move into channel `channelId`: a reply banner on a moving message
+// (one of `tops` or a reply in their threads) that points at a message which
+// stays in another channel goes, so readers there do not see a line of a
+// message from a channel they may not be able to open. Banners between
+// messages that move together stay.
+function dropStrayBanners(db, tops, channelId) {
+  const tph = placeholders(tops.length);
+  db.prepare(`UPDATE messages SET reply_to = NULL
+    WHERE (id IN (${tph}) OR thread_id IN (${tph})) AND reply_to IS NOT NULL
+      AND EXISTS (SELECT 1 FROM messages r WHERE r.id = messages.reply_to AND r.channel_id != ?
+        AND r.id NOT IN (${tph}) AND (r.thread_id IS NULL OR r.thread_id NOT IN (${tph})))`)
+    .run(...tops, ...tops, channelId, ...tops, ...tops);
+}
+
 // Checks inside the transaction. Returns { error } or { root, tops }, where
 // tops are the selected top-level messages that actually move.
 function plan(db, { from, to, rootId, ids }) {
@@ -135,12 +149,7 @@ function moveIntoThread(db, { from, to, rootId, messageIds }) {
     const absorbedRoots = [...new Set(replies.map(r => r.thread_id))].sort((a, b) => a - b);
 
     db.prepare(`UPDATE messages SET reply_to = thread_id WHERE thread_id IN (${tph}) AND reply_to IS NULL`).run(...tops);
-    // A banner pointing at a message that stays in another channel goes.
-    db.prepare(`UPDATE messages SET reply_to = NULL
-      WHERE (id IN (${tph}) OR thread_id IN (${tph})) AND reply_to IS NOT NULL
-        AND EXISTS (SELECT 1 FROM messages r WHERE r.id = messages.reply_to AND r.channel_id != ?
-          AND r.id NOT IN (${tph}) AND (r.thread_id IS NULL OR r.thread_id NOT IN (${tph})))`)
-      .run(...tops, ...tops, to.id, ...tops, ...tops);
+    dropStrayBanners(db, tops, to.id);
     db.prepare(`UPDATE messages SET thread_id = ?, channel_id = ? WHERE thread_id IN (${tph})`).run(rootId, to.id, ...tops);
     db.prepare(`UPDATE messages SET thread_id = ?, channel_id = ? WHERE id IN (${tph})`).run(rootId, to.id, ...tops);
     if (from.id !== to.id) {
@@ -158,4 +167,4 @@ function moveIntoThread(db, { from, to, rootId, messageIds }) {
   return run();
 }
 
-module.exports = { MAX_SELECTED, moveIntoThread };
+module.exports = { MAX_SELECTED, moveIntoThread, dropStrayBanners, placeholders };

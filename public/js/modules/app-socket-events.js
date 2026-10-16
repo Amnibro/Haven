@@ -584,6 +584,17 @@ _listenMessageChanges() {
         }
       }
     }
+    // Move to... took the open thread's message to another channel and its
+    // replies went along, so the panel here would stop getting new ones. A
+    // move into a thread (toThread) reopens it there (app-move-to-thread.js),
+    // and someone already looking at the destination keeps it.
+    const panel = document.getElementById('thread-panel');
+    const active = Number(this._activeThreadParent);
+    if (!data.toThread && active && panel && panel.style.display !== 'none'
+        && data.toChannel !== this.currentChannel && (data.messageIds || []).map(Number).includes(active)) {
+      this._closeThread();
+      this._showToast(t('modals.move_messages.open_thread_moved'), 'info');
+    }
   });
 
   // ── Messages received (destination channel) ──────

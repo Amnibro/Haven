@@ -3787,6 +3787,7 @@
       "no_channels": "No other channels available",
       "moved_one": "Moved {{n}} message to #{{name}}",
       "moved_many": "Moved {{n}} messages to #{{name}}",
+      "open_thread_moved": "The thread you had open was moved to another channel",
       "here_as_thread": "Move here as thread",
       "here_as_thread_title": "Put the selected messages in a thread under this message",
       "thread_confirm_one": "Move {{n}} message into a thread under {{name}}'s message?",
@@ -3842,6 +3843,7 @@
         "badge_delete": "deleted badge",
         "badge_grant": "gave a badge to",
         "badge_revoke": "took a badge back from",
+        "messages_move": "moved messages to",
         "messages_move_to_thread": "moved messages into a thread in"
       }
     },
