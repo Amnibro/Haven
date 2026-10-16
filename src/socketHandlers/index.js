@@ -1729,6 +1729,21 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   /**
+   * Only the sender's own uploads go to Discord (ferry.keepOwnUploads). The
+   * rest are taken out of what is sent, and the sender hears about it once
+   * per message rather than once per pairing it goes to.
+   */
+  function ownUploadsOnly(body, sender, notify) {
+    const own = ferry.keepOwnUploads(body, sender);
+    if (own.refused) {
+      notify(own.refused === 1
+        ? 'Only your own uploads go to Discord, so 1 file stayed in Haven'
+        : `Only your own uploads go to Discord, so ${own.refused} files stayed in Haven`);
+    }
+    return own.content;
+  }
+
+  /**
    * Relays one just-sent Haven message onward. Fire and forget: a Discord
    * outage must never fail or delay the Haven send that already succeeded,
    * so failures land on the pairing's health row and in a toast to the
@@ -1757,8 +1772,11 @@ function setupSocketHandlers(io, db, opts = {}) {
       username: usePersona ? personaUsername : user.displayName,
       avatar: usePersona ? personaAvatar : (user.avatar || null),
     };
+    const sender = { id: user.id, isAdmin: !!user.isAdmin };
 
     if (target && target.dm) {
+      body = ownUploadsOnly(body, sender, notify);
+      if (!body.trim()) return;
       // The recipient id comes from the client, so being offered in the
       // autocomplete is not proof of anything. Confirm the person is actually
       // in a guild this channel is paired with before sending.
@@ -1769,7 +1787,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             notify('That Discord user is not in a server this channel is linked to');
             return null;
           }
-          return ferry.sendDiscordDm(target.discordUserId, { fromName: identity.username, content: body })
+          return ferry.sendDiscordDm(target.discordUserId, { fromName: identity.username, content: body, sender })
             .then(() => notify('Sent to Discord'));
         })
         .catch(err => notify(err.message));
@@ -1783,14 +1801,15 @@ function setupSocketHandlers(io, db, opts = {}) {
       destinations.push(target.link);
     }
     if (!destinations.length) return;
+    body = ownUploadsOnly(body, sender, notify);
     if (!body.trim()) return;
 
     for (const link of destinations) {
       // A topic in a Haven forum becomes a new post in a Discord forum. The
       // send functions refuse a pairing of mismatched kinds and say so on it.
       const send = topic
-        ? ferry.sendTopicToDiscord(link, { ...identity, content: body, title: topic.title, tags: topic.tags, topicId: topic.id })
-        : ferry.sendToDiscord(link, { ...identity, content: body });
+        ? ferry.sendTopicToDiscord(link, { ...identity, content: body, sender, title: topic.title, tags: topic.tags, topicId: topic.id })
+        : ferry.sendToDiscord(link, { ...identity, content: body, sender });
       Promise.resolve(send).catch(err => notify(`Discord relay failed: ${err.message}`));
     }
   }
@@ -1810,11 +1829,14 @@ function setupSocketHandlers(io, db, opts = {}) {
     if (!ch || !ch.is_forum) return;
     // Silent, like an untargeted message in a mirrored channel.
     if (!user.isAdmin && !userHasPermission(user.id, 'use_ferry', channelId)) return;
+    const sender = { id: user.id, isAdmin: !!user.isAdmin };
+    body = ownUploadsOnly(body, sender, notify);
+    if (!body.trim()) return;
 
     // Thread replies have no persona prefix, so the real name always goes.
     const identity = { username: user.displayName, avatar: user.avatar || null };
     for (const link of links) {
-      ferry.sendReplyToDiscord(link, { ...identity, content: body, topicId: parentId })
+      ferry.sendReplyToDiscord(link, { ...identity, content: body, sender, topicId: parentId })
         .catch(err => notify(`Discord relay failed: ${err.message}`));
     }
   }
