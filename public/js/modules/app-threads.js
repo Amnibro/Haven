@@ -375,9 +375,11 @@ _sendThreadMessage() {
   }
 },
 
-_appendThreadMessage(msg) {
+_appendThreadMessage(msg, opts = {}) {
   const container = document.getElementById('thread-messages');
   if (!container) return;
+  // Where the reader was before this reply went in (app-thread-scroll.js).
+  const gapBefore = container.scrollHeight - container.scrollTop - container.clientHeight;
   // In a blog-mode forum a reply goes to the post's own section or to the
   // comments under it (#5742); otherwise straight into the thread.
   const target = this._forumBlogTargetFor?.(msg) || container;
@@ -496,7 +498,10 @@ _appendThreadMessage(msg) {
   try { this._decryptE2EFiles?.(el); } catch (err) { console.warn('[Thread] _decryptE2EFiles failed', err); }
   try { if (this._isDmContainer(el)) this._enforceDmLinkPolicy?.(el); } catch (err) { console.warn('[Thread] _enforceDmLinkPolicy failed', err); }
   try { this._setupVideos?.(el); } catch (err) { console.warn('[Thread] _setupVideos failed', err); }
-  container.scrollTop = container.scrollHeight;
+  // Loading the thread lands at its end; a reply arriving later moves the
+  // view only for a reader who is already there.
+  if (opts.live && this._threadAfterLiveReply) this._threadAfterLiveReply(container, gapBefore, msg);
+  else container.scrollTop = container.scrollHeight;
 },
 
 // Promote a compact thread reply back to a full row (avatar + author header

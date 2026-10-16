@@ -84,6 +84,7 @@ import MasterVolumeMethods from './modules/app-master-volume.js?v=4.23.6';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.22.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.24.25';
+import ThreadScrollMethods from './modules/app-thread-scroll.js?v=4.24.25';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
@@ -429,6 +430,7 @@ class HavenApp {
     this._setupServerMute();
     this._setupForumUnread();
     this._setupThreadUnread();
+    this._setupThreadScroll();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
     this._setupLightbox();
@@ -610,6 +612,7 @@ Object.assign(HavenApp.prototype,
   MasterVolumeMethods,
   ForumUnreadMethods,
   ThreadUnreadMethods,
+  ThreadScrollMethods,
   ChannelCategoryMethods,
   ChannelPersonalOrderMethods,
   PushToMuteMethods,

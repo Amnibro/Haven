@@ -58,6 +58,7 @@ _listenFeatureEvents() {
       data.messages.forEach(msg => this._appendThreadMessage(msg));
     }
     this._forumBlogAfterLoad?.();
+    this._resetThreadJump?.();
     this._threadJumpToMention?.();
   });
 
@@ -72,7 +73,7 @@ _listenFeatureEvents() {
       if (data.message) {
         try { await this._decryptMessages([data.message], data.channelCode); } catch (err) { console.warn('[Thread] could not decrypt the new thread message', err); }
       }
-      this._appendThreadMessage(data.message);
+      this._appendThreadMessage(data.message, { live: true });
     }
   });
 

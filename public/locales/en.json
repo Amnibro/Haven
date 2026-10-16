@@ -4413,7 +4413,10 @@
     "new_other": "{{count}} new",
     "threads_new_one": "{{count}} thread with new replies",
     "threads_new_other": "{{count}} threads with new replies",
-    "sidebar_unread": "New replies in a thread you take part in"
+    "sidebar_unread": "New replies in a thread you take part in",
+    "new_replies_one": "{{count}} new reply",
+    "new_replies_other": "{{count}} new replies",
+    "jump_latest": "Jump to the latest reply"
   },
   "dm_runtime": {
     "title": "DM",
