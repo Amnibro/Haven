@@ -507,6 +507,20 @@ _appendThreadMessage(msg, opts = {}) {
   else container.scrollTop = container.scrollHeight;
 },
 
+// Up in the empty reply box: edit your newest reply in the open thread,
+// docked or popped out. Returns whether there was one to edit.
+_editLastThreadMessage() {
+  const box = document.getElementById('thread-messages');
+  if (!box || !this.user) return false;
+  const mine = [...box.querySelectorAll('.thread-message')]
+    .filter(el => parseInt(el.dataset.userId, 10) === this.user.id && !el.classList.contains('editing'));
+  const el = mine[mine.length - 1];
+  if (!el) return false;
+  this._startEditMessage(el, parseInt(el.dataset.msgId, 10));
+  el.scrollIntoView({ block: 'nearest' });
+  return true;
+},
+
 // The line under a thread's header, and its row in the Threads list:
 // pictures and files by name, as reply lines show them, never the address
 // they are stored under.
