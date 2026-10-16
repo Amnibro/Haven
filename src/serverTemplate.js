@@ -10,6 +10,7 @@ const { MEMBER_PERMS, getAdminRoleId } = require('./roleDefaults');
 const { normalizeHost } = require('../public/js/automod-rules.js');
 const { BUILTIN_THEMES, isThemeFilename, parseThemeMetadata } = require('./themeMetadata');
 const memberDefaults = require('./memberDefaults');
+const { MEDIA_GROUP_LAYOUTS } = require('./mediaGroup');
 const FORMAT = 'haven-server-template';
 const VERSION = 1;
 const LIMITS = { bytes: 12 * 1024 * 1024, asset: 2 * 1024 * 1024, theme: 512 * 1024, assets: 8 * 1024 * 1024, assetCount: 200, channels: 500, roles: 100, posts: 500, post: 16000, webhooks: 200, domains: 2000, menus: 50, access: 5000, emojis: 500, stickers: 500, categories: 200 };
@@ -52,6 +53,7 @@ const B = { t: 'bool' }, N = (lo, hi) => ({ t: 'int', lo, hi }), E = (...v) => (
 const SETTINGS = {
   server_name: T(32), server_title: T(40), welcome_message: T(500), custom_tos: T(50000), default_locale: E('', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'zh', 'pt', 'fa', 'ja', 'ko'),
   member_visibility: E('all', 'online', 'none'), allow_self_purge: B, hide_disabled_channel_badges: B, guests_enabled: B, guests_allow_voice: B,
+  media_group_layout: E(...MEDIA_GROUP_LAYOUTS),
   max_upload_mb: N(1, 102400), max_attachments: N(1, 50), max_poll_options: N(2, 25), max_message_chars: N(200, 100000), max_tags_per_attachment: N(1, 20),
   max_tag_len: N(1, 50), max_sound_kb: N(256, 10240), max_avatar_mb: N(1, 10), max_emoji_kb: N(64, 1024), max_sticker_kb: N(256, 10240),
   role_icon_sidebar: B, role_icon_chat: B, role_icon_after_name: B, channel_sort_mode: E(...SORT_MODES), channel_cat_sort: E('az', 'za', 'manual'),

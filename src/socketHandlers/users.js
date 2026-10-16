@@ -9,6 +9,7 @@ const { saveFcmToken } = require('../fcm');
 const { validHighScore, isKnownGame } = require('../highScores');
 const { badgesForProfile } = require('../badges');
 const { themePreferenceAllowed } = require('../themeMetadata');
+const { MEDIA_GROUP_LAYOUTS } = require('../mediaGroup');
 
 const PUSH_SCOPES = ['all', 'mentions'];
 
@@ -763,6 +764,9 @@ module.exports = function register(socket, ctx) {
       // Muting, for yourself (app-server-mute.js): this server ('all' or
       // 'mentions') and members muted for you (a JSON list of user ids).
       'server_mute', 'muted_users',
+      // How pictures sent together show for you (#5799): 'grid' or
+      // 'stacked'. No row follows the server's media_group_layout.
+      'media_group_layout',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
     // A theme is saved as file:<file name>, and a community theme's file name
@@ -775,6 +779,7 @@ module.exports = function register(socket, ctx) {
       if (!stored) return;
     }
     if (key === 'server_mute' && value !== 'all' && value !== 'mentions') return;
+    if (key === 'media_group_layout' && !MEDIA_GROUP_LAYOUTS.includes(value)) return;
     // Members pick from Haven's own themes and the published theme files. A
     // refusal is quiet: the picker only offers allowed themes, so this is a
     // stale list or a crafted request, and the client falls back on its own.
@@ -813,7 +818,7 @@ module.exports = function register(socket, ctx) {
   socket.on('delete-preference', (data) => {
     if (!data || typeof data !== 'object') return;
     const key = typeof data.key === 'string' ? data.key.trim() : '';
-    const deletableKeys = ['timezone', 'time_format', 'channel_order', 'server_mute', 'muted_users'];
+    const deletableKeys = ['timezone', 'time_format', 'channel_order', 'server_mute', 'muted_users', 'media_group_layout'];
     if (!deletableKeys.includes(key)) return;
     db.prepare('DELETE FROM user_preferences WHERE user_id = ? AND key = ?').run(socket.user.id, key);
     socket.emit('preference-deleted', { key });
