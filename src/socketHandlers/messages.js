@@ -2306,8 +2306,8 @@ module.exports = function register(socket, ctx) {
     if (!fromCode || !toCode || fromCode === toCode) return cb({ error: 'Invalid channels' });
     if (!/^[a-f0-9]{8}$/i.test(fromCode) || !/^[a-f0-9]{8}$/i.test(toCode)) return cb({ error: 'Invalid channel codes' });
 
-    const fromCh = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(fromCode);
-    const toCh   = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(toCode);
+    const fromCh = db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(fromCode);
+    const toCh   = db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(toCode);
     if (!fromCh || !toCh) return cb({ error: 'Channel not found' });
     if (fromCh.is_dm || toCh.is_dm) return cb({ error: 'Cannot move messages to or from DMs' });
 
@@ -2355,6 +2355,13 @@ module.exports = function register(socket, ctx) {
       brought: result.brought
     });
 
+    if (typeof logAudit === 'function') {
+      logAudit({
+        actor: socket.user, action: 'messages_move',
+        target_type: 'channel', target_id: toCh.id, target_name: toCh.name,
+        details: { fromChannel: fromCh.name, messages: result.moved.length, broughtReplies: result.brought.length, messageIds: result.moved },
+      });
+    }
     cb({ success: true, moved: result.moved.length, brought: result.brought.length, kept: result.kept.length });
   });
 

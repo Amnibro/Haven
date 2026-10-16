@@ -198,4 +198,20 @@ test('moving messages to another channel', async (t) => {
     assert.equal(d.channelCode, other.code);
     assert.equal(db.prepare('SELECT channel_id FROM messages WHERE thread_id = ? ORDER BY id DESC LIMIT 1').get(root).channel_id, other.id);
   });
+
+  await t.test('each move is in the audit log, naming where it went', async () => {
+    await wait(100);
+    const rows = db.prepare("SELECT actor_id, target_type, target_id, target_name, details FROM audit_log WHERE action = 'messages_move' ORDER BY id").all();
+    assert.equal(rows.length, 5, 'one per move that went through, none for refused ones');
+    assert.equal(rows[0].actor_id, mod.id);
+    assert.equal(rows[0].target_type, 'channel');
+    assert.equal(rows[0].target_id, other.id);
+    assert.equal(rows[0].target_name, 'other');
+    const details = JSON.parse(rows[0].details);
+    assert.equal(details.fromChannel, 'talk');
+    assert.equal(details.messages, 2);
+    assert.equal(details.broughtReplies, 3);
+    assert.equal(details.messageIds.length, 2);
+    assert.equal(JSON.parse(rows[2].details).messages, 1, 'a reply that stayed is not counted');
+  });
 });
