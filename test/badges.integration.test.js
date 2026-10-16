@@ -266,3 +266,42 @@ test('threshold and image checks on their own', () => {
   assert.strictEqual(sniffImage(Buffer.from('RIFF....WEBP')), 'image/webp');
   assert.strictEqual(sniffImage(Buffer.from('<svg>')), null);
 });
+
+// The owner's rule: no two default badges look alike, and neither do the
+// built-in icons. Each built-in has its own background colour, and the
+// defaults are far enough apart in hue to tell at a glance.
+test('default badges and built-in icons are all different', () => {
+  const fs = require('node:fs');
+  const { DEFAULT_BADGES, BUILTIN_ICONS } = require('../src/badges');
+  const icons = DEFAULT_BADGES.map((b) => b.icon);
+  assert.strictEqual(new Set(icons).size, icons.length, 'no two default badges share an icon');
+  for (const icon of icons) assert.ok(BUILTIN_ICONS.includes(icon), `${icon} is a built-in icon`);
+
+  const dir = path.join(__dirname, '..', 'public', 'img', 'badges');
+  const fill = {};
+  const drawn = new Set();
+  for (const name of BUILTIN_ICONS) {
+    const svg = fs.readFileSync(path.join(dir, `${name}.svg`), 'utf8');
+    const m = svg.match(/<circle cx="32" cy="32" r="30" fill="#([0-9a-f]{6})"\/>/);
+    assert.ok(m, `${name}.svg has a background colour`);
+    fill[name] = m[1];
+    drawn.add(svg.slice(m.index + m[0].length).replaceAll(m[1], ''));
+  }
+  assert.strictEqual(new Set(Object.values(fill)).size, BUILTIN_ICONS.length, 'every built-in has its own colour');
+  assert.strictEqual(drawn.size, BUILTIN_ICONS.length, 'and its own picture');
+
+  const hue = (hex) => {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+    if (!d) return 0;
+    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (h * 60 + 360) % 360;
+  };
+  for (let i = 0; i < icons.length; i++) {
+    for (let j = i + 1; j < icons.length; j++) {
+      const a = hue(fill[icons[i]]), b = hue(fill[icons[j]]);
+      const apart = Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+      assert.ok(apart >= 30, `${icons[i]} and ${icons[j]} are ${Math.round(apart)} degrees apart in colour`);
+    }
+  }
+});
