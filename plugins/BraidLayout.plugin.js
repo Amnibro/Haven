@@ -1005,7 +1005,7 @@ html[data-braid-layout="1"] .sidebar-header{order:0;padding:.625rem .75rem!impor
 html[data-braid-layout="1"] .brand{margin-bottom:.5rem!important;gap:.5rem!important}
 html[data-braid-layout="1"] .brand-text{font-size:.9375rem!important;font-weight:650!important;letter-spacing:-.03em!important;text-transform:none!important}
 html[data-braid-layout="1"] .user-bar{border-radius:.75rem!important;padding:.5rem .625rem!important;gap:.5rem!important;background:var(--braid-btn-bg)!important;border:1px solid var(--braid-btn-line)!important}
-html[data-braid-layout="1"] .sidebar-mod-container{order:1;flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:2px 0 .375rem}
+html[data-braid-layout="1"] .sidebar-mod-container{order:1;flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:2px 0 7px}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"],
 html[data-braid-layout="1"] .sidebar-section#admin-controls{border:0!important;padding:2px .625rem!important;margin:0!important}
 html:not([data-braid-layout="1"]) .braid-more-wrap,
