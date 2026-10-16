@@ -891,23 +891,27 @@ _mediaTagManageApply() {
   if (!st || !this.currentChannel || !this.socket) return;
   const ids = this._mediaSelectedMessageIds();
   if (!ids.length) { this._closeMediaTagManage(); return; }
+  // Each selected file by name, so a picture sent together with others
+  // changes alone (#5799).
+  const items = [...this._mediaGallerySelected.values()].map(({ message_id, url }) => ({ messageId: message_id, url }));
   const mode = st.mode;
   const tags = st.tags.slice();
 
   const doEmit = () => {
-    this.socket.emit('bulk-tag-messages', { code: this.currentChannel, messageIds: ids, mode, tags }, (res) => {
+    this.socket.emit('bulk-tag-messages', { code: this.currentChannel, items, mode, tags }, (res) => {
       if (!res || res.error) {
         this._showToast?.(res && res.error ? res.error : t('media_gallery.tags_update_failed'), 'error');
         return;
       }
-      // Optimistically reflect each message's new set in the gallery data so
+      // Optimistically reflect each file's new set in the gallery data so
       // chips update without a full refetch (keeps the current selection).
-      const byId = new Map((res.results || []).map(r => [r.messageId, r.tags || []]));
+      const byKey = new Map((res.results || []).map(r => [this._mediaItemKey({ message_id: r.messageId, url: r.url }), r.tags || []]));
       if (this._mediaGalleryData) {
         ['photos', 'videos', 'audios', 'files'].forEach(k => {
           (this._mediaGalleryData[k] || []).forEach(it => {
-            if (byId.has(it.message_id)) {
-              const tg = byId.get(it.message_id);
+            const key = this._mediaItemKey(it);
+            if (byKey.has(key)) {
+              const tg = byKey.get(key);
               if (tg.length) it.tags = tg; else delete it.tags;
             }
           });
