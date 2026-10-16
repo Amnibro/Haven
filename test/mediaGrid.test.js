@@ -64,6 +64,15 @@ test('grid lines are pictures, encrypted pictures and videos', () => {
   assert.deepEqual(M._mediaGridRun(['a', '/uploads/1.png', '/uploads/2.png', 'b'], 1), ['/uploads/1.png', '/uploads/2.png']);
 });
 
+test('editing a batch edits its text and keeps its pictures', () => {
+  const split = (c) => M._mediaGroupSplit.call(M, c);
+  assert.deepEqual(split('hi there\n/uploads/1.png\n/uploads/2.png'), { text: 'hi there', media: ['/uploads/1.png', '/uploads/2.png'] });
+  assert.deepEqual(split('/uploads/1.png\n[file:a.pdf](/uploads/a.pdf|1 KB)'), { text: '', media: ['/uploads/1.png', '[file:a.pdf](/uploads/a.pdf|1 KB)'] });
+  assert.equal(split('/uploads/1.png'), null, 'one picture edits as before');
+  assert.equal(split('a\n/uploads/1.png\nb\n/uploads/2.png'), null, 'text between pictures edits as before');
+  assert.equal(split('just text'), null);
+});
+
 test('the grid markup: spans, +N, hidden extras and video tiles', () => {
   const ctx = Object.assign(Object.create(M), {
     _escapeHtml: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'),

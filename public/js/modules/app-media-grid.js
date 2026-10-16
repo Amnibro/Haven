@@ -59,6 +59,20 @@ _mediaGridRun(lines, from) {
   return run;
 },
 
+// A message's text and its upload lines, for editing the text alone. Null
+// unless it is the shape a batch is sent in, text first and then two or more
+// uploads, so a single picture, or a post with text between its pictures,
+// edits as it always has.
+_mediaGroupSplit(content) {
+  const lines = String(content || '').split('\n');
+  const isUpload = (l) => !!this._mediaGridKind(l) || /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l.trim()) || /^e2e-file:\{.*\}$/.test(l.trim());
+  const start = lines.findIndex(isUpload);
+  if (start < 0) return null;
+  const media = lines.slice(start).filter(l => l.trim());
+  if (media.length < 2 || !media.every(isUpload)) return null;
+  return { text: lines.slice(0, start).join('\n').trim(), media: media.map(l => l.trim()) };
+},
+
 // ── Feed ──────────────────────────────────────────────────
 
 // Video tiles open the video viewer; picture tiles are chat images and go

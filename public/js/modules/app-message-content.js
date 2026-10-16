@@ -820,9 +820,17 @@ _updateMessageReactions(messageId, reactions) {
 // The text a reply line shows for a message: pictures and files by a short
 // label, not the address they are stored under (an encrypted picture's
 // "e2e-img:image/png:/uploads/..." used to show as it was).
+// Several pictures in a row read as one count, not a label each (#5799).
 _replyPreviewText(content) {
-  return String(content || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
-    if (this._isImageUrl(l) || /^\/uploads\/\S+$/i.test(l)) return `🖼️ ${t('messages.preview_picture')}`;
+  const isPicture = (l) => this._isImageUrl(l) || /^\/uploads\/\S+$/i.test(l);
+  const lines = String(content || '').split('\n').map(l => l.trim()).filter(Boolean);
+  return lines.map((l, i) => {
+    if (isPicture(l)) {
+      if (i > 0 && isPicture(lines[i - 1])) return null;
+      let n = 1;
+      while (i + n < lines.length && isPicture(lines[i + n])) n++;
+      return n > 1 ? `🖼️ ${t('messages.preview_pictures', { count: n })}` : `🖼️ ${t('messages.preview_picture')}`;
+    }
     const file = /^\[file:([^\]]*)\]\(/.exec(l);
     if (file) return `📎 ${file[1] || t('messages.preview_file')}`;
     if (l.startsWith('e2e-file:')) {
@@ -831,7 +839,7 @@ _replyPreviewText(content) {
       return `📎 ${name || t('messages.preview_file')}`;
     }
     return l;
-  }).join(' ');
+  }).filter(l => l !== null).join(' ');
 },
 
 _renderReplyBanner(replyCtx) {
@@ -957,6 +965,9 @@ _startEditMessage(msgEl, msgId) {
   // 1) markdown formatting stripped (bold/italic/etc. lost)
   // 2) '(edited)' tag text leaked into the textarea on repeated edits.
   const rawText = msgEl.dataset.rawContent ?? contentEl.textContent;
+  // Pictures sent together (#5799): only the text is edited, and the
+  // pictures go back under it unchanged.
+  const grouped = this._mediaGroupSplit?.(rawText) || null;
 
   // Replace content with an editable textarea
   const originalHtml = contentEl.innerHTML;
@@ -965,7 +976,7 @@ _startEditMessage(msgEl, msgId) {
 
   const textarea = document.createElement('textarea');
   textarea.className = 'edit-textarea';
-  textarea.value = rawText;
+  textarea.value = grouped ? grouped.text : rawText;
   textarea.rows = 1;
   textarea.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
   // The same drag bar the composer has, so a long message can be pulled
@@ -1020,6 +1031,7 @@ _startEditMessage(msgEl, msgId) {
     e.stopPropagation();
     e.preventDefault();
     let newContent = textarea.value.trim();
+    if (grouped) newContent = [newContent, ...grouped.media].filter(Boolean).join('\n');
     if (!newContent) {
       // Discord-style: clearing the whole message and confirming the edit
       // offers to delete the message rather than silently cancelling it.
