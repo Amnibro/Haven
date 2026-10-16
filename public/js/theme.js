@@ -2050,32 +2050,32 @@ function applyThemeFromServer(theme, persist = true, syncFallback = false) {
 // ═══════════════════════════════════════════════════════════
 // Published (file:) themes, shared with the login page
 // ═══════════════════════════════════════════════════════════
-// A theme an admin publishes is a .theme.css file rather than one of the
-// built-in data-theme values, so applying it means injecting a stylesheet.
-// plugin-loader.js already did that, but the loader only runs on the app page,
-// which left the login page with no custom themes in its picker and no way to
-// honour one that the admin had set as the server default. These two helpers
-// live in theme.js because theme.js is the file every page loads. (#5537)
+// A published theme is a .theme.css file rather than a built-in data-theme
+// value, so applying it means injecting a stylesheet. These helpers live here
+// because theme.js is the file every page loads, the login page too. (#5537)
 
-// Inject a published theme's stylesheet and make it the active theme.
-// Deliberately the minimum: no plugin bookkeeping, no effect re-run, no socket.
-// plugin-loader's applyFileTheme() calls this for the shared half and then does
-// its own extra work on top, so the injection itself cannot drift between them.
+// Inject a published theme's stylesheet and make it the active theme. Just
+// that: plugin-loader's applyFileTheme() calls it and does its own extra work.
 function applyPublishedThemeBase(file, persist = true, meta = null) {
   if (!file || _isHavenSafeMode() || _isThemeRecoveryPending()) return null;
   const compatibility = meta || window.HavenThemeCompat?.getCachedTheme?.(file);
   if (!_isFileThemeCompatible(compatibility)) return null;
-  document.querySelectorAll('link[id^="haven-theme-"]').forEach(l => l.remove());
-
+  // The theme on screen stays until the new sheet has loaded, so a switch
+  // never flashes the bare Haven base. The old sheets are renamed at once, so
+  // a lookup by theme id already treats them as gone.
+  const stale = [...document.querySelectorAll('link[id^="haven-theme-"]')];
+  stale.forEach((link, i) => { link.id = `haven-theme-stale-${i}-${Date.now()}`; });
   const linkEl = document.createElement('link');
   linkEl.rel = 'stylesheet';
   linkEl.href = `/themes/${encodeURIComponent(file)}?_=${Date.now()}`;
   linkEl.id = `haven-theme-${file}`;
+  // 'haven' is the stable layout base; the sheet loads after it and overrides the :root variables.
+  const settle = () => {
+    stale.forEach(link => link.remove());
+    if (linkEl.isConnected) document.documentElement.setAttribute('data-theme', 'haven');
+  };
+  ['load', 'error'].forEach(type => linkEl.addEventListener(type, settle, { once: true }));
   document.head.appendChild(linkEl);
-
-  // 'haven' is the stable layout base; the injected sheet loads after it and
-  // overrides the :root variables.
-  document.documentElement.setAttribute('data-theme', 'haven');
 
   if (persist) {
     try { localStorage.setItem('haven_theme', `file:${file}`); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
