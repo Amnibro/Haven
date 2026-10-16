@@ -178,8 +178,9 @@ _themeFileCard(entry) {
   this._dressThemeCard(btn, entry.name, entry.author);
   if (entry.description) btn.title = entry.description;
   btn.classList.toggle('tp-overlay', entry.overlay);
+  const colors = window.HavenThemeGallery.cardColors(entry.swatch, window.HavenThemeCompat?.colorSchemeFor);
   for (const [key, prop] of [['bg', '--tp-sw-bg'], ['panel', '--tp-sw-panel'], ['accent', '--tp-sw-accent'], ['text', '--tp-sw-text']]) {
-    if (entry.swatch?.[key]) btn.style.setProperty(prop, entry.swatch[key]);
+    if (colors[key]) btn.style.setProperty(prop, colors[key]);
     else btn.style.removeProperty(prop);
   }
   btn.disabled = !!window.HavenPluginLoader?.suppressed;

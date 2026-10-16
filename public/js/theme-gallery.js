@@ -107,6 +107,22 @@
       .filter(section => section.entries.length > 0);
   }
 
+  // The colours a theme file's card is drawn in. A file that names only some
+  // of them still gets a readable card in any page theme: the panel falls
+  // back to the background, and the text to dark or light ink by how light
+  // the panel is (schemeFor is HavenThemeCompat.colorSchemeFor), never to
+  // the page's own text colour.
+  function cardColors(swatch, schemeFor) {
+    const colors = { ...(swatch || {}) };
+    if (colors.bg && !colors.panel) colors.panel = colors.bg;
+    if (colors.panel && !colors.text && typeof schemeFor === 'function') {
+      const scheme = schemeFor(colors.panel);
+      if (scheme === 'light') colors.text = '#16181d';
+      else if (scheme === 'dark') colors.text = '#f2f3f5';
+    }
+    return colors;
+  }
+
   // Whether a card shows as chosen: the selected theme, or an add-on that is on.
   function isPressed(entry, activeTheme) {
     if (entry.kind === 'file' && entry.overlay) return entry.enabled;
@@ -167,6 +183,7 @@
   return {
     SECTION_ORDER,
     buildSections,
+    cardColors,
     isOverlay,
     isPressed,
     isSeasonal,

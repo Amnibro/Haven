@@ -226,3 +226,16 @@ test('the app page loads the picker and keeps the theme-picker region', () => {
   const popup = html.slice(html.indexOf('id="theme-popup"'), html.indexOf('<!-- Bottom bar -->'));
   assert.doesNotMatch(popup, /layout-picker|layout-select/);
 });
+
+test('a theme file card stays readable when the file names only some colours', () => {
+  const { colorSchemeFor } = require('../public/js/theme-compat');
+  assert.deepEqual(Gallery.cardColors({ bg: '#f7f7f8' }, colorSchemeFor),
+    { bg: '#f7f7f8', panel: '#f7f7f8', text: '#16181d' }, 'light card, dark ink');
+  assert.deepEqual(Gallery.cardColors({ bg: '#000', panel: '#111418' }, colorSchemeFor),
+    { bg: '#000', panel: '#111418', text: '#f2f3f5' }, 'dark card, light ink');
+  const full = { bg: '#fff', panel: '#eee', accent: '#00875a', text: '#09090b' };
+  assert.deepEqual(Gallery.cardColors(full, colorSchemeFor), full, 'a full swatch is left alone');
+  assert.deepEqual(Gallery.cardColors(null, colorSchemeFor), {}, 'no swatch: the card keeps the page colours');
+  const picker = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-theme-picker.js'), 'utf8');
+  assert.match(picker, /HavenThemeGallery\.cardColors\(entry\.swatch, window\.HavenThemeCompat\?\.colorSchemeFor\)/);
+});
