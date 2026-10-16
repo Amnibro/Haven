@@ -986,7 +986,11 @@ _forumThreadRenderTopic() {
   if (!topic) return;
   const body = document.createElement('div');
   body.className = 'thread-topic-body message-content';
-  body.innerHTML = this._formatContent(topic.content || '') + (this._renderAttachmentTags ? this._renderAttachmentTags(topic.attachmentTags) : '');
+  // A blog post keeps one piece per picture, never a grid (#5763, #5799).
+  this._mediaGridOff = !!this._forumBlogOn?.();
+  const html = this._formatContent(topic.content || '');
+  this._mediaGridOff = false;
+  body.innerHTML = html + (this._renderAttachmentTags ? this._renderAttachmentTags(topic.attachmentTags) : '');
   container.prepend(body);
   // The same video player or link card the post gets in chat (#5745).
   this._fetchLinkPreviews?.(body);

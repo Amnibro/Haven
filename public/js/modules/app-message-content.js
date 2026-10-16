@@ -16,8 +16,9 @@ _formatContent(str) {
   // it blurred behind a "Spoiler" overlay; a click reveals it (handled by the
   // delegated reveal listener). Only treat as a spoiler when the payload is
   // actually media so a plain text message that happens to start with the
-  // marker isn't blurred unexpectedly.
-  if (typeof str === 'string' && str.startsWith('spoiler-img:')) {
+  // marker isn't blurred unexpectedly. One line only: pictures sent together
+  // (#5799) can start with a spoiler and are laid out further down.
+  if (typeof str === 'string' && str.startsWith('spoiler-img:') && !str.includes('\n')) {
     const rest = str.slice('spoiler-img:'.length);
     if (this._isImageUrl(rest) || /^\/uploads\//i.test(rest) || rest.startsWith('e2e-img:')) {
       const inner = this._formatContent(rest);
@@ -37,7 +38,7 @@ _formatContent(str) {
   // E2E encrypted file: e2e-file:{"mime":...,"size":N,"url":"/uploads/...","name":"..."}
   // (#5310, #5308): non-image DM uploads, plus paste-into-PiP, are encrypted
   // before upload and the metadata is wrapped in this marker.
-  if (str.startsWith('e2e-file:')) {
+  if (str.startsWith('e2e-file:') && !str.includes('\n')) {
     try {
       const meta = JSON.parse(str.slice(9));
       if (meta && typeof meta.url === 'string' && meta.url.startsWith('/uploads/')) {
@@ -68,9 +69,14 @@ _formatContent(str) {
   // of those lines shows as the picture or file, and the text around them
   // formats as usual; the link used to print as plain text (#5690, #5689).
   // Only this server's uploads, and never inside a code block.
+  // Pictures and files sent together use the same form (#5799), encrypted DM
+  // ones included, and two or more pictures or videos in a row show as one
+  // grid (app-media-grid.js). A blog post keeps one piece per file, so it
+  // turns the grid off while its post is drawn.
   if (typeof str === 'string' && str.includes('\n') && !str.includes('```')) {
     const mediaLine = (l) => /^(?:spoiler-img:)?\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(l) ||
-      /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l);
+      /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l) ||
+      this._mediaGridKind?.(l) === 'image' || /^e2e-file:\{.*\}$/.test(l);
     const lines = str.split('\n');
     if (lines.some(l => mediaLine(l.trim()))) {
       const parts = [];
@@ -80,9 +86,17 @@ _formatContent(str) {
         text = [];
         if (chunk.trim()) parts.push(`<div class="content-text-part">${this._formatContent(chunk)}</div>`);
       };
-      for (const l of lines) {
-        if (mediaLine(l.trim())) { flush(); parts.push(`<div class="content-media-part">${this._formatContent(l.trim())}</div>`); }
-        else text.push(l);
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i];
+        if (!mediaLine(l.trim())) { text.push(l); continue; }
+        flush();
+        const run = this._mediaGridOff ? [] : (this._mediaGridRun?.(lines, i) || []);
+        if (run.length >= 2) {
+          parts.push(this._mediaGridHtml(run));
+          i += run.length - 1;
+          continue;
+        }
+        parts.push(`<div class="content-media-part">${this._formatContent(l.trim())}</div>`);
       }
       flush();
       return parts.join('');

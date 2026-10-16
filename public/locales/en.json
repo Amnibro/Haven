@@ -481,6 +481,11 @@
     "preview_picture": "Picture",
     "preview_file": "File"
   },
+  "media_grid": {
+    "label": "{{count}} attachments",
+    "more": "{{count}} more",
+    "play_video": "Play video"
+  },
   "utils": {
     "today_at": "Today at {{time}}",
     "yesterday_at": "Yesterday at {{time}}"

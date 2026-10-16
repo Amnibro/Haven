@@ -24,6 +24,7 @@ import ServerBarMethods from './modules/app-server-bar.js?v=4.23.9';
 import MobileMethods from './modules/app-mobile.js?v=4.23.9';
 import MediaMethods    from './modules/app-media.js?v=4.24.3';
 import ImageZoomMethods from './modules/app-image-zoom.js?v=4.23.12';
+import MediaGridMethods from './modules/app-media-grid.js?v=4.24.17';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.24.4';
 import AttachmentMethods from './modules/app-attachments.js?v=4.24.10';
 import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.23.5';
@@ -427,6 +428,7 @@ class HavenApp {
     this._setupDebugSection();
     this._setupLightbox();
     this._setupImageZoom();
+    this._setupMediaGrid();
     this._setupOnlineOverlay();
     this._setupModalExpand();
     this._checkForUpdates();
@@ -544,6 +546,7 @@ Object.assign(HavenApp.prototype,
   MobileMethods,
   MediaMethods,
   ImageZoomMethods,
+  MediaGridMethods,
   FeedAnchorMethods,
   AttachmentMethods,
   AvatarEditorMethods,
