@@ -199,7 +199,7 @@ _renderBadgeAdmin() {
           <div class="badge-admin-actions">
             ${b.kind === 'manual' ? `<button class="btn-sm badge-admin-holders">${esc(t('badges.admin.holders', { n: b.holders }))}</button>` : ''}
             <button class="btn-sm badge-admin-edit"${lock}>${esc(t('badges.admin.edit'))}</button>
-            <button class="btn-sm btn-danger-fill badge-admin-delete"${lock}>${esc(t('badges.admin.delete'))}</button>
+            <button class="btn-sm badge-admin-delete"${lock}>${esc(t('badges.admin.delete'))}</button>
           </div>
           <div class="badge-admin-holder-list" hidden></div>
         </div>`;

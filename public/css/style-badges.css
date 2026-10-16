@@ -78,6 +78,19 @@
 /* The On/Off control is a standard .toggle-row, so it follows the Toggle Style setting. */
 .badge-admin-switch { display: inline-flex; cursor: pointer; }
 .badge-admin-actions { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+/* Delete is a quiet danger button, red text on the row, filled only on
+   hover. The confirm dialog is where the loud red button lives. */
+.badge-admin-actions .badge-admin-delete {
+  background: transparent;
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.badge-admin-actions .badge-admin-delete:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+.badge-admin-actions .badge-admin-delete:disabled:hover { background: transparent; color: var(--danger); }
 .badge-admin-holder-list { flex: 1 0 100%; display: flex; flex-direction: column; gap: 0.25rem; padding-top: 0.25rem; border-top: 1px dashed var(--border); }
 .badge-admin-holder-list[hidden] { display: none; }
 .badge-holder { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; }
