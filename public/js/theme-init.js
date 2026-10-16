@@ -178,6 +178,13 @@
   // Safe mode and a pending recovery reset always start from Haven's base
   // appearance. Preferences stay stored until the user explicitly resets them.
   var t = (_safeMode || _resetPending) ? 'haven' : localStorage.getItem('haven_theme');
+  // Light or dark native controls (dropdown lists, scrollbars), as theme.js
+  // last measured them, so a light theme's first frame is light too. Haven's
+  // base (safe mode, no theme yet) is dark, the stylesheet default.
+  if (t && t !== 'haven') {
+    var _scheme = localStorage.getItem('haven_color_scheme');
+    if (_scheme === 'light' || _scheme === 'dark') document.documentElement.setAttribute('data-color-scheme', _scheme);
+  }
   if (t) {
     if (t.indexOf('file:') === 0) {
       // File theme: inject the CSS link immediately so the theme applies on

@@ -1,0 +1,27 @@
+/* ═══════════════════════════════════════════════════════════
+   FORM CONTROLS: every native <select> in the app
+   Settings, admin, modals and the create-channel box all use plain
+   <select> elements, many with no class of their own, so they used to draw
+   as the system's white control and open a white list on a dark theme.
+   These rules give every one the theme's input colors. :where() keeps them
+   at zero specificity: a component's own select class, Win95, or a
+   published theme still decides size, shape and color.
+   The open list is drawn by the browser. It follows color-scheme (set per
+   theme in style-themes.css), and Chromium also honors each option's
+   background and text color, set below.
+   ═══════════════════════════════════════════════════════════ */
+:where(select) {
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition);
+}
+:where(select:focus) { border-color: var(--accent); }
+:where(select:disabled) { opacity: 0.6; cursor: not-allowed; }
+
+:where(select option, select optgroup) {
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+}
+:where(select option:disabled) { color: var(--text-muted); }

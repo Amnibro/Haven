@@ -90,8 +90,8 @@ function browserCompat(localStorage, sessionStorage) {
   };
 }
 
-function runThemeInit({ theme = 'file:test.theme.css', search = '', cache = [], themes } = {}) {
-  const localStorage = new MemoryStorage({ haven_theme: theme });
+function runThemeInit({ theme = 'file:test.theme.css', search = '', cache = [], themes, stored = {} } = {}) {
+  const localStorage = new MemoryStorage({ haven_theme: theme, ...stored });
   const sessionStorage = new MemoryStorage();
   ThemeCompat.cacheThemes(cache, localStorage);
   const { document, documentElement, links } = createDocument();
@@ -559,6 +559,28 @@ test('safe mode suppresses compatible theme CSS before paint', () => {
   assert.equal(result.links.length, 0);
   assert.equal(result.documentElement.attributes.get('data-theme'), 'haven');
   assert.equal(result.documentElement.attributes.get('data-haven-safe-mode'), '1');
+});
+
+test('pre-paint loader restores the light or dark scheme theme.js last measured', () => {
+  const light = runThemeInit({ theme: 'daylight', stored: { haven_color_scheme: 'light' } });
+  assert.equal(light.documentElement.attributes.get('data-color-scheme'), 'light');
+
+  const file = runThemeInit({ stored: { haven_color_scheme: 'light' } });
+  assert.equal(file.documentElement.attributes.get('data-color-scheme'), 'light');
+
+  const junk = runThemeInit({ theme: 'daylight', stored: { haven_color_scheme: 'purple' } });
+  assert.equal(junk.documentElement.attributes.has('data-color-scheme'), false);
+});
+
+test('Haven, safe mode and a fresh account start from the dark default scheme', () => {
+  const haven = runThemeInit({ theme: 'haven', stored: { haven_color_scheme: 'light' } });
+  assert.equal(haven.documentElement.attributes.has('data-color-scheme'), false);
+
+  const safe = runThemeInit({ theme: 'daylight', search: '?haven-safe-mode=1', stored: { haven_color_scheme: 'light' } });
+  assert.equal(safe.documentElement.attributes.has('data-color-scheme'), false);
+
+  const fresh = runThemeInit({ theme: '', stored: { haven_color_scheme: 'light' } });
+  assert.equal(fresh.documentElement.attributes.has('data-color-scheme'), false);
 });
 
 test('safe mode never fetches or evaluates plugin files', async () => {
