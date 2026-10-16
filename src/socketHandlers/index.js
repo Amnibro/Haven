@@ -75,6 +75,7 @@ const { quietRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const forumUnread = require('../forumUnread');
 const registerForumVotes = require('./forumVotes');
+const registerForumPictureVotes = require('./forumPictureVotes');
 const createLiveAccess = require('./liveAccess');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -2869,6 +2870,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerModCases(socket, ctx);
     registerForumUnread(socket, ctx);
     registerForumVotes(socket, ctx);
+    registerForumPictureVotes(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made

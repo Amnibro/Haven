@@ -628,6 +628,7 @@ if (!sslCert && !sslKey) {
 }
 
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
+let tlsIssue = null;
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -1434,7 +1435,8 @@ app.get('/api/public-config', (req, res) => {
       // login page never offers a button that can only fail. The issuer and
       // client id stay server-side; the client needs neither.
       oidc_enabled: oidcConfig.enabled,
-      oidc_button_label: oidcConfig.enabled ? oidcConfig.buttonLabel : ''
+      oidc_button_label: oidcConfig.enabled ? oidcConfig.buttonLabel : '',
+      tls_issue: tlsIssue
     });
   } catch {
     res.json({ default_theme: '', default_locale: '', server_title: '' });
@@ -3097,7 +3099,6 @@ app.get('/api/bot-commands', (req, res) => {
 // DISCORD IMPORT: upload, preview, execute
 // ═══════════════════════════════════════════════════════════
 const os = require('os');
-const { parseDiscordExport, isReactionEmoji } = require('./src/importDiscord');
 
 // Multer instance for import uploads (ZIP/JSON up to 500 MB)
 const importUpload = multer({
@@ -3119,203 +3120,6 @@ const importUpload = multer({
 // ── Discord import: src/routes/import.js ──
 require('./src/routes/import')({ uploadDiskGuard, app, verifyAdminFromDb, uploadLimiter, importUpload });
 
-// ── Step 2: Execute the import ───────────────────────────
-app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-
-  const { importId, selectedChannels } = req.body;
-  if (!importId || !Array.isArray(selectedChannels) || selectedChannels.length === 0) {
-    return res.status(400).json({ error: 'Missing importId or selectedChannels' });
-  }
-
-  // Validate importId is hex-only (prevent path traversal)
-  if (!/^[a-f0-9]{32}$/.test(importId)) {
-    return res.status(400).json({ error: 'Invalid import ID' });
-  }
-
-  const tempPath = path.join(os.tmpdir(), `haven-import-${importId}.json`);
-  if (!fs.existsSync(tempPath)) {
-    return res.status(404).json({ error: 'Import data expired or not found. Please re-upload.' });
-  }
-
-  try {
-    const data = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
-    const { getDb } = require('./src/database');
-    const db = getDb();
-    const { generateChannelCode } = require('./src/auth');
-    const { generateUniqueChannelCode } = require('./src/channelRotation');
-
-    const stats = { channelsCreated: 0, channelsReused: 0, messagesImported: 0, messagesSkipped: 0, threadsImported: 0 };
-
-    // Where an imported message goes. user_id is NULL: imported messages
-    // belong to no Haven account (#5771, src/importAuthors.js).
-    const insertMsg = db.prepare(`
-      INSERT OR IGNORE INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, is_webhook, imported_from, reply_to, discord_message_id, thread_id, title, tags)
-      VALUES (?, NULL, ?, ?, ?, ?, 0, 'discord', ?, ?, ?, ?, ?)
-    `);
-    const lookupByDiscordId = db.prepare('SELECT id FROM messages WHERE channel_id = ? AND discord_message_id = ?');
-    const toTs = (raw) => {
-      try { return new Date(raw).toISOString().replace('T', ' ').replace('Z', ''); }
-      catch { return raw; }
-    };
-
-    // Adds one channel's (or one thread's) messages, oldest first. Duplicates
-    // (same Discord id in the same channel) are skipped, which is what makes
-    // importing again, or importing what Ferry already carried, safe.
-    const importMessages = (channelId, messages, { threadId = null } = {}) => {
-      const sorted = messages.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      const idMap = {}; // Discord message id -> Haven id, for replies
-      for (const msg of sorted) {
-        const content = (msg.content || '').trim();
-        if (!content) continue;
-        const replyTo = msg.replyTo && idMap[msg.replyTo] ? idMap[msg.replyTo] : null;
-        const result = insertMsg.run(
-          channelId, content, toTs(msg.timestamp), msg.author || 'Unknown', msg.authorAvatar || null,
-          replyTo, msg.discordId || null, threadId, null, null
-        );
-        if (result.changes === 0) {
-          if (msg.discordId) {
-            const existing = lookupByDiscordId.get(channelId, msg.discordId);
-            if (existing) idMap[msg.discordId] = existing.id;
-          }
-          stats.messagesSkipped++;
-          continue;
-        }
-        if (msg.discordId) idMap[msg.discordId] = result.lastInsertRowid;
-        stats.messagesImported++;
-
-        if (msg.isPinned && !threadId) {
-          try {
-            db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)')
-              .run(result.lastInsertRowid, channelId, user.id);
-          } catch (err) {
-            // Do not abort the import over one pin, but do not lose it silently either.
-            console.warn('[import] Could not pin an imported message:', err.message);
-          }
-        }
-        if (Array.isArray(msg.reactions)) {
-          for (const r of msg.reactions) {
-            if (!r || !isReactionEmoji(r.emoji)) continue;
-            try {
-              db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)')
-                .run(result.lastInsertRowid, user.id, r.emoji);
-            } catch { /* a reaction is cosmetic and can number in the thousands; never abort the import over one */ }
-          }
-        }
-      }
-    };
-
-    // A Discord thread inside a channel that is in Haven (#5772): its
-    // messages become a Haven thread there. In a forum the post becomes a
-    // topic, its first message the opening post. In a chat channel the
-    // thread hangs from the message it was started from, or from a line with
-    // its name when that message is not in Haven.
-    const importThread = (parent, channelData) => {
-      const threadDiscordId = channelData.discordId;
-      const messages = channelData.messages || [];
-      let root = lookupByDiscordId.get(parent.id, threadDiscordId);
-      let replies = messages;
-      if (parent.is_forum) {
-        const starter = messages.find(m => m.discordId === threadDiscordId)
-          || messages.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))[0];
-        if (!root) {
-          if (!starter) return;
-          const title = sanitizeText(String(channelData.name || '').trim().replace(/\s+/g, ' ').slice(0, 120)) || 'Untitled';
-          const tags = Array.isArray(channelData.tags) && channelData.tags.length ? JSON.stringify(channelData.tags.slice(0, 5)) : null;
-          const r = insertMsg.run(
-            parent.id, (starter.content || '').trim() || title, toTs(starter.timestamp), starter.author || 'Unknown',
-            starter.authorAvatar || null, null, threadDiscordId, null, title, tags
-          );
-          root = { id: r.lastInsertRowid };
-          stats.messagesImported++;
-        }
-        replies = messages.filter(m => m !== starter);
-      } else if (!root) {
-        const first = messages.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))[0];
-        if (!first) return;
-        const r = insertMsg.run(
-          parent.id, `🧵 ${sanitizeText(String(channelData.name || '').slice(0, 100)) || 'Thread'}`, toTs(first.timestamp),
-          first.author || 'Unknown', first.authorAvatar || null, null, threadDiscordId, null, null, null
-        );
-        root = { id: r.lastInsertRowid };
-      }
-      importMessages(parent.id, replies, { threadId: root.id });
-      stats.threadsImported++;
-    };
-
-    const txn = db.transaction(() => {
-      // Channels first, so a thread finds its parent already in Haven.
-      const entries = [];
-      for (const sel of selectedChannels) {
-        // Find channel data by discordId or original name
-        const channelData = data.channels.find(c =>
-          (sel.discordId && c.discordId === sel.discordId) ||
-          c.name === sel.originalName
-        );
-        if (!channelData || !channelData.messages) continue;
-        entries.push({ sel, channelData });
-      }
-      entries.sort((a, b) => (a.channelData.kind === 'thread') - (b.channelData.kind === 'thread'));
-
-      for (const { sel, channelData } of entries) {
-        const discordChannelId = channelData.discordId || null;
-
-        if (channelData.kind === 'thread' && channelData.parentId) {
-          const parent = db.prepare('SELECT id, is_forum FROM channels WHERE discord_channel_id = ?').get(channelData.parentId);
-          if (parent) { importThread(parent, channelData); continue; }
-          // Its channel is not in Haven: the thread gets a channel of its own.
-        }
-
-        const channelName = [...(sel.name || channelData.name)].slice(0, 50).join('');
-        const code = generateUniqueChannelCode(db, generateChannelCode);
-
-        // Reuse an existing Haven channel if it was created from the same Discord channel.
-        // This makes re-importing (or importing a second overlapping export) idempotent:
-        // new messages are appended, duplicates are skipped, and native Haven messages are untouched.
-        let channelId;
-        if (discordChannelId) {
-          const existing = db.prepare('SELECT id FROM channels WHERE discord_channel_id = ?').get(discordChannelId);
-          if (existing) {
-            channelId = existing.id;
-            stats.channelsReused++;
-          }
-        }
-
-        if (!channelId) {
-          // A Discord forum (or media channel) becomes a Haven forum with the
-          // same tags; its posts come in as topics (#5772).
-          const isForum = channelData.kind === 'forum' || channelData.kind === 'media';
-          const forumTags = isForum && Array.isArray(channelData.tags) && channelData.tags.length
-            ? JSON.stringify(channelData.tags.slice(0, 20).map(name => ({ name })))
-            : null;
-          const chResult = db.prepare(
-            'INSERT INTO channels (name, code, created_by, topic, discord_channel_id, is_forum, forum_tags) VALUES (?, ?, ?, ?, ?, ?, ?)'
-          ).run(channelName, code, user.id, channelData.topic || '', discordChannelId, isForum ? 1 : 0, forumTags);
-          channelId = chResult.lastInsertRowid;
-
-          // Auto-join the importing admin
-          db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, user.id);
-          stats.channelsCreated++;
-        }
-
-        importMessages(channelId, channelData.messages);
-      }
-    });
-
-    txn();
-
-    // Clean up temp file
-    try { fs.unlinkSync(tempPath); } catch { /* cleanupTempImports() sweeps any haven-import leftover */ }
-
-    res.json({ success: true, ...stats });
-  } catch (err) {
-    console.error('Import execute error:', err);
-    res.status(500).json({ error: 'Import failed: ' + err.message });
-  }
-});
-
 // ── Server templates: src/routes/serverTemplate.js ──
 require('./src/routes/serverTemplate')({ app, verifyAdminFromDb, uploadLimiter, uploadDiskGuard, THEMES_DIR, late });
 
@@ -3336,6 +3140,15 @@ if (useSSL) {
     };
     server = createHttpsServer(sslOptions, app);
     console.log('🔒 HTTPS enabled');
+    try {
+      const { inspectCertChain, certAdvice } = require('./src/certCheck');
+      const status = inspectCertChain(sslOptions.cert);
+      tlsIssue = status.issue;
+      const advice = certAdvice(status, sslCert);
+      if (advice) console.warn(`⚠️  TLS certificate problem: ${advice}`);
+    } catch (err) {
+      console.warn('⚠️  Could not check the TLS certificate chain:', err.message);
+    }
 
     // Also start an HTTP server that redirects to HTTPS (hardened)
     const httpRedirect = express();
@@ -3377,6 +3190,7 @@ if (useSSL) {
     });
   } catch (err) {
     console.error('Failed to load SSL certs, falling back to HTTP:', err.message);
+    if (err.code === 'EACCES') console.error(`   Haven cannot read ${err.path || 'the certificate files'} as this user. Certbot keeps /etc/letsencrypt/live and /etc/letsencrypt/archive readable by root only: copy fullchain.pem and privkey.pem somewhere Haven can read (a certbot deploy hook keeps them fresh), or grant this user read access.`);
     server = createServer(app);
   }
 } else {
@@ -3854,9 +3668,9 @@ server.on('error', (err) => {
         ? `this machine has no network interface with address ${HOST}; check HOST in your .env`
         : process.platform === 'win32'
           ? `Windows refused port ${PORT}. Ports below 1024 need an elevated prompt; otherwise the port is usually inside a reserved range held by Hyper-V/WSL (see: netsh interface ipv4 show excludedportrange protocol=tcp). Pick another PORT in your .env, or free the range with: net stop winnat && net start winnat`
-          : `no permission to bind port ${PORT} (ports below 1024 need elevation)`;
+          : `no permission to bind port ${PORT}. Ports below 1024 need root. Keep Haven on a port above 1024 (the default is 3000) and forward 443 to it on your router, or put a reverse proxy such as Caddy or nginx in front`;
     console.error(`\n❌ Haven could not start: ${why}`);
-    console.error(`   Stop the other process or change PORT in your .env, then start Haven again.`);
+    console.error(err.code === 'EADDRINUSE' ? '   Stop the other process or change PORT in your .env, then start Haven again.' : '   Fix that or change PORT/HOST in your .env, then start Haven again.');
     logCrash('Fatal listen error (exiting)', err);
     process.exit(1);
   }

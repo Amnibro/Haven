@@ -278,32 +278,9 @@ _setThreadPiPEnabled(enabled) {
   localStorage.setItem('haven_thread_panel_pip', isOn ? '1' : '0');
 
   if (isOn) {
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem('haven_thread_panel_pip_rect') || 'null'); } catch { /* corrupt saved position: use the default placement */ }
-
-    const minW = 320;
-    const maxW = Math.min(760, window.innerWidth - 28);
-    const minH = 240;
-    const footerOffset = (() => {
-      const raw = getComputedStyle(document.body).getPropertyValue('--thread-footer-offset');
-      const v = parseInt(raw, 10);
-      return Number.isFinite(v) ? v : 0;
-    })();
-    const maxH = Math.max(minH, window.innerHeight - footerOffset - 28);
-
-    const width = Math.max(minW, Math.min(maxW, (saved && saved.width) || panel.offsetWidth || 420));
-    const height = Math.max(minH, Math.min(maxH, (saved && saved.height) || panel.offsetHeight || 460));
-    const defaultLeft = Math.max(0, window.innerWidth - width - 14);
-    const defaultTop = Math.max(0, window.innerHeight - footerOffset - height - 14);
-    const left = Math.max(0, Math.min(window.innerWidth - width, (saved && Number.isFinite(saved.left)) ? saved.left : defaultLeft));
-    const top = Math.max(0, Math.min(window.innerHeight - footerOffset - height, (saved && Number.isFinite(saved.top)) ? saved.top : defaultTop));
-
-    panel.style.width = `${Math.round(width)}px`;
-    panel.style.height = `${Math.round(height)}px`;
-    panel.style.left = `${Math.round(left)}px`;
-    panel.style.top = `${Math.round(top)}px`;
-    panel.style.right = 'auto';
-    panel.style.bottom = 'auto';
+    // With no saved size, the pop-out starts at the docked panel's size.
+    this._threadPiPDefaults = { width: panel.offsetWidth || 420, height: panel.offsetHeight || 460 };
+    this._applyThreadPiPGeometry(panel);
   } else {
     panel.style.height = '';
     panel.style.left = '';

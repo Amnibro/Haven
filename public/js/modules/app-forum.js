@@ -843,8 +843,7 @@ _setupSettingsSearch() {
   const input = wrap.querySelector('input');
   const apply = () => {
     const q = input.value.trim().toLowerCase();
-    const sections = modal.querySelectorAll('.settings-section');
-    sections.forEach(sec => {
+    modal.querySelectorAll('.settings-section:not(#admin-mod-panel), #admin-mod-panel > .admin-settings').forEach(sec => {
       const hit = !q || sec.textContent.toLowerCase().includes(q);
       sec.classList.toggle('settings-search-hidden', !hit);
       const navItem = sec.id ? nav.querySelector(`.settings-nav-item[data-target="${sec.id}"]`) : null;
@@ -855,6 +854,7 @@ _setupSettingsSearch() {
       while (sib && !sib.classList.contains('settings-nav-group-label')) { if (sib.classList.contains('settings-nav-item') && !sib.classList.contains('settings-search-hidden')) any = true; sib = sib.nextElementSibling; }
       label.classList.toggle('settings-search-hidden', !any && !!q);
     });
+    modal.querySelectorAll('.settings-body').forEach(body => { body.scrollTop = 0; });
   };
   input.addEventListener('input', apply);
   modal.addEventListener('keydown', (e) => {
@@ -884,6 +884,7 @@ _forumApplyThreadChrome(parentId) {
   if (!topic) {
     panel.classList.remove('thread-panel-forum');
     panel.style.removeProperty('--thread-forum-left');
+    panel.style.removeProperty('--thread-forum-right');
     bar.style.display = 'none';
     bar.innerHTML = '';
     if (icon) icon.textContent = '🧵';
@@ -891,17 +892,8 @@ _forumApplyThreadChrome(parentId) {
   }
   const full = this._forumTopicFullPref();
   panel.classList.toggle('thread-panel-forum', full);
-  if (!this._forumThreadResizeBound) {
-    this._forumThreadResizeBound = true;
-    window.addEventListener('resize', () => this._forumSyncThreadLeft());
-    // Dragging the sidebar wider or narrower moves the chat column without
-    // resizing the window, and left the open topic behind it (#5755).
-    const header = document.querySelector('.channel-header');
-    if (header && typeof ResizeObserver === 'function') {
-      new ResizeObserver(() => this._forumSyncThreadLeft()).observe(header);
-    }
-  }
-  this._forumSyncThreadLeft();
+  this._forumWatchChatColumn();
+  this._forumSyncThreadEdges();
 
   const ch = this.channels.find(c => c.code === this.currentChannel);
   const title = document.getElementById('thread-panel-title');
@@ -935,14 +927,53 @@ _forumApplyThreadChrome(parentId) {
   });
 },
 
-// The panel is fixed to the window, so its left edge is set to the chat
-// column's left edge and kept there when the window changes size.
-_forumSyncThreadLeft() {
+// The panel is fixed to the window, so both its edges are copied from the
+// chat column and kept there while the column moves or changes size. The
+// right edge used to stay at the side panel's width (or the window's edge),
+// so the forum showed through on one side or the member list was covered.
+_forumSyncThreadEdges() {
   const panel = document.getElementById('thread-panel');
   if (!panel || !panel.classList.contains('thread-panel-forum')) return;
-  const header = document.querySelector('.channel-header');
-  const left = header ? Math.max(0, Math.round(header.getBoundingClientRect().left)) : 0;
-  panel.style.setProperty('--thread-forum-left', left + 'px');
+  const column = document.querySelector('.main') || document.querySelector('.channel-header');
+  if (!column) return;
+  const r = column.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const left = Math.max(0, Math.round(r.left));
+  const right = Math.max(0, Math.round(vw - r.right));
+  // Written only when they change: this runs on every transition end.
+  if (panel.style.getPropertyValue('--thread-forum-left') !== left + 'px') panel.style.setProperty('--thread-forum-left', left + 'px');
+  if (panel.style.getPropertyValue('--thread-forum-right') !== right + 'px') panel.style.setProperty('--thread-forum-right', right + 'px');
+},
+
+// What moves the chat column: the window, dragging the sidebar or the member
+// list (#5755), collapsing or hiding the member list, and layout mods that
+// reorder or restyle the columns. Bound once; each check is cheap and does
+// nothing unless a topic is open full width.
+_forumWatchChatColumn() {
+  if (this._forumThreadResizeBound) return;
+  this._forumThreadResizeBound = true;
+  const sync = () => this._forumSyncThreadEdges();
+  window.addEventListener('resize', sync);
+  // Collapsing the member list can animate; measure again once it settles.
+  document.addEventListener('transitionend', sync, true);
+  const column = document.querySelector('.main');
+  if (column && typeof ResizeObserver === 'function') new ResizeObserver(sync).observe(column);
+  if (typeof MutationObserver === 'function') {
+    const mo = new MutationObserver(sync);
+    // The row holding the columns, and the page's styles: a mod that
+    // reorders the columns or adds a stylesheet can move the chat column
+    // without changing its size, which the ResizeObserver would miss.
+    const row = column && column.parentElement;
+    if (row) mo.observe(row, { attributes: true, attributeFilter: ['class', 'style'], childList: true });
+    [document.documentElement, document.body].forEach(el => mo.observe(el, { attributes: true, attributeFilter: ['class', 'style'] }));
+    mo.observe(document.head, { childList: true });
+    for (const id of ['right-sidebar', 'sb-sidebar-panel']) {
+      const el = document.getElementById(id);
+      if (el) mo.observe(el, { attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+    }
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) mo.observe(sidebar, { attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+  }
 },
 
 // The whole first post, rendered like a message, above the replies.

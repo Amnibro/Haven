@@ -554,6 +554,8 @@
     "stop_camera": "Desligar câmera",
     "sharing_started": "{{who}} começou a compartilhar a tela",
     "status_muted": "Silenciado",
+    "status_push_to_mute": "Silenciado (segurar para silenciar)",
+    "push_to_mute_held": "Segurar para silenciar está ativo. Seu microfone fica silenciado até você soltar a tecla.",
     "status_active": "Ativo",
     "status_deafened": "Sem áudio",
     "status_off": "Desligado",
@@ -1827,7 +1829,9 @@
       "binding_hint": "Modificadores isolados (Alt / Ctrl / Shift) e botões extras do mouse (Mouse4 / Mouse5) podem ser vinculados aqui. Alguns atalhos exigem uma versão recente do Haven Desktop para serem registrados no sistema operacional.",
       "ptt_hold": "segurar",
       "ptt_toggle_mode": "alternar",
-      "ptt_mode_title": "Como a tecla de push-to-talk se comporta"
+      "ptt_mode_title": "Como a tecla de push-to-talk se comporta",
+      "ptm": "Segurar para silenciar",
+      "ptm_hint": "Segure para silenciar o microfone. Útil na mesma tecla do push-to-talk de um jogo."
     },
     "desktop_app_section": {
       "title": "Aplicativo para desktop",
@@ -2331,7 +2335,7 @@
       "max_upload_hint": "Tamanho máximo de arquivo que os usuários podem enviar em MB (padrão: 25). Não há limite rígido; o espaço disponível em disco é o fator limitante.",
       "max_attachments_hint": "Quantos arquivos alguém pode juntar numa mensagem arrastando, colando ou escolhendo (1 a 50, padrão 10). Cada um ainda precisa caber no limite de tamanho acima.",
       "max_tags_per_attachment": "Máximo de tags por anexo",
-      "max_tags_per_attachment_hint": "Quantas tags de upload alguém pode colocar num anexo (1 a 10, padrão 3).",
+      "max_tags_per_attachment_hint": "Quantas tags de upload alguém pode colocar num anexo (1 a 20, padrão 3).",
       "max_tag_len": "Tamanho máximo da tag (caracteres)",
       "max_tag_len_hint": "Máximo de caracteres no nome de uma tag de upload (1 a 50, padrão 20).",
       "tags_title": "Tags",

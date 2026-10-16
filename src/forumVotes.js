@@ -7,7 +7,9 @@
  * channels.forum_votes is the per-forum switch: 0 off (the default),
  * 1 likes, 2 likes and dislikes. forum_votes holds one row per person per
  * topic, value 1 for a like and -1 for a dislike; taking a vote back deletes
- * the row. Rows go with their topic or their voter through the cascades.
+ * the row. In a blog forum each picture of a post is its own message (the
+ * topic, or one of its author's additions), so picture votes (#5784) are
+ * rows here too, keyed by that message. Rows go with their topic or their voter through the cascades.
  * Turning votes off hides them without deleting any, so turning them back
  * on brings the counts back.
  */
@@ -53,6 +55,15 @@ function votesFor(db, userId, ids) {
   return out;
 }
 
+// The same for the pieces of a blog post (#5784), as a plain object keyed by
+// message id, with every piece present even before anyone votes.
+function pieceVotesFor(db, userId, ids) {
+  const found = votesFor(db, userId, ids);
+  const out = {};
+  for (const id of ids) out[id] = found.get(id) || { likes: 0, dislikes: 0, mine: 0 };
+  return out;
+}
+
 // Set one person's vote: 1, -1, or 0 to take it back.
 function setVote(db, messageId, userId, value) {
   if (value === 0) {
@@ -64,4 +75,32 @@ function setVote(db, messageId, userId, value) {
   return totalsOf(db, messageId);
 }
 
-module.exports = { MODES, MODE_NAMES, migrateForumVotes, totalsOf, votesFor, setVote };
+// Why this person may not cast `value` on a message in this forum, or null
+// when they may. Topic votes and picture votes (#5784) share it, so both
+// follow the same rules. `row` carries channel_id, role_gate and
+// forum_votes. Any error refuses the vote.
+function voteRefusal(ctx, user, row, value) {
+  const { db } = ctx;
+  let allowed = false;
+  try {
+    // Only people who can see the forum may vote in it.
+    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, user.id);
+    const banned = db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id);
+    allowed = !!member && !banned && (user.isAdmin || ctx.roleGateAllows(user.id, { id: row.channel_id, role_gate: row.role_gate }));
+  } catch (err) {
+    console.warn('[forum-votes] access check failed, refusing the vote:', err.message);
+    allowed = false;
+  }
+  if (!allowed) return 'Not a member of this channel';
+
+  const mode = row.forum_votes || 0;
+  if (mode === MODES.off) return 'Votes are turned off in this forum';
+  if (value === -1 && mode !== MODES.both) return 'Dislikes are turned off in this forum';
+
+  // A muted member cannot vote, the same as reacting.
+  const mute = db.prepare("SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime('now') LIMIT 1").get(user.id);
+  if (mute) return 'You are in a timeout';
+  return null;
+}
+
+module.exports = { MODES, MODE_NAMES, migrateForumVotes, totalsOf, votesFor, pieceVotesFor, setVote, voteRefusal };

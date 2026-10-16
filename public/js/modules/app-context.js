@@ -872,10 +872,12 @@ async _setupPushNotifications() {
     if (toggle) toggle.disabled = true;
     let reason = t('context.push_error.service_worker', { error: err.message });
     let helpType = '';
-    const host = location.hostname;
-    const isSelfSigned = location.protocol === 'https:' && host !== 'localhost' && host !== '127.0.0.1' && !host.endsWith('.trycloudflare.com');
-    if (err.name === 'SecurityError' || (err.message && err.message.includes('SSL')) || isSelfSigned) {
-      reason = t('context.push_error.ssl_required');
+    if (err.name === 'SecurityError' || /SSL|certificate/i.test(err.message || '')) {
+      const issue = await fetch('/api/public-config').then(r => r.json()).then(d => d.tls_issue).catch(err => {
+        console.warn('[push] could not ask the server about its certificate:', err.message);
+        return null;
+      });
+      reason = t(issue === 'missing_chain' ? 'context.push_error.ssl_chain' : issue === 'untrusted' ? 'context.push_error.ssl_untrusted' : issue === 'expired' ? 'context.push_error.ssl_expired' : 'context.push_error.ssl_required');
     }
     if (isBrave) {
       reason = t('context.push_error.brave_setup');

@@ -781,15 +781,12 @@ _updateMessageReactions(messageId, reactions) {
   const els = document.querySelectorAll(`[data-msg-id="${messageId}"]`);
   if (!els.length) return;
 
+  // A reader at the bottom of the chat, a thread or the DM window stays
+  // there while the row grows the message, and again when a custom emoji in
+  // it loads: the feed anchor (app-feed-anchor.js) sees every change in a
+  // message's height.
   const wasAtBottom = this._coupledToBottom;
   const html = this._renderReactions(messageId, reactions);
-  // A message whose bottom edge was on screen keeps it there when the row
-  // grows it, so a reaction on a message at the bottom of the chat is not
-  // left under the message box (the feed is not always counted as at the
-  // bottom, and a custom emoji in the row grows it again when it loads).
-  const box = document.getElementById('messages');
-  const main = box ? box.querySelector(`[data-msg-id="${messageId}"]`) : null;
-  const keep = !!main && !wasAtBottom && this._messageBottomVisible(main);
 
   els.forEach((msgEl) => {
     const oldRow = msgEl.querySelector('.reactions-row');
@@ -800,41 +797,6 @@ _updateMessageReactions(messageId, reactions) {
   });
 
   if (wasAtBottom) this._scrollToBottom(true);
-  else if (keep) this._revealMessageBottom(main);
-  if (main && (wasAtBottom || keep)) {
-    main.querySelectorAll('.reactions-row img').forEach(img => {
-      if (img.complete) return;
-      img.addEventListener('load', () => {
-        if (this._coupledToBottom) this._scrollToBottom(true);
-        else this._revealMessageBottom(main);
-      }, { once: true });
-    });
-  }
-},
-
-// The visible bottom of the chat: the feed's own edge, or the top of the
-// message box where a layout lets it overlap the feed.
-_feedVisibleBottom() {
-  const box = document.getElementById('messages');
-  if (!box) return 0;
-  let bottom = box.getBoundingClientRect().bottom;
-  const input = document.querySelector('.message-input-area');
-  if (input && input.offsetParent) bottom = Math.min(bottom, input.getBoundingClientRect().top);
-  return bottom;
-},
-
-_messageBottomVisible(el) {
-  const box = document.getElementById('messages');
-  if (!box || !el) return false;
-  const r = el.getBoundingClientRect();
-  return r.bottom > box.getBoundingClientRect().top && r.bottom <= this._feedVisibleBottom() + 4;
-},
-
-_revealMessageBottom(el) {
-  const box = document.getElementById('messages');
-  if (!box || !el || !el.isConnected) return;
-  const over = el.getBoundingClientRect().bottom - this._feedVisibleBottom();
-  if (over > 0) box.scrollTop += over + 6;
 },
 
 // ═══════════════════════════════════════════════════════

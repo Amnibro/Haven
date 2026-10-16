@@ -915,6 +915,9 @@ _appendMessage(message, forceScroll = false) {
   }
 
   const forumFeed = this._isForumFeed();
+  // A feed showing its newest message follows the new one, even when no
+  // scroll event coupled it (a jump to a message already on screen).
+  if (!forceScroll && !this._coupledToBottom && this._feedAtEnd?.()) this._coupledToBottom = true;
   const wasAtBottom = forceScroll || this._coupledToBottom;
   const nearTop = container.scrollTop < 40;
   const msgEl = this._createMessageEl(message, forumFeed ? null : prevMsg);

@@ -542,6 +542,7 @@
 }
 @keyframes shortcut-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 .shortcut-btns { display: flex; gap: 0.25rem; }
+.shortcut-label .shortcut-hint { display: block; margin: 0.125rem 0 0; font-size: 0.6875rem; }
 
 /* ── Desktop App preference rows ─── */
 .desktop-pref-row { margin-bottom: 0.75rem; }

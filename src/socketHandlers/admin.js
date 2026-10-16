@@ -283,7 +283,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'cleanup_max_uploads_mb') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 10000000) return; value = String(n); }
     if (key === 'max_upload_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 102400) return; }
     if (key === 'max_attachments') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 50) return; } // (#5561)
-    if (key === 'max_tags_per_attachment') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 10) return; } // (#tagging phase 4)
+    if (key === 'max_tags_per_attachment') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 20) return; } // (#tagging phase 4)
     if (key === 'max_tag_len') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 50) return; } // (#tagging phase 4)
     if (key === 'max_poll_options') { const n = parseInt(value); if (isNaN(n) || n < 2 || n > 25) return; }
     if (key === 'max_message_chars') { const n = parseInt(value); if (isNaN(n) || n < 200 || n > 100000) return; }
