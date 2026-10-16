@@ -349,6 +349,7 @@ test('theme metadata parser preserves existing fields and exposes compatibility'
     compatibility: 'compatible',
     compatible: true,
     palette: false,
+    swatch: null,
   });
 });
 
