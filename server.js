@@ -3668,7 +3668,7 @@ server.on('error', (err) => {
         ? `this machine has no network interface with address ${HOST}; check HOST in your .env`
         : process.platform === 'win32'
           ? `Windows refused port ${PORT}. Ports below 1024 need an elevated prompt; otherwise the port is usually inside a reserved range held by Hyper-V/WSL (see: netsh interface ipv4 show excludedportrange protocol=tcp). Pick another PORT in your .env, or free the range with: net stop winnat && net start winnat`
-          : `no permission to bind port ${PORT}. Ports below 1024 need elevation: on Linux run  sudo setcap 'cap_net_bind_service=+ep' "${process.execPath}"  (or keep Haven on a high port behind a reverse proxy or a port forward to 443)`;
+          : `no permission to bind port ${PORT}. Ports below 1024 need root. Keep Haven on a port above 1024 (the default is 3000) and forward 443 to it on your router, or put a reverse proxy such as Caddy or nginx in front`;
     console.error(`\n❌ Haven could not start: ${why}`);
     console.error(err.code === 'EADDRINUSE' ? '   Stop the other process or change PORT in your .env, then start Haven again.' : '   Fix that or change PORT/HOST in your .env, then start Haven again.');
     logCrash('Fatal listen error (exiting)', err);
