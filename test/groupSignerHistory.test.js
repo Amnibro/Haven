@@ -68,3 +68,18 @@ test('a message under a key the author never published stays hidden', async () =
   assert.equal(r.ok, false);
   assert.equal(r.plaintext ?? null, null);
 });
+
+test('a message open in the main view and a pop-out is checked once, not hidden', async () => {
+  const s = await signer();
+  const { app, send } = await makeApp([s.jwk]);
+  const ch = app.channels[0];
+  const msg = { id: 7, user_id: 2, content: await send('seen twice', s.pair) };
+  await app._decryptGroupMessages([msg], ch);
+  await app._decryptGroupMessages([msg], ch);
+  assert.equal(msg.content, 'seen twice');
+  assert.equal(msg._e2eVerified, true);
+  // Plain text from the server is still refused, whatever it claims.
+  const forged = { id: 8, user_id: 2, content: 'not signed', _e2eVerified: true };
+  await app._decryptGroupMessages([forged], ch);
+  assert.equal(forged.content, 'groups.cannot_verify');
+});

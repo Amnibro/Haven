@@ -443,7 +443,14 @@ async _decryptGroupMessages(messages, ch) {
   const fail = (r, id) => (r.reason === 'no-key' ? t('groups.no_key')
     : r.reason === 'signer-changed' ? t('groups.signer_changed', { name: this._groupMemberName(ch.code, id) })
     : t('groups.cannot_verify'));
+  // A message open in both the main view and a pop-out comes through here
+  // twice as the same object. Its second pass would find plain text and hide
+  // it, so each object is checked once. Kept on this device, not in the
+  // message, so the server cannot mark one as checked.
+  if (!this._groupDecrypted) this._groupDecrypted = new WeakSet();
   for (const msg of messages) {
+    if (this._groupDecrypted.has(msg)) continue;
+    this._groupDecrypted.add(msg);
     // Membership lines are drawn from ids by _groupNoticeText, never shown as
     // text, so they need no signature.
     if (msg.type === 'notice') continue;
