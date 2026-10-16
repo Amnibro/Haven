@@ -6,6 +6,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.25.0] - 2026-10-16
+
+Profile badges, pictures sent together as one message, push to mute, a new
+theme picker, moving messages into threads, silent messages, and a long list
+of fixes.
+
+### Added
+- Profile badges: admins (or anyone given the new Manage Badges permission) make badges in Settings > Admin > Badges, with a built-in icon, an emoji or an uploaded picture. Badges can be earned automatically (time on the server, messages posted, forum likes received), come with a role, or be given by hand. They show on profile cards, and members can hide their own (#5632).
+- Pictures sent together arrive as one message in a grid, up to ten per message, with a +N tile past nine. Clicking a picture opens the viewer on that message's pictures. Admins choose grid or full size as the server default under Uploads & Limits, and anyone can pick their own under Image Display (#5799).
+- Push to mute: a new hold shortcut under Desktop shortcuts mutes your mic while it is held, and works while a game has focus. Mute wins over push to talk. Needs Haven Desktop 1.8.0.
+- A new theme picker: a searchable gallery with preview cards, with Community and Seasonal sections. Admins publish themes straight from the picker; members see the built-in themes and the published ones.
+- Move selected messages into a thread: while selecting messages, hover any message (or open its menu) and choose Move here as thread. It works across channels, and an existing thread merges with the moved messages in time order. Phones get Select messages in the message menu.
+- Silent messages: start a message with @silent, or use the muted bell in the message box, to send without sounds, pop-ups or push.
+- Upload tags can be limited to a role in Settings > Tags (#5751), and attachments can carry up to 20 tags (#5790, thanks Amnibro).
+- Like and dislike on each picture of a blog post, when the forum has votes on (#5784).
+- Listen Together follows the keyboard's media keys and shows in the system media overlay.
+- Threads with replies you have not seen show "N new" on the thread chip, a count on the Threads button and a dot in the sidebar.
+- Up arrow in an empty thread box edits your last reply there.
+- Ferry sends attachments addressed to Discord, in DMs and as spoilers (#5795, thanks Amnibro).
+- The server checks its TLS certificate chain at startup and explains port bind failures (#5796, thanks Amnibro).
+- The Discord import and Ferry pairing show which Discord channels the bot cannot read, with how to fix it.
+
+### Changed
+- Phone and browser push follows the Notifications switch in Settings > Sounds. With it off (the default), pushes come only for DMs, replies to you, and pings of you, by name, @everyone, @here or one of your roles.
+- Sounds for thread replies play only for threads you started, replied in or have open. Mentions and replies to you always come through.
+- Move to brings a moved message's thread replies along and is recorded in the audit log. Role menus, Discord-paired forum topics and blog forums cannot be moved.
+- Ferry relays only the sender's own uploads to Discord.
+- Every dropdown follows the active theme, light or dark.
+- The Discord import writes messages in the background with a progress count, so a proxy cannot cut a long import off.
+- Settings search narrows the Admin tab down one section at a time (#5792, thanks Amnibro).
+
+### Fixed
+- Reactions and new messages kept the feed at the bottom only part of the time, in the chat, threads, DM pop-outs and blog topics.
+- A thread kept jumping to the bottom while you read further up. It now stays put and shows a "new replies" pill.
+- Thread messages repeated a reply line pointing at the thread's own first post, and the thread header showed a picture's file address.
+- Clicking a reply line that points at a picture now brings the picture into view in threads too.
+- Cameras could stay invisible until someone reconnected.
+- A Join prompt for a share that had already ended opened an empty stream tile.
+- Uneven gaps between grouped messages on phones.
+- Full width forum topics did not cover the whole chat column.
+- A new account showed the Custom palette instead of Haven's colours.
+- Reply, Quote and Thread showed on read-only channels for members who cannot post (#5791, thanks Amnibro).
+- DM and thread pop-outs left the screen after a resize, and a squeezed pop-out lost its saved size (#5798, thanks Amnibro).
+- A Discord import finished but reported a failure behind proxies such as Cloudflare.
+
+Haven Desktop 1.8.0 ships alongside this release.
+
 ## [4.24.0] - 2026-10-15
 
 Security fixes, zoom in the picture viewer, birthdays, a full Chinese
