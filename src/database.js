@@ -1675,6 +1675,8 @@ function initDatabase() {
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to) WHERE reply_to IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_destruct_at ON messages(destruct_at) WHERE destruct_at IS NOT NULL");
+  // Silent messages: no sound, pop-up or push for anyone (src/silentMessages.js).
+  addColumn('messages', 'silent', 'INTEGER NOT NULL DEFAULT 0');
 
   // Encrypted DM files (#5699). Deleting a message by any route (one message,
   // a whole DM or channel, auto-cleanup, a purge) notes its files here, and a

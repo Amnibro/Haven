@@ -1506,6 +1506,7 @@ Content-Type: application/json
 - `recipient_id` (required when `ephemeral` is `true`): user id that should receive the private bot message
 - `reply_to` (optional): id of a message in the same channel to reply to
 - `thread_id` (optional): id of a top-level message in the bot's channel; the message is posted as a reply inside that thread (not combinable with `ephemeral`)
+- `silent` (optional): when `true`, the message makes no sound, pop-up or push for anyone; starting `content` with `@silent ` does the same
 
 Ephemeral example:
 
