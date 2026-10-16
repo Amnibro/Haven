@@ -1332,22 +1332,43 @@ body:has(#thread-panel.thread-panel-forum:not(.pip)) :is(#sidebar-toggle-btn, #s
 }
 /* Compact thread reply: grouped under the previous reply from the same
    author. Avatar/author header are dropped; a timestamp shows in the avatar
-   gutter on hover, like the main channel's compact rows. */
-.thread-message.thread-compact {
+   gutter on hover, like the main channel's compact rows.
+   They sit as close together as the main channel's follow-ups: the small
+   gap goes above a follow-up, and the full gap only between authors. The
+   gutter used to keep the 28 px avatar height and the row its 4 px padding,
+   so every one-line follow-up stood about twice its height apart. */
+.thread-message:has(+ .thread-message.thread-compact) {
   margin-bottom: 0.125rem;
+}
+.thread-message.thread-compact .thread-msg-row {
+  padding-top: 0.0625rem;
+  padding-bottom: 0.0625rem;
+}
+.thread-msg-avatar.thread-msg-compact-spacer {
+  height: auto;
 }
 .thread-msg-compact-spacer {
   background: transparent !important;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
 .thread-compact-time {
   font-size: 0.625rem;
+  /* One line of reply text tall, so the time lines up with the first line. */
+  line-height: 1.1375rem;
   color: var(--text-muted);
   opacity: 0;
   transition: opacity var(--transition);
   white-space: nowrap;
+}
+/* A blog post's pictures keep their spacing (#5742). */
+.blog-post-parts .thread-message.thread-compact {
+  margin-bottom: 0.125rem;
+}
+.blog-post-parts .thread-message.thread-compact .thread-msg-row {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
 }
 .thread-message.thread-compact:hover .thread-compact-time {
   opacity: 1;
