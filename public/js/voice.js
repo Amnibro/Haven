@@ -1109,6 +1109,7 @@ class VoiceManager {
     // Someone started their webcam
     this.socket.on('webcam-started', (data) => {
       this.webcamUsers.add(data.userId);
+      this._claimWebcamTrack(data.userId);
       if (this.onWebcamStatusChange) this.onWebcamStatusChange();
     });
 
@@ -1154,7 +1155,10 @@ class VoiceManager {
     // Late joiner: server tells us about active webcam users
     this.socket.on('active-webcam-users', (data) => {
       if (data && data.users) {
-        data.users.forEach(u => this.webcamUsers.add(u.id));
+        data.users.forEach(u => {
+          this.webcamUsers.add(u.id);
+          this._claimWebcamTrack(u.id);
+        });
         if (this.onWebcamStatusChange) this.onWebcamStatusChange();
       }
     });
@@ -1379,6 +1383,39 @@ class VoiceManager {
       const track = vid && vid.srcObject && vid.srcObject.getVideoTracks?.()[0];
       return track ? track.id : null;
     } catch { return null; }
+  }
+
+  // Show a peer's camera track and follow it. The track id is remembered so
+  // _deliverScreenFromReceivers can tell it apart from a screen share the
+  // same peer sends at the same time.
+  _deliverWebcamTrack(userId, track, sourceStream) {
+    const p = this.peers.get(userId);
+    if (p) {
+      p._webcamTrackId = track.id;
+      if (p._unclaimedVideo?.track === track) p._unclaimedVideo = null;
+    }
+    const camStream = sourceStream || new MediaStream([track]);
+    if (this.onWebcamStream) this.onWebcamStream(userId, camStream);
+    track.onunmute = () => {
+      setTimeout(() => {
+        const freshStream = new MediaStream([track]);
+        if (this.onWebcamStream) this.onWebcamStream(userId, freshStream);
+      }, 150);
+    };
+    track.onended = () => {
+      if (this.onWebcamStream) this.onWebcamStream(userId, null);
+    };
+  }
+
+  // webcam-started came in after the camera's track: show the track that
+  // arrived without a label.
+  _claimWebcamTrack(userId) {
+    const p = this.peers.get(userId);
+    const pending = p?._unclaimedVideo;
+    if (!pending) return;
+    p._unclaimedVideo = null;
+    if (pending.track.readyState !== 'live' || pending.track.id === p._screenTrackId) return;
+    this._deliverWebcamTrack(userId, pending.track, pending.stream);
   }
 
   _deliverScreenFromReceivers(sharerId, { skipTrackId = null } = {}) {
@@ -3189,22 +3226,7 @@ class VoiceManager {
           this.webcamUsers.has(userId);
 
         if (isWebcamTrack && !isScreenTrack) {
-          // Route to webcam callback. Remember the track id so
-          // _deliverScreenFromReceivers can exclude it when this peer is
-          // sending webcam and screen at the same time.
-          const p = this.peers.get(userId);
-          if (p) p._webcamTrackId = track.id;
-          const camStream = sourceStream || new MediaStream([track]);
-          if (this.onWebcamStream) this.onWebcamStream(userId, camStream);
-          track.onunmute = () => {
-            setTimeout(() => {
-              const freshStream = new MediaStream([track]);
-              if (this.onWebcamStream) this.onWebcamStream(userId, freshStream);
-            }, 150);
-          };
-          track.onended = () => {
-            if (this.onWebcamStream) this.onWebcamStream(userId, null);
-          };
+          this._deliverWebcamTrack(userId, track, sourceStream);
         } else if (isScreenTrack) {
           // Screen share video
           if (sourceStream) knownScreenStreamIds.add(sourceStream.id);
@@ -3248,6 +3270,13 @@ class VoiceManager {
               this._playScreenAudio(userId, d.sourceStream);
             }
           }
+        } else {
+          // Neither yet: the camera's track can arrive before the
+          // webcam-started that says what it is. Keep it, and the
+          // announcement hands it over (_claimWebcamTrack); before, it was
+          // dropped and the camera stayed invisible until a reconnect.
+          const p = this.peers.get(userId);
+          if (p) p._unclaimedVideo = { track, stream: sourceStream };
         }
       } else {
         // Is this audio from a screen share stream?

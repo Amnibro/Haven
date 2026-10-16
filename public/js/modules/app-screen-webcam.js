@@ -114,7 +114,11 @@ _handleWebcamStream(userId, stream) {
       const vid = document.createElement('video');
       vid.autoplay = true;
       vid.playsInline = true;
-      vid.muted = (userId === this.user.id); // mute own cam to avoid echo
+      // Always muted: a camera carries no sound (voice plays on its own), and
+      // an unmuted video may not start without a tap where autoplay needs a
+      // gesture, as in the Android app, so cameras stayed black until a
+      // reconnect.
+      vid.muted = true;
       // Mirror own camera (like a mirror), but show others normally
       if (userId === this.user.id) {
         vid.style.transform = 'scaleX(-1)';
