@@ -1021,6 +1021,7 @@ html[data-braid-layout="1"] #create-section-body.collapsed{display:none!importan
 html[data-braid-layout="1"] .sidebar-split{flex:1;min-height:0;display:flex;flex-direction:column;border:0!important}
 html[data-braid-layout="1"] .channel-section{flex:1;min-height:0;padding:2px .375rem .375rem!important;border:0!important}
 html[data-braid-layout="1"] .dm-section-pane{flex:0 0 auto;max-height:28%;padding:2px .375rem .375rem!important;border-top:1px solid var(--border)!important}
+html[data-braid-layout="1"] .dm-section-pane[style*="flex"]{max-height:none}
 html[data-braid-layout="1"] .section-label.channels-toggle,
 html[data-braid-layout="1"] .section-label.dm-section-label{font-size:.625rem!important;font-weight:650!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--text-muted)!important;margin:.5rem .5rem .25rem!important}
 html[data-braid-layout="1"] .channel-item{margin:1px .375rem!important;padding:var(--braid-chan-pad-y) var(--braid-chan-pad-x)!important;border-radius:.625rem!important}
