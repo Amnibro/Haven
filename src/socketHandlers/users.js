@@ -8,6 +8,7 @@ const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 const { saveFcmToken } = require('../fcm');
 const { validHighScore, isKnownGame } = require('../highScores');
 const { badgesForProfile } = require('../badges');
+const { themePreferenceAllowed } = require('../themeMetadata');
 
 // A personal sidebar order (#5779): category keys and, per category, channel
 // codes. Only that shape is kept, within limits, so the value cannot carry
@@ -685,6 +686,27 @@ module.exports = function register(socket, ctx) {
     socket.emit('preferences', prefs);
   });
 
+  // Whether this account may save a theme file as its theme. Every failure
+  // counts against it: no permission, nothing published.
+  const themeFileAllowed = (value) => {
+    let canManage = false;
+    try {
+      canManage = !!(socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_server'));
+    } catch (err) {
+      console.warn('[preferences] permission check failed:', err.message);
+    }
+    const setting = (name) => db.prepare('SELECT value FROM server_settings WHERE key = ?').get(name)?.value || '';
+    let published = [];
+    try {
+      published = JSON.parse(setting('published_themes') || '[]');
+    } catch {
+      // A malformed list publishes nothing; the picker reads it the same way.
+    }
+    const current = db.prepare("SELECT value FROM user_preferences WHERE user_id = ? AND key = 'theme'")
+      .get(socket.user.id)?.value || '';
+    return themePreferenceAllowed(value, { published, current, defaultTheme: setting('default_theme'), canManage });
+  };
+
   socket.on('set-preference', (data) => {
     if (!data || typeof data !== 'object') return;
     const key = typeof data.key === 'string' ? data.key.trim() : '';
@@ -728,6 +750,13 @@ module.exports = function register(socket, ctx) {
       if (!stored) return;
     }
     if (key === 'server_mute' && value !== 'all' && value !== 'mentions') return;
+    // Members pick from Haven's own themes and the published theme files. A
+    // refusal is quiet: the picker only offers allowed themes, so this is a
+    // stale list or a crafted request, and the client falls back on its own.
+    if (key === 'theme' && value.startsWith('file:') && !themeFileAllowed(value)) {
+      socket.emit('preference-refused', { key, value });
+      return;
+    }
     if (key === 'muted_users') {
       let ids;
       try { ids = JSON.parse(value); } catch { return; } // not JSON: refused

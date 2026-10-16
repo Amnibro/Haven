@@ -205,6 +205,17 @@ function validatedThemeDefault(directory, value, publishedFiles) {
   return isThemeFilename(file) ? '' : value;
 }
 
+// Whether an account may save `value` as its theme. Haven's own themes and
+// published theme files are open to everyone. An unpublished file is only for
+// people who manage the server, apart from the account's current theme and
+// the server's Default Theme, so saving again never takes a look away.
+function themePreferenceAllowed(value, { published = [], current = '', defaultTheme = '', canManage = false } = {}) {
+  if (typeof value !== 'string' || !value.startsWith('file:')) return true;
+  if (canManage === true) return true;
+  if (value === current || value === defaultTheme) return true;
+  return Array.isArray(published) && published.includes(value.slice(5));
+}
+
 module.exports = {
   THEME_API_VERSION,
   BUILTIN_THEMES,
@@ -216,6 +227,7 @@ module.exports = {
   readThemeMetadataFile,
   readThemeMetadataSnapshot,
   themeFileFromRequestPath,
+  themePreferenceAllowed,
   themeSwatch,
   validatedThemeDefault,
 };
