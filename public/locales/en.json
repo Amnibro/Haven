@@ -1102,6 +1102,8 @@
     "nickname_cleared": "Nickname cleared",
     "nickname_set": "Nickname set to \"{{name}}\"",
     "typing": "{{name}} is typing...",
+    "typing_two": "{{first}} and {{second}} are typing...",
+    "typing_many": "Several people are typing...",
     "set_nickname_title": "Set Nickname",
     "nickname_hint": "Only you will see this nickname for {{name}}.",
     "nickname_clear_btn": "Clear",

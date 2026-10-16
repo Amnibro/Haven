@@ -378,7 +378,10 @@
 .dm-pip-header,
 .dm-pip-messages,
 .dm-pip-reply-bar,
+.dm-pip-typing,
 .dm-pip-input-area { position: relative; z-index: 1; }
+/* Who is typing in the pop-out's DM, in a slim line over its reply box. */
+.dm-pip-typing { flex-shrink: 0; height: 1.1rem; padding: 0 0.75rem; font-size: 0.7rem; }
 .dm-pip-header {
   display: flex;
   align-items: center;

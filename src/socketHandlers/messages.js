@@ -2068,12 +2068,18 @@ module.exports = function register(socket, ctx) {
   }
 
   // ── Typing indicator ────────────────────────────────────
+  // The channel on screen, or a DM or group chat you are in: those are typed
+  // in from the pop-out too, without being the channel on screen.
+  const typingDmMember = db.prepare(`SELECT 1 FROM channels c
+    JOIN channel_members m ON m.channel_id = c.id AND m.user_id = ?
+    WHERE c.code = ? AND c.is_dm = 1`);
   socket.on('typing', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8)) return;
-    if (data.code !== socket.currentChannel) return;
+    if (data.code !== socket.currentChannel && !typingDmMember.get(socket.user.id, data.code)) return;
     socket.to(`channel:${data.code}`).emit('user-typing', {
       channelCode: data.code,
+      userId: socket.user.id,
       username: socket.user.displayName
     });
   });

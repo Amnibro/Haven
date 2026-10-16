@@ -806,12 +806,6 @@ _listenPresenceAndVoice() {
     this._updateChannelVoiceIndicators();
   });
 
-  this.socket.on('user-typing', (data) => {
-    if (data.channelCode === this.currentChannel) {
-      this._showTyping(data.username);
-    }
-  });
-
   this.socket.on('user-joined', (data) => {
     if (data.channelCode === this.currentChannel) {
       this._appendSystemMessage(t('header.messages.user_joined', { name: this._getNickname(data.user.id, data.user.username) }));

@@ -517,6 +517,7 @@ _openDMPiP(code) {
   }
   panel.style.display = 'flex';
   panel.dataset.code = code;
+  this._typingRender?.();
   // Title: partner name, or the group's name for a group DM
   const partnerName = ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
   const titleEl = document.getElementById('dm-pip-title');
