@@ -873,7 +873,10 @@ async _setupPushNotifications() {
     let reason = t('context.push_error.service_worker', { error: err.message });
     let helpType = '';
     if (err.name === 'SecurityError' || /SSL|certificate/i.test(err.message || '')) {
-      const issue = await fetch('/api/public-config').then(r => r.json()).then(d => d.tls_issue).catch(() => null);
+      const issue = await fetch('/api/public-config').then(r => r.json()).then(d => d.tls_issue).catch(err => {
+        console.warn('[push] could not ask the server about its certificate:', err.message);
+        return null;
+      });
       reason = t(issue === 'missing_chain' || issue === 'untrusted' ? 'context.push_error.ssl_chain' : issue === 'expired' ? 'context.push_error.ssl_expired' : 'context.push_error.ssl_required');
     }
     if (isBrave) {

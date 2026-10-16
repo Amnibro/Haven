@@ -4,9 +4,23 @@ const path = require('path');
 const tls = require('tls');
 const { X509Certificate } = require('crypto');
 let roots = null;
-const storeOf = kind => { try { return tls.getCACertificates(kind); } catch { return []; } };
-const rootCerts = () => roots || (roots = [...new Set([...tls.rootCertificates, ...storeOf('bundled'), ...storeOf('system')])].map(pem => { try { return new X509Certificate(pem); } catch { return null; } }).filter(Boolean));
+// Node before 22.15 has no getCACertificates; tls.rootCertificates still covers the bundled roots.
+const storeOf = kind => {
+  if (typeof tls.getCACertificates !== 'function') return [];
+  try { return tls.getCACertificates(kind); } catch (err) {
+    console.warn(`[cert-check] could not read the ${kind} certificate store: ${err.message}`);
+    return [];
+  }
+};
+const parseRoot = pem => {
+  try { return new X509Certificate(pem); } catch (err) {
+    console.warn(`[cert-check] skipped a root certificate Node could not parse: ${err.message}`);
+    return null;
+  }
+};
+const rootCerts = () => roots || (roots = [...new Set([...tls.rootCertificates, ...storeOf('bundled'), ...storeOf('system')])].map(parseRoot).filter(Boolean));
 const trusted = cert => rootCerts().some(r => r.fingerprint256 === cert.fingerprint256 || signedBy(cert, r));
+// verify() throws on key types it cannot check; a signature we cannot check counts as not signed.
 const signedBy = (cert, issuer) => { try { return cert.checkIssued(issuer) && cert.verify(issuer.publicKey); } catch { return false; } };
 function inspectCertChain(pem, now = Date.now()) {
   const certs = (String(pem).match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) || []).map(p => new X509Certificate(p));
