@@ -58,7 +58,9 @@ _onThreadReply(data) {
   const isMention = (!!meEsc && new RegExp(`@${meEsc}(?!\\w)`, 'i').test(content))
     || /(?<![\w@])@(everyone|here)\b/i.test(content)
     || !!this._mentionsMyRole?.(content);
-  const isReplyToMe = !!(msg.replyContext && msg.replyContext.user_id === this.user.id);
+  // Someone starting a thread on your message counts as a reply to you.
+  const isReplyToMe = !!(msg.replyContext && msg.replyContext.user_id === this.user.id)
+    || data.threadStartedFor === this.user.id;
   const followed = Array.isArray(data.followerIds) && data.followerIds.includes(this.user.id);
   const open = this._threadIsOpen(parentId);
   // A silent reply (app-silent.js) still marks the thread, but makes no sound.

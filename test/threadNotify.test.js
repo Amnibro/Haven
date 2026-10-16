@@ -116,7 +116,11 @@ test('replies are wired through the unread module and the server names followers
   const app = read('public/js/app.js');
   assert.match(app, /import ThreadUnreadMethods from '\.\/modules\/app-thread-unread\.js\?v=[0-9.]+';/);
   assert.match(app, /this\._setupThreadUnread\(\);/);
-  assert.match(read('src/socketHandlers/messages.js'), /followerIds: threadNotify\.followerIds\(db, parentId\)/);
+  const msgs = read('src/socketHandlers/messages.js');
+  assert.match(msgs, /const followers = threadNotify\.followerIds\(db, parentId\);/);
+  assert.match(msgs, /followerIds: followers,/);
+  assert.match(msgs, /threadStartedFor: startedFor/);
+  assert.match(read('public/js/modules/app-thread-unread.js'), /data\.threadStartedFor === this\.user\.id/);
   const server = read('server.js');
   assert.equal((server.match(/followerIds: threadNotify\.followerIds\(db, /g) || []).length, 2, 'webhook and Discord replies name followers too');
   assert.match(read('public/js/modules/app-threads.js'), /this\._clearThreadUnread\?\.\(parentId\);/);
@@ -124,4 +128,20 @@ test('replies are wired through the unread module and the server names followers
   for (const k of ['new_one', 'new_other', 'threads_new_one', 'threads_new_other', 'sidebar_unread']) {
     assert.ok(en.thread_runtime[k], `en.json thread_runtime.${k}`);
   }
+});
+
+test('the first reply under a message reaches its author as a thread start', () => {
+  const db = makeDb();
+  const add = db.prepare('INSERT INTO messages (id, channel_id, user_id, content, thread_id) VALUES (?, 1, ?, ?, ?)');
+  add.run(30, 5, 'my message', null);
+  add.run(31, 6, 'first reply', 30);
+  assert.equal(threadNotify.startedFor(db, 30, 6, threadNotify.followerIds(db, 30)), 5);
+  add.run(32, 7, 'second reply', 30);
+  assert.equal(threadNotify.startedFor(db, 30, 7, threadNotify.followerIds(db, 30)), null, 'only the first reply starts it');
+  // Your own first reply is not news to you, and a muted topic stays quiet.
+  assert.equal(threadNotify.startedFor(db, 20, 4, threadNotify.followerIds(db, 20)), null);
+  add.run(40, 8, 'topic', null);
+  add.run(41, 9, 'comment', 40);
+  db.prepare('INSERT INTO forum_topic_mutes (user_id, topic_id) VALUES (8, 40)').run();
+  assert.equal(threadNotify.startedFor(db, 40, 9, threadNotify.followerIds(db, 40)), null);
 });

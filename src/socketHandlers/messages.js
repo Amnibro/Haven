@@ -3298,12 +3298,20 @@ module.exports = function register(socket, ctx) {
 
       // Everyone in the channel gets the reply; the ones taking part in the
       // thread are named so only they hear it (threadNotify.js).
+      const followers = threadNotify.followerIds(db, parentId);
+      const startedFor = threadNotify.startedFor(db, parentId, socket.user.id, followers);
       io.to(`channel:${code}`).emit('new-thread-message', {
         channelCode: code,
         parentId,
         message,
-        followerIds: threadNotify.followerIds(db, parentId)
+        followerIds: followers,
+        ...(startedFor ? { threadStartedFor: startedFor } : {})
       });
+      if (startedFor) {
+        sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName,
+          `Started a thread on your message: ${safeContent}`,
+          { onlyUserIds: [startedFor], replyToUserId: startedFor, silent: !!tSilent.silent });
+      }
 
       // Update thread preview on the parent message for all users
       const threadCount = db.prepare('SELECT COUNT(*) as count FROM messages WHERE thread_id = ?').get(parentId);

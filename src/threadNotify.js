@@ -51,4 +51,16 @@ function newCounts(db, userId, threads) {
   return out;
 }
 
-module.exports = { followerIds, newCounts };
+// The first reply under a message starts its thread, and that reaches the
+// message's author like a reply to them (bell, sound, push). Returns their id,
+// or null when this is not the first reply, they wrote it themselves, or they
+// muted the topic. Call it after the reply is stored.
+function startedFor(db, parentId, replierId, followers) {
+  const n = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE thread_id = ?').get(parentId).n;
+  if (n !== 1) return null;
+  const parent = db.prepare('SELECT user_id FROM messages WHERE id = ?').get(parentId);
+  if (!parent || parent.user_id == null || parent.user_id === replierId) return null;
+  return followers.includes(parent.user_id) ? parent.user_id : null;
+}
+
+module.exports = { followerIds, newCounts, startedFor };

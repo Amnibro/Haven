@@ -1489,12 +1489,15 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (s.user && s.hasFocus !== false) activeUserIds.add(s.user.id);
       }
 
+      // onlyUserIds narrows a push to some members, such as the author of a
+      // message someone just started a thread on.
+      const only = Array.isArray(pushOpts.onlyUserIds) ? new Set(pushOpts.onlyUserIds) : null;
       const subs = db.prepare(`
         SELECT ps.endpoint, ps.p256dh, ps.auth, ps.user_id, ps.scope
         FROM push_subscriptions ps
         JOIN channel_members cm ON cm.user_id = ps.user_id
         WHERE cm.channel_id = ? AND ps.user_id != ?
-      `).all(channelId, senderUserId);
+      `).all(channelId, senderUserId).filter(s => !only || only.has(s.user_id));
 
       // 3.20.2 (#5399 follow-up): pull the per-user mute set for this
       // channel up front so we can skip both web-push AND FCM for anyone
@@ -1572,6 +1575,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           SELECT DISTINCT cm.user_id FROM channel_members cm
           WHERE cm.channel_id = ? AND cm.user_id != ?
         `).all(channelId, senderUserId)
+          .filter(m => !only || only.has(m.user_id))
           .filter(m => !activeUserIds.has(m.user_id))
           .filter(m => !mutedUserIds.has(m.user_id))
           .filter(m => !quietFor.has(m.user_id))
