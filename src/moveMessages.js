@@ -35,11 +35,16 @@
 //    forum, so in another channel it would match no link: Discord replies
 //    would keep landing in the old channel under a topic that left it, and
 //    Haven replies would stop crossing. Unpairing it quietly would be worse
+//  - not to or from a blog forum. There, who wrote a reply decides whether
+//    it is part of the post or a comment, so moving a post and its replies
+//    in or out would rewrite which is which. Move here as thread refuses the
+//    same
 //
 // Everything runs in one transaction, checked again inside it, so two moves
 // at once cannot both move the same message.
 
 const { MAX_SELECTED, dropStrayBanners, placeholders } = require('./moveToThread');
+const forumBlog = require('./forumBlog');
 
 // `from` and `to` are channels rows. Returns { error } or what moved:
 //   moved   the selected top-level ids, which leave the source feed
@@ -52,6 +57,7 @@ function moveToChannel(db, { from, to, messageIds }) {
     if (!from || !to) return { error: 'Channel not found' };
     if (from.id === to.id) return { error: 'Invalid channels' };
     if (from.is_dm || to.is_dm) return { error: 'Cannot move messages to or from DMs' };
+    if (forumBlog.blogOn(db, from.id) || forumBlog.blogOn(db, to.id)) return { error: 'Messages cannot be moved into or out of a blog forum' };
     if (ids.length === 0 || ids.length > MAX_SELECTED) return { error: `Select between 1 and ${MAX_SELECTED} messages` };
 
     const rows = db.prepare(`SELECT id, thread_id FROM messages WHERE id IN (${placeholders(ids.length)}) AND channel_id = ?`)

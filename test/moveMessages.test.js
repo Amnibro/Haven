@@ -220,6 +220,20 @@ test('moving messages to another channel', async (t) => {
     assert.equal(db.prepare('SELECT channel_id FROM ferry_forum_threads WHERE topic_message_id = ?').get(topic).channel_id, talk.id, 'still paired');
   });
 
+  await t.test('not into or out of a blog forum', async () => {
+    const blog = await makeChannel('journal');
+    for (const permission of ['forum', 'forum_blog']) {
+      A.emit('toggle-channel-permission', { code: blog.code, permission });
+      await wait(150);
+    }
+    const entry = post(blog.id, admin.id, 'a post');
+    const chat = post(talk.id, bob.id, 'chat line');
+    assert.match((await move(A, blog.code, talk.code, [entry])).error || '', /blog forum/, 'out of one');
+    assert.match((await move(A, talk.code, blog.code, [chat])).error || '', /blog forum/, 'into one');
+    assert.equal(row(entry).channel_id, blog.id);
+    assert.equal(row(chat).channel_id, talk.id);
+  });
+
   await t.test('each move is in the audit log, naming where it went', async () => {
     await wait(100);
     const rows = db.prepare("SELECT actor_id, target_type, target_id, target_name, details FROM audit_log WHERE action = 'messages_move' ORDER BY id").all();
