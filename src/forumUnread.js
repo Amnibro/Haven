@@ -65,6 +65,14 @@ function countCached(db, userId, channelId) {
   return n;
 }
 
+// Topics folded into another topic's thread (moveToThread.js) leave the
+// forum without changing its messages, so the signature above cannot see it:
+// every count kept for that forum is dropped.
+function forget(channelId) {
+  const suffix = `:${channelId}`;
+  for (const key of cache.keys()) if (key.endsWith(suffix)) cache.delete(key);
+}
+
 function mutedIn(db, userId, topicIds) {
   if (!topicIds || !topicIds.length) return new Set();
   const ph = topicIds.map(() => '?').join(',');
@@ -77,4 +85,4 @@ function setMute(db, userId, topicId, muted) {
   else db.prepare('DELETE FROM forum_topic_mutes WHERE user_id = ? AND topic_id = ?').run(userId, topicId);
 }
 
-module.exports = { ensureTable, count, countCached, mutedIn, setMute };
+module.exports = { ensureTable, count, countCached, forget, mutedIn, setMute };

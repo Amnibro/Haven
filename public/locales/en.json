@@ -3817,7 +3817,8 @@
         "badge_update": "updated badge",
         "badge_delete": "deleted badge",
         "badge_grant": "gave a badge to",
-        "badge_revoke": "took a badge back from"
+        "badge_revoke": "took a badge back from",
+        "messages_move_to_thread": "moved messages into a thread in"
       }
     },
     "ip_bans": {
