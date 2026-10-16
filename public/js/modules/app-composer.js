@@ -5,7 +5,7 @@
 export default {
 
 _enterSends(e) {
-  return e.ctrlKey || e.metaKey || document.documentElement.hasAttribute('data-hide-send-btn') || !window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  return !e.isComposing && (e.ctrlKey || e.metaKey || document.documentElement.hasAttribute('data-hide-send-btn') || !window.matchMedia('(hover: none) and (pointer: coarse)').matches);
 },
 
 _bindComposer() {
