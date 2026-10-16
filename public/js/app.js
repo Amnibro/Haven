@@ -6,7 +6,7 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.21.0';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.23.8';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.24.26';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.24.31';
 import UIBindMethods   from './modules/app-ui.js?v=4.24.10';
 import ComposerMethods from './modules/app-composer.js?v=4.22.22';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
