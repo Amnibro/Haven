@@ -1713,12 +1713,16 @@ function initCustomThemeEditor() {
   function redrawHue() { drawHueBar(hueCtx, hueCanvas.width, hueCanvas.height, hue); }
   function redrawTri()  { drawTriangle(triCtx, triCanvas.width, triCanvas.height, hue, sat, val); }
 
+  function paintSwatch(palette) {
+    const swatch = document.getElementById('custom-theme-swatch');
+    if (swatch) swatch.style.background = palette['--accent'];
+  }
+
   function apply() {
     const palette = generateCustomPalette(hue, sat, val, sat, isLightColorBase());
     applyCustomVars(palette);
     localStorage.setItem('haven_custom_hsv', JSON.stringify({ h: hue, s: sat, v: val }));
-    const swatch = document.getElementById('custom-theme-swatch');
-    if (swatch) swatch.style.background = palette['--accent'];
+    paintSwatch(palette);
   }
 
   function render() { redrawHue(); redrawTri(); apply(); }
@@ -1759,7 +1763,14 @@ function initCustomThemeEditor() {
   triCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); triFromEvent(e); });
   triCanvas.addEventListener('touchmove',  (e) => { e.preventDefault(); triFromEvent(e); });
 
-  render();
+  // Draw the picker and the swatch only. Applying the palette here put
+  // Custom's colors over every other theme on each page load, so an account
+  // with no saved theme saw Custom instead of Haven. The palette is applied
+  // when Custom is the selected theme: initThemeSwitcher, a picker click,
+  // applyThemeFromServer, or _show() below.
+  redrawHue();
+  redrawTri();
+  paintSwatch(generateCustomPalette(hue, sat, val, sat, isLightColorBase()));
 
   editor._show = () => { editor.style.display = 'block'; render(); };
   editor._hide = () => { editor.style.display = 'none'; };
