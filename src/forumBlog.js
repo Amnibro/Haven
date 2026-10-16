@@ -94,4 +94,20 @@ function threadExtras(db, channelId, parentId) {
   return { comments: commentCounts(db, [parentId]).get(parentId) || 0 };
 }
 
-module.exports = { migrateForumBlog, blogOn, picsOnly, commentAllowed, partIdsOf, isPart, commentCounts, threadExtras };
+// A piece of a blog post, for picture votes (#5784): the topic itself, or
+// one of its author's additions in the topic's thread, in a forum with blog
+// mode on. Returns what the vote checks need (the channel and its settings,
+// and the topic the piece belongs to), or null for any other message.
+function pieceOf(db, messageId) {
+  const m = db.prepare(`SELECT m.id, m.thread_id, c.id AS channel_id, c.code, c.is_forum, c.is_dm, c.forum_blog, c.forum_votes, c.role_gate
+    FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?`).get(messageId);
+  if (!m || !m.is_forum || m.is_dm || Number(m.forum_blog) !== 1) return null;
+  if (m.thread_id) {
+    const topic = db.prepare('SELECT thread_id, channel_id FROM messages WHERE id = ?').get(m.thread_id);
+    if (!topic || topic.thread_id || topic.channel_id !== m.channel_id) return null;
+    if (!isPart(db, m.id)) return null;
+  }
+  return { ...m, topicId: m.thread_id || m.id };
+}
+
+module.exports = { migrateForumBlog, blogOn, picsOnly, commentAllowed, partIdsOf, isPart, commentCounts, threadExtras, pieceOf };

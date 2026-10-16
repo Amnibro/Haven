@@ -7,7 +7,9 @@
  * channels.forum_votes is the per-forum switch: 0 off (the default),
  * 1 likes, 2 likes and dislikes. forum_votes holds one row per person per
  * topic, value 1 for a like and -1 for a dislike; taking a vote back deletes
- * the row. Rows go with their topic or their voter through the cascades.
+ * the row. In a blog forum each picture of a post is its own message (the
+ * topic, or one of its author's additions), so picture votes (#5784) are
+ * rows here too, keyed by that message. Rows go with their topic or their voter through the cascades.
  * Turning votes off hides them without deleting any, so turning them back
  * on brings the counts back.
  */
@@ -53,6 +55,15 @@ function votesFor(db, userId, ids) {
   return out;
 }
 
+// The same for the pieces of a blog post (#5784), as a plain object keyed by
+// message id, with every piece present even before anyone votes.
+function pieceVotesFor(db, userId, ids) {
+  const found = votesFor(db, userId, ids);
+  const out = {};
+  for (const id of ids) out[id] = found.get(id) || { likes: 0, dislikes: 0, mine: 0 };
+  return out;
+}
+
 // Set one person's vote: 1, -1, or 0 to take it back.
 function setVote(db, messageId, userId, value) {
   if (value === 0) {
@@ -92,4 +103,4 @@ function voteRefusal(ctx, user, row, value) {
   return null;
 }
 
-module.exports = { MODES, MODE_NAMES, migrateForumVotes, totalsOf, votesFor, setVote, voteRefusal };
+module.exports = { MODES, MODE_NAMES, migrateForumVotes, totalsOf, votesFor, pieceVotesFor, setVote, voteRefusal };
