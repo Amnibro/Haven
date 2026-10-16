@@ -304,7 +304,7 @@ Click **Clear** to remove your avatar and revert to the default initial-letter a
 
 ### Themes
 
-Haven includes 20+ visual themes. Click the **🎨** button at the bottom of the sidebar to open the theme picker. Themes change colors, fonts, and overall aesthetic. Your choice is saved per browser.
+Haven includes 20+ visual themes. Click the **🎨** button at the bottom of the sidebar to open the theme picker. Every theme has a small preview card in its own colors; type in the search box to find one by name, author or description, and fold away a section you do not need. Community themes the admin has published come first, then Seasonal ones, then Haven's own. Themes change colors, fonts, and overall aesthetic. Your choice is saved to your account.
 
 | Button | Theme | Style |
 |--------|-------|-------|
@@ -383,7 +383,7 @@ Haven also ships optional extras that are **installed but switched off by defaul
 | `plugins/HavenGlyphs.plugin.js` | Reversible contextual interface icons using the bundled local Font Awesome font |
 | `public/fonts/fa-solid-900.woff2` | Local Font Awesome Solid font used by Haven Glyphs |
 
-To make a bundled theme available to everyone, go to **Settings → Admin → 🏠 Branding → Custom Themes** and publish it. Publishing is what adds its button to the theme picker in the sidebar. Until then it stays hidden even though the file is present, which is the usual reason a theme "looks missing" after an update.
+To make a bundled theme available to everyone, publish it. The quickest way is the theme picker itself: admins (and anyone with Manage Server) see an **Available to publish** section there with every theme nobody has published yet, and each theme file's card has a **Publish** switch. **Settings → Admin → 🏠 Branding → Custom Themes** does the same. Until a theme is published, members do not see it in their picker even though the file is present, which is the usual reason a theme "looks missing" after an update.
 
 Custom themes work the same way. Drop a `<name>.theme.css` file into the `themes/` folder, restart, then publish it in the same place. A theme can also be set as the server **default** from that section, which applies to anyone who has not already picked a theme of their own. It is a default rather than a lock, so a user who chooses a different theme keeps their choice.
 

@@ -25,8 +25,12 @@ comment:
  */
 ```
 
-The theme list reads `@name`, `@description`, `@author`, `@version`, `@icon`, and
-`@haven-theme-api`. Haven checks the API declaration before it injects the
+The theme list reads `@name`, `@description`, `@author`, `@version`, `@icon`,
+`@section`, and `@haven-theme-api`. `@section Seasonal` puts the theme in the
+picker's Seasonal section; any other `@section` name gets a section of its own,
+and a theme without one is listed under Community. The picker's preview card is
+drawn from the file's `--bg-primary`, `--bg-secondary`, `--accent` and
+`--text-primary` values when they are plain colours. Haven checks the API declaration before it injects the
 stylesheet. Older Haven versions ignore metadata they do not recognise.
 Declare each field on its own metadata line. Multiple `@haven-theme-api`
 declarations make the theme invalid.
@@ -63,8 +67,10 @@ the stylesheet. The cache is only a flash-prevention optimisation.
 
 1. Put the file in the server's `themes/` directory.
 2. Restart Haven or refresh the Plugins & Themes list.
-3. Open Settings, then Admin, Branding, Custom Themes.
-4. Publish the theme to add it to every user's theme picker.
+3. Open the theme picker (the palette button in the sidebar). As an admin you
+   see it under Available to publish.
+4. Switch Publish on under its card to add it to every user's theme picker.
+   Settings, Admin, Branding, Custom Themes has the same switches.
 
 A published file is a selectable base theme. Haven applies the built-in Haven
 theme as the stable layout base, then loads the selected file after the core
