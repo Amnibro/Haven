@@ -202,17 +202,26 @@ _bindMessageActions() {
   // Messages container: move-selection mode intercept (supports Shift+click range)
   document.getElementById('messages').addEventListener('click', (e) => {
     if (!this._moveSelectionActive) return;
-    // Don't intercept toolbar button clicks
-    if (e.target.closest('.msg-toolbar, .msg-dots-btn')) return;
-    const msgEl = e.target.closest('.message, .message-compact');
+    // Don't intercept toolbar button clicks, or Move here as thread
+    if (e.target.closest('.msg-toolbar, .msg-dots-btn, .move-thread-here-btn')) return;
+    // Forum topic cards can be picked too.
+    const msgEl = e.target.closest('.message, .message-compact, .forum-topic');
     if (msgEl) {
       e.preventDefault();
       e.stopPropagation();
+      // The tap a long press leaves behind (app-move-to-thread.js).
+      if (this._moveThreadSwallowing?.()) return;
+      // In another channel than the selection, a message is picked to put
+      // the selection under.
+      if (this._moveThreadPickingHere?.()) {
+        this._moveSelectedIntoThread(msgEl);
+        return;
+      }
 
       if (e.shiftKey && this._lastMoveSelectedEl) {
         // Shift+click: select all messages between last selected and this one
         const container = document.getElementById('messages');
-        const allMsgs = Array.from(container.querySelectorAll('.message, .message-compact'));
+        const allMsgs = Array.from(container.querySelectorAll('.message, .message-compact, .forum-topic'));
         const lastIdx = allMsgs.indexOf(this._lastMoveSelectedEl);
         const curIdx = allMsgs.indexOf(msgEl);
         if (lastIdx !== -1 && curIdx !== -1) {

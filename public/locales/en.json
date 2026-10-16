@@ -3777,7 +3777,22 @@
       "max_messages": "Maximum {{max}} messages can be moved at once",
       "no_channels": "No other channels available",
       "moved_one": "Moved {{n}} message to #{{name}}",
-      "moved_many": "Moved {{n}} messages to #{{name}}"
+      "moved_many": "Moved {{n}} messages to #{{name}}",
+      "here_as_thread": "Move here as thread",
+      "here_as_thread_title": "Put the selected messages in a thread under this message",
+      "thread_confirm_one": "Move {{n}} message into a thread under {{name}}'s message?",
+      "thread_confirm_many": "Move {{n}} messages into a thread under {{name}}'s message?",
+      "thread_confirm_hint": "They keep their authors, times, reactions and pins, and sit in the thread in the order they were written. Replies under a selected message come along.",
+      "thread_confirm_btn": "Move",
+      "threaded_one": "Moved {{n}} message into the thread",
+      "threaded_many": "Moved {{n}} messages into the thread",
+      "thread_base_selected": "That message is selected. Pick one that isn't.",
+      "thread_failed": "Could not move the messages",
+      "pick_in_channel": "Into a thread...",
+      "pick_in_channel_title": "Go to #{{name}} and pick a message to put them under",
+      "pick_base": "{{n}} selected: pick a message in #{{name}} to put them under",
+      "select": "Select",
+      "deselect": "Deselect"
     },
     "hidden_channels": {
       "title": "Hidden Channels",

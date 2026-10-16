@@ -213,6 +213,10 @@ _enterMoveSelectionMode() {
   if (this._moveSelectionActive) return;
   this._moveSelectionActive = true;
   this._moveSelectedIds.clear();
+  // Where the selection is; "Move here as thread" can take it to another
+  // channel (app-move-to-thread.js).
+  this._moveSourceChannel = this.currentChannel;
+  this._watchMoveSelection?.(true);
   document.body.classList.add('move-selection-mode');
   const toolbar = document.getElementById('move-msg-toolbar');
   if (toolbar) toolbar.style.display = 'flex';
@@ -223,6 +227,9 @@ _exitMoveSelectionMode() {
   this._moveSelectionActive = false;
   this._moveSelectedIds.clear();
   this._lastMoveSelectedEl = null;
+  this._moveSourceChannel = null;
+  this._watchMoveSelection?.(false);
+  this._endMoveThreadPick?.();
   document.body.classList.remove('move-selection-mode');
   const toolbar = document.getElementById('move-msg-toolbar');
   if (toolbar) toolbar.style.display = 'none';
@@ -255,6 +262,7 @@ _updateMoveCount() {
   if (countEl) countEl.textContent = t('modals.move_messages.selected', { n });
   if (moveBtn) moveBtn.disabled = n === 0;
   if (deleteBtn) deleteBtn.disabled = n === 0;
+  this._syncMoveThreadUi?.();
 },
 
 _showMoveChannelPicker() {
@@ -268,14 +276,17 @@ _showMoveChannelPicker() {
   desc.textContent = t(_n === 1 ? 'modals.move_messages.move_one' : 'modals.move_messages.move_many', { n: _n });
   list.innerHTML = '';
 
+  const source = this._moveSourceChannel || this.currentChannel;
   const channels = (this.channels || []).filter(ch =>
-    !ch.is_dm && ch.code !== this.currentChannel
+    !ch.is_dm && ch.code !== source
   );
 
   if (channels.length === 0) {
     list.innerHTML = `<div class="move-msg-empty">${t('modals.move_messages.no_channels')}</div>`;
   } else {
     for (const ch of channels) {
+      const row = document.createElement('div');
+      row.className = 'move-msg-channel-row';
       const item = document.createElement('button');
       item.className = 'move-msg-channel-item';
       item.textContent = `# ${ch.name}`;
@@ -283,7 +294,14 @@ _showMoveChannelPicker() {
         this._executeMoveMessages(ch.code, ch.name);
         modal.style.display = 'none';
       });
-      list.appendChild(item);
+      // Or go there and pick a message to put them under as a thread.
+      const toThread = document.createElement('button');
+      toThread.className = 'move-msg-thread-pick';
+      toThread.textContent = `🧵 ${t('modals.move_messages.pick_in_channel')}`;
+      toThread.title = t('modals.move_messages.pick_in_channel_title', { name: ch.name });
+      toThread.addEventListener('click', () => this._startMoveThreadPick?.(ch.code));
+      row.append(item, toThread);
+      list.appendChild(row);
     }
   }
 
@@ -292,7 +310,7 @@ _showMoveChannelPicker() {
 
 _executeMoveMessages(toCode, toName) {
   const ids = [...this._moveSelectedIds];
-  const fromCode = this.currentChannel;
+  const fromCode = this._moveSourceChannel || this.currentChannel;
 
   this.socket.emit('move-messages', {
     messageIds: ids,
@@ -319,7 +337,7 @@ async _executeDeleteMessages() {
   if (!ok) return;
 
   const ids = [...this._moveSelectedIds];
-  const code = this.currentChannel;
+  const code = this._moveSourceChannel || this.currentChannel;
   // For E2E DMs the server can't read attachment URLs out of ciphertext, so
   // hand it the URLs per message the same way single-delete does. The move
   // selector is mod/non-DM gated today, but keep this future-proof.

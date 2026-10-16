@@ -120,8 +120,10 @@ async switchChannel(code) {
     const canMove = !isDm && (this.user.isAdmin || this._canModerate());
     moveSelectBtn.style.display = canMove ? 'inline-flex' : 'none';
   }
-  // Exit selection mode when switching channels
-  if (this._moveSelectionActive) this._exitMoveSelectionMode();
+  // Exit selection mode when switching channels, unless picking a message
+  // there to put the selection under (app-move-to-thread.js).
+  if (this._moveSelectionActive && !this._moveThreadKeepsSelection?.(code)) this._exitMoveSelectionMode();
+  else if (this._moveSelectionActive) this._syncMoveThreadUi?.();
 
   // Show/hide topic bar. DMs don't have topics; showing the placeholder
   // overlaps the E2E encryption dropdown that lives in the same header.

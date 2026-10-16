@@ -13,7 +13,7 @@ import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.22.14';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.21.0';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.24.26';
-import MessageActionMethods from './modules/app-message-actions.js?v=4.24.26';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.24.27';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.24.26';
 import PeopleMethods from './modules/app-people.js?v=4.23.11';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
@@ -34,13 +34,14 @@ import SoundMethods from './modules/app-sounds.js?v=4.21.0';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.23.9';
 import ContextMethods  from './modules/app-context.js?v=4.24.24';
-import ChannelMethods  from './modules/app-channels.js?v=4.24.26';
+import ChannelMethods  from './modules/app-channels.js?v=4.24.27';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.24.9';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.26';
 import MessageMethods  from './modules/app-messages.js?v=4.24.22';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.24.19';
-import MessageToolMethods from './modules/app-message-tools.js?v=4.24.9';
+import MessageToolMethods from './modules/app-message-tools.js?v=4.24.27';
+import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.27';
 import UserMethods     from './modules/app-users.js?v=4.24.15';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
 import VoiceMethods    from './modules/app-voice.js?v=4.24.5';
@@ -443,6 +444,7 @@ class HavenApp {
     this._initAndroidBetaBanner();
     this._initWelcomePopups();
     this._initMoveMessages();
+    this._initMoveToThread();
 
     // CSP-safe image error handling (no inline onerror attributes)
     // For avatar images, hide the broken img and show the letter-initial fallback
@@ -613,6 +615,7 @@ Object.assign(HavenApp.prototype,
   ForumUnreadMethods,
   ThreadUnreadMethods,
   ThreadScrollMethods,
+  MoveToThreadMethods,
   ChannelCategoryMethods,
   ChannelPersonalOrderMethods,
   PushToMuteMethods,
