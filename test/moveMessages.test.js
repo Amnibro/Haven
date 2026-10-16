@@ -209,6 +209,17 @@ test('moving messages to another channel', async (t) => {
     assert.equal(db.prepare('SELECT channel_id FROM role_menus WHERE message_id = ?').get(menu).channel_id, talk.id);
   });
 
+  await t.test('a forum topic paired with a Discord post stays where it is', async () => {
+    const topic = post(talk.id, bob.id, 'paired topic');
+    const reply = post(talk.id, admin.id, 'a reply', topic);
+    db.prepare(`INSERT INTO ferry_forum_threads (topic_message_id, channel_id, guild_id, discord_forum_id, discord_thread_id, origin)
+      VALUES (?, ?, 'g', 'f', 't1', 'haven')`).run(topic, talk.id);
+    assert.match((await move(A, talk.code, other.code, [topic])).error || '', /Discord/);
+    assert.equal(row(topic).channel_id, talk.id);
+    assert.equal(row(reply).channel_id, talk.id);
+    assert.equal(db.prepare('SELECT channel_id FROM ferry_forum_threads WHERE topic_message_id = ?').get(topic).channel_id, talk.id, 'still paired');
+  });
+
   await t.test('each move is in the audit log, naming where it went', async () => {
     await wait(100);
     const rows = db.prepare("SELECT actor_id, target_type, target_id, target_name, details FROM audit_log WHERE action = 'messages_move' ORDER BY id").all();

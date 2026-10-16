@@ -30,6 +30,11 @@
 //    the right to hand out roles, so moving a menu from a gated channel into
 //    an open one would hand its roles to people it was never meant for. A
 //    role manager can post a new menu where they want it
+//  - a forum topic paired with a Discord post through Ferry stays put. The
+//    pairing belongs to the Ferry link between this channel and one Discord
+//    forum, so in another channel it would match no link: Discord replies
+//    would keep landing in the old channel under a topic that left it, and
+//    Haven replies would stop crossing. Unpairing it quietly would be worse
 //
 // Everything runs in one transaction, checked again inside it, so two moves
 // at once cannot both move the same message.
@@ -69,6 +74,9 @@ function moveToChannel(db, { from, to, messageIds }) {
     const moving = `SELECT id FROM messages WHERE id IN (${tph}) OR thread_id IN (${tph})`;
     if (db.prepare(`SELECT 1 FROM role_menus WHERE message_id IN (${moving}) LIMIT 1`).get(...tops, ...tops)) {
       return { error: 'Role menus cannot be moved to another channel' };
+    }
+    if (db.prepare(`SELECT 1 FROM ferry_forum_threads WHERE topic_message_id IN (${tph}) LIMIT 1`).get(...tops)) {
+      return { error: 'A topic linked to a Discord post cannot be moved to another channel' };
     }
     const brought = db.prepare(`SELECT id FROM messages WHERE thread_id IN (${tph}) ORDER BY id`).all(...tops).map(r => r.id);
 
