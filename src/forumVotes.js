@@ -64,4 +64,32 @@ function setVote(db, messageId, userId, value) {
   return totalsOf(db, messageId);
 }
 
-module.exports = { MODES, MODE_NAMES, migrateForumVotes, totalsOf, votesFor, setVote };
+// Why this person may not cast `value` on a message in this forum, or null
+// when they may. Topic votes and picture votes (#5784) share it, so both
+// follow the same rules. `row` carries channel_id, role_gate and
+// forum_votes. Any error refuses the vote.
+function voteRefusal(ctx, user, row, value) {
+  const { db } = ctx;
+  let allowed = false;
+  try {
+    // Only people who can see the forum may vote in it.
+    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, user.id);
+    const banned = db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id);
+    allowed = !!member && !banned && (user.isAdmin || ctx.roleGateAllows(user.id, { id: row.channel_id, role_gate: row.role_gate }));
+  } catch (err) {
+    console.warn('[forum-votes] access check failed, refusing the vote:', err.message);
+    allowed = false;
+  }
+  if (!allowed) return 'Not a member of this channel';
+
+  const mode = row.forum_votes || 0;
+  if (mode === MODES.off) return 'Votes are turned off in this forum';
+  if (value === -1 && mode !== MODES.both) return 'Dislikes are turned off in this forum';
+
+  // A muted member cannot vote, the same as reacting.
+  const mute = db.prepare("SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime('now') LIMIT 1").get(user.id);
+  if (mute) return 'You are in a timeout';
+  return null;
+}
+
+module.exports = { MODES, MODE_NAMES, migrateForumVotes, totalsOf, votesFor, setVote, voteRefusal };

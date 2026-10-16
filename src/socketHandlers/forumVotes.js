@@ -9,7 +9,7 @@
 // voted which way is not broadcast; only the voter's own devices learn their
 // vote ('topic-vote-mine').
 
-const { MODES, MODE_NAMES, setVote } = require('../forumVotes');
+const { MODES, MODE_NAMES, setVote, voteRefusal } = require('../forumVotes');
 const { reachableChannel } = require('./channelAccess');
 
 module.exports = function register(socket, ctx) {
@@ -52,24 +52,9 @@ module.exports = function register(socket, ctx) {
       FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?`).get(messageId);
     if (!topic || topic.thread_id || !topic.is_forum || topic.is_dm) return cb({ error: 'That is not a forum topic' });
 
-    // Only people who can see the forum may vote in it. Fails closed.
-    let allowed = false;
-    try {
-      const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(topic.channel_id, socket.user.id);
-      allowed = !!member && (socket.user.isAdmin || ctx.roleGateAllows(socket.user.id, { id: topic.channel_id, role_gate: topic.role_gate }));
-    } catch (err) {
-      console.warn('[forum-votes] access check failed, refusing the vote:', err.message);
-      allowed = false;
-    }
-    if (!allowed) return cb({ error: 'Not a member of this channel' });
-
-    const mode = topic.forum_votes || 0;
-    if (mode === MODES.off) return cb({ error: 'Votes are turned off in this forum' });
-    if (value === -1 && mode !== MODES.both) return cb({ error: 'Dislikes are turned off in this forum' });
-
-    // A muted member cannot vote, the same as reacting.
-    const mute = db.prepare("SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime('now') LIMIT 1").get(socket.user.id);
-    if (mute) return cb({ error: 'You are in a timeout' });
+    // Membership, role gate, ban, the forum's setting and timeouts.
+    const refusal = voteRefusal(ctx, socket.user, topic, value);
+    if (refusal) return cb({ error: refusal });
 
     let totals;
     try {
