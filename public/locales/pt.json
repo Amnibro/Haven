@@ -554,6 +554,8 @@
     "stop_camera": "Desligar câmera",
     "sharing_started": "{{who}} começou a compartilhar a tela",
     "status_muted": "Silenciado",
+    "status_push_to_mute": "Silenciado (segurar para silenciar)",
+    "push_to_mute_held": "Segurar para silenciar está ativo. Seu microfone fica silenciado até você soltar a tecla.",
     "status_active": "Ativo",
     "status_deafened": "Sem áudio",
     "status_off": "Desligado",

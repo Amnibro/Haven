@@ -43,6 +43,7 @@ import MessageToolMethods from './modules/app-message-tools.js?v=4.23.9';
 import UserMethods     from './modules/app-users.js?v=4.23.11';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
 import VoiceMethods    from './modules/app-voice.js?v=4.21.0';
+import PushToMuteMethods from './modules/app-push-to-mute.js?v=4.24.5';
 import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.23.9';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.23.9';
 import MusicMethods from './modules/app-music.js?v=4.23.9';
@@ -599,6 +600,7 @@ Object.assign(HavenApp.prototype,
   ForumUnreadMethods,
   ChannelCategoryMethods,
   ChannelPersonalOrderMethods,
+  PushToMuteMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

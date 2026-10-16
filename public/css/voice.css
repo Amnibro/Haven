@@ -723,6 +723,16 @@
   line-height: 1.2;
 }
 
+/* Push to mute held in Haven Desktop: the muted mic gets a ring and the voice
+   bar says why, so a held key does not read as a mute that stays. */
+.voice-header-btn.ptm-held,
+.voice-panel-btn.ptm-held { box-shadow: 0 0 0 2px var(--danger, #e74c3c); }
+.voice-bar-badge-ptm {
+  background: var(--warning);
+  border-color: var(--warning);
+  color: var(--warning-text);
+}
+
 @media (max-width: 768px) {
   .btn-voice { padding: 5px 10px; font-size: 12px; }
   .voice-label-text { display: none; }

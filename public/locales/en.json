@@ -597,6 +597,8 @@
     "stop_camera": "Stop Camera",
     "sharing_started": "{{who}} started sharing their screen",
     "status_muted": "Muted",
+    "status_push_to_mute": "Muted (push to mute)",
+    "push_to_mute_held": "Push to mute is held. Your mic is muted until you let go.",
     "status_active": "Active",
     "status_deafened": "Deafened",
     "status_off": "Off",
