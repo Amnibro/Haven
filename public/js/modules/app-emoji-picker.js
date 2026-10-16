@@ -573,6 +573,7 @@ _showReactionPopout(badge) {
   const popout = document.createElement('div');
   popout.id = 'reaction-popout';
   popout.className = 'reaction-popout';
+  popout._badge = badge;
   popout.innerHTML = `
     <div class="reaction-popout-header">${emojiDisplay} <span class="reaction-popout-count">${users.length}</span></div>
     <div class="reaction-popout-list">

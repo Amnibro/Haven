@@ -416,68 +416,48 @@ _bindMessageActions() {
   bindOverflowDirection(threadMessages);
   bindOverflowDirection(document.getElementById('dm-pip-messages'));
 
-  // Reaction badge hover: show popout with user list
+  // Reaction badge hover: show popout with user list. The popout sits a few
+  // pixels away from its badge, so hiding waits a moment: the pointer can
+  // cross that gap (or cut a corner) and reach the popout's scroll bar.
   {
     let _popoutTimer = null;
-    const msgs = document.getElementById('messages');
-    const threadMsgs = document.getElementById('thread-messages');
-    msgs.addEventListener('mouseover', (e) => {
+    let _hideTimer = null;
+    const isOpenFor = (badge) => {
+      const pop = document.getElementById('reaction-popout');
+      return !!pop && pop._badge === badge;
+    };
+    const onBadgeOver = (e) => {
       const badge = e.target.closest('.reaction-badge');
       if (!badge) return;
+      clearTimeout(_hideTimer);
+      _hideTimer = null;
       clearTimeout(_popoutTimer);
+      if (isOpenFor(badge)) return;
       _popoutTimer = setTimeout(() => this._showReactionPopout(badge), 350);
-    });
-    if (threadMsgs) {
-      threadMsgs.addEventListener('mouseover', (e) => {
-        const badge = e.target.closest('.reaction-badge');
-        if (!badge) return;
-        clearTimeout(_popoutTimer);
-        _popoutTimer = setTimeout(() => this._showReactionPopout(badge), 350);
-      });
-      threadMsgs.addEventListener('mouseout', (e) => {
-        const badge = e.target.closest('.reaction-badge');
-        if (!badge && !e.target.closest('#reaction-popout')) {
-          clearTimeout(_popoutTimer);
-          setTimeout(() => {
-            if (!document.querySelector('#reaction-popout:hover')) this._hideReactionPopout();
-          }, 200);
-        }
-      });
-    }
-    msgs.addEventListener('mouseout', (e) => {
-      const badge = e.target.closest('.reaction-badge');
-      if (!badge && !e.target.closest('#reaction-popout')) {
-        clearTimeout(_popoutTimer);
-        setTimeout(() => {
-          if (!document.querySelector('#reaction-popout:hover')) this._hideReactionPopout();
-        }, 200);
-      }
-    });
-    document.addEventListener('mouseover', (e) => {
-      if (!e.target.closest('#reaction-popout') && !e.target.closest('.reaction-badge')) {
-        clearTimeout(_popoutTimer);
+    };
+    const scheduleHide = () => {
+      clearTimeout(_popoutTimer);
+      if (_hideTimer || !document.getElementById('reaction-popout')) return;
+      _hideTimer = setTimeout(() => {
+        _hideTimer = null;
         this._hideReactionPopout();
+      }, 300);
+    };
+    for (const id of ['messages', 'thread-messages', 'dm-pip-messages']) {
+      document.getElementById(id)?.addEventListener('mouseover', onBadgeOver);
+    }
+    document.addEventListener('mouseover', (e) => {
+      if (e.target.closest('#reaction-popout')) {
+        clearTimeout(_hideTimer);
+        _hideTimer = null;
+      } else if (!e.target.closest('.reaction-badge')) {
+        scheduleHide();
       }
     });
-    // DM PiP reaction badge popout
-    const dmPipMsgs = document.getElementById('dm-pip-messages');
-    if (dmPipMsgs) {
-      dmPipMsgs.addEventListener('mouseover', (e) => {
-        const badge = e.target.closest('.reaction-badge');
-        if (!badge) return;
-        clearTimeout(_popoutTimer);
-        _popoutTimer = setTimeout(() => this._showReactionPopout(badge), 350);
-      });
-      dmPipMsgs.addEventListener('mouseout', (e) => {
-        const badge = e.target.closest('.reaction-badge');
-        if (!badge && !e.target.closest('#reaction-popout')) {
-          clearTimeout(_popoutTimer);
-          setTimeout(() => {
-            if (!document.querySelector('#reaction-popout:hover')) this._hideReactionPopout();
-          }, 200);
-        }
-      });
-    }
+    // Pointer left the window entirely: no mouseover follows, so hide here.
+    document.addEventListener('mouseout', (e) => {
+      if (!e.relatedTarget) scheduleHide();
+    });
   }
 
   // ── Poll vote click (delegated from messages container) ──
