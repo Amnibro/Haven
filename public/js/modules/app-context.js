@@ -52,6 +52,10 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
       this._hideUserContextMenu();
       this._openRoleAssignCenter(targetUserId);
     });
+    addBtn(`🏅 ${t('badges.menu')}`, () => {
+      this._hideUserContextMenu();
+      this._openMemberBadges(targetUserId, targetName);
+    });
     this._placeUserContextMenu(menu, e);
     return;
   }
@@ -139,12 +143,19 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
   );
   const canAddToChannel = (canMod || canPromote || canBan) && addToChannelList.length > 0 && targetUserId !== this.user?.id;
 
+  // Hand-given badges (#5632); the server checks rank.
+  const canBadge = this._canManageBadges();
+
   // ── Section 2: role / channel management ──
-  if (canPromote || canAddToChannel) {
+  if (canPromote || canAddToChannel || canBadge) {
     addDivider();
     if (canPromote) addBtn(`👑 ${t('users.gear_menu.role_management')}`, () => {
       this._hideUserContextMenu();
       this._openRoleAssignCenter(targetUserId);
+    });
+    if (canBadge) addBtn(`🏅 ${t('badges.menu')}`, () => {
+      this._hideUserContextMenu();
+      this._openMemberBadges(targetUserId, targetName);
     });
     if (canAddToChannel) addBtn(`➕ ${t('users.gear_menu.add_to_channel')}`, () => {
       this._hideUserContextMenu();

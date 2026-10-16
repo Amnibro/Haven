@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.24.11">
+  <link rel="stylesheet" href="/css/style.css?v=4.24.12">
   <script src="/js/theme-compat.js?v=4.18.3"></script>
   <script src="/js/theme-init.js?v=4.22.9"></script>
 </head>
@@ -1505,6 +1505,7 @@
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_people">People &amp; Access</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-members" style="display:none">👥 <span data-i18n="settings.nav.members">Members</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-roles" style="display:none">👑 <span data-i18n="settings.nav.roles">Roles</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-badges" style="display:none">🏅 <span data-i18n="settings.nav.badges">Badges</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-moderation" style="display:none">🛡️ <span data-i18n="settings.nav.moderation">Moderation</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-security" style="display:none">🔒 <span data-i18n="settings.nav.security">Security</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-automod" style="display:none">🛡️ <span data-i18n="settings.nav.automod">Moderation</span></div>
@@ -3086,6 +3087,18 @@
             <small class="settings-hint" data-i18n="settings.admin.channel_creator_role_hint">When a non-admin who can create channels makes one, they are given this role inside that channel so they can manage it. Admins are never affected.</small>
           </div>
           <div id="roles-list-preview" style="margin-top:8px;">
+          </div>
+        </div>
+
+        <!-- Badges (Admin / manage_badges): profile badges, earned, from roles or given by hand (#5632) -->
+        <div class="admin-settings" id="section-badges" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🏅 <span data-i18n="badges.admin.title">Badges</span></h5>
+          <small class="settings-hint" data-i18n="badges.admin.hint">Small icons on profile cards that show someone's history here. Earned ones appear on their own, role ones come with a role, and hand-given ones are given from a member's right-click menu. Members can hide their own.</small>
+          <div style="margin-top:8px">
+            <button class="btn-sm btn-accent" id="badge-new-btn">➕ <span data-i18n="badges.admin.new">New badge</span></button>
+          </div>
+          <div id="badge-admin-list" class="badge-admin-list">
+            <p class="muted-text" data-i18n="badges.admin.loading">Loading...</p>
           </div>
         </div>
 
@@ -5263,7 +5276,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
-  <script type="module" src="/js/app.js?v=4.24.11"></script>
+  <script type="module" src="/js/app.js?v=4.24.12"></script>
   <script src="/js/plugin-loader.js?v=4.23.9"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

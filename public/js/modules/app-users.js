@@ -843,7 +843,7 @@ _showProfilePopup(profile) {
   const canMod = this.user.isAdmin || this._canModerate();
   const canPromote = this._hasPerm('promote_user');
   const canBan = this.user.isAdmin || this._hasPerm('ban_user');
-  const gearVisible = !isSelf && (canMod || canPromote || canBan);
+  const gearVisible = !isSelf && (canMod || canPromote || canBan || this._canManageBadges());
   const gearBtnHtml = gearVisible
     ? `<button class="profile-popup-action-btn profile-gear-btn" title="${this._escapeHtml(t('users.more_actions'))}">⚙️ ${t('users.more_actions')}</button>`
     : '';
@@ -874,6 +874,7 @@ _showProfilePopup(profile) {
       <div class="profile-popup-divider"></div>
       <div id="profile-popup-activity-slot">${this._profileActivityHtml(profile.activity)}</div>
       ${rolesHtml ? `<div class="profile-popup-section-label">${t('users.profile_roles_label')}</div><div class="profile-popup-roles">${rolesHtml}</div>` : ''}
+      ${this._badgeRowHtml(profile)}
       ${joinDate ? `<div class="profile-popup-section-label">${t('users.member_since_label')}</div><div class="profile-popup-join-date">${joinDate}${birthdayHtml}</div>` : ''}
       <div class="profile-popup-actions">${actionsHtml}</div>
     </div>
@@ -925,6 +926,9 @@ _showProfilePopup(profile) {
 
   // Close button
   popup.querySelector('.profile-popup-close').addEventListener('click', () => this._closeProfilePopup());
+
+  // Badges (#5632): click one to see what it is
+  this._bindBadgeRow(popup, profile);
 
   // Gear: the unified user menu, same as right-click, anchored to the button
   const gearBtnEl = popup.querySelector('.profile-gear-btn');

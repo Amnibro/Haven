@@ -767,6 +767,7 @@ _syncSettingsNav() {
     'section-stickers':     ['manage_stickers'],
     'section-sounds-admin': ['manage_soundboard'],
     'section-roles':        ['manage_roles'],
+    'section-badges':       ['manage_badges'],
     'section-audit-log':    ['view_audit_log']
   };
   

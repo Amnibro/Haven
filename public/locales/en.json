@@ -1507,6 +1507,7 @@
       "emojis": "Emojis",
       "stickers": "Stickers",
       "roles": "Roles",
+      "badges": "Badges",
       "tunnel": "Tunnel",
       "bots": "Bots",
       "import": "Import",
@@ -3784,7 +3785,12 @@
         "user_unban": "unbanned",
         "user_mute": "gave a timeout to",
         "user_unmute": "ended the timeout of",
-        "user_rename": "renamed"
+        "user_rename": "renamed",
+        "badge_create": "created badge",
+        "badge_update": "updated badge",
+        "badge_delete": "deleted badge",
+        "badge_grant": "gave a badge to",
+        "badge_revoke": "took a badge back from"
       }
     },
     "ip_bans": {
@@ -4548,5 +4554,103 @@
     "unmute_member": "Unmute for me",
     "muted_member": "{{name}} is muted for you",
     "unmuted_member": "{{name}} is no longer muted for you"
+  },
+  "badges": {
+    "profile_label": "Badges",
+    "hide_on_profile": "Hide on my profile",
+    "show_on_profile": "Show on my profile",
+    "hidden_note": "Hidden: only you can see it.",
+    "save_failed": "Could not save that",
+    "given": "Badge given",
+    "taken_back": "Badge taken back",
+    "take_back": "Take back",
+    "menu": "Badges",
+    "span": {
+      "days_one": "1 day",
+      "days": "{{n}} days",
+      "months_one": "1 month",
+      "months": "{{n}} months",
+      "years_one": "1 year",
+      "years": "{{n}} years"
+    },
+    "how": {
+      "account_age": "Earned by being a member for {{span}}",
+      "messages": "Earned by posting {{count}} messages",
+      "forum_likes": "Earned by getting {{count}} likes on forum posts",
+      "role": "Comes with the {{role}} role",
+      "role_missing": "Comes with a role that no longer exists",
+      "manual": "Given by hand"
+    },
+    "kind": {
+      "account_age": "Time on the server",
+      "messages": "Messages posted",
+      "forum_likes": "Forum likes received",
+      "role": "Comes with a role",
+      "manual": "Given by hand"
+    },
+    "kind_hint": {
+      "account_age": "Everyone whose account is at least this old shows it.",
+      "messages": "Counts messages in server channels. DMs, bots and deleted messages do not count.",
+      "forum_likes": "Counts likes from other people on forum topics and pictures.",
+      "role": "Everyone holding the role shows it, and loses it when the role goes.",
+      "manual": "Give it from a member's right-click menu, under Badges."
+    },
+    "admin": {
+      "title": "Badges",
+      "hint": "Small icons on profile cards that show someone's history here. Earned ones appear on their own, role ones come with a role, and hand-given ones are given from a member's right-click menu. Members can hide their own.",
+      "new": "New badge",
+      "loading": "Loading...",
+      "load_failed": "Could not load badges",
+      "none": "No badges yet.",
+      "group_earned": "Earned",
+      "group_role": "From roles",
+      "group_manual": "Given by hand",
+      "enabled": "Show this badge",
+      "on": "On",
+      "off": "Off",
+      "edit": "Edit",
+      "delete": "Delete",
+      "holders": "Who has it ({{n}})",
+      "no_holders": "Nobody has this badge yet.",
+      "given_by": "given by {{name}}",
+      "role_above_you": "This badge comes with a role at or above yours",
+      "delete_title": "Delete \"{{name}}\"?",
+      "delete_body": "It goes from every profile, and anyone it was given to loses it. This cannot be undone.",
+      "deleted": "Badge deleted",
+      "saved": "Badge saved"
+    },
+    "editor": {
+      "new_title": "New badge",
+      "edit_title": "Edit badge",
+      "name": "Name",
+      "description": "Description",
+      "description_placeholder": "What it means, in a few words",
+      "icon": "Icon",
+      "icon_builtin": "Built-in",
+      "icon_emoji": "Emoji",
+      "icon_image": "Image",
+      "emoji_hint": "Type or paste one emoji.",
+      "upload": "Upload an image",
+      "upload_hint": "PNG, GIF, WebP or JPG. It is shrunk to 64 by 64.",
+      "upload_failed": "Upload failed",
+      "bad_type": "Only PNG, GIF, WebP or JPG images",
+      "too_large": "That image is too large (256 KB at most)",
+      "kind": "How members get it",
+      "after": "After",
+      "unit_days": "days",
+      "unit_months": "months",
+      "unit_years": "years",
+      "count": "How many",
+      "role": "Role",
+      "no_roles": "No roles you can use",
+      "enabled": "Show this badge",
+      "save": "Save"
+    },
+    "member": {
+      "title": "Badges for {{name}}",
+      "intro": "Tick a badge to give it, untick to take it back.",
+      "none": "There are no hand-given badges yet. Make one in Settings, Admin, Badges.",
+      "switched_off": "switched off"
+    }
   }
 }

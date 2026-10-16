@@ -42,6 +42,11 @@ _setupAuditLog() {
     user_mute:             { icon: '🔇', label: t('modals.audit_log.actions.user_mute') },
     user_unmute:           { icon: '🔊', label: t('modals.audit_log.actions.user_unmute') },
     user_rename:           { icon: '✏️', label: t('modals.audit_log.actions.user_rename') },
+    badge_create:          { icon: '🏅', label: t('modals.audit_log.actions.badge_create') },
+    badge_update:          { icon: '🏅', label: t('modals.audit_log.actions.badge_update') },
+    badge_delete:          { icon: '🏅', label: t('modals.audit_log.actions.badge_delete') },
+    badge_grant:           { icon: '🏅', label: t('modals.audit_log.actions.badge_grant') },
+    badge_revoke:          { icon: '🏅', label: t('modals.audit_log.actions.badge_revoke') },
   };
 
   const _esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
