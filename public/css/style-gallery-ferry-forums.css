@@ -140,12 +140,18 @@
   .message, .message-compact {
     position: relative;
   }
-  /* Ensure compact messages are tall enough that the ⋯ button (28 px)
-     doesn't overflow into adjacent rows and cause visual overlap. */
+  /* A follow-up line keeps the height of its own text. Making it tall
+     enough for the 28 px button left a blank strip under every one-line
+     follow-up (and none under longer ones), so on phones the messages
+     looked spaced out unevenly. Its button is one line tall instead, so
+     neighbouring buttons still never overlap. */
   .message-compact {
-    min-height: 2rem;
+    min-height: 1.375rem;
     display: flex;
     align-items: flex-start;
+  }
+  .message-compact .msg-dots-btn {
+    height: 1.375rem;
   }
   /* Give message rows right padding so text doesn't flow under the ⋯ button */
   .message .message-row,
