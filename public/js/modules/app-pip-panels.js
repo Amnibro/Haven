@@ -451,6 +451,13 @@ _bindThreadAndDmPanels() {
       });
       observer.observe(threadPanel);
     }
+    window.addEventListener('resize', () => {
+      if (!threadPanel.classList.contains('pip')) return;
+      const r = threadPanel.getBoundingClientRect();
+      const pos = clampPiPRect(r.left, r.top, r.width, r.height);
+      threadPanel.style.left = `${pos.left}px`;
+      threadPanel.style.top = `${pos.top}px`;
+    });
   }
 
   // PiP input area height resize: drag the top handle upward to expand the textarea.
@@ -679,6 +686,7 @@ _bindDMPiPDrag() {
   this._dmPipDragBound = true;
   const panel = document.getElementById('dm-pip-panel');
   if (!panel) return;
+  window.addEventListener('resize', () => { if (panel.style.display !== 'none') this._applyDMPiPGeometry(panel); });
   const header = panel.querySelector('.dm-pip-header');
   if (!header) return;
   let startX = 0, startY = 0, startLeft = 0, startTop = 0, dragging = false;
