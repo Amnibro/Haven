@@ -3473,6 +3473,7 @@
       "hours": "hours",
       "hours_placeholder": "Hours",
       "admin_note": "Admins always have access to all channels, including private ones.",
+      "tag_label": "Tag (optional)",
       "create_btn": "Create"
     },
     "webhook": {

@@ -846,6 +846,17 @@ _bindChannelMenu() {
     if (!parentCh) return;
     // Show the create-sub-channel modal
     document.getElementById('create-sub-name').value = '';
+    // A tag now saves a trip to Organize; the ones already used next to it
+    // are offered first.
+    document.getElementById('create-sub-tag').value = '';
+    const tagList = document.getElementById('create-sub-tag-list');
+    tagList.textContent = '';
+    const usedTags = [...new Set(this.channels.filter(c => c.parent_channel_id === parentCh.id && c.category).map(c => c.category))].sort();
+    for (const tag of usedTags) {
+      const opt = document.createElement('option');
+      opt.value = tag;
+      tagList.appendChild(opt);
+    }
     document.getElementById('create-sub-private').checked = false;
     document.getElementById('create-sub-temporary').checked = false;
     document.getElementById('sub-temp-duration-row').style.display = 'none';
@@ -861,13 +872,15 @@ _bindChannelMenu() {
     const isPrivate = document.getElementById('create-sub-private').checked;
     const temporary = document.getElementById('create-sub-temporary').checked;
     const duration = parseInt(document.getElementById('create-sub-duration').value) || 24;
+    const category = document.getElementById('create-sub-tag').value.trim();
     if (!name) return;
     this.socket.emit('create-sub-channel', {
       parentCode: modal._parentCode,
       name,
       isPrivate,
       temporary,
-      duration
+      duration,
+      category
     });
     modal.style.display = 'none';
   });

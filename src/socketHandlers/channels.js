@@ -176,6 +176,18 @@ module.exports = function register(socket, ctx) {
     ctx.dmCalls?.snapshotFor(socket);
   });
 
+  // An Organize tag as stored: trimmed, at most 30 characters, null when
+  // empty. If another channel already uses it in different casing, that
+  // casing is adopted so the two group together.
+  function normalizeCategory(raw, ownId = 0) {
+    const category = typeof raw === 'string' ? raw.trim().slice(0, 30) : '';
+    if (!category) return null;
+    const existing = db.prepare(
+      'SELECT category FROM channels WHERE category IS NOT NULL AND id != ? AND category COLLATE NOCASE = ?'
+    ).get(ownId, category);
+    return existing ? existing.category : category;
+  }
+
   // ── Create channel (permission-based) ─────────────────
   // (#5461) Assign the configured "channel creator role" to a non-admin who
   // just created a channel, scoped to that channel. The role is configurable
@@ -936,11 +948,14 @@ module.exports = function register(socket, ctx) {
 
     const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id = ?').get(parentChannel.id);
     const position = (maxPos && maxPos.mp != null) ? maxPos.mp + 1 : 0;
+    // The Organize tag, set here so it needs no second step. Same rules as
+    // set-channel-category, which the creator is allowed to use on it too.
+    const category = normalizeCategory(data.category);
 
     try {
       const result = db.prepare(
-        'INSERT INTO channels (name, code, created_by, parent_channel_id, position, is_private, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(name, code, socket.user.id, parentChannel.id, position, isPrivate, expiresAt);
+        'INSERT INTO channels (name, code, created_by, parent_channel_id, position, is_private, expires_at, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(name, code, socket.user.id, parentChannel.id, position, isPrivate, expiresAt, category);
 
       const parentMembers = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(parentChannel.id);
       const membersToAdd = isPrivate ? [{ user_id: socket.user.id }] : parentMembers;
@@ -1667,20 +1682,10 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
-    let category = typeof data.category === 'string' ? data.category.trim() : '';
-    if (category.length > 30) category = category.slice(0, 30);
-    if (!category) category = null;
     const channel = db.prepare('SELECT id, parent_channel_id FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSubsOf(channel.parent_channel_id)) return socket.emit('error-msg', 'You don\'t have permission to set categories'); // (#5424)
-    // Case-insensitive dedup: if another channel already uses this tag with
-    // different casing, adopt the existing casing so they group together.
-    if (category) {
-      const existing = db.prepare(
-        'SELECT category FROM channels WHERE category IS NOT NULL AND id != ? AND category COLLATE NOCASE = ?'
-      ).get(channel.id, category);
-      if (existing) category = existing.category;
-    }
+    const category = normalizeCategory(data.category, channel.id);
     try {
       db.prepare('UPDATE channels SET category = ? WHERE id = ?').run(category, channel.id);
       broadcastChannelLists();

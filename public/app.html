@@ -5059,6 +5059,9 @@
       <p class="modal-desc" id="create-sub-parent-name"></p>
       <label style="display:block;margin:12px 0 6px;font-size:0.85rem;opacity:0.7" data-i18n="modals.create_sub.name_label">Sub-channel name</label>
       <input type="text" id="create-sub-name" class="input" maxlength="50" data-i18n-placeholder="modals.create_sub.name_placeholder" placeholder="sub-channel name..." style="width:100%">
+      <label for="create-sub-tag" style="display:block;margin:12px 0 6px;font-size:0.85rem;opacity:0.7" data-i18n="modals.create_sub.tag_label">Tag (optional)</label>
+      <input type="text" id="create-sub-tag" class="input" maxlength="30" list="create-sub-tag-list" data-i18n-placeholder="modals.organize.tag_placeholder" placeholder="Tag name…" style="width:100%">
+      <datalist id="create-sub-tag-list"></datalist>
       <label class="checkbox-row" style="margin:14px 0 8px;display:flex;align-items:center;gap:8px;cursor:pointer">
         <input type="checkbox" id="create-sub-private">
         <span style="font-size:0.9rem">🔒 <span data-i18n="modals.create_sub.private_label">Private</span> <span style="opacity:0.5;font-size:0.8rem" data-i18n="modals.create_sub.private_hint">(invite-only, hidden from non-members)</span></span>
@@ -5332,7 +5335,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
-  <script type="module" src="/js/app.js?v=4.25.3"></script>
+  <script type="module" src="/js/app.js?v=4.25.4"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
