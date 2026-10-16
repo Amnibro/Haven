@@ -7,7 +7,7 @@ const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyCo
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
 const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
-const { votesFor } = require('../forumVotes');
+const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
@@ -3041,6 +3041,8 @@ module.exports = function register(socket, ctx) {
       // post and the rest under Comments.
       blog: !!blogParts,
       blogPicsOnly: !!blogParts && forumBlog.picsOnly(db, channel.id),
+      // Each picture's likes and dislikes, and this reader's own vote (#5784).
+      pieceVotes: blogParts ? pieceVotesFor(db, socket.user.id, [parentId, ...blogParts]) : undefined,
       // A closed forum topic: only moderators and admins may still reply.
       closed: !!(parent.is_forum && parent.closed),
       parentContent: parent.content,
