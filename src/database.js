@@ -13,6 +13,7 @@ const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
+const { migrateBadges } = require('./badges');
 const { installGuard: installProtectedGuard } = require('./protectedMessages');
 
 let db;
@@ -1715,6 +1716,8 @@ function initDatabase() {
   modCases.ensureTable(db);
   migrateImportedAuthors(db);
   forumUnread.ensureTable(db);
+  // Profile badges (#5632); needs forum_votes, made above.
+  migrateBadges(db);
 
   // ── Rich presence: linked external accounts ─────────────
   // One row per (user, provider). access_token / refresh_token are stored
