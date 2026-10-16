@@ -11,6 +11,8 @@ const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
 const THEME_SOURCE = fs.readFileSync(path.join(ROOT, 'public/js/theme.js'), 'utf8');
+const ThemeCompat = require('../public/js/theme-compat');
+const { readCoreCss } = require('./coreCss');
 
 function memoryStorage(initial = {}) {
   const values = new Map(Object.entries(initial));
@@ -70,7 +72,8 @@ function canvas(id) {
   });
 }
 
-function loadThemePage(stored = {}) {
+function loadThemePage(stored = {}, { computedColor = '' } = {}) {
+  const page = { computedColor };
   const localStorage = memoryStorage(stored);
   const sessionStorage = memoryStorage();
   const root = element('html');
@@ -95,6 +98,7 @@ function loadThemePage(stored = {}) {
   };
   const window = {
     location: { href: 'http://localhost/app', search: '' },
+    HavenThemeCompat: ThemeCompat,
     addEventListener() {},
     matchMedia: () => ({ matches: false, addEventListener() {} }),
   };
@@ -108,7 +112,7 @@ function loadThemePage(stored = {}) {
     clearTimeout() {},
     requestAnimationFrame: () => 1,
     cancelAnimationFrame() {},
-    getComputedStyle: () => ({ getPropertyValue: () => '', color: '' }),
+    getComputedStyle: () => ({ getPropertyValue: () => '', color: page.computedColor }),
     URLSearchParams,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
   };
@@ -117,7 +121,8 @@ function loadThemePage(stored = {}) {
   vm.createContext(context);
   vm.runInContext(THEME_SOURCE, context, { filename: 'theme.js' });
   const runTimers = () => { while (timers.length) timers.shift()(); };
-  return { context, root, nodes, localStorage, runTimers };
+  Object.assign(page, { context, root, nodes, localStorage, runTimers });
+  return page;
 }
 
 test('a fresh account keeps Haven colors instead of the Custom palette', () => {
@@ -161,4 +166,78 @@ test('Custom chosen from the server applies even before a color was ever saved',
 
   assert.ok(page.root.style.props.get('--bg-primary'), 'the default Custom palette is applied');
   assert.equal(page.localStorage.getItem('haven_theme'), 'custom');
+});
+
+test('every theme gets light or dark native controls from its own background', () => {
+  const light = new Set(['gospel', 'win95', 'daylight', 'cloudy', 'amni-scient-light.theme.css', 'braid-light.theme.css']);
+  const themes = new Map();
+  const core = readCoreCss();
+  for (const [, name, color] of core.matchAll(/\[data-theme="([a-z0-9]+)"\]\s*\{[^}]*?--bg-primary:\s*([^;]+);/g)) themes.set(name, color);
+  const haven = core.match(/:root,\s*\[data-theme="haven"\]\s*\{[^}]*?--bg-primary:\s*([^;]+);/);
+  themes.set('haven', haven[1]);
+  const themeDir = path.join(ROOT, 'themes');
+  for (const file of fs.readdirSync(themeDir).filter(f => f.endsWith('.theme.css'))) {
+    const css = fs.readFileSync(path.join(themeDir, file), 'utf8');
+    themes.set(file, css.match(/--bg-primary:\s*([^;]+);/)[1]);
+    // A theme that names its scheme must agree with what its colors say.
+    const declared = css.match(/color-scheme:\s*(light|dark)\s*;/);
+    if (declared) assert.equal(ThemeCompat.colorSchemeFor(themes.get(file)), declared[1], file);
+  }
+  assert.ok(themes.size > 30, 'built-in and file themes were all found');
+  for (const [name, color] of themes) {
+    assert.equal(ThemeCompat.colorSchemeFor(color), light.has(name) ? 'light' : 'dark', `${name} (${color})`);
+  }
+});
+
+test('the color scheme reader understands the color syntaxes a theme can use', () => {
+  assert.equal(ThemeCompat.colorSchemeFor('#fff'), 'light');
+  assert.equal(ThemeCompat.colorSchemeFor('#000000'), 'dark');
+  assert.equal(ThemeCompat.colorSchemeFor('#F3F2EF'), 'light');
+  assert.equal(ThemeCompat.colorSchemeFor('rgb(250, 248, 245)'), 'light');
+  assert.equal(ThemeCompat.colorSchemeFor('rgb(25 27 40)'), 'dark');
+  assert.equal(ThemeCompat.colorSchemeFor('rgba(245, 247, 250, 0.95)'), 'light');
+  assert.equal(ThemeCompat.colorSchemeFor('color(srgb 0.98 0.97 0.96)'), 'light');
+  assert.equal(ThemeCompat.colorSchemeFor('rgba(0, 0, 0, 0)'), null, 'transparent says nothing');
+  assert.equal(ThemeCompat.colorSchemeFor('oklch(0.9 0.1 200)'), null);
+  assert.equal(ThemeCompat.colorSchemeFor(''), null);
+  assert.equal(ThemeCompat.colorSchemeFor('#12'), null);
+});
+
+test('Custom and RGB set the scheme from their light or dark base', () => {
+  const page = loadThemePage();
+  for (const hue of [0, 60, 120, 200, 260, 320]) {
+    page.context.applyCustomVars(page.context.generateCustomPalette(hue, 0.75, 0.95, 0.75, true));
+    assert.equal(page.root.getAttribute('data-color-scheme'), 'light', `light base, hue ${hue}`);
+    page.context.applyCustomVars(page.context.generateCustomPalette(hue, 0.75, 0.95, 0.75, false));
+    assert.equal(page.root.getAttribute('data-color-scheme'), 'dark', `dark base, hue ${hue}`);
+  }
+  assert.equal(page.localStorage.getItem('haven_color_scheme'), 'dark', 'stored for the next first paint');
+});
+
+test('switching to a built-in theme measures its background again', () => {
+  const page = loadThemePage({}, { computedColor: 'rgb(25, 27, 40)' });
+  page.runTimers();
+  assert.equal(page.root.getAttribute('data-color-scheme'), 'dark');
+
+  page.computedColor = 'rgb(250, 248, 245)';
+  page.context.applyThemeFromServer('daylight', true, true);
+  page.runTimers();
+  assert.equal(page.root.getAttribute('data-color-scheme'), 'light');
+  assert.equal(page.localStorage.getItem('haven_color_scheme'), 'light');
+});
+
+test('every native select and its options use the theme input colors', () => {
+  const core = readCoreCss();
+  assert.match(core, /:where\(:root\)\s*\{\s*color-scheme:\s*dark;\s*\}/);
+  assert.match(core, /:where\(:root\[data-color-scheme="light"\]\)\s*\{\s*color-scheme:\s*light;\s*\}/);
+  const select = core.match(/:where\(select\)\s*\{([^}]*)\}/);
+  assert.ok(select, 'a base rule for every select');
+  assert.match(select[1], /background-color:\s*var\(--bg-input\)/);
+  assert.match(select[1], /color:\s*var\(--text-primary\)/);
+  assert.match(select[1], /border:\s*1px solid var\(--border\)/);
+  assert.match(core, /:where\(select:focus\)\s*\{\s*border-color:\s*var\(--accent\);\s*\}/);
+  const option = core.match(/:where\(select option, select optgroup\)\s*\{([^}]*)\}/);
+  assert.ok(option, 'a base rule for every option');
+  assert.match(option[1], /background-color:\s*var\(--bg-input\)/);
+  assert.match(option[1], /color:\s*var\(--text-primary\)/);
 });

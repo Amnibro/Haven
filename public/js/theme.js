@@ -177,6 +177,9 @@ function applyCustomVars(palette) {
   // must not leave the light one behind.
   if (!('--accent-text' in palette)) root.removeProperty('--accent-text');
   _cachePalette(palette);
+  // Read from the palette itself: RGB calls this many times a second, too
+  // often to ask the browser for computed styles.
+  _setColorScheme(window.HavenThemeCompat?.colorSchemeFor?.(palette['--bg-primary']));
 }
 
 // theme-init.js paints the first frame from the last palette shown, so a
@@ -208,7 +211,73 @@ function clearCustomVars() {
     '--text-link','--border','--border-light','--success','--danger','--warning',
     '--led-on','--led-off','--led-glow'];
   keys.forEach(k => document.documentElement.style.removeProperty(k));
+  scheduleColorSchemeSync();
 }
+
+// ── Light or dark native controls ───────────────────────
+// The list a <select> opens, scrollbars and date pickers are drawn by the
+// browser, which picks light or dark from color-scheme. data-color-scheme on
+// <html> carries the active theme's answer (style-themes.css turns it into
+// color-scheme), worked out from the theme's own --bg-primary, so built-in,
+// published and Custom themes all get it without a list kept by hand.
+// theme-init.js reads the stored copy so the first frame already has it.
+const COLOR_SCHEME_KEY = 'haven_color_scheme';
+let _colorSchemeProbe = null;
+let _colorSchemeTimer = 0;
+
+function _setColorScheme(scheme) {
+  if (scheme !== 'light' && scheme !== 'dark') return;
+  const root = document.documentElement;
+  if (root.getAttribute('data-color-scheme') === scheme) return;
+  root.setAttribute('data-color-scheme', scheme);
+  try {
+    localStorage.setItem(COLOR_SCHEME_KEY, scheme);
+  } catch {
+    // Storage unavailable: the next load works the scheme out again.
+  }
+}
+
+function syncColorScheme() {
+  _colorSchemeTimer = 0;
+  const compat = window.HavenThemeCompat;
+  if (!compat?.colorSchemeFor || !document.body) return;
+  // The browser resolves the token to rgb() on an element, whatever color
+  // syntax the theme wrote it in.
+  if (!_colorSchemeProbe || !_colorSchemeProbe.isConnected) {
+    _colorSchemeProbe = document.createElement('span');
+    _colorSchemeProbe.setAttribute('aria-hidden', 'true');
+    _colorSchemeProbe.setAttribute('data-haven-color-probe', '');
+    _colorSchemeProbe.style.cssText = 'display:none;color:var(--bg-primary)';
+    document.body.appendChild(_colorSchemeProbe);
+  }
+  _setColorScheme(compat.colorSchemeFor(getComputedStyle(_colorSchemeProbe).color));
+}
+
+// A timer rather than an animation frame: frames pause in a hidden window,
+// and a theme switched there would keep the old scheme until shown.
+function scheduleColorSchemeSync() {
+  if (_colorSchemeTimer) return;
+  _colorSchemeTimer = setTimeout(syncColorScheme, 0);
+}
+
+// Built-in themes switch by data-theme; published themes by adding or
+// removing a stylesheet, whose colors only count once it has loaded.
+function _watchColorScheme() {
+  if (typeof MutationObserver === 'function') {
+    const observer = new MutationObserver(scheduleColorSchemeSync);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    if (document.head) observer.observe(document.head, { childList: true });
+  }
+  document.addEventListener('load', (e) => {
+    if (e.target?.tagName === 'LINK') scheduleColorSchemeSync();
+  }, true);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleColorSchemeSync, { once: true });
+  } else {
+    scheduleColorSchemeSync();
+  }
+}
+_watchColorScheme();
 
 // ═══════════════════════════════════════════════════════════
 // RGB CYCLING THEME

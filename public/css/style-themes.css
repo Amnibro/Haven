@@ -117,6 +117,14 @@
   --scanline:      none;
 }
 
+/* Light or dark native controls: the list a <select> opens, scrollbars and
+   date pickers. theme.js sets data-color-scheme from the active theme's
+   --bg-primary, for built-in, published and Custom themes alike. :where()
+   keeps both rules at zero specificity, so a theme that sets color-scheme
+   itself still wins. Dark until theme.js has measured, like Haven. */
+:where(:root) { color-scheme: dark; }
+:where(:root[data-color-scheme="light"]) { color-scheme: light; }
+
 /* ─── THEME: Discord ───────────────────────────────────── */
 [data-theme="discord"] {
   --bg-primary:    #313338;

@@ -145,6 +145,54 @@
     }
   }
 
+  // Native controls (the list a <select> opens, scrollbars, date pickers) are
+  // drawn by the browser, which only knows light or dark through
+  // color-scheme. A theme's page background decides which it is, so
+  // built-in, published and Custom themes need no list kept by hand.
+  // Takes a CSS color as #rgb, #rrggbb(aa), rgb()/rgba() or color(srgb ...),
+  // and returns 'light', 'dark', or null when it cannot tell.
+  function parseColor(value) {
+    const text = String(value || '').trim().toLowerCase();
+    let match = text.match(/^#([0-9a-f]{3,8})$/);
+    if (match) {
+      let hex = match[1];
+      if (hex.length === 3 || hex.length === 4) hex = hex.split('').map(c => c + c).join('');
+      if (hex.length !== 6 && hex.length !== 8) return null;
+      const alpha = hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1;
+      return [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16)).concat(alpha);
+    }
+    match = text.match(/^rgba?\(([^)]+)\)$/);
+    if (match) {
+      const parts = match[1].split(/[\s,/]+/).filter(Boolean);
+      if (parts.length < 3) return null;
+      const channel = p => (p.endsWith('%') ? parseFloat(p) * 2.55 : parseFloat(p));
+      const alpha = parts[3] === undefined ? 1
+        : (parts[3].endsWith('%') ? parseFloat(parts[3]) / 100 : parseFloat(parts[3]));
+      const rgb = parts.slice(0, 3).map(channel);
+      return rgb.some(Number.isNaN) || Number.isNaN(alpha) ? null : rgb.concat(alpha);
+    }
+    match = text.match(/^color\(srgb\s+([^)]+)\)$/);
+    if (match) {
+      const parts = match[1].split(/[\s/]+/).filter(Boolean).map(parseFloat);
+      if (parts.length < 3 || parts.slice(0, 3).some(Number.isNaN)) return null;
+      return parts.slice(0, 3).map(c => c * 255).concat(parts[3] === undefined ? 1 : parts[3]);
+    }
+    return null;
+  }
+
+  function colorSchemeFor(color) {
+    const rgba = parseColor(color);
+    // A see-through background takes its look from what is behind it.
+    if (!rgba || rgba[3] < 0.5) return null;
+    const lin = c => {
+      const v = Math.min(255, Math.max(0, c)) / 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    const luminance = 0.2126 * lin(rgba[0]) + 0.7152 * lin(rgba[1]) + 0.0722 * lin(rgba[2]);
+    // Light when black text would read better on it than white text does.
+    return (luminance + 0.05) / 0.05 > 1.05 / (luminance + 0.05) ? 'light' : 'dark';
+  }
+
   return {
     CACHE_KEY,
     SAFE_MODE_KEY,
@@ -160,5 +208,6 @@
     resetLocalCustomizations,
     urlWithoutSafeMode,
     isSeasonalTheme,
+    colorSchemeFor,
   };
 });

@@ -431,7 +431,9 @@
   color: #000;
 }
 
-/* Win95 select dropdowns */
+/* Win95 select dropdowns. The chosen option keeps its navy row once the
+   pointer moves off it, or its white text vanishes on the white list. */
+[data-theme="win95"] select option:checked { background-color: #000080; }
 [data-theme="win95"] select {
   background: #fff;
   border: 2px inset #808080 !important;
