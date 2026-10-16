@@ -1,24 +1,28 @@
 'use strict';
 
 // "Move here as thread": selected messages go into the thread under another
-// message in the same channel. The rules live in src/moveToThread.js.
+// message, in the same channel or another. The rules live in
+// src/moveToThread.js.
 //
 //   move-messages-to-thread { code, rootId, messageIds }
-//     -> { success, moved, brought } or { error }
+//     code is the channel the selection is in; the base names its own.
+//     -> { success, moved, brought, toChannel } or { error }
 //
-// The same permission as Move to...: the admin, or Delete Messages in the
-// channel, and the mover has to reach the channel (membership and its role
-// gate). Everyone in the channel then hears:
-//   messages-moved     the selected messages leave the feed (the event Move
-//                      to... sends, so older clients drop them too)
-//   messages-threaded  which thread they went to, so an open thread panel or
-//                      a forum reloads
-//   thread-updated     the base's reply chip and count
+// The same permission as Move to..., in both channels: the admin, or Delete
+// Messages there, and the mover has to reach both (membership and the role
+// gate). Into another channel, its text switch and read-only mode apply as
+// they do for a plain move. Then:
+//   messages-moved     to the source: the selected messages leave the feed
+//                      (the event Move to... sends, so older clients drop
+//                      them too)
+//   messages-threaded  to both: which thread they went to, so an open thread
+//                      panel or a forum reloads
+//   thread-updated     to the base's channel: its reply chip and count
 // No new-thread-message goes out: these are old messages that were already
 // on screen, so nobody gets a sound or an "N new" marker for them.
 
 const { utcStamp } = require('./helpers');
-const { reachableChannelByCode } = require('./channelAccess');
+const { reachableChannel, reachableChannelByCode } = require('./channelAccess');
 const { moveIntoThread } = require('../moveToThread');
 const forumUnread = require('../forumUnread');
 
@@ -56,42 +60,60 @@ module.exports = function register(socket, ctx) {
   socket.on('move-messages-to-thread', (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
     if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
-
-    const channel = reachableChannelByCode(ctx, socket.user, typeof data.code === 'string' ? data.code.trim() : '');
-    if (!channel) return cb({ error: 'Channel not found' });
-    if (channel.is_dm) return cb({ error: 'Cannot move messages in DMs' });
-    if (!canMove(channel.id)) return cb({ error: 'You need message management permissions to move messages' });
-
     const rootId = data.rootId;
+    if (!Number.isInteger(rootId) || rootId <= 0) return cb({ error: 'Invalid message' });
+
+    // Where the selection is, and where the base is.
+    const from = reachableChannelByCode(ctx, socket.user, typeof data.code === 'string' ? data.code.trim() : '');
+    if (!from) return cb({ error: 'Channel not found' });
+    const base = db.prepare('SELECT channel_id FROM messages WHERE id = ?').get(rootId);
+    const to = base ? reachableChannel(ctx, socket.user, base.channel_id) : null;
+    if (!to) return cb({ error: 'That message no longer exists' });
+    if (from.is_dm || to.is_dm) return cb({ error: 'Cannot move messages to or from DMs' });
+    if (!canMove(from.id) || !canMove(to.id)) {
+      return cb({ error: 'You need message management permissions to move messages' });
+    }
+    // Into another channel it is posting there, as Move to... checks.
+    if (from.id !== to.id && !socket.user.isAdmin) {
+      if (to.text_enabled === 0) return cb({ error: 'Text messages are disabled in that channel' });
+      if (to.read_only === 1 && !userHasPermission(socket.user.id, 'read_only_override', to.id)) {
+        return cb({ error: 'That channel is read-only' });
+      }
+    }
+
     let result;
     try {
-      result = moveIntoThread(db, { channel, rootId, messageIds: data.messageIds });
+      result = moveIntoThread(db, { from, to, rootId, messageIds: data.messageIds });
     } catch (err) {
       console.error('Move to thread error:', err);
       return cb({ error: 'Failed to move messages' });
     }
     if (result.error) return cb({ error: result.error });
-    forumUnread.forget(channel.id);
+    forumUnread.forget(from.id);
+    forumUnread.forget(to.id);
 
-    const code = channel.code;
-    const tell = (event, payload) => io.to(`channel:${code}`).emit(event, payload);
-    tell('messages-moved', { channelCode: code, messageIds: result.selected, toThread: rootId });
-    tell('messages-threaded', {
-      channelCode: code,
+    const tell = (code, event, payload) => io.to(`channel:${code}`).emit(event, payload);
+    tell(from.code, 'messages-moved', { channelCode: from.code, messageIds: result.selected, toChannel: to.code, toThread: rootId });
+    const threaded = {
+      channelCode: to.code,
+      fromChannel: from.code,
       parentId: rootId,
       messageIds: result.moved,
       absorbedRoots: result.absorbedRoots,
-    });
-    tell('thread-updated', { channelCode: code, parentId: rootId, thread: threadSummary(rootId) });
+    };
+    tell(to.code, 'messages-threaded', threaded);
+    // Viewers of the source with a moved thread open, or a forum showing.
+    if (from.id !== to.id) tell(from.code, 'messages-threaded', threaded);
+    tell(to.code, 'thread-updated', { channelCode: to.code, parentId: rootId, thread: threadSummary(rootId) });
 
     const brought = result.moved.length - result.selected.length;
     if (typeof logAudit === 'function') {
       logAudit({
         actor: socket.user, action: 'messages_move_to_thread',
-        target_type: 'channel', target_id: channel.id, target_name: channel.name,
-        details: { thread: rootId, messages: result.selected.length, broughtReplies: brought, messageIds: result.selected },
+        target_type: 'channel', target_id: to.id, target_name: to.name,
+        details: { thread: rootId, fromChannel: from.name, messages: result.selected.length, broughtReplies: brought, messageIds: result.selected },
       });
     }
-    cb({ success: true, moved: result.selected.length, brought });
+    cb({ success: true, moved: result.selected.length, brought, toChannel: to.code });
   });
 };
