@@ -457,6 +457,8 @@ _appendThreadMessage(msg, opts = {}) {
   if (msg.avatar) el.dataset.avatar = msg.avatar;
   if (msg.avatar_shape) el.dataset.avatarShape = msg.avatar_shape;
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
+  if (msg.silent) el.dataset.silent = '1';
+  const silentHtml = this._silentTagHtml?.(msg) || '';
   if (threadCompact) {
     const shortTime = this._fmtTime(msg.created_at);
     el.innerHTML = `
@@ -467,7 +469,7 @@ _appendThreadMessage(msg, opts = {}) {
             <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
             ${threadOverflowHtml}
           </div>
-          <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
+          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>
           ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
@@ -487,7 +489,7 @@ _appendThreadMessage(msg, opts = {}) {
             </div>
           </div>
           ${replyHtml}
-          <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
+          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>
           ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>

@@ -344,7 +344,8 @@
       "embed_medium": "Medium",
       "embed_small": "Small",
       "embed_size_hint": "Embed size (use Settings ▸ Link Previews to turn off)",
-      "collapse": "Collapse"
+      "collapse": "Collapse",
+      "silent_hint": "Sent silently: nobody got a sound, pop-up or push for it"
     },
     "input_bar": {
       "emoji_btn": "Emoji",
@@ -362,7 +363,9 @@
       "highlight_btn_armed": "Official message is on for the next message",
       "highlight_btn_mode_on": "Official mode is on: this message goes out as your role. Click to send just this one plain",
       "highlight_btn_mode_skip": "Official mode is on, but this message goes out plain. Click to post it as your role",
-      "self_destruct_btn_armed": "Self-destruct is on: your next message deletes itself"
+      "self_destruct_btn_armed": "Self-destruct is on: your next message deletes itself",
+      "silent_btn": "Silent message: send without a sound, pop-up or push for anyone (or start it with @silent)",
+      "silent_btn_armed": "Silent is on: your next message notifies nobody"
     },
     "profile": {
       "login_username": "Your login username",

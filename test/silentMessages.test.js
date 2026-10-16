@@ -33,6 +33,15 @@ test('anything else is left alone', () => {
   assert.deepEqual(takeSilent(null), { silent: false, content: '' });
 });
 
+test('the message box takes the prefix off before sending, an encrypted DM included', async () => {
+  const { pathToFileURL } = require('node:url');
+  const M = (await import(pathToFileURL(path.join(__dirname, '..', 'public', 'js', 'modules', 'app-silent.js')).href)).default;
+  assert.deepEqual(M._silentSplit('@silent hello'), { silent: true, content: 'hello' });
+  assert.deepEqual(M._silentSplit('@silent'), { silent: false, content: '@silent' });
+  assert.deepEqual(M._silentSplit('@silent', true), { silent: true, content: '' }, 'with attachments the prefix alone is enough');
+  assert.deepEqual(M._silentSplit('say @silent'), { silent: false, content: 'say @silent' });
+});
+
 // ── Against a running server ─────────────────────────────────────────────
 const relayed = [];
 let relay;

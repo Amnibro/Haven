@@ -25,6 +25,13 @@ async _sendMessage() {
     return;
   }
 
+  // Silent message (app-silent.js): "@silent" up front, or the muted bell.
+  // The prefix comes off here so an encrypted DM never carries it.
+  const silentPick = this._silentSplit(content, hasImages || hasFiles);
+  const silent = silentPick.silent || !!this._silentArmed;
+  content = silentPick.content;
+  const silentField = silent ? { silent: true } : {};
+
   // Self-destructing message: ask how long it lives before anything goes.
   // Backing out leaves the text, the attachments and the toggle as they were.
   // Commands that never post a message are left alone.
@@ -67,7 +74,8 @@ async _sendMessage() {
       if (line && file?._tags?.length) mediaTags.push({ url: line.slice(line.indexOf('/uploads/')), tags: file._tags });
       if (this._uploadsCancelled) break;
     }
-    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n'), ...(mediaTags.length ? { mediaTags } : {}), ...this._destructField(destructAt) });
+    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n'), ...(mediaTags.length ? { mediaTags } : {}), ...this._destructField(destructAt), ...silentField });
+    this._setSilentArmed(false);
     if (mediaTags.length) this._recordFrequentTags?.(mediaTags.flatMap(m => m.tags));
     this.notifications.play('sent');
     if (hasFiles) this._flushFileQueue?.();
@@ -231,7 +239,8 @@ async _sendMessage() {
   if (this._burnArmed) {
     payload.burnSeconds = 30;
   }
-  Object.assign(payload, this._destructField(destructAt));
+  Object.assign(payload, this._destructField(destructAt), silentField);
+  this._setSilentArmed(false);
 
   // Pictures and files go out together, with the text when they can (#5799).
   const groupMedia = (hasImages || hasFiles) && this._mediaGroupOn(this.currentChannel);
@@ -381,7 +390,7 @@ async _sendMessage() {
       }
     }
     // Everything queued goes out together, ten to a message (#5799).
-    if (groupMedia) return void this._flushComposerMedia({ payload, combine, partner: groupPartner, textSent: !!content && !ferryOnly, replyTo: imageReplyTo, prefix: personaPrefix + ferryPrefix, ferryDiscordUserId: ferryDm, destructAt });
+    if (groupMedia) return void this._flushComposerMedia({ payload, combine, partner: groupPartner, textSent: !!content && !ferryOnly, replyTo: imageReplyTo, prefix: personaPrefix + ferryPrefix, ferryDiscordUserId: ferryDm, destructAt, silent });
     // (#5425) These were both inside `if (hasImages)`, so a non-image file
     // queued on its own (no image) never flushed and the attachment was stuck
     // in the queue forever. Flush each queue based on its own contents.
@@ -1069,7 +1078,8 @@ _createMessageEl(msg, prevMsg) {
   const threadHtml = isDmContext ? ''
     : (msg.thread ? this._renderThreadPreview(msg.id, msg.thread, { forum: isForum })
       : (isForum ? this._renderThreadPreview(msg.id, { count: 0 }, { forum: true }) : ''));
-  const editedHtml = msg.edited_at ? `<span class="edited-tag" title="${t('app.messages.edited_at', { date: this._fmtDateTime(msg.edited_at) })}">${t('app.messages.edited')}</span>` : '';
+  const editedHtml = (msg.edited_at ? `<span class="edited-tag" title="${t('app.messages.edited_at', { date: this._fmtDateTime(msg.edited_at) })}">${t('app.messages.edited')}</span>` : '')
+    + this._silentTagHtml(msg);
   const pinnedTag = msg.pinned ? `<span class="pinned-tag" title="${t('app.messages.pinned')}">📌</span>` : '';
   const archivedTag = msg.is_archived ? `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>` : '';
   const ephemeralTag = msg.ephemeral ? `<span class="ephemeral-tag" title="${t('app.messages.only_visible_to_you')}">${t('app.messages.only_visible_to_you')}</span>` : '';
@@ -1188,6 +1198,7 @@ _createMessageEl(msg, prevMsg) {
     if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
     if (msg.persona_username) el.dataset.personaUsername = msg.persona_username;
     if (msg.break_chain) el.dataset.breakChain = '1';
+    if (msg.silent) el.dataset.silent = '1';
     if (msg.pinned) el.dataset.pinned = '1';
     if (msg.is_archived) el.dataset.archived = '1';
     if (msg._e2e) el.dataset.e2e = '1';
@@ -1322,6 +1333,7 @@ _createMessageEl(msg, prevMsg) {
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
   if (msg.persona_username) el.dataset.personaUsername = msg.persona_username;
   if (msg.break_chain) el.dataset.breakChain = '1';
+  if (msg.silent) el.dataset.silent = '1';
   if (msg.pinned) el.dataset.pinned = '1';
   if (msg.is_archived) el.dataset.archived = '1';
   if (msg._e2e) el.dataset.e2e = '1';

@@ -460,6 +460,7 @@ _listenMessageChanges() {
           editedTag.textContent = t('header.messages.edited');
           contentEl.appendChild(editedTag);
         }
+        this._restoreSilentTag?.(msgEl, contentEl);
       });
     }
   });

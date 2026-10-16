@@ -88,6 +88,7 @@ import ThreadScrollMethods from './modules/app-thread-scroll.js?v=4.24.26';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
+import SilentMethods from './modules/app-silent.js?v=4.24.28';
 
 class HavenApp {
   constructor() {
@@ -431,6 +432,7 @@ class HavenApp {
     this._setupForumUnread();
     this._setupThreadUnread();
     this._setupThreadScroll();
+    this._setupSilentToggle();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
     this._setupLightbox();
@@ -618,6 +620,7 @@ Object.assign(HavenApp.prototype,
   PushToMuteMethods,
   BadgeMethods,
   ThemePickerMethods,
+  SilentMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

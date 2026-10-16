@@ -491,9 +491,10 @@ _listenChannelsAndMessages() {
           const _isDm = _notifCh && _notifCh.is_dm;
           const _isMention = mentionRegex.test(data.message.content) || everyoneRegex.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
           const _notifOpts = _isMention ? { isMention: true } : _isReplyToMe ? { isReply: true } : _isDm ? { isDm: true } : null;
-          const _quiet = this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm, isMention: !!_isMention });
+          // A silent message (app-silent.js) never sounds or pops up.
+          const _quiet = !!data.message.silent || this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm, isMention: !!_isMention });
           if (_quiet) {
-            // Muted server or member: no sound and no pop-up.
+            // Silent message, or a muted server or member: no sound and no pop-up.
           } else if (_isMention) {
             this.notifications.play('mention', { isMention: true });
           } else if (_isReplyToMe) {
@@ -559,9 +560,9 @@ _listenChannelsAndMessages() {
         const _isDm2 = _notifCh2 && _notifCh2.is_dm;
         const _isMention2 = mentionRegex.test(data.message.content) || everyoneRegex2.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
         const _notifOpts2 = _isMention2 ? { isMention: true } : _isReplyToMe2 ? { isReply: true } : _isDm2 ? { isDm: true } : null;
-        const _quiet2 = this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm2, isMention: !!_isMention2 });
+        const _quiet2 = !!data.message.silent || this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm2, isMention: !!_isMention2 });
         if (_quiet2) {
-          // Muted server or member: no sound and no pop-up.
+          // Silent message, or a muted server or member: no sound and no pop-up.
         } else if (_isMention2) {
           this.notifications.play('mention', { isMention: true });
         } else if (_isReplyToMe2) {
