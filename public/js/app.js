@@ -14,7 +14,7 @@ import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.22.14';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.21.0';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.24.32';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.24.29';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.24.26';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.25.1';
 import PeopleMethods from './modules/app-people.js?v=4.23.11';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.23.9';
@@ -38,7 +38,7 @@ import ChannelMethods  from './modules/app-channels.js?v=4.24.29';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.24.9';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.32';
-import MessageMethods  from './modules/app-messages.js?v=4.24.32';
+import MessageMethods  from './modules/app-messages.js?v=4.25.1';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.24.19';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.24.32';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
@@ -55,7 +55,7 @@ import UtilityMethods  from './modules/app-utilities.js?v=4.23.9';
 import MessageContentMethods from './modules/app-message-content.js?v=4.24.22';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.23.9';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.22.1';
-import ThreadMethods from './modules/app-threads.js?v=4.24.32';
+import ThreadMethods from './modules/app-threads.js?v=4.25.1';
 import AdminMethods    from './modules/app-admin.js?v=4.24.34';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.23.7';
@@ -80,6 +80,7 @@ import GroupMethods from './modules/app-groups.js?v=4.23.12';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.22.9';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
+import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import MasterVolumeMethods from './modules/app-master-volume.js?v=4.23.6';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
@@ -610,6 +611,7 @@ Object.assign(HavenApp.prototype,
   TemplateMethods,
   MemberDefaultsMethods,
   MessageHighlightMethods,
+  MessageGroupingMethods,
   ModCaseMethods,
   ServerMuteMethods,
   AdminReauthMethods,

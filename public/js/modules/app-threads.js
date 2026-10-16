@@ -434,11 +434,9 @@ _appendThreadMessage(msg, opts = {}) {
   if (this._forumBlogIsPart?.(msg)) {
     threadCompact = true;
   } else if (prevEl && prevEl.classList?.contains('thread-message') && (!msg.reply_to || toRoot)) {
-    const samePerson = parseInt(prevEl.dataset.userId, 10) === msg.user_id
-      && (prevEl.dataset.personaId || '') === (msg.persona_id ? String(msg.persona_id) : '');
-    const prevTime = prevEl.dataset.time ? new Date(prevEl.dataset.time).getTime() : 0;
-    const within = prevTime && (new Date(msg.created_at).getTime() - prevTime) < 5 * 60 * 1000;
-    threadCompact = samePerson && within;
+    // The same rule as the channel (message-grouping.js). A reply to the
+    // thread's own first message counts as a plain message here.
+    threadCompact = this._groupsWithPrevious(this._groupInfoFromElement(prevEl), toRoot ? { ...msg, reply_to: null } : msg);
   }
 
   // A reply's picture shows its tags like a chat message does (#5682).
@@ -457,6 +455,7 @@ _appendThreadMessage(msg, opts = {}) {
   if (msg.avatar) el.dataset.avatar = msg.avatar;
   if (msg.avatar_shape) el.dataset.avatarShape = msg.avatar_shape;
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
+  this._stampGroupSource(el, msg);
   if (msg.silent) el.dataset.silent = '1';
   const silentHtml = this._silentTagHtml?.(msg) || '';
   if (threadCompact) {

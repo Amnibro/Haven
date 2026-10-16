@@ -773,23 +773,9 @@ _appendDMPiPMessage(msg) {
   // threads are not available in DMs.
   if (msg) msg._isDmRender = true;
   // Use the previous message in the PiP list as the "prev" reference so
-  // grouping into compact messages still works.
-  let prevMsg = null;
-  const lastEl = list.lastElementChild;
-  if (lastEl && lastEl.dataset && lastEl.dataset.userId && lastEl.dataset.msgId) {
-    // Rebuild enough of the previous message for `_createMessageEl`'s grouping
-    // check. It compares username and persona too, so a prev that only carried
-    // user_id + time never matched and every message rendered ungrouped. (the
-    // dataset already stores these from when the element was created.)
-    prevMsg = {
-      user_id: parseInt(lastEl.dataset.userId, 10),
-      username: lastEl.dataset.username || null,
-      persona_id: lastEl.dataset.personaId ? parseInt(lastEl.dataset.personaId, 10) : null,
-      persona_username: lastEl.dataset.personaUsername || null,
-      break_chain: lastEl.dataset.breakChain === '1' ? 1 : 0,
-      created_at: lastEl.dataset.time
-    };
-  }
+  // grouping into compact messages still works, rebuilt the same way the
+  // main pane does it (message-grouping.js).
+  const prevMsg = this._groupInfoFromElement(list.lastElementChild);
   const wasAtBottom = (list.scrollHeight - list.clientHeight - list.scrollTop) < 80;
   const el = this._createMessageEl(msg, prevMsg);
   list.appendChild(el);

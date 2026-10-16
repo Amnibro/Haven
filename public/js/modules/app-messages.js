@@ -773,18 +773,7 @@ _appendMessages(messages) {
       prevMsg = messages[i - 1];
     } else {
       // Link to existing last message for grouping
-      const lastEl = container.lastElementChild;
-      if (lastEl && lastEl.dataset && lastEl.dataset.userId && lastEl.dataset.msgId) {
-        prevMsg = {
-          user_id: parseInt(lastEl.dataset.userId),
-          created_at: lastEl.dataset.time,
-          persona_id: lastEl.dataset.personaId ? parseInt(lastEl.dataset.personaId) : null,
-          persona_username: lastEl.dataset.personaUsername || null,
-          username: lastEl.dataset.username || null,
-          break_chain: lastEl.dataset.breakChain ? 1 : 0,
-          highlight: lastEl.dataset.highlighted === '1' || undefined,
-        };
-      }
+      prevMsg = this._groupInfoFromElement(container.lastElementChild);
     }
     fragment.appendChild(this._createMessageEl(msg, prevMsg));
   });
@@ -920,19 +909,8 @@ _appendMessage(message, forceScroll = false) {
     });
   }
 
-  let prevMsg = null;
   // Only use last element for grouping if it's an actual message (not a system message)
-  if (lastMsg && lastMsg.dataset && lastMsg.dataset.userId && lastMsg.dataset.msgId) {
-    prevMsg = {
-      user_id: parseInt(lastMsg.dataset.userId),
-      created_at: lastMsg.dataset.time,
-      persona_id: lastMsg.dataset.personaId ? parseInt(lastMsg.dataset.personaId) : null,
-      persona_username: lastMsg.dataset.personaUsername || null,
-      username: lastMsg.dataset.username || null,
-      break_chain: lastMsg.dataset.breakChain ? 1 : 0,
-      highlight: lastMsg.dataset.highlighted === '1' || undefined,
-    };
-  }
+  const prevMsg = this._groupInfoFromElement(lastMsg);
 
   const forumFeed = this._isForumFeed();
   // A feed showing its newest message follows the new one, even when no
@@ -1036,7 +1014,11 @@ _createMessageEl(msg, prevMsg) {
     return el;
   }
   const isImage = this._isImageUrl(msg.content);
-  const curCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  // The channel this message is drawn in. The pop-out DM draws while another
+  // channel is open in the main pane, so it goes by the DM, not by the open
+  // channel: a forum open behind it stopped every DM message from grouping.
+  const viewCode = (msg && msg._isDmRender && this._activeDMPip) || this.currentChannel;
+  const curCh = this.channels && this.channels.find(c => c.code === viewCode);
   const isAnnouncement = curCh && curCh.notification_type === 'announcement';
   // Forum topics never fold into each other: every topic keeps its own header,
   // which also keeps _bumpForumTopic's node move safe. (#144)
@@ -1046,29 +1028,12 @@ _createMessageEl(msg, prevMsg) {
   // `curCh.is_dm`. Either signal suppresses the thread button + preview so
   // there is no entry point left in any DM surface.
   const isDmContext = !!(msg && msg._isDmRender) || !!(curCh && curCh.is_dm);
-  const isCompact = prevMsg && !isForum &&
-    // A preceding welcome/system line never folds the next message into it.
-    (prevMsg.type || 'user') === 'user' &&
-    prevMsg.user_id === msg.user_id &&
-    // Persona / webhook / Discord-imported messages must each break the
-    // grouping chain so a different persona under the same account doesn't
-    // get folded under the previous persona's avatar. (#5349 follow-up,
-    // #5393 defence-in-depth: also compare persona_username and the
-    // displayed username so a missing persona_id field can't sneak two
-    // different personas into a single compact group.)
-    (prevMsg.persona_id || null) === (msg.persona_id || null) &&
-    (prevMsg.persona_username || null) === (msg.persona_username || null) &&
-    (prevMsg.username || null) === (msg.username || null) &&
-    // /break and the persisted break_chain flag (#5393) hard-stop grouping.
-    !msg.break_chain && !prevMsg.break_chain &&
-    // Official messages group by the look the reader picked
-    // (_highlightGroups in app-message-highlights.js).
+  // Same author within five minutes folds under the message before it
+  // (message-grouping.js). Official messages group by the look the reader
+  // picked (_highlightGroups in app-message-highlights.js).
+  const isCompact = !!prevMsg && !isForum &&
     this._highlightGroups(msg, prevMsg) &&
-    (prevMsg.is_webhook ? 1 : 0) === (msg.is_webhook ? 1 : 0) &&
-    (prevMsg.webhook_username || null) === (msg.webhook_username || null) &&
-    (prevMsg.imported_from || null) === (msg.imported_from || null) &&
-    !msg.reply_to &&
-    (new Date(msg.created_at) - new Date(prevMsg.created_at)) < 5 * 60 * 1000;
+    this._groupsWithPrevious(prevMsg, msg);
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const tagsHtml = this._renderAttachmentTags(msg.attachmentTags);
@@ -1198,6 +1163,7 @@ _createMessageEl(msg, prevMsg) {
     if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
     if (msg.persona_username) el.dataset.personaUsername = msg.persona_username;
     if (msg.break_chain) el.dataset.breakChain = '1';
+    this._stampGroupSource(el, msg);
     if (msg.silent) el.dataset.silent = '1';
     if (msg.pinned) el.dataset.pinned = '1';
     if (msg.is_archived) el.dataset.archived = '1';
@@ -1333,6 +1299,7 @@ _createMessageEl(msg, prevMsg) {
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
   if (msg.persona_username) el.dataset.personaUsername = msg.persona_username;
   if (msg.break_chain) el.dataset.breakChain = '1';
+  this._stampGroupSource(el, msg);
   if (msg.silent) el.dataset.silent = '1';
   if (msg.pinned) el.dataset.pinned = '1';
   if (msg.is_archived) el.dataset.archived = '1';
