@@ -647,19 +647,23 @@ _renderPiPImageQueue() {
   }
 },
 
-async _flushPiPImageQueue(bundled = false) {
+// The pop-out's pictures go out together as one message (#5799), with the
+// text when `text` is given (the pop-out already asked about encryption and
+// passes `partner`).
+async _flushPiPImageQueue(bundled = false, { text = '', base = {}, partner } = {}) {
   if (!this._pipImageQueue || this._pipImageQueue.length === 0) return;
-  if (!(await this._dmSendGate(this._pipImageQueueTarget))) return;
+  let to = partner;
+  if (to === undefined) {
+    const gate = await this._dmSendGate(this._pipImageQueueTarget);
+    if (!gate) return;
+    to = gate.partner;
+  }
   const files = [...this._pipImageQueue];
   const target = this._pipImageQueueTarget;
   this._pipImageQueue = [];
   this._pipImageQueueTarget = null;
   this._renderPiPImageQueue();
-  this._uploadsCancelled = false;
-  for (const file of files) {
-    await this._uploadImage(file, target, bundled);
-    if (this._uploadsCancelled) break;
-  }
+  await this._sendMediaGroups({ code: target, files, text, base, partner: to, bundled: bundled && !text });
 },
 
 // ── Thread attachment queue (#thread-paste-instant) ──────────────────
@@ -731,14 +735,21 @@ _renderThreadPending() {
   }
 },
 
-// Upload each held attachment and post it as a thread reply. Runs from
-// _sendThreadMessage after the text so the ordering feels natural.
-async _flushThreadPending(parentId) {
+// Upload the held attachments and post them as one thread reply, with the
+// text when `text` is given (#5799). In a blog each file stays a piece of its
+// own (#5763), so there they still go one reply each, after the text.
+async _flushThreadPending(parentId, { text = '', replyTo } = {}) {
   if (!this._threadPending || this._threadPending.length === 0) return;
   if (!parentId) return;
   const files = [...this._threadPending];
   this._threadPending = [];
   this._renderThreadPending();
+  if (!this._forumBlogOn?.(this.currentChannel)) {
+    const to = replyTo !== undefined ? replyTo
+      : (this._threadReplyingTo ? this._threadReplyingTo.id : (this._forumBlogDefaultReply?.() || null));
+    await this._sendMediaGroups({ files, text, thread: { parentId, replyTo: to } });
+    return;
+  }
   this._uploadsCancelled = false;
   for (const file of files) {
     try {

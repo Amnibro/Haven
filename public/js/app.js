@@ -12,9 +12,9 @@ import ComposerMethods from './modules/app-composer.js?v=4.22.22';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.22.14';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.21.0';
-import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.22.2';
-import MessageActionMethods from './modules/app-message-actions.js?v=4.24.9';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.24.6';
+import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.24.17';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.24.17';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.24.17';
 import PeopleMethods from './modules/app-people.js?v=4.23.11';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.23.9';
@@ -22,10 +22,11 @@ import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.23.9';
 import MobileMethods from './modules/app-mobile.js?v=4.23.9';
-import MediaMethods    from './modules/app-media.js?v=4.24.3';
+import MediaMethods    from './modules/app-media.js?v=4.24.17';
 import ImageZoomMethods from './modules/app-image-zoom.js?v=4.23.12';
+import MediaGridMethods from './modules/app-media-grid.js?v=4.24.17';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.24.4';
-import AttachmentMethods from './modules/app-attachments.js?v=4.24.10';
+import AttachmentMethods from './modules/app-attachments.js?v=4.24.17';
 import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.23.5';
 import AppearanceMethods from './modules/app-appearance.js?v=4.22.9';
 import AccessibilityMethods from './modules/app-accessibility.js?v=4.22.3';
@@ -37,7 +38,7 @@ import ChannelMethods  from './modules/app-channels.js?v=4.22.23';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.24.9';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.22.24';
-import MessageMethods  from './modules/app-messages.js?v=4.24.11';
+import MessageMethods  from './modules/app-messages.js?v=4.24.17';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.24.19';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.24.9';
 import UserMethods     from './modules/app-users.js?v=4.24.15';
@@ -50,10 +51,10 @@ import StreamTileMethods from './modules/app-stream-tiles.js?v=4.23.9';
 import MusicMethods from './modules/app-music.js?v=4.24.19';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.23.9';
-import MessageContentMethods from './modules/app-message-content.js?v=4.24.4';
+import MessageContentMethods from './modules/app-message-content.js?v=4.24.17';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.23.9';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.22.1';
-import ThreadMethods from './modules/app-threads.js?v=4.24.9';
+import ThreadMethods from './modules/app-threads.js?v=4.24.17';
 import AdminMethods    from './modules/app-admin.js?v=4.24.15';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.23.7';
@@ -66,7 +67,7 @@ import ModerationMethods from './modules/app-moderation.js?v=4.24.15';
 import PlatformMethods from './modules/app-platform.js?v=4.24.5';
 import SearchMethods   from './modules/app-search.js?v=4.21.0';
 import FerryMethods    from './modules/app-ferry.js?v=4.24.10';
-import ForumMethods    from './modules/app-forum.js?v=4.24.7';
+import ForumMethods    from './modules/app-forum.js?v=4.24.17';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.24.3';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
@@ -430,6 +431,7 @@ class HavenApp {
     this._setupDebugSection();
     this._setupLightbox();
     this._setupImageZoom();
+    this._setupMediaGrid();
     this._setupOnlineOverlay();
     this._setupModalExpand();
     this._checkForUpdates();
@@ -547,6 +549,7 @@ Object.assign(HavenApp.prototype,
   MobileMethods,
   MediaMethods,
   ImageZoomMethods,
+  MediaGridMethods,
   FeedAnchorMethods,
   AttachmentMethods,
   AvatarEditorMethods,

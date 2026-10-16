@@ -338,6 +338,16 @@ _sendThreadMessage() {
   if (!content && !hasPending) return;
   const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : (this._forumBlogDefaultReply?.() || null);
 
+  // Text and attachments sent together are one reply (#5799), except in a
+  // blog, where each file is a piece of its own.
+  if (content && hasPending && !this._forumBlogOn?.(this.currentChannel)) {
+    this._lastSendDraft = { text: input.value, code: parentId, at: Date.now(), inputId: 'thread-input' };
+    input.value = '';
+    this._flushThreadPending?.(parentId, { text: content, replyTo });
+    this._clearThreadReply();
+    return;
+  }
+
   if (content) {
     // Kept so a reply refused as too long comes back to the box (#5691).
     this._lastSendDraft = { text: input.value, code: parentId, at: Date.now(), inputId: 'thread-input' };

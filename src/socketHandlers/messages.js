@@ -6,13 +6,14 @@ const bcrypt = require('bcryptjs');
 const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
-const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
+const { applyTagsToMessage, applyTagsToFiles, fileTags, messageTags, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, extractUploadPaths, effectiveLimits } = require('../uploadTags');
 const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
 const forumUnread = require('../forumUnread');
 const protectedMessages = require('../protectedMessages');
+const mediaGroup = require('../mediaGroup');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -32,8 +33,20 @@ function looksEncrypted(content) {
 function isGroupEnvelope(content) {
   return looksEncrypted(content) && JSON.parse(content).v === 3;
 }
-function contentCap(maxChars, channel, content) {
-  return channel && channel.is_dm && looksEncrypted(content) ? encryptedDmCap(maxChars) : maxChars;
+// The longest a message can be before its channel is known: ciphertext room
+// for a DM, or text at the limit with a full set of upload lines.
+function sizeCeiling(maxChars) {
+  return Math.max(encryptedDmCap(maxChars), mediaGroup.ceiling(maxChars));
+}
+// Why a message cannot go out for its size, or null. An encrypted DM gets
+// ciphertext room; anything else is held to the typed limit, with room for
+// the upload lines of pictures sent together, and to the number of files one
+// message carries (src/mediaGroup.js, #5799).
+function sizeRefusal(content, channel, { maxChars, maxAttachments, forumTopic = false }) {
+  if (channel && channel.is_dm && looksEncrypted(content)) {
+    return content.length > encryptedDmCap(maxChars) ? `Message too long (max ${maxChars} characters)` : null;
+  }
+  return mediaGroup.refusal(content, { maxChars, maxAttachments, forumTopic });
 }
 
 module.exports = function register(socket, ctx) {
@@ -89,6 +102,11 @@ module.exports = function register(socket, ctx) {
     if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id)) return false;
     if (socket.user.isAdmin) return true;
     return ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId));
+  }
+
+  // The admin's files-per-message setting (Uploads & Limits, #5561).
+  function maxAttachmentsSetting() {
+    return db.prepare("SELECT value FROM server_settings WHERE key = 'max_attachments'").get()?.value;
   }
 
   const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
@@ -1224,7 +1242,7 @@ module.exports = function register(socket, ctx) {
     const _maxCharsRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
     const _maxChars = parseInt(_maxCharsRow?.value) || 2000;
     // Nothing could be this long; the exact check waits for the channel.
-    if (content.length > encryptedDmCap(_maxChars)) {
+    if (content.length > sizeCeiling(_maxChars)) {
       return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
     }
 
@@ -1237,9 +1255,9 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_group, is_self_dm, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found. Try switching channels and back');
     if (channel.is_group && !isGroupEnvelope(content)) return socket.emit('error-msg', 'Group messages must be end-to-end encrypted. Update Haven to send here.');
-    if (content.length > contentCap(_maxChars, channel, content)) {
-      return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
-    }
+    // A top-level message in a forum is a topic, written in New Post.
+    const _sizeWhy = sizeRefusal(content, channel, { maxChars: _maxChars, maxAttachments: maxAttachmentsSetting(), forumTopic: !!channel.is_forum });
+    if (_sizeWhy) return socket.emit('error-msg', _sizeWhy);
 
     // A moderation mute covers the server's channels, not private messages:
     // a muted person can still DM, which is also how they reach a mod about
@@ -1299,16 +1317,16 @@ module.exports = function register(socket, ctx) {
       if (roleStripped !== content) content = roleStripped;
     }
 
+    // Every line is read, not just the first, now that several uploads can
+    // share a message with text above them (#5799).
     if (channel.text_enabled === 0) {
-      const isMedia = /^(?:spoiler-img:)?\/uploads\b/i.test(content.trim()) || /^\[file:[^\]]+\]\(/i.test(content.trim());
-      if (!isMedia || channel.media_enabled === 0) {
+      if (!mediaGroup.isMediaOnly(content) || channel.media_enabled === 0) {
         return socket.emit('error-msg', 'Text messages are disabled in this channel');
       }
     }
 
     if (channel.media_enabled === 0 && !socket.user.isAdmin) {
-      const isMediaContent = /^(?:spoiler-img:)?\/uploads\b/i.test(content.trim()) || /^\[file:[^\]]+\]\(/i.test(content.trim());
-      if (isMediaContent) {
+      if (mediaGroup.hasMedia(content)) {
         return socket.emit('error-msg', 'Media uploads are disabled in this channel');
       }
     }
@@ -1323,7 +1341,7 @@ module.exports = function register(socket, ctx) {
     const _bare = String(content || '').trim().replace(/^::\S+\s+/, '');
     const _ferryTo = data.bundled === true && !channel.is_dm && parseFerryTarget(channel.id, _bare, data.ferryDiscordUserId);
     const _media = _ferryTo ? _ferryTo.body : _bare;
-    const _mediaOnly = /^(?:spoiler-img:)?\/uploads\/\S+$/i.test(_media) || /^\[file:[^\]]+\]\(\/uploads\//i.test(_media) || (channel.is_dm && data.encrypted === true);
+    const _mediaOnly = mediaGroup.isMediaOnly(_media) || (channel.is_dm && data.encrypted === true);
     const _lastCounted = slowModeTracker.get(`slow:${socket.user.id}:${channel.id}`) || 0;
     const _bundledOk = data.bundled === true && _mediaOnly && Date.now() - _lastCounted < 60000;
     if (channel.slow_mode_interval > 0 && !socket.user.isAdmin && getUserEffectiveLevel(socket.user.id, channel.id) < 25 && !_bundledOk) {
@@ -1521,7 +1539,7 @@ module.exports = function register(socket, ctx) {
     let e2eFiles = null;
     if (channel.is_dm && data.encrypted === true && Array.isArray(data.files)) {
       const owns = db.prepare('SELECT 1 FROM upload_ownership WHERE rel_path = ? AND user_id = ?');
-      e2eFiles = data.files.slice(0, 10)
+      e2eFiles = data.files.slice(0, mediaGroup.MAX_GROUP_MEDIA)
         .map(f => (typeof f === 'string' ? UPLOAD_PATH_EXACT_RE.exec(f) : null))
         .map(m => (m ? m[1] : null))
         .filter(rel => rel && isSafeUploadRelPath(rel) && owns.get(rel, socket.user.id));
@@ -1539,8 +1557,26 @@ module.exports = function register(socket, ctx) {
       // carries. Not on E2E DMs (server never sees their plaintext). Minting a
       // new tag needs manage_tags; applying an existing one is open to uploaders.
       // Tagging is non-critical: a failure here never sinks the message.
+      // Pictures sent together (#5799) send `mediaTags` instead, one entry per
+      // file, so each keeps its own.
       let appliedTags = [];
-      if (!channel.is_dm && Array.isArray(data.attachmentTags) && data.attachmentTags.length) {
+      if (!channel.is_dm && Array.isArray(data.mediaTags) && data.mediaTags.length) {
+        try {
+          const canCreate = socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_tags', null);
+          const { maxTags, maxLen } = effectiveLimits(db);
+          appliedTags = applyTagsToFiles(db, {
+            messageId: result.lastInsertRowid,
+            content: finalContent,
+            perFile: data.mediaTags,
+            userId: socket.user.id,
+            canCreate,
+            maxTags,
+            maxLen,
+          });
+        } catch (e) {
+          console.warn('send-message attachment tagging failed:', e.message);
+        }
+      } else if (!channel.is_dm && Array.isArray(data.attachmentTags) && data.attachmentTags.length) {
         try {
           const canCreate = socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_tags', null);
           const { maxTags, maxLen } = effectiveLimits(db);
@@ -1687,6 +1723,10 @@ module.exports = function register(socket, ctx) {
     const canManage = isAdmin || userHasPermission(socket.user.id, 'manage_tags', channel.id);
     if (!isOwn && !canManage) return socket.emit('error-msg', 'You cannot edit tags on this message');
 
+    // One picture of several sent together (#5799) can be named by `url`.
+    const relPath = typeof data.url === 'string' ? data.url : null;
+    if (relPath && !extractUploadPaths(msg.content).includes(relPath)) return socket.emit('error-msg', 'That message has no attachment to tag');
+
     try {
       const { maxTags, maxLen } = effectiveLimits(db);
       const applied = setMessageTags(db, {
@@ -1697,11 +1737,12 @@ module.exports = function register(socket, ctx) {
         canCreate: canManage,   // creating a new tag always needs manage_tags
         maxTags,
         maxLen,
+        relPath,
       });
       io.to(`channel:${channel.code}`).emit('message-tags-updated', {
         channelCode: channel.code,
         messageId: msg.id,
-        tags: applied,
+        tags: relPath ? messageTags(db, msg.id) : applied,
       });
     } catch (e) {
       console.error('set-message-tags error:', e.message);
@@ -1724,9 +1765,17 @@ module.exports = function register(socket, ctx) {
     const mode = data.mode === 'append' ? 'append' : (data.mode === 'replace' ? 'replace' : null);
     if (!mode) return ack({ error: 'Bad mode' });
     if (!Array.isArray(data.tags)) return ack({ error: 'Bad request' });
-    const messageIds = Array.isArray(data.messageIds)
-      ? Array.from(new Set(data.messageIds.filter(isInt))).slice(0, 500)
-      : [];
+    // The gallery names each file it changes (`items`), so one picture of
+    // several sent together (#5799) keeps its own set. `messageIds` alone
+    // still works, on each message's first file as before.
+    const items = Array.isArray(data.items)
+      ? data.items.filter(it => it && isInt(it.messageId) && typeof it.url === 'string').slice(0, 500)
+      : null;
+    const messageIds = items
+      ? Array.from(new Set(items.map(it => it.messageId)))
+      : Array.isArray(data.messageIds)
+        ? Array.from(new Set(data.messageIds.filter(isInt))).slice(0, 500)
+        : [];
     if (!messageIds.length) return ack({ error: 'No messages selected' });
     if (floodCheck('tagEdit')) return ack({ error: 'Slow down a moment' });
 
@@ -1751,6 +1800,26 @@ module.exports = function register(socket, ctx) {
     const results = [];
     const { maxTags, maxLen } = effectiveLimits(db);
     try {
+      if (items) {
+        const msgs = new Map();
+        for (const it of items) {
+          if (!msgs.has(it.messageId)) msgs.set(it.messageId, db.prepare('SELECT id, content, channel_id FROM messages WHERE id = ?').get(it.messageId) || null);
+          const msg = msgs.get(it.messageId);
+          if (!msg || msg.channel_id !== channel.id) continue;
+          if (!extractUploadPaths(msg.content).includes(it.url)) continue;
+          const args = { messageId: msg.id, content: msg.content, userId: socket.user.id, canCreate: true, maxTags, maxLen };
+          if (mode === 'replace') setMessageTags(db, { ...args, tagNames: data.tags, relPath: it.url });
+          else applyTagsToFiles(db, { ...args, perFile: [{ url: it.url, tags: data.tags }] });
+          results.push({ messageId: msg.id, url: it.url, tags: fileTags(db, msg.id, it.url) });
+        }
+        for (const msg of msgs.values()) {
+          if (!msg || msg.channel_id !== channel.id) continue;
+          io.to(`channel:${channel.code}`).emit('message-tags-updated', {
+            channelCode: channel.code, messageId: msg.id, tags: messageTags(db, msg.id),
+          });
+        }
+        return ack({ ok: true, updated: results.length, results });
+      }
       for (const id of messageIds) {
         const msg = db.prepare('SELECT id, content, channel_id FROM messages WHERE id = ?').get(id);
         if (!msg || msg.channel_id !== channel.id) continue;
@@ -2041,7 +2110,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const _editMaxRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
     const _editMax = parseInt(_editMaxRow?.value) || 2000;
-    if (!isInt(data.messageId) || !isString(data.content, 1, encryptedDmCap(_editMax))) return;
+    if (!isInt(data.messageId) || !isString(data.content, 1, sizeCeiling(_editMax))) return;
 
     // Accept an explicit channelCode from the client (e.g. DM PiP, where
     // socket.currentChannel is a different server channel). Fall back to
@@ -2050,20 +2119,21 @@ module.exports = function register(socket, ctx) {
     const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
     if (!code) return;
 
-    const channel = db.prepare('SELECT id, is_dm, is_group FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm, is_group, is_forum FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // Editing takes still being there: someone removed from a channel or a
     // group could otherwise keep rewriting what they had posted in it.
     if (!(socket.user.isAdmin && !channel.is_dm) && !hasChannelAccess(channel.id)) return;
     if (channel.is_group && !isGroupEnvelope(data.content)) return socket.emit('error-msg', 'Group messages must be end-to-end encrypted. Update Haven to send here.');
-    if (data.content.length > contentCap(_editMax, channel, data.content)) {
-      return socket.emit('error-msg', `Message too long (max ${_editMax} characters)`);
-    }
 
     const msg = db.prepare(
-      'SELECT id, user_id, is_archived FROM messages WHERE id = ? AND channel_id = ?'
+      'SELECT id, user_id, is_archived, thread_id FROM messages WHERE id = ? AND channel_id = ?'
     ).get(data.messageId, channel.id);
     if (!msg) return;
+    // The same size rules as sending: the typed text, with room for the
+    // upload lines of pictures sent together (#5799).
+    const editSizeWhy = sizeRefusal(data.content, channel, { maxChars: _editMax, maxAttachments: maxAttachmentsSetting(), forumTopic: !!channel.is_forum && !msg.thread_id });
+    if (editSizeWhy) return socket.emit('error-msg', editSizeWhy);
 
     if (msg.user_id !== socket.user.id) {
       return socket.emit('error-msg', 'You can only edit your own messages');
@@ -3098,9 +3168,10 @@ module.exports = function register(socket, ctx) {
     // the missing length cap were sitting in the same gap.
     const tMaxRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
     const tMax = parseInt(tMaxRow?.value) || 2000;
-    if (content.length > tMax) {
-      return socket.emit('error-msg', `Message too long (max ${tMax} characters)`);
-    }
+    // Pictures sent together are one reply too (#5799), held to the same
+    // count and typed length as in the channel.
+    const tSizeWhy = mediaGroup.refusal(content, { maxChars: tMax, maxAttachments: maxAttachmentsSetting() });
+    if (tSizeWhy) return socket.emit('error-msg', tSizeWhy);
 
     const tMute = db.prepare(
       'SELECT expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
@@ -3116,11 +3187,10 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'This channel is read-only');
     }
     // The channel's text and media switches, as send-message applies them.
-    const tIsMedia = /^(?:spoiler-img:)?\/uploads\b/i.test(content) || /^\[file:[^\]]+\]\(/i.test(content);
-    if (tChannelRow && tChannelRow.text_enabled === 0 && (!tIsMedia || tChannelRow.media_enabled === 0)) {
+    if (tChannelRow && tChannelRow.text_enabled === 0 && (!mediaGroup.isMediaOnly(content) || tChannelRow.media_enabled === 0)) {
       return socket.emit('error-msg', 'Text messages are disabled in this channel');
     }
-    if (tChannelRow && tChannelRow.media_enabled === 0 && tIsMedia && !socket.user.isAdmin) {
+    if (tChannelRow && tChannelRow.media_enabled === 0 && mediaGroup.hasMedia(content) && !socket.user.isAdmin) {
       return socket.emit('error-msg', 'Media uploads are disabled in this channel');
     }
 

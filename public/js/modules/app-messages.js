@@ -60,14 +60,15 @@ async _sendMessage() {
     if (picker) picker.style.display = 'none';
     this._uploadsCancelled = false;
     const lines = [];
+    const mediaTags = [];   // each picture keeps its own (#5799)
     for (const file of files) {
       const line = await this._uploadImage(file, code, true, '', false, { returnContent: true });
       if (line) lines.push(line);
+      if (line && file?._tags?.length) mediaTags.push({ url: line.slice(line.indexOf('/uploads/')), tags: file._tags });
       if (this._uploadsCancelled) break;
     }
-    const topicTags = [...new Set(files.flatMap(f => (f && Array.isArray(f._tags)) ? f._tags : []))];
-    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n'), ...(topicTags.length ? { attachmentTags: topicTags } : {}), ...this._destructField(destructAt) });
-    if (topicTags.length) this._recordFrequentTags?.(topicTags);
+    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n'), ...(mediaTags.length ? { mediaTags } : {}), ...this._destructField(destructAt) });
+    if (mediaTags.length) this._recordFrequentTags?.(mediaTags.flatMap(m => m.tags));
     this.notifications.play('sent');
     if (hasFiles) this._flushFileQueue?.();
     return;
@@ -232,6 +233,11 @@ async _sendMessage() {
   }
   Object.assign(payload, this._destructField(destructAt));
 
+  // Pictures and files go out together, with the text when they can (#5799).
+  const groupMedia = (hasImages || hasFiles) && this._mediaGroupOn(this.currentChannel);
+  const combine = groupMedia && !ferryOnly && this._mediaGroupTakesText(content, payload);
+  let groupPartner = null;
+
   // Clear UI immediately (before any async E2E work)
   input.value = '';
   input.style.height = 'auto';
@@ -338,7 +344,8 @@ async _sendMessage() {
       }
     }
 
-    if (partner) {
+    // Text going with attachments is encrypted and sent with them below.
+    if (partner && !combine) {
       try {
         const encrypted = await this._e2eEncryptText(partner, content);
         payload.content = encrypted;
@@ -351,8 +358,8 @@ async _sendMessage() {
         return false;
       }
     }
-    this.socket.emit('send-message', payload);
-    this.notifications.play('sent');
+    if (combine) groupPartner = partner;
+    else { this.socket.emit('send-message', payload); this.notifications.play('sent'); }
   }
 
   // Upload queued images. Mark as bundled when text was also sent so
@@ -373,6 +380,8 @@ async _sendMessage() {
         }
       }
     }
+    // Everything queued goes out together, ten to a message (#5799).
+    if (groupMedia) return void this._flushComposerMedia({ payload, combine, partner: groupPartner, textSent: !!content && !ferryOnly, replyTo: imageReplyTo, prefix: personaPrefix + ferryPrefix, ferryDiscordUserId: ferryDm, destructAt });
     // (#5425) These were both inside `if (hasImages)`, so a non-image file
     // queued on its own (no image) never flushed and the attachment was stuck
     // in the queue forever. Flush each queue based on its own contents.

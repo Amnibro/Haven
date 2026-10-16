@@ -1,0 +1,298 @@
+// Pictures sent together (#5799). They used to go out as one message per
+// picture, which pushed everything else out of view. Now a batch from the
+// message box, a thread or the DM pop-out goes out as one message: the text on
+// top, then one line per upload, the form forum topics already use. In the
+// feed, two or more pictures (and videos) in a row show as one grid, laid out
+// by count; clicking a tile opens the lightbox on that message's pictures.
+//
+// The layout and line helpers are pure, so the tests can drive them.
+
+// A message carries at most this many files; more go out as further messages.
+export const MEDIA_GROUP_MAX = 10;
+
+// Tiles per row for each count, on a six-column grid. Three is the one
+// layout that is not rows: a large picture on the left, two stacked beside it.
+const GRID_ROWS = { 2: [2], 4: [2, 2], 5: [2, 3], 6: [3, 3], 7: [1, 3, 3], 8: [2, 3, 3], 9: [3, 3, 3] };
+// The grid's width to height, fixed before anything loads so the feed keeps
+// its place while the tiles fill in.
+const GRID_RATIO = { 2: '2 / 1', 3: '4 / 3', 4: '4 / 3', 5: '6 / 5', 6: '3 / 2', 7: '1 / 1', 8: '1 / 1', 9: '1 / 1' };
+const GRID_SHOWN = 9;
+
+const PICTURE_LINE = /^(?:spoiler-img:)?\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(?:jpg|jpeg|png|gif|webp|svg)$/i;
+const E2E_PICTURE_LINE = /^(?:spoiler-img:)?e2e-img:image\/(?:jpeg|png|gif|webp|svg\+xml):\/uploads\/[\w\-.]+$/i;
+const VIDEO_LINE = /^\[file:[^\]\n]+\]\((\/uploads\/[^\s|)]+\.(?:mp4|webm|mov|m4v))\|[^)\n]+\)$/i;
+const VIDEO_NAME = /\.(?:mp4|webm|mov|m4v)$/i;
+// The picture types an encrypted DM picture can be shown as; others go as files.
+const E2E_PICTURE_MIME = /^image\/(?:jpeg|png|gif|webp|svg\+xml)$/i;
+
+export default {
+
+// ── Pure helpers ──────────────────────────────────────────
+
+// How a grid of `count` tiles is laid out: the tiles shown (at most nine),
+// how many more sit behind the "+N" on the last one, the row count, each
+// shown tile's [columns, rows] span on the six-column grid, and the grid's
+// aspect ratio. Null below two, which shows as a single picture as before.
+_mediaGridLayout(count) {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  if (n < 2) return null;
+  const shown = Math.min(n, GRID_SHOWN);
+  const more = n > GRID_SHOWN ? n - (GRID_SHOWN - 1) : 0;
+  if (shown === 3) return { shown, more, rows: 2, spans: [[3, 2], [3, 1], [3, 1]], ratio: GRID_RATIO[3] };
+  const perRow = GRID_ROWS[shown];
+  const spans = perRow.flatMap(k => Array.from({ length: k }, () => [6 / k, 1]));
+  return { shown, more, rows: perRow.length, spans, ratio: GRID_RATIO[shown] };
+},
+
+// What a content line shows as in a grid: 'image', 'video', or null for
+// anything else (text, other files, a link).
+_mediaGridKind(line) {
+  const l = String(line || '').trim();
+  if (PICTURE_LINE.test(l) || E2E_PICTURE_LINE.test(l)) return 'image';
+  if (VIDEO_LINE.test(l)) return 'video';
+  return null;
+},
+
+// The run of grid lines starting at lines[from]: consecutive pictures and
+// videos, trimmed.
+_mediaGridRun(lines, from) {
+  const run = [];
+  for (let i = from; i < lines.length; i++) {
+    const l = String(lines[i] || '').trim();
+    if (!this._mediaGridKind(l)) break;
+    run.push(l);
+  }
+  return run;
+},
+
+// A queued file's kind: pictures and videos go in the grid, anything else
+// is listed under it.
+_mediaFileKind(file) {
+  const type = (file && file.type) || '';
+  if (type.startsWith('image/')) return 'image';
+  if (type.startsWith('video/') || VIDEO_NAME.test((file && file.name) || '')) return 'video';
+  return 'file';
+},
+
+// Pictures and videos first, in the order they were picked, then the rest,
+// so the grid lines sit together.
+_mediaGroupOrder(files) {
+  const list = Array.from(files || []).filter(Boolean);
+  const grid = list.filter(f => this._mediaFileKind(f) !== 'file');
+  return [...grid, ...list.filter(f => this._mediaFileKind(f) === 'file')];
+},
+
+// Split a list into runs of at most `size`.
+_mediaChunks(list, size) {
+  const n = Math.max(1, Math.floor(size) || 1);
+  const out = [];
+  for (let i = 0; i < list.length; i += n) out.push(list.slice(i, i + n));
+  return out;
+},
+
+// Files per message: ten, or fewer when the admin allows fewer.
+_mediaGroupMax() {
+  const setting = this._maxAttachments ? this._maxAttachments() : MEDIA_GROUP_MAX;
+  return Math.max(1, Math.min(MEDIA_GROUP_MAX, setting));
+},
+
+// A message's text and its upload lines, for editing the text alone. Null
+// unless it is the shape a batch is sent in, text first and then two or more
+// uploads, so a single picture, or a post with text between its pictures,
+// edits as it always has.
+_mediaGroupSplit(content) {
+  const lines = String(content || '').split('\n');
+  const isUpload = (l) => !!this._mediaGridKind(l) || /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l.trim()) || /^e2e-file:\{.*\}$/.test(l.trim());
+  const start = lines.findIndex(isUpload);
+  if (start < 0) return null;
+  const media = lines.slice(start).filter(l => l.trim());
+  if (media.length < 2 || !media.every(isUpload)) return null;
+  return { text: lines.slice(0, start).join('\n').trim(), media: media.map(l => l.trim()) };
+},
+
+// ── Feed ──────────────────────────────────────────────────
+
+// Video tiles open the video viewer; picture tiles are chat images and go
+// through the usual lightbox click.
+_setupMediaGrid() {
+  document.addEventListener('click', (e) => {
+    const tile = e.target.closest && e.target.closest('.media-grid-tile.is-video');
+    if (!tile) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const src = tile.dataset.videoSrc;
+    if (src) this._openVideoLightbox?.(src);
+  });
+},
+
+// The grid for a run of picture and video lines.
+_mediaGridHtml(lines) {
+  const layout = this._mediaGridLayout(lines.length);
+  if (!layout) return lines.map(l => `<div class="content-media-part">${this._formatContent(l)}</div>`).join('');
+  const tiles = lines.map((line, i) => {
+    const hidden = i >= layout.shown;
+    const [cs, rs] = hidden ? [1, 1] : layout.spans[i];
+    const video = this._mediaGridKind(line) === 'video' ? VIDEO_LINE.exec(line) : null;
+    const inner = video
+      ? `<video class="media-grid-video" src="${this._escapeHtml(video[1])}" preload="metadata" muted playsinline></video><span class="media-grid-play" aria-hidden="true">▶</span>`
+      : this._formatContent(line);
+    const more = layout.more && i === layout.shown - 1
+      ? `<span class="media-grid-more" title="${this._escapeHtml(t('media_grid.more', { count: layout.more }))}">+${layout.more}</span>`
+      : '';
+    const cls = 'media-grid-tile' + (video ? ' is-video' : '') + (hidden ? ' mg-hidden' : '');
+    const attrs = video ? ` data-video-src="${this._escapeHtml(video[1])}" role="button" tabindex="0" title="${this._escapeHtml(t('media_grid.play_video'))}"` : '';
+    return `<div class="${cls}" style="grid-column:span ${cs};grid-row:span ${rs}"${attrs}>${inner}${more}</div>`;
+  }).join('');
+  const label = this._escapeHtml(t('media_grid.label', { count: lines.length }));
+  return `<div class="media-grid" data-count="${lines.length}" role="group" aria-label="${label}" style="aspect-ratio:${layout.ratio};grid-template-rows:repeat(${layout.rows},minmax(0,1fr))">${tiles}</div>`;
+},
+
+// ── Sending ───────────────────────────────────────────────
+
+// Upload one file and return the line it takes in a message, or null when
+// it failed (already reported). In an encrypted DM the bytes are encrypted
+// first, as before, and the line is the encrypted picture or file marker.
+async _mediaUploadLine(file, { partner = null, isDm = false } = {}) {
+  const type = file.type || '';
+  const isImage = type.startsWith('image/');
+  const spoiler = file._spoiler ? 'spoiler-img:' : '';
+  try {
+    if (partner) {
+      const encrypted = await this._e2eEncryptBytes(partner, await file.arrayBuffer());
+      const fd = new FormData();
+      fd.append('scope', 'dm');
+      const asPicture = isImage && E2E_PICTURE_MIME.test(type);
+      fd.append('file', new Blob([encrypted], { type: 'application/octet-stream' }), asPicture ? 'e2e-image.enc' : 'e2e-file.enc');
+      const data = await this._uploadWithProgress('/api/upload-file', fd);
+      if (!data || !data.url) throw new Error(t('toasts.encrypted_image_failed'));
+      const line = asPicture
+        ? `${spoiler}e2e-img:${type}:${data.url}`
+        : `e2e-file:${JSON.stringify({ mime: type || 'application/octet-stream', size: file.size, url: data.url, name: file.name || 'file' })}`;
+      return { line, url: data.url };
+    }
+    const fd = new FormData();
+    fd.append('scope', isDm ? 'dm' : 'channel');
+    // SVG goes through /api/upload-file; the picture route takes rasters only.
+    const raster = isImage && type !== 'image/svg+xml';
+    fd.append(raster ? 'image' : 'file', file);
+    const data = await this._uploadWithProgress(raster ? '/api/upload' : '/api/upload-file', fd);
+    if (!data || data.error || !data.url) throw new Error((data && data.error) || t('toasts.upload_failed'));
+    const line = (raster || data.isImage)
+      ? `${spoiler}${data.url}`
+      : `[file:${data.originalName}](${data.url}|${this._formatFileSize(data.fileSize)})`;
+    return { line, url: data.url };
+  } catch (err) {
+    if (err?.aborted) return null;
+    if (partner) console.error('[E2E] Attachment encryption failed:', err);
+    this._showToast(err?.message || t('toasts.upload_failed'), 'error');
+    return null;
+  }
+},
+
+// Attachments from the message box go out together, except in a blog, where
+// each file is a piece of its own (#5763).
+_mediaGroupOn(code) {
+  return !this._forumBlogOn?.(code);
+},
+
+// Whether the typed text goes in the same message as the attachments: not a
+// command, not burn-after-read (pictures never burned), and not where text is
+// switched off. `payload` is the text message the message box built.
+_mediaGroupTakesText(content, payload) {
+  if (!content || content.startsWith('/') || payload.burnSeconds) return false;
+  const ch = this.channels?.find(c => c.code === payload.code);
+  return !(ch && ch.text_enabled === 0);
+},
+
+// The message box's queued pictures and files, sent as messages of up to
+// ten. With `combine` the text message `payload` goes with them, already
+// cleared by the DM check (`partner`); otherwise a DM that cannot be
+// encrypted asks first, and backing out keeps the queue. `textSent` says the
+// text went on its own, carrying the reply.
+async _flushComposerMedia({ payload, combine = false, partner = null, textSent = false, replyTo = null, prefix = '', ferryDiscordUserId = null, destructAt = null }) {
+  const { content: text, code, ...base } = payload;
+  let to = partner;
+  if (!combine) {
+    const gate = await this._dmSendGate(code);
+    if (!gate) return;
+    to = gate.partner;
+  }
+  const files = [...(this._imageQueue || []), ...(this._fileQueue || [])];
+  this._imageQueue = [];
+  this._fileQueue = [];
+  this._renderImageQueue?.();
+  await this._sendMediaGroups({
+    code, files, partner: to, prefix, ferryDiscordUserId, destructAt,
+    text: combine ? text : '',
+    base: combine ? base : { replyTo: textSent ? null : replyTo },
+    bundled: !combine && textSent,
+  });
+},
+
+// Upload `files` and send them as messages of up to ten. The first carries
+// `text` and `base` (reply, quote, official mark and the like); the rest
+// follow as media sent with it. `prefix` (a persona or Discord target) goes
+// in front of a message that has no text of its own. In a thread the
+// messages are thread replies instead. The × on the progress bar stops the
+// batch: what is already uploaded still goes, with the text.
+async _sendMediaGroups({ code, files, text = '', base = {}, partner = null, prefix = '', bundled = false, ferryDiscordUserId = null, destructAt = null, thread = null }) {
+  const ordered = this._mediaGroupOrder(files);
+  if (!ordered.length && !text) return;
+  const ch = code ? this.channels?.find(c => c.code === code) : null;
+  const isDm = !!(ch && ch.is_dm);
+  const chunks = ordered.length ? this._mediaChunks(ordered, this._mediaGroupMax()) : [[]];
+  this._uploadsCancelled = false;
+  for (let i = 0; i < chunks.length; i++) {
+    const first = i === 0;
+    const lines = [];
+    const urls = [];
+    const mediaTags = [];
+    for (const file of chunks[i]) {
+      if (this._uploadsCancelled) break;
+      const up = await this._mediaUploadLine(file, { partner, isDm });
+      if (!up) continue;
+      lines.push(up.line);
+      urls.push(up.url);
+      if (!partner && Array.isArray(file._tags) && file._tags.length) mediaTags.push({ url: up.url, tags: file._tags });
+    }
+    const ownText = first ? text : '';
+    let body = [ownText, ...lines].filter(Boolean).join('\n');
+    if (!body) { if (this._uploadsCancelled) break; continue; }
+    if (prefix && !ownText) body = prefix + body;
+    if (thread) {
+      const replyTo = first ? thread.replyTo : null;
+      this.socket.emit('send-thread-message', replyTo ? { parentId: thread.parentId, content: body, replyTo } : { parentId: thread.parentId, content: body }, (resp) => {
+        if (resp && resp.error) this._showToast(resp.error, 'error');
+      });
+    } else {
+      const payload = {
+        code,
+        content: body,
+        ...(first ? base : {}),
+        ...(ownText ? {} : { isImage: true }),
+        ...((!first || bundled) ? { bundled: true } : {}),
+        ...(ferryDiscordUserId ? { ferryDiscordUserId } : {}),
+        ...this._destructField(destructAt),
+        ...(mediaTags.length ? { mediaTags } : {}),
+      };
+      if (partner) {
+        try {
+          payload.content = await this._e2eEncryptText(partner, body);
+        } catch (err) {
+          console.warn('[E2E] Encryption failed:', err);
+          this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+          return;
+        }
+        payload.encrypted = true;
+        // So deleting the message removes its files too (#5699).
+        if (urls.length) payload.files = urls;
+      }
+      this.socket.emit('send-message', payload);
+    }
+    this.notifications?.play?.('sent');
+    if (mediaTags.length) this._recordFrequentTags?.(mediaTags.flatMap(m => m.tags));
+    if (this._uploadsCancelled) break;
+  }
+},
+
+};

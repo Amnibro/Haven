@@ -1,23 +1,32 @@
 'use strict';
+// Attachments addressed to Discord (#5795). Since #5799 the text and its
+// attachments go out as one message, so the Discord target in the text covers
+// them; attachments sent without text, and the messages past the first ten,
+// carry the target themselves.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
-const FILES = ['app-messages.js', 'app-attachments.js', 'app-ferry.js'];
+const FILES = ['app-messages.js', 'app-attachments.js', 'app-ferry.js', 'app-media-grid.js'];
 function loadApp(globals) {
   const methods = {};
   FILES.forEach(name => {
     const context = vm.createContext({ module: { exports: {} }, console, ...globals });
-    vm.runInContext(fs.readFileSync(path.join(ROOT, 'public/js/modules', name), 'utf8').replace(/^export default/m, 'module.exports ='), context, { filename: name });
+    const src = fs.readFileSync(path.join(ROOT, 'public/js/modules', name), 'utf8')
+      .replace(/^export default/m, 'module.exports =')
+      .replace(/^export const /gm, 'const ');
+    vm.runInContext(src, context, { filename: name });
     Object.assign(methods, context.module.exports);
   });
   return methods;
 }
+const pic = (n) => ({ type: 'image/png', name: `p${n}.png`, line: `/uploads/p${n}.png` });
+const doc = { type: 'application/pdf', name: 'a.pdf', line: '[file:a.pdf](/uploads/a.pdf|1 KB)' };
 function makeApp(value, { images = [], files = [], dm = null } = {}) {
   const input = { value, style: {}, focus() {}, dispatchEvent() {} };
-  const emitted = [], images_ = [], files_ = [];
+  const emitted = [];
   const methods = loadApp({ document: { getElementById: id => (id === 'message-input' ? input : null), querySelector: () => null }, t: k => k, Event: class {} });
   const app = Object.assign(Object.create(null), methods, {
     currentChannel: 'aaaaaaaa',
@@ -35,48 +44,58 @@ function makeApp(value, { images = [], files = [], dm = null } = {}) {
     _clearReply() {},
     _hideMentionDropdown() {},
     _hideSlashDropdown() {},
-    _clearImageQueue() { this._imageQueue = []; },
     _renderImageQueue() {},
     _isForumChannel: () => false,
+    _maxAttachments: () => 50,
     _dmSendGate: async () => ({ partner: null }),
-    _uploadImage: async (file, code, bundled, prefix, spoiler, opts) => { images_.push({ bundled, prefix, opts }); },
-    _uploadGeneralFile: (file, code, opts) => { files_.push(opts); },
+    _mediaUploadLine: async (file) => ({ line: file.line, url: file.line.replace(/^.*?(\/uploads\/[^|)]+).*$/, '$1') }),
   });
-  return { app, emitted, images: images_, files: files_ };
+  return { app, emitted };
 }
-const settle = () => new Promise(r => setTimeout(r, 20));
-test('a picture sent with a Discord target carries the target', async () => {
-  const { app, emitted, images } = makeApp('=>Test Guild#general look', { images: [{}] });
+const settle = () => new Promise(r => setTimeout(r, 50));
+const contents = (emitted) => emitted.map(([, d]) => d.content);
+
+test('a picture sent with a Discord target goes in the same message as the target', async () => {
+  const { app, emitted } = makeApp('=>Test Guild#general look', { images: [pic(1)] });
   await app._sendMessage();
   await settle();
-  assert.deepEqual(emitted.map(([, d]) => d.content), ['=>Test Guild#general look']);
-  assert.equal(images.length, 1);
-  assert.equal(images[0].prefix, '=>Test Guild#general ');
-  assert.equal(images[0].bundled, true);
+  assert.deepEqual(contents(emitted), ['=>Test Guild#general look\n/uploads/p1.png']);
+  assert.equal(emitted[0][1].bundled, undefined);
 });
+
 test('a target with only attachments sends no empty text and still addresses them', async () => {
-  const { app, emitted, images, files } = makeApp('=>#general', { images: [{}], files: [{}] });
+  const { app, emitted } = makeApp('=>#general', { images: [pic(1)], files: [doc] });
   await app._sendMessage();
   await settle();
-  assert.deepEqual(emitted, []);
-  assert.equal(images[0].prefix, '=>#general ');
-  assert.equal(images[0].bundled, false);
-  assert.equal(files[0].prefix, '=>#general ');
+  assert.deepEqual(contents(emitted), [`=>#general /uploads/p1.png\n${doc.line}`]);
+  assert.equal(emitted[0][1].isImage, true);
+  assert.equal(emitted[0][1].bundled, undefined);
 });
+
 test('a Discord DM target hands its user id to the attachments', async () => {
-  const { app, emitted, images, files } = makeApp('=>@Alice hi', { images: [{}], files: [{}], dm: { id: '1300000000000000100', label: '@Alice' } });
+  const { app, emitted } = makeApp('=>@Alice hi', { images: [pic(1)], files: [doc], dm: { id: '1300000000000000100', label: '@Alice' } });
   await app._sendMessage();
   await settle();
+  assert.deepEqual(contents(emitted), [`=>@Alice hi\n/uploads/p1.png\n${doc.line}`]);
   assert.equal(emitted[0][1].ferryDiscordUserId, '1300000000000000100');
-  assert.equal(images[0].prefix, '=>@Alice ');
-  assert.equal(images[0].opts.ferryDiscordUserId, '1300000000000000100');
-  assert.deepEqual({ ...files[0] }, { prefix: '=>@Alice ', ferryDiscordUserId: '1300000000000000100' });
 });
-test('an unknown target and plain text leave attachments as they were', async () => {
+
+test('past ten, the further messages carry the target themselves', async () => {
+  const images = Array.from({ length: 12 }, (_, i) => pic(i + 1));
+  const { app, emitted } = makeApp('=>Test Guild#general trip', { images });
+  await app._sendMessage();
+  await settle();
+  assert.equal(emitted.length, 2);
+  assert.equal(emitted[0][1].content.split('\n').length, 11);
+  assert.equal(emitted[1][1].content, '=>Test Guild#general /uploads/p11.png\n/uploads/p12.png');
+  assert.equal(emitted[1][1].bundled, true);
+});
+
+test('an unknown target and plain text leave the text as it was', async () => {
   for (const text of ['=>Nowhere#x hi', 'just text', '::Alter hello']) {
-    const { app, images } = makeApp(text, { images: [{}] });
+    const { app, emitted } = makeApp(text, { images: [pic(1)] });
     await app._sendMessage();
     await settle();
-    assert.equal(images[0].prefix, '', text);
+    assert.deepEqual(contents(emitted), [`${text}\n/uploads/p1.png`], text);
   }
 });

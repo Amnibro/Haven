@@ -182,6 +182,9 @@ _setupLightbox() {
 },
 
 _getLightboxImages() {
+  // A picture from a grid steps through that message's pictures only (#5799),
+  // the ones behind its "+N" too.
+  if (this._lightboxScope && this._lightboxScope.isConnected) return Array.from(this._lightboxScope.querySelectorAll('.chat-image'));
   // Use whichever container opened the lightbox (main feed, thread panel, DM PiP)
   const container = this._lightboxContainer || document.getElementById('messages');
   if (!container) return [];
@@ -245,6 +248,7 @@ _openLightbox(src, imgEl = null) {
   const lb = document.getElementById('image-lightbox');
   const img = document.getElementById('lightbox-img');
   if (!lb || !img) return;
+  this._lightboxScope = (imgEl && imgEl.closest && imgEl.closest('.media-grid')) || null;
   const imgs = this._getLightboxImages();
   this._lightboxIndex = imgEl ? imgs.indexOf(imgEl) : imgs.findIndex(i => i.src === src);
   this._lightboxShow(imgEl || imgs[this._lightboxIndex] || null, src);
@@ -263,6 +267,7 @@ _closeLightbox() {
     this._lightboxBlobUrl = null;
   }
   this._lightboxIndex = -1;
+  this._lightboxScope = null;
   this._imageZoomReset?.();
   this._forumPieceVotesLightbox?.(null);
   this._hideImageContextMenu();

@@ -496,7 +496,13 @@
     "self_destructing": "Self-destructing {{time}}",
     "self_destruct_no_reply": "Self-destructing messages can't be replied to or quoted",
     "preview_picture": "Picture",
+    "preview_pictures": "{{count}} pictures",
     "preview_file": "File"
+  },
+  "media_grid": {
+    "label": "{{count}} attachments",
+    "more": "{{count}} more",
+    "play_video": "Play video"
   },
   "utils": {
     "today_at": "Today at {{time}}",
