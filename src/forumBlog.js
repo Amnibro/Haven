@@ -9,18 +9,19 @@
  * the topic's thread are shown as part of the post, and everyone else's
  * replies are its comments.
  *
- * Nothing is stored per message, so turning the switch on or off needs no
- * migration and changes nothing on disk. A thread reply counts as part of
- * the post when all of these hold:
+ * Turning the switch on or off needs no migration and changes nothing on
+ * disk. A thread reply counts as part of the post when all of these hold:
  *   - the topic has a real author (not a bot or relayed post),
  *   - the reply was written by that same account (messages.user_id, which
  *     the server sets from the signed-in socket, so nobody can claim it),
- *   - the reply is not a bot or relayed message.
- * Everything else in the thread is a comment. Only who wrote a reply
- * counts, never what it replies to, so a reply never moves between the post
- * and the comments (deleting a comment clears reply_to on its answers).
- * The server works this out and hands the client the answer; the client
- * never decides it.
+ *   - the reply is not a bot or relayed message,
+ *   - the author did not write it as a comment (messages.blog_comment).
+ * Everything else in the thread is a comment. The author writes a comment
+ * by answering a comment, or by writing in a piece's open comments; that is
+ * decided once, when the reply is sent, and stored, so a reply never moves
+ * between the post and the comments later (deleting a comment clears
+ * reply_to on its answers). The server works this out and hands the client
+ * the answer; the client never decides it.
  */
 
 function migrateForumBlog(addColumn) {
@@ -28,11 +29,13 @@ function migrateForumBlog(addColumn) {
   // Comments on pictures only (#5765): no general Comments section, so a
   // comment has to be on one piece of the post.
   addColumn('channels', 'forum_blog_pics_only', 'INTEGER DEFAULT 0');
+  // The topic's author answering a comment: a comment, not more of the post.
+  addColumn('messages', 'blog_comment', 'INTEGER DEFAULT 0');
 }
 
 // t is the reply, p the topic. True for a part of the post, and never NULL
 // (IS rather than =), so NOT of it is exactly the comments.
-const PART_SQL = '(p.user_id IS NOT NULL AND t.user_id IS p.user_id AND COALESCE(t.is_webhook, 0) = 0)';
+const PART_SQL = '(p.user_id IS NOT NULL AND t.user_id IS p.user_id AND COALESCE(t.is_webhook, 0) = 0 AND COALESCE(t.blog_comment, 0) = 0)';
 
 // Is blog mode on for the forum this channel id names?
 function blogOn(db, channelId) {
@@ -62,6 +65,21 @@ function commentAllowed(db, { channelId, parentId, userId, replyTo }) {
   if (isPart(db, replyTo)) return true;
   const onPiece = target.reply_to === parentId || (target.reply_to && isPart(db, target.reply_to));
   return !!onPiece;
+}
+
+// Whether a reply the topic's author is sending is a comment (1) rather than
+// more of the post (0). An answer to anything in the thread is a comment.
+// An answer to the topic itself is a comment only when the author wrote it
+// in the topic's open comments (asComment): some clients point every reply
+// at the topic, and those are additions to the post. Worked out with blog
+// mode off too, so turning it on later sorts earlier answers the same way.
+function authorComment(db, { parentId, userId, replyTo, asComment }) {
+  if (!replyTo) return 0;
+  const parent = db.prepare('SELECT user_id FROM messages WHERE id = ?').get(parentId);
+  if (!parent || parent.user_id == null || parent.user_id !== userId) return 0;
+  if (replyTo === parentId) return asComment === true ? 1 : 0;
+  const target = db.prepare('SELECT thread_id FROM messages WHERE id = ?').get(replyTo);
+  return target && target.thread_id === parentId ? 1 : 0;
 }
 
 // The ids in one topic's thread that are part of the post.
@@ -110,4 +128,4 @@ function pieceOf(db, messageId) {
   return { ...m, topicId: m.thread_id || m.id };
 }
 
-module.exports = { migrateForumBlog, blogOn, picsOnly, commentAllowed, partIdsOf, isPart, commentCounts, threadExtras, pieceOf };
+module.exports = { migrateForumBlog, blogOn, picsOnly, commentAllowed, authorComment, partIdsOf, isPart, commentCounts, threadExtras, pieceOf };

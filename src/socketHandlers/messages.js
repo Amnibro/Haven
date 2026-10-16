@@ -3257,10 +3257,12 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'In this blog, comments go on a picture: open its comments and write there');
     }
 
+    const blogComment = forumBlog.authorComment(db, { parentId, userId: socket.user.id, replyTo, asComment: data.asComment });
+
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to, silent) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, safeContent, parentId, replyTo, tSilent.silent ? 1 : 0);
+        'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to, silent, blog_comment) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, safeContent, parentId, replyTo, tSilent.silent ? 1 : 0, blogComment);
       // Your own reply is not news to you (#5641).
       db.prepare(`
         INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id) VALUES (?, ?, ?)

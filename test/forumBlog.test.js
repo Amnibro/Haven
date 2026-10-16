@@ -106,7 +106,7 @@ test('blog mode on forum topics', async (t) => {
   assert.ok(topic, 'topic posted');
 
   // Bob adds to his post, the admin comments, and Bob answers the comment
-  // (still Bob adding to his post: only who wrote a reply counts).
+  // (an answer to a comment is a comment, even from the author).
   await reply(B, topic.id, 'day two');
   await reply(A, topic.id, 'nice shots');
   const before = await thread(B, topic.id);
@@ -137,10 +137,10 @@ test('blog mode on forum topics', async (t) => {
     const th = await thread(A, topic.id);
     assert.strictEqual(th.blog, true);
     const parts = Object.fromEntries(th.messages.map((m) => [m.content, m.post_part]));
-    assert.deepStrictEqual(parts, { 'day two': true, 'nice shots': false, 'thanks!': true },
-      'only who wrote a reply counts');
+    assert.deepStrictEqual(parts, { 'day two': true, 'nice shots': false, 'thanks!': false },
+      'the author\'s answer to a comment is a comment');
     const card = (await history(A, code)).messages.find((m) => m.id === topic.id);
-    assert.strictEqual(card.thread.comments, 1, 'the card counts the comments');
+    assert.strictEqual(card.thread.comments, 2, 'the card counts the comments');
     assert.strictEqual(card.thread.count, 3, 'the reply count is unchanged');
   });
 
@@ -149,13 +149,35 @@ test('blog mode on forum topics', async (t) => {
     let upd = next(A, 'thread-updated', (d) => d && d.parentId === topic.id);
     await reply(B, topic.id, 'day three');
     assert.strictEqual((await msg).message.post_part, true);
-    assert.strictEqual((await upd).thread.comments, 1);
+    assert.strictEqual((await upd).thread.comments, 2);
 
     msg = next(B, 'new-thread-message', (d) => d && d.parentId === topic.id);
     upd = next(B, 'thread-updated', (d) => d && d.parentId === topic.id);
     await reply(A, topic.id, 'post more!');
     assert.strictEqual((await msg).message.post_part, false);
-    assert.strictEqual((await upd).thread.comments, 2);
+    assert.strictEqual((await upd).thread.comments, 3);
+  });
+
+  await t.test('the author comments by answering a comment or writing in a piece\'s comments', async () => {
+    const th = await thread(B, topic.id);
+    const other = th.messages.find((m) => m.content === 'post more!');
+    let msg = next(A, 'new-thread-message', (d) => d && d.parentId === topic.id);
+    await reply(B, topic.id, 'soon', other.id);
+    assert.strictEqual((await msg).message.post_part, false, 'an answer to a comment');
+    const day = th.messages.find((m) => m.content === 'day two');
+    msg = next(A, 'new-thread-message', (d) => d && d.parentId === topic.id);
+    await reply(B, topic.id, 'about day two', day.id);
+    assert.strictEqual((await msg).message.post_part, false, 'a comment on one of their own pictures');
+    msg = next(A, 'new-thread-message', (d) => d && d.parentId === topic.id);
+    await new Promise((res) => B.emit('send-thread-message', { parentId: topic.id, content: 'on the first one', replyTo: topic.id, asComment: true }, res));
+    assert.strictEqual((await msg).message.post_part, false, 'a comment on the opening post');
+    msg = next(A, 'new-thread-message', (d) => d && d.parentId === topic.id);
+    await reply(B, topic.id, 'day four', topic.id);
+    assert.strictEqual((await msg).message.post_part, true, 'pointing at the topic alone still adds to the post');
+    // Someone else cannot use it to slip a reply into the post either way.
+    msg = next(B, 'new-thread-message', (d) => d && d.parentId === topic.id);
+    await new Promise((res) => A.emit('send-thread-message', { parentId: topic.id, content: 'admin', replyTo: topic.id, asComment: false }, res));
+    assert.strictEqual((await msg).message.post_part, false);
   });
 
   await t.test('a client cannot claim a reply is part of the post', async () => {
@@ -172,7 +194,7 @@ test('blog mode on forum topics', async (t) => {
     const upd = next(A, 'thread-updated', (d) => d && d.parentId === topic.id);
     const r = await post(`/api/webhooks/${hook.token}`, { content: 'bot says hi', username: 'bob', thread_id: topic.id });
     assert.ok(r.success, 'bot posted');
-    assert.strictEqual((await upd).thread.comments, 4);
+    assert.strictEqual((await upd).thread.comments, 9);
     const th = await thread(A, topic.id);
     assert.strictEqual(th.messages.find((m) => m.content === 'bot says hi').post_part, false);
   });
@@ -184,9 +206,9 @@ test('blog mode on forum topics', async (t) => {
     A.emit('delete-message', { messageId: target.id });
     assert.ok(await gone, 'comment deleted');
     const card = (await history(A, code)).messages.find((m) => m.id === topic.id);
-    assert.strictEqual(card.thread.comments, 3);
+    assert.strictEqual(card.thread.comments, 8);
     const after = await thread(A, topic.id);
-    assert.strictEqual(after.messages.find((m) => m.content === 'thanks!').post_part, true, 'the author\'s answer to it stays with the post');
+    assert.strictEqual(after.messages.find((m) => m.content === 'thanks!').post_part, false, 'the author\'s answer to it stays a comment');
   });
 
   await t.test('turning it off puts everything back', async () => {
