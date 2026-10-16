@@ -149,6 +149,7 @@ const {
 const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = require('./src/tunnel');
 const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
 const { initFcm, setFcmAdminEnabled } = require('./src/fcm');
+const threadNotify = require('./src/threadNotify');
 
 const app = express();
 const BOT_AUDIO_DIR = path.join(UPLOADS_DIR, 'bot-audio');
@@ -1998,7 +1999,7 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   if (io && threadId) {
     // A thread reply: the same two events a person's thread reply sends.
     const code = webhook.channel_code;
-    io.to(`channel:${code}`).emit('new-thread-message', { channelCode: code, parentId: threadId, message });
+    io.to(`channel:${code}`).emit('new-thread-message', { channelCode: code, parentId: threadId, message, followerIds: threadNotify.followerIds(db, threadId) });
     const count = db.prepare('SELECT COUNT(*) AS count FROM messages WHERE thread_id = ?').get(threadId).count;
     const last = db.prepare('SELECT id, created_at FROM messages WHERE thread_id = ? ORDER BY created_at DESC, id DESC LIMIT 1').get(threadId);
     const participants = db.prepare(`
@@ -3418,7 +3419,8 @@ initFerry({
           webhook_avatar: avatarUrl || null,
           thread_id: parentId,
           from_discord: true
-        }
+        },
+        followerIds: threadNotify.followerIds(db, parentId)
       });
 
       const count = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE thread_id = ?').get(parentId).n;

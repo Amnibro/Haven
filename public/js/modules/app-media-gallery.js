@@ -262,18 +262,16 @@ _renderThreadList(filter = '') {
     const label = replies === 1
       ? t('thread_list.reply_one')
       : t('thread_list.reply_other', { count: replies });
-    // Strip attachment markdown so a thread started with a file reads as its
-    // filename rather than a wall of markup.
-    const preview = String(th.content || '')
-      .replace(/\[file:([^\]]+)\]\([^)]*\)/g, '$1')
-      .replace(/!\[[^\]]*\]\(([^)\s]+)\)/g, '$1')
-      .trim();
+    // Pictures and files read by name, as on reply lines, rather than as
+    // markup or the address they are stored under.
+    const preview = this._threadRootPreview(th.content, 300);
     return `
       <button class="thread-list-row" data-parent-id="${th.id}">
         <span class="thread-list-row-top">
           <span class="thread-list-author">${this._escapeHtml(th.username || '')}</span>
           <span class="thread-list-replies">${this._escapeHtml(label)}</span>
           <span class="thread-list-when">${this._escapeHtml(this._formatTime?.(th.last_reply_at) || '')}</span>
+          ${this._threadListNewHtml?.(th) || ''}
         </span>
         <span class="thread-list-preview">${this._escapeHtml(preview)}</span>
       </button>`;

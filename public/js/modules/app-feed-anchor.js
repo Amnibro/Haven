@@ -34,7 +34,10 @@ export default {
 _scrollToMessage(el) {
   if (!el || !el.isConnected) return;
   const sc = el.closest('#messages, #thread-messages, #dm-pip-messages') || el.parentElement;
-  el.scrollIntoView({ block: 'center' });
+  // A message taller than the list (a big picture, a grid of them) lines up
+  // its top instead, so its name and the start of the picture show.
+  const block = () => (sc && el.getBoundingClientRect().height > sc.clientHeight * 0.9 ? 'start' : 'center');
+  el.scrollIntoView({ block: block() });
   if (!sc) return;
   if (this._jumpSettle) this._jumpSettle();
   const until = performance.now() + 1500;
@@ -52,8 +55,9 @@ _scrollToMessage(el) {
     if (!el.isConnected || now > until) { stop(); return; }
     const r = el.getBoundingClientRect();
     const box = sc.getBoundingClientRect();
-    const off = (r.top + r.height / 2) - (box.top + box.height / 2);
-    if (Math.abs(off) > box.height * 0.25) el.scrollIntoView({ block: 'center' });
+    const mode = block();
+    const off = mode === 'start' ? r.top - box.top : (r.top + r.height / 2) - (box.top + box.height / 2);
+    if (Math.abs(off) > box.height * 0.25) el.scrollIntoView({ block: mode });
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);

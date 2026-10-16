@@ -6,15 +6,15 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.21.0';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.23.8';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.23.11';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.24.25';
 import UIBindMethods   from './modules/app-ui.js?v=4.24.10';
 import ComposerMethods from './modules/app-composer.js?v=4.22.22';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.22.14';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.21.0';
-import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.24.22';
-import MessageActionMethods from './modules/app-message-actions.js?v=4.24.22';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.24.22';
+import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.24.25';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.24.25';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.24.25';
 import PeopleMethods from './modules/app-people.js?v=4.23.11';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.23.9';
@@ -25,7 +25,7 @@ import MobileMethods from './modules/app-mobile.js?v=4.24.24';
 import MediaMethods    from './modules/app-media.js?v=4.24.22';
 import ImageZoomMethods from './modules/app-image-zoom.js?v=4.23.12';
 import MediaGridMethods from './modules/app-media-grid.js?v=4.24.22';
-import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.24.4';
+import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.24.25';
 import AttachmentMethods from './modules/app-attachments.js?v=4.24.22';
 import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.23.5';
 import AppearanceMethods from './modules/app-appearance.js?v=4.22.9';
@@ -34,10 +34,10 @@ import SoundMethods from './modules/app-sounds.js?v=4.21.0';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.23.9';
 import ContextMethods  from './modules/app-context.js?v=4.24.24';
-import ChannelMethods  from './modules/app-channels.js?v=4.22.23';
+import ChannelMethods  from './modules/app-channels.js?v=4.24.25';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.24.9';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
-import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.22.24';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.25';
 import MessageMethods  from './modules/app-messages.js?v=4.24.22';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.24.19';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.24.9';
@@ -54,7 +54,7 @@ import UtilityMethods  from './modules/app-utilities.js?v=4.23.9';
 import MessageContentMethods from './modules/app-message-content.js?v=4.24.22';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.23.9';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.22.1';
-import ThreadMethods from './modules/app-threads.js?v=4.24.22';
+import ThreadMethods from './modules/app-threads.js?v=4.24.25';
 import AdminMethods    from './modules/app-admin.js?v=4.24.15';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.23.7';
@@ -83,6 +83,8 @@ import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import MasterVolumeMethods from './modules/app-master-volume.js?v=4.23.6';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
+import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.24.25';
+import ThreadScrollMethods from './modules/app-thread-scroll.js?v=4.24.25';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
@@ -427,6 +429,8 @@ class HavenApp {
     this._setupBadges();
     this._setupServerMute();
     this._setupForumUnread();
+    this._setupThreadUnread();
+    this._setupThreadScroll();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
     this._setupLightbox();
@@ -607,6 +611,8 @@ Object.assign(HavenApp.prototype,
   AdminReauthMethods,
   MasterVolumeMethods,
   ForumUnreadMethods,
+  ThreadUnreadMethods,
+  ThreadScrollMethods,
   ChannelCategoryMethods,
   ChannelPersonalOrderMethods,
   PushToMuteMethods,

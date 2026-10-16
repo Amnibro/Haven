@@ -31,10 +31,15 @@ _renderThreadPreview(parentId, thread, opts = {}) {
   }).join('');
 
   const timeAgo = this._relativeTime(thread.lastReplyAt);
+  // Replies you have not seen yet (app-thread-unread.js); forum cards have
+  // their own dot.
+  const fresh = opts.forum ? 0 : (this._threadNewCount?.(parentId, thread) || 0);
+  if (!opts.forum) this._queueThreadsBadge?.();
   return `
-    <button class="thread-preview" data-thread-parent="${parentId}">
+    <button class="thread-preview${fresh ? ' thread-preview-has-new' : ''}" data-thread-parent="${parentId}">
       ${participantAvatars}
       <span class="thread-preview-count">${t(thread.count === 1 ? 'thread_runtime.reply_one' : 'thread_runtime.reply_other', { count: thread.count })}</span>
+      ${fresh ? this._threadChipNewHtml(fresh) : ''}
       <span class="thread-preview-time">${timeAgo}</span>
       <span class="thread-preview-arrow">›</span>
     </button>
@@ -227,6 +232,8 @@ _openThread(parentId) {
   this._activeThreadParent = parentId;
   // Clear any pending thread mentions for this thread/channel
   this._clearThreadMentionsForParent(this.currentChannel, parentId);
+  // Opening it is reading it: the "N new" marker goes (app-thread-unread.js).
+  this._clearThreadUnread?.(parentId);
   // The server records the read position when it serves the thread; drop the
   // forum card's dot right away rather than on the next reload (#5641).
   if (this._forumActive && this._forumMarkTopicRead) this._forumMarkTopicRead(parentId);
@@ -244,8 +251,7 @@ _openThread(parentId) {
   const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
   const author = msgEl?.querySelector('.message-author')?.textContent || t('thread_runtime.starter');
   document.getElementById('thread-panel-title').textContent = t('msg_toolbar.thread');
-  const parentPreview = msgEl?.querySelector('.message-content')?.textContent || '';
-  document.getElementById('thread-parent-preview').textContent = parentPreview.length > 120 ? parentPreview.substring(0, 120) + '…' : parentPreview;
+  document.getElementById('thread-parent-preview').textContent = this._threadRootPreview(msgEl?.dataset?.rawContent ?? msgEl?.querySelector('.message-content')?.textContent ?? '');
 
   const avatarImg = msgEl?.querySelector('.message-avatar-img');
   let avatar = null;
@@ -368,9 +374,11 @@ _sendThreadMessage() {
   }
 },
 
-_appendThreadMessage(msg) {
+_appendThreadMessage(msg, opts = {}) {
   const container = document.getElementById('thread-messages');
   if (!container) return;
+  // Where the reader was before this reply went in (app-thread-scroll.js).
+  const gapBefore = container.scrollHeight - container.scrollTop - container.clientHeight;
   // In a blog-mode forum a reply goes to the post's own section or to the
   // comments under it (#5742); otherwise straight into the thread.
   const target = this._forumBlogTargetFor?.(msg) || container;
@@ -392,7 +400,11 @@ _appendThreadMessage(msg) {
   }
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
-  const replyHtml = msg.replyContext ? this._renderReplyBanner(msg.replyContext) : '';
+  // Some clients send every thread reply as a reply to the thread's own
+  // first message; in the thread that says nothing, so no banner. A blog
+  // keeps it: there it is a comment on the post's first picture (#5753).
+  const toRoot = this._isThreadRootReply(msg);
+  const replyHtml = msg.replyContext && !toRoot ? this._renderReplyBanner(msg.replyContext) : '';
   const canDelete = msg.user_id === this.user.id || this.user.isAdmin || this._canModerate();
   const canEdit = msg.user_id === this.user.id;
   const iconPair = (emoji, monoSvg) => `<span class="tb-icon tb-icon-emoji" aria-hidden="true">${emoji}</span><span class="tb-icon tb-icon-mono" aria-hidden="true">${monoSvg}</span>`;
@@ -421,7 +433,7 @@ _appendThreadMessage(msg) {
   // name header of their own (#5742).
   if (this._forumBlogIsPart?.(msg)) {
     threadCompact = true;
-  } else if (prevEl && prevEl.classList?.contains('thread-message') && !msg.reply_to) {
+  } else if (prevEl && prevEl.classList?.contains('thread-message') && (!msg.reply_to || toRoot)) {
     const samePerson = parseInt(prevEl.dataset.userId, 10) === msg.user_id
       && (prevEl.dataset.personaId || '') === (msg.persona_id ? String(msg.persona_id) : '');
     const prevTime = prevEl.dataset.time ? new Date(prevEl.dataset.time).getTime() : 0;
@@ -489,7 +501,39 @@ _appendThreadMessage(msg) {
   try { this._decryptE2EFiles?.(el); } catch (err) { console.warn('[Thread] _decryptE2EFiles failed', err); }
   try { if (this._isDmContainer(el)) this._enforceDmLinkPolicy?.(el); } catch (err) { console.warn('[Thread] _enforceDmLinkPolicy failed', err); }
   try { this._setupVideos?.(el); } catch (err) { console.warn('[Thread] _setupVideos failed', err); }
-  container.scrollTop = container.scrollHeight;
+  // Loading the thread lands at its end; a reply arriving later moves the
+  // view only for a reader who is already there.
+  if (opts.live && this._threadAfterLiveReply) this._threadAfterLiveReply(container, gapBefore, msg);
+  else container.scrollTop = container.scrollHeight;
+},
+
+// Up in the empty reply box: edit your newest reply in the open thread,
+// docked or popped out. Returns whether there was one to edit.
+_editLastThreadMessage() {
+  const box = document.getElementById('thread-messages');
+  if (!box || !this.user) return false;
+  const mine = [...box.querySelectorAll('.thread-message')]
+    .filter(el => parseInt(el.dataset.userId, 10) === this.user.id && !el.classList.contains('editing'));
+  const el = mine[mine.length - 1];
+  if (!el) return false;
+  this._startEditMessage(el, parseInt(el.dataset.msgId, 10));
+  el.scrollIntoView({ block: 'nearest' });
+  return true;
+},
+
+// The line under a thread's header, and its row in the Threads list:
+// pictures and files by name, as reply lines show them, never the address
+// they are stored under.
+_threadRootPreview(content, max = 120) {
+  const text = this._replyPreviewText ? this._replyPreviewText(content) : String(content || '');
+  return text.length > max ? text.substring(0, max) + '…' : text;
+},
+
+// Whether a thread reply answers the thread's own first message.
+_isThreadRootReply(msg) {
+  if (!msg || msg.reply_to == null || this._forumBlogThread) return false;
+  const root = msg.thread_id != null ? msg.thread_id : this._activeThreadParent;
+  return root != null && Number(msg.reply_to) === Number(root);
 },
 
 // Promote a compact thread reply back to a full row (avatar + author header

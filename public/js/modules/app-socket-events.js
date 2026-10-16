@@ -42,10 +42,7 @@ _listenFeatureEvents() {
     // Update parent preview from server (authoritative source)
     if (data.parentContent) {
       const preview = document.getElementById('thread-parent-preview');
-      if (preview) {
-        const text = data.parentContent.length > 120 ? data.parentContent.substring(0, 120) + '…' : data.parentContent;
-        preview.textContent = text;
-      }
+      if (preview) preview.textContent = this._threadRootPreview(data.parentContent);
     }
     const container = document.getElementById('thread-messages');
     if (!container) return;
@@ -58,36 +55,14 @@ _listenFeatureEvents() {
       data.messages.forEach(msg => this._appendThreadMessage(msg));
     }
     this._forumBlogAfterLoad?.();
+    this._resetThreadJump?.();
     this._threadJumpToMention?.();
   });
 
   this.socket.on('new-thread-message', async (data) => {
-    // Detect @mentions / replies-to-self in thread messages, even when the
-    // thread (or even the channel) is not currently open. Server broadcasts
-    // new-thread-message to the entire channel room, so all members get it.
-    const msg = data && data.message;
-    if (msg && msg.user_id !== this.user.id) {
-      const _mutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-      const _isMuted = _mutedChs.includes(data.channelCode);
-      const _meEsc = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const mentionRegex = _meEsc ? new RegExp(`@${_meEsc}(?!\\w)`, 'i') : null;
-      const everyoneRegex = /(?<![\w@])@(everyone|here)\b/i;
-      const _isMention = (mentionRegex && mentionRegex.test(msg.content || '')) || everyoneRegex.test(msg.content || '') || this._mentionsMyRole?.(msg.content || '');
-      const _isReplyToMe = msg.replyContext && msg.replyContext.user_id === this.user.id;
-      if ((_isMention || _isReplyToMe) && !_isMuted) {
-        this._recordThreadMention(data.channelCode, data.parentId, msg);
-        // A muted server (Mute all) or a member muted for you stays quiet.
-        const _quietThread = this._notifyBlockedByMutes?.({ senderId: msg.user_id, isDm: false, isMention: true });
-        if (!_quietThread) this.notifications.play('mention', { isMention: true });
-        if (document.hidden && !_quietThread) {
-          this._fireNativeNotification(
-            { ...msg, content: `[thread] ${msg.content || ''}` },
-            data.channelCode,
-            { isMention: true }
-          );
-        }
-      }
-    }
+    // Every member of the channel gets every reply. Whether it makes a sound,
+    // and the unread markers, are decided in app-thread-unread.js.
+    this._onThreadReply?.(data);
     if (data.channelCode !== this.currentChannel) return;
     // If this thread is open, append the message
     if (this._activeThreadParent === data.parentId) {
@@ -95,7 +70,7 @@ _listenFeatureEvents() {
       if (data.message) {
         try { await this._decryptMessages([data.message], data.channelCode); } catch (err) { console.warn('[Thread] could not decrypt the new thread message', err); }
       }
-      this._appendThreadMessage(data.message);
+      this._appendThreadMessage(data.message, { live: true });
     }
   });
 

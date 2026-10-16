@@ -1356,10 +1356,6 @@ body:has(#thread-panel.thread-panel-forum:not(.pip)) :is(#sidebar-toggle-btn, #s
   background: rgba(255,255,255,0.02);
   box-shadow: var(--msg-glow);
 }
-.thread-message.thread-highlight {
-  background: rgba(255,255,255,0.035);
-  box-shadow: var(--msg-glow);
-}
 .thread-msg-row {
   display: flex;
   gap: 0.625rem;

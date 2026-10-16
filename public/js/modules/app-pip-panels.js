@@ -265,6 +265,12 @@ _bindThreadAndDmPanels() {
         this._sendThreadMessage();
         return;
       }
+      // Up in an empty box edits your last reply here, as in the channel.
+      if (e.key === 'ArrowUp' && !threadInput.value && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey
+          && localStorage.getItem('haven_up_arrow_edit') !== 'false' && this._editLastThreadMessage()) {
+        e.preventDefault();
+        return;
+      }
       // Markdown Formatting shortcuts
       if (this._handleMarkdownShortcuts(threadInput, e)) {
         e.preventDefault();
