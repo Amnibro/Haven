@@ -24,6 +24,12 @@
 //  - a reply banner that points at a message left behind is dropped, as
 //    Move here as thread does, so the other channel's readers do not see a
 //    line of a message from a channel they may not be able to open
+//  - role menus stay where they are. Who can take a role from a menu goes by
+//    the menu's channel (membership and its role gate), and the person who
+//    placed it chose that audience. A mover only needs Delete Messages, not
+//    the right to hand out roles, so moving a menu from a gated channel into
+//    an open one would hand its roles to people it was never meant for. A
+//    role manager can post a new menu where they want it
 //
 // Everything runs in one transaction, checked again inside it, so two moves
 // at once cannot both move the same message.
@@ -60,12 +66,16 @@ function moveToChannel(db, { from, to, messageIds }) {
     kept.sort((a, b) => a - b);
 
     const tph = placeholders(tops.length);
+    const moving = `SELECT id FROM messages WHERE id IN (${tph}) OR thread_id IN (${tph})`;
+    if (db.prepare(`SELECT 1 FROM role_menus WHERE message_id IN (${moving}) LIMIT 1`).get(...tops, ...tops)) {
+      return { error: 'Role menus cannot be moved to another channel' };
+    }
     const brought = db.prepare(`SELECT id FROM messages WHERE thread_id IN (${tph}) ORDER BY id`).all(...tops).map(r => r.id);
 
     dropStrayBanners(db, tops, to.id);
     db.prepare(`UPDATE messages SET channel_id = ? WHERE id IN (${tph}) OR thread_id IN (${tph})`).run(to.id, ...tops, ...tops);
     db.prepare(`UPDATE pinned_messages SET channel_id = ? WHERE channel_id != ?
-      AND message_id IN (SELECT id FROM messages WHERE id IN (${tph}) OR thread_id IN (${tph}))`)
+      AND message_id IN (${moving})`)
       .run(to.id, to.id, ...tops, ...tops);
 
     return { moved: tops, brought, kept };

@@ -199,6 +199,16 @@ test('moving messages to another channel', async (t) => {
     assert.equal(db.prepare('SELECT channel_id FROM messages WHERE thread_id = ? ORDER BY id DESC LIMIT 1').get(root).channel_id, other.id);
   });
 
+  await t.test('role menus stay where they are', async () => {
+    const menu = post(talk.id, admin.id, 'pick a role');
+    const loose = post(talk.id, admin.id, 'a plain message');
+    db.prepare("INSERT INTO role_menus (message_id, channel_id, created_by, title, data) VALUES (?, ?, ?, 't', '[]')").run(menu, talk.id, admin.id);
+    assert.match((await move(A, talk.code, other.code, [loose, menu])).error || '', /Role menus/);
+    assert.equal(row(menu).channel_id, talk.id);
+    assert.equal(row(loose).channel_id, talk.id, 'nothing moved');
+    assert.equal(db.prepare('SELECT channel_id FROM role_menus WHERE message_id = ?').get(menu).channel_id, talk.id);
+  });
+
   await t.test('each move is in the audit log, naming where it went', async () => {
     await wait(100);
     const rows = db.prepare("SELECT actor_id, target_type, target_id, target_name, details FROM audit_log WHERE action = 'messages_move' ORDER BY id").all();
