@@ -597,6 +597,8 @@
     "stop_camera": "Stop Camera",
     "sharing_started": "{{who}} started sharing their screen",
     "status_muted": "Muted",
+    "status_push_to_mute": "Muted (push to mute)",
+    "push_to_mute_held": "Push to mute is held. Your mic is muted until you let go.",
     "status_active": "Active",
     "status_deafened": "Deafened",
     "status_off": "Off",
@@ -2035,7 +2037,9 @@
       "binding_hint": "Lone modifiers (Alt / Ctrl / Shift) and extra mouse buttons (Mouse4 / Mouse5) can be bound here. Some bindings require a recent Haven Desktop build to register at the OS level.",
       "ptt_hold": "hold",
       "ptt_toggle_mode": "toggle",
-      "ptt_mode_title": "How the PTT key behaves"
+      "ptt_mode_title": "How the PTT key behaves",
+      "ptm": "Push to mute (hold)",
+      "ptm_hint": "Hold to mute your mic. Handy on the same key as a game's push to talk."
     },
     "desktop_app_section": {
       "title": "Desktop App",

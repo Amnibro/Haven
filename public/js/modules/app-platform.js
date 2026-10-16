@@ -642,7 +642,12 @@ async _setupDesktopShortcuts() {
   let config = {};
   try { config = await window.havenDesktop.shortcuts.getConfig(); } catch (e) { console.warn('[Desktop] could not read the shortcut config', e); }
 
-  const actions = ['mute', 'deafen', 'ptt'];
+  // Push to mute (ptm) is held like push to talk. A Haven Desktop that has
+  // it always lists it in the config, empty when unbound; an older one
+  // would take the key and ignore it, so the row stays hidden there.
+  const hasPtm = typeof config?.ptm === 'string';
+  if (!hasPtm) document.getElementById('shortcut-row-ptm')?.style.setProperty('display', 'none');
+  const actions = hasPtm ? ['mute', 'deafen', 'ptt', 'ptm'] : ['mute', 'deafen', 'ptt'];
 
   actions.forEach(action => {
     const keyEl     = document.getElementById(`shortcut-key-${action}`);

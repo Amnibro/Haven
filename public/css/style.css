@@ -2,7 +2,7 @@
    HAVEN: Multi-Theme Stylesheet
    Themes: Haven (default), Discord, Matrix, Tron, HALO, LoTR
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-@import url('/css/voice.css?v=4.21.0');
+@import url('/css/voice.css?v=4.24.5');
 @import url('/css/music.css?v=4.21.0');
 @import url('/css/style-themes.css?v=4.21.0');
 @import url('/css/style-themes-win95-light.css?v=4.23.7');
@@ -14,7 +14,7 @@
 @import url('/css/style-emoji-reactions-threads.css?v=4.24.3');
 @import url('/css/style-tags-uploads-search.css?v=4.21.1');
 @import url('/css/style-e2e-spoilers.css?v=4.23.7');
-@import url('/css/style-settings.css?v=4.23.9');
+@import url('/css/style-settings.css?v=4.24.5');
 @import url('/css/style-mobile.css?v=4.22.12');
 @import url('/css/style-streams-markdown.css?v=4.22.12');
 @import url('/css/style-presence-connections.css?v=4.22.12');
