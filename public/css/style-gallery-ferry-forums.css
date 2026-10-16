@@ -1170,6 +1170,8 @@ html.reduce-motion .forum-unread-dot { animation: none; }
 .forum-post-modal { max-width: 34rem; width: 94%; }
 .forum-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
 .forum-field input, .forum-field textarea { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.6rem; font: inherit; }
+/* Taller only: dragging the corner sideways pushed the body out of the window. */
+.forum-field textarea { resize: vertical; max-width: 100%; max-height: 60vh; }
 .forum-tag-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 /* Pictures and files in a post's body (#5689, #5690) */
 .forum-attach-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin: -0.35rem 0 0.75rem; }
