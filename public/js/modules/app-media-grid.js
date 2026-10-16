@@ -5,6 +5,12 @@
 // feed, two or more pictures (and videos) in a row show as one grid, laid out
 // by count; clicking a tile opens the lightbox on that message's pictures.
 //
+// The grid crops each picture to fill its tile, which is bad for artwork, so
+// it is a choice: the admin sets the server's default and each member may
+// pick their own (media_group_layout, 'grid' or 'stacked'). Stacked shows the
+// same tiles full size, one under another, uncropped, at the Image Display
+// size. Changing either redraws the pictures already on screen in place.
+//
 // The layout and line helpers are pure, so the tests can drive them.
 
 // A message carries at most this many files; more go out as further messages.
@@ -17,6 +23,7 @@ const GRID_ROWS = { 2: [2], 4: [2, 2], 5: [2, 3], 6: [3, 3], 7: [1, 3, 3], 8: [2
 // its place while the tiles fill in.
 const GRID_RATIO = { 2: '2 / 1', 3: '4 / 3', 4: '4 / 3', 5: '6 / 5', 6: '3 / 2', 7: '1 / 1', 8: '1 / 1', 9: '1 / 1' };
 const GRID_SHOWN = 9;
+export const MEDIA_GROUP_LAYOUTS = ['grid', 'stacked'];
 
 const PICTURE_LINE = /^(?:spoiler-img:)?\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(?:jpg|jpeg|png|gif|webp|svg)$/i;
 const E2E_PICTURE_LINE = /^(?:spoiler-img:)?e2e-img:image\/(?:jpeg|png|gif|webp|svg\+xml):\/uploads\/[\w\-.]+$/i;
@@ -42,6 +49,41 @@ _mediaGridLayout(count) {
   const perRow = GRID_ROWS[shown];
   const spans = perRow.flatMap(k => Array.from({ length: k }, () => [6 / k, 1]));
   return { shown, more, rows: perRow.length, spans, ratio: GRID_RATIO[shown] };
+},
+
+// The layout in effect: the member's own pick, or else the server's default,
+// or else the grid.
+_mediaGroupLayoutFor(personal, serverDefault) {
+  if (MEDIA_GROUP_LAYOUTS.includes(personal)) return personal;
+  return MEDIA_GROUP_LAYOUTS.includes(serverDefault) ? serverDefault : 'grid';
+},
+
+_mediaGroupLayoutPref() {
+  return this._mediaGroupLayoutFor(this._userPrefs?.media_group_layout, this.serverSettings?.media_group_layout);
+},
+
+// What the group's box and each of its `count` tiles carry in a layout: the
+// box's inline style, each tile's style and whether it waits behind the
+// "+N", and where that "+N" goes. Stacked has no inline sizes, hides
+// nothing and has no "+N". Null below two, as for _mediaGridLayout.
+_mediaGridFrame(count, layout) {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  if (n < 2) return null;
+  if (layout === 'stacked') {
+    return { stacked: true, style: '', tiles: Array.from({ length: n }, () => ({ style: '', hidden: false })), more: null };
+  }
+  const grid = this._mediaGridLayout(n);
+  const tiles = Array.from({ length: n }, (_, i) => {
+    const hidden = i >= grid.shown;
+    const [cs, rs] = hidden ? [1, 1] : grid.spans[i];
+    return { style: `grid-column:span ${cs};grid-row:span ${rs}`, hidden };
+  });
+  return {
+    stacked: false,
+    style: `aspect-ratio:${grid.ratio};grid-template-rows:repeat(${grid.rows},minmax(0,1fr))`,
+    tiles,
+    more: grid.more ? { index: grid.shown - 1, count: grid.more } : null,
+  };
 },
 
 // What a content line shows as in a grid: 'image', 'video', or null for
@@ -113,7 +155,9 @@ _mediaGroupSplit(content) {
 // ── Feed ──────────────────────────────────────────────────
 
 // Video tiles open the video viewer; picture tiles are chat images and go
-// through the usual lightbox click.
+// through the usual lightbox click. A new server default or a member's own
+// pick redraws the pictures already on screen; the app's own handlers have
+// stored the new value by the time these run.
 _setupMediaGrid() {
   document.addEventListener('click', (e) => {
     const tile = e.target.closest && e.target.closest('.media-grid-tile.is-video');
@@ -123,28 +167,61 @@ _setupMediaGrid() {
     const src = tile.dataset.videoSrc;
     if (src) this._openVideoLightbox?.(src);
   });
+  this.socket?.on('server-settings', () => this._relayoutMediaGrids());
+  this.socket?.on('preferences', () => this._relayoutMediaGrids());
+  this.socket?.on('server-setting-changed', (data) => {
+    if (data?.key === 'media_group_layout') this._relayoutMediaGrids();
+  });
 },
 
-// The grid for a run of picture and video lines.
-_mediaGridHtml(lines) {
-  const layout = this._mediaGridLayout(lines.length);
-  if (!layout) return lines.map(l => `<div class="content-media-part">${this._formatContent(l)}</div>`).join('');
+_mediaGridMoreHtml(count) {
+  return `<span class="media-grid-more" title="${this._escapeHtml(t('media_grid.more', { count }))}">+${count}</span>`;
+},
+
+// The group for a run of picture and video lines, as a grid or stacked.
+// Both keep the same tiles in one box, so the lightbox steps through that
+// message's pictures either way.
+_mediaGridHtml(lines, layout = this._mediaGroupLayoutPref()) {
+  const frame = this._mediaGridFrame(lines.length, layout);
+  if (!frame) return lines.map(l => `<div class="content-media-part">${this._formatContent(l)}</div>`).join('');
   const tiles = lines.map((line, i) => {
-    const hidden = i >= layout.shown;
-    const [cs, rs] = hidden ? [1, 1] : layout.spans[i];
+    const tile = frame.tiles[i];
     const video = this._mediaGridKind(line) === 'video' ? VIDEO_LINE.exec(line) : null;
     const inner = video
       ? `<video class="media-grid-video" src="${this._escapeHtml(video[1])}" preload="metadata" muted playsinline></video><span class="media-grid-play" aria-hidden="true">▶</span>`
       : this._formatContent(line);
-    const more = layout.more && i === layout.shown - 1
-      ? `<span class="media-grid-more" title="${this._escapeHtml(t('media_grid.more', { count: layout.more }))}">+${layout.more}</span>`
-      : '';
-    const cls = 'media-grid-tile' + (video ? ' is-video' : '') + (hidden ? ' mg-hidden' : '');
+    const more = frame.more && i === frame.more.index ? this._mediaGridMoreHtml(frame.more.count) : '';
+    const cls = 'media-grid-tile' + (video ? ' is-video' : '') + (tile.hidden ? ' mg-hidden' : '');
+    const style = tile.style ? ` style="${tile.style}"` : '';
     const attrs = video ? ` data-video-src="${this._escapeHtml(video[1])}" role="button" tabindex="0" title="${this._escapeHtml(t('media_grid.play_video'))}"` : '';
-    return `<div class="${cls}" style="grid-column:span ${cs};grid-row:span ${rs}"${attrs}>${inner}${more}</div>`;
+    return `<div class="${cls}"${style}${attrs}>${inner}${more}</div>`;
   }).join('');
   const label = this._escapeHtml(t('media_grid.label', { count: lines.length }));
-  return `<div class="media-grid" data-count="${lines.length}" role="group" aria-label="${label}" style="aspect-ratio:${layout.ratio};grid-template-rows:repeat(${layout.rows},minmax(0,1fr))">${tiles}</div>`;
+  const cls = frame.stacked ? 'media-grid is-stacked' : 'media-grid';
+  const style = frame.style ? ` style="${frame.style}"` : '';
+  return `<div class="${cls}" data-count="${lines.length}" data-layout="${frame.stacked ? 'stacked' : 'grid'}" role="group" aria-label="${label}"${style}>${tiles}</div>`;
+},
+
+// Puts every group on the page (chat, threads, DM pop-outs, search) into the
+// layout in effect. The tiles stay where they are, so loaded, decrypted and
+// revealed pictures are kept as they were.
+_relayoutMediaGrids(root = document) {
+  const layout = this._mediaGroupLayoutPref();
+  root.querySelectorAll('.media-grid[data-count]').forEach((el) => {
+    if (el.dataset.layout === layout) return;
+    const tiles = Array.from(el.children).filter(c => c.classList.contains('media-grid-tile'));
+    const frame = this._mediaGridFrame(tiles.length, layout);
+    if (!frame) return;
+    el.classList.toggle('is-stacked', frame.stacked);
+    el.dataset.layout = layout;
+    el.style.cssText = frame.style;
+    el.querySelectorAll('.media-grid-more').forEach(m => m.remove());
+    tiles.forEach((tile, i) => {
+      tile.style.cssText = frame.tiles[i].style;
+      tile.classList.toggle('mg-hidden', frame.tiles[i].hidden);
+      if (frame.more && i === frame.more.index) tile.insertAdjacentHTML('beforeend', this._mediaGridMoreHtml(frame.more.count));
+    });
+  });
 },
 
 // ── Sending ───────────────────────────────────────────────
