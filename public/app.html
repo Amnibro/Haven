@@ -208,13 +208,13 @@
             </div>
             <div class="theme-popup-section" id="theme-popup-layout-section">
               <div class="theme-popup-title" style="margin-top: 8px;" data-i18n="app.theme.layout">Layout</div>
-              <div class="layout-picker" id="theme-popup-layout-picker" role="radiogroup" data-i18n-aria-label="app.theme.layout" aria-label="Layout">
-                <button type="button" class="layout-opt active" data-layout="" role="radio" aria-checked="true" data-i18n="app.theme.layout_original">Original</button>
-              </div>
+              <select class="settings-select layout-select" id="theme-popup-layout-select" data-i18n-aria-label="app.theme.layout" aria-label="Layout">
+                <option value="" data-i18n="app.theme.layout_original">Original</option>
+              </select>
             </div>
             <div class="theme-popup-section" id="theme-popup-specials-section" style="display:none">
               <div class="theme-popup-title" style="margin-top: 8px;" data-i18n="app.theme.special_themes">Special Themes</div>
-              <div class="theme-special-list" id="theme-popup-specials"></div>
+              <div class="theme-selector theme-special-list" id="theme-popup-specials"></div>
             </div>
             <!-- Custom theme triangle picker -->
             <div id="custom-theme-editor" style="display:none">

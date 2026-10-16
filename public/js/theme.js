@@ -1547,6 +1547,12 @@ function _setLayout(key) {
 
 function _renderLayoutPicker() {
   document.querySelectorAll('.layout-picker').forEach(_renderOneLayoutPicker);
+  document.querySelectorAll('select.layout-select').forEach(_renderLayoutSelect);
+}
+function _renderLayoutSelect(sel) {
+  sel.querySelectorAll('option:not([value=""])').forEach(o => o.remove());
+  for (const l of _layoutPluginFiles()) sel.add(new Option(l.name, l.key));
+  sel.value = _activeLayoutKey();
 }
 function _renderOneLayoutPicker(picker) {
   const active = _activeLayoutKey();
@@ -1577,6 +1583,10 @@ function initEffectSelector() {
   applyEffects(mode);
   _updateEffectButtons(container, mode);
 
+  document.querySelectorAll('select.layout-select:not([data-bound])').forEach(sel => {
+    sel.dataset.bound = '1';
+    sel.addEventListener('change', () => _setLayout(sel.value));
+  });
   document.querySelectorAll('.layout-picker:not([data-bound])').forEach(layoutPicker => {
     layoutPicker.dataset.bound = '1';
     layoutPicker.addEventListener('click', (e) => {

@@ -702,12 +702,16 @@ window.HavenPluginLoader = (function () {
     section.style.display = specials.length ? '' : 'none';
     list.innerHTML = '';
     for (const [file, r] of specials) {
-      const row = document.createElement('label');
-      row.className = 'theme-special-row';
-      row.title = r.meta.description || '';
-      row.innerHTML = `<span class="theme-special-name">${escHtml(r.meta.name || file)}</span><span class="plugin-toggle"><input type="checkbox" ${r.enabled ? 'checked' : ''} ${suppressExtensions && !r.enabled ? 'disabled' : ''}><span class="plugin-toggle-slider"></span></span>`;
-      row.querySelector('input').addEventListener('change', (e) => e.target.checked ? enableTheme(file) : disableTheme(file));
-      list.appendChild(row);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'theme-btn theme-special-btn';
+      btn.dataset.specialTheme = file;
+      btn.title = r.meta.description ? `${r.meta.name || file}: ${r.meta.description}` : (r.meta.name || file);
+      btn.setAttribute('aria-pressed', String(!!r.enabled));
+      btn.disabled = suppressExtensions && !r.enabled;
+      btn.innerHTML = `<span class="theme-icon">${escHtml(r.meta.icon || '🎨')}</span>`;
+      btn.addEventListener('click', () => r.enabled ? disableTheme(file) : enableTheme(file));
+      list.appendChild(btn);
     }
   }
 
