@@ -109,6 +109,7 @@ async switchChannel(code) {
   // so a server-built list of it would have nothing readable to show.
   const _threadsBtn = document.getElementById('threads-toggle-btn');
   if (_threadsBtn) _threadsBtn.style.display = isDm ? 'none' : '';
+  this._updateThreadsButtonBadge?.();
   // Auto-close pinned panel and Pins PiP on channel switch so stale pins don't linger
   document.getElementById('pinned-panel').style.display = 'none';
   this._closePinsPiP?.();
@@ -1202,6 +1203,8 @@ _renderChannels() {
   this._updateNestedIndicators();
   // Forum dots are drawn apart from the counts above (app-forum-unread.js).
   Object.keys(this.forumUnread || {}).forEach(code => this._updateForumDot?.(code));
+  // So are the dots for news in threads you take part in (app-thread-unread.js).
+  this._paintThreadDots?.();
 },
 
 // ── Keyboard Navigation ──────────────────────────────────

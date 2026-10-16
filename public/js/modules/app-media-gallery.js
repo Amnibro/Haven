@@ -274,6 +274,7 @@ _renderThreadList(filter = '') {
           <span class="thread-list-author">${this._escapeHtml(th.username || '')}</span>
           <span class="thread-list-replies">${this._escapeHtml(label)}</span>
           <span class="thread-list-when">${this._escapeHtml(this._formatTime?.(th.last_reply_at) || '')}</span>
+          ${this._threadListNewHtml?.(th) || ''}
         </span>
         <span class="thread-list-preview">${this._escapeHtml(preview)}</span>
       </button>`;

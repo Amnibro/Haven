@@ -31,10 +31,15 @@ _renderThreadPreview(parentId, thread, opts = {}) {
   }).join('');
 
   const timeAgo = this._relativeTime(thread.lastReplyAt);
+  // Replies you have not seen yet (app-thread-unread.js); forum cards have
+  // their own dot.
+  const fresh = opts.forum ? 0 : (this._threadNewCount?.(parentId, thread) || 0);
+  if (!opts.forum) this._queueThreadsBadge?.();
   return `
-    <button class="thread-preview" data-thread-parent="${parentId}">
+    <button class="thread-preview${fresh ? ' thread-preview-has-new' : ''}" data-thread-parent="${parentId}">
       ${participantAvatars}
       <span class="thread-preview-count">${t(thread.count === 1 ? 'thread_runtime.reply_one' : 'thread_runtime.reply_other', { count: thread.count })}</span>
+      ${fresh ? this._threadChipNewHtml(fresh) : ''}
       <span class="thread-preview-time">${timeAgo}</span>
       <span class="thread-preview-arrow">›</span>
     </button>
@@ -227,6 +232,8 @@ _openThread(parentId) {
   this._activeThreadParent = parentId;
   // Clear any pending thread mentions for this thread/channel
   this._clearThreadMentionsForParent(this.currentChannel, parentId);
+  // Opening it is reading it: the "N new" marker goes (app-thread-unread.js).
+  this._clearThreadUnread?.(parentId);
   // The server records the read position when it serves the thread; drop the
   // forum card's dot right away rather than on the next reload (#5641).
   if (this._forumActive && this._forumMarkTopicRead) this._forumMarkTopicRead(parentId);

@@ -12,6 +12,7 @@ const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
 const forumUnread = require('../forumUnread');
+const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
 
@@ -484,6 +485,11 @@ module.exports = function register(socket, ctx) {
     const topicVotes = channel.is_forum ? votesFor(db, socket.user.id, msgIds) : null;
     // Topics this reader muted: they never light up the forum in the sidebar.
     const mutedTopics = channel.is_forum ? forumUnread.mutedIn(db, socket.user.id, msgIds) : null;
+    // Replies you have not seen in the chat threads you follow, for the
+    // marker on each thread under its message (threadNotify.js).
+    const threadNew = !channel.is_forum && threadMap.size > 0
+      ? threadNotify.newCounts(db, socket.user.id, messages.filter(m => threadMap.has(m.id)).map(m => ({ id: m.id, userId: m.user_id })))
+      : null;
     // Blog mode: each card counts only the comments, not the author's own
     // follow-ups (#5742).
     const blogComments = channel.is_forum && Number(channel.forum_blog) === 1 ? forumBlog.commentCounts(db, msgIds) : null;
@@ -507,6 +513,7 @@ module.exports = function register(socket, ctx) {
       if (highlightMap.has(m.id)) obj.highlight = highlightMap.get(m.id);
       if (quoteMap.has(m.id)) obj.quoteOf = quoteMap.get(m.id);
       obj.thread = threadMap.get(m.id) || null;
+      if (threadNew && obj.thread && threadNew.has(m.id)) obj.thread = { ...obj.thread, newCount: threadNew.get(m.id) };
       // A forum topic is unread until you open it (your own topics start
       // read), and again whenever a reply lands after the last one you saw.
       if (channel.is_forum && !m.thread_id) {
@@ -996,10 +1003,12 @@ module.exports = function register(socket, ctx) {
       LIMIT 500
     `).all(channel.id);
 
+    const threadNew = threadNotify.newCounts(db, socket.user.id, threads.map(t => ({ id: t.id, userId: t.user_id })));
     socket.emit('channel-threads', {
       channelCode: code,
       threads: threads.map(t => ({
         ...t,
+        ...(threadNew.has(t.id) ? { new_count: threadNew.get(t.id) } : {}),
         created_at: utcStamp(t.created_at),
         last_reply_at: utcStamp(t.last_reply_at),
       })),
@@ -3251,11 +3260,13 @@ module.exports = function register(socket, ctx) {
       const blogMode = forumBlog.blogOn(db, channel.id);
       if (blogMode) message.post_part = forumBlog.isPart(db, message.id);
 
-      // Emit to everyone in the channel who has the thread open
+      // Everyone in the channel gets the reply; the ones taking part in the
+      // thread are named so only they hear it (threadNotify.js).
       io.to(`channel:${code}`).emit('new-thread-message', {
         channelCode: code,
         parentId,
-        message
+        message,
+        followerIds: threadNotify.followerIds(db, parentId)
       });
 
       // Update thread preview on the parent message for all users

@@ -4408,7 +4408,12 @@
     "forum_side": "Side panel",
     "forum_full_title": "Open topics across the whole chat area",
     "forum_side_title": "Open topics in a panel beside the forum",
-    "read_only_no_replies": "This channel is read-only. Only members allowed to post here can reply or start a thread."
+    "read_only_no_replies": "This channel is read-only. Only members allowed to post here can reply or start a thread.",
+    "new_one": "{{count}} new",
+    "new_other": "{{count}} new",
+    "threads_new_one": "{{count}} thread with new replies",
+    "threads_new_other": "{{count}} threads with new replies",
+    "sidebar_unread": "New replies in a thread you take part in"
   },
   "dm_runtime": {
     "title": "DM",
