@@ -4629,6 +4629,8 @@
       "icon_builtin": "Built-in",
       "icon_emoji": "Emoji",
       "icon_image": "Image",
+      "icon_used": "Used by {{name}}",
+      "icon_in_use": "Another badge already uses this icon ({{name}}). Pick a different one.",
       "emoji_hint": "Type or paste one emoji.",
       "upload": "Upload an image",
       "upload_hint": "PNG, GIF, WebP or JPG. It is shrunk to 64 by 64.",

@@ -296,8 +296,23 @@ _openBadgeEditor(badge) {
   const data = this._badgeAdmin;
   if (!data) { this._loadBadgeAdmin(); return; }
   const esc = (s) => this._escapeHtml(String(s ?? ''));
-  const b = badge || { name: '', description: '', iconType: 'builtin', icon: 'star', kind: 'manual', threshold: null, roleId: null, enabled: true };
-  const state = { iconType: b.iconType, icon: b.icon, image: b.iconType === 'image' ? b.icon : null, emoji: b.iconType === 'emoji' ? b.icon : '' };
+  // No two badges share an icon (the server refuses it), so the icons other
+  // badges show are marked here: dimmed built-ins, and a note for an emoji
+  // or picture that is taken. Keys match iconKey in src/badges.js.
+  const usedBy = new Map(data.badges.filter(x => x.iconKey && (!badge || x.id !== badge.id)).map(x => [x.iconKey, x.name]));
+  const firstFree = () => (data.builtinIcons || []).find(k => !usedBy.has(`builtin:${k}`)) || null;
+  const b = badge || { name: '', description: '', iconType: 'builtin', icon: firstFree(), kind: 'manual', threshold: null, roleId: null, enabled: true };
+  const state = {
+    iconType: b.iconType, icon: b.icon,
+    image: b.iconType === 'image' ? b.icon : null, imageKey: b.iconType === 'image' ? b.iconKey : null,
+    emoji: b.iconType === 'emoji' ? b.icon : '',
+  };
+  const keyOf = () => {
+    if (!state.icon) return null;
+    if (state.iconType === 'builtin') return `builtin:${state.icon}`;
+    if (state.iconType === 'emoji') return `emoji:${state.icon.replace(/[\uFE0E\uFE0F]/g, '')}`;
+    return state.imageKey;
+  };
   const span = b.kind === 'account_age' && b.threshold ? splitDays(b.threshold) : { n: 1, unit: 'years' };
   const count = (b.kind === 'messages' || b.kind === 'forum_likes') && b.threshold ? b.threshold : 100;
   const roles = (data.roles || []).filter(r => data.canEditAll || r.level < data.myLevel);
@@ -316,7 +331,11 @@ _openBadgeEditor(badge) {
           ${['builtin', 'emoji', 'image'].map(k => `<button type="button" class="btn-sm badge-editor-tab" data-tab="${k}">${esc(t(`badges.editor.icon_${k}`))}</button>`).join('')}
         </div>
         <div class="badge-editor-pane" data-pane="builtin">
-          <div class="badge-editor-builtins">${(data.builtinIcons || []).map(k => `<button type="button" class="badge-editor-builtin" data-icon="${esc(k)}" title="${esc(k)}">${this._badgeIconHtml({ iconType: 'builtin', icon: k }, 'badge-icon badge-icon-lg')}</button>`).join('')}</div>
+          <div class="badge-editor-builtins">${(data.builtinIcons || []).map(k => {
+            const owner = usedBy.get(`builtin:${k}`);
+            const tip = owner ? t('badges.editor.icon_used', { name: owner }) : k;
+            return `<button type="button" class="badge-editor-builtin${owner ? ' is-used' : ''}" data-icon="${esc(k)}" title="${esc(tip)}"${owner ? ' aria-disabled="true"' : ''}>${this._badgeIconHtml({ iconType: 'builtin', icon: k }, 'badge-icon badge-icon-lg')}</button>`;
+          }).join('')}</div>
         </div>
         <div class="badge-editor-pane" data-pane="emoji">
           <input type="text" class="settings-text-input badge-editor-emoji" data-f="emoji" maxlength="16" value="${esc(state.emoji)}" placeholder="🏅">
@@ -327,6 +346,7 @@ _openBadgeEditor(badge) {
           <input type="file" accept="image/png,image/gif,image/webp,image/jpeg" hidden data-f="file">
           <small class="settings-hint">${esc(t('badges.editor.upload_hint'))}</small>
         </div>
+        <small class="badge-editor-icon-used" role="alert" hidden></small>
       </div>
 
       <label class="badge-editor-field">${esc(t('badges.editor.kind'))}
@@ -359,6 +379,11 @@ _openBadgeEditor(badge) {
     overlay.querySelector('.badge-editor-preview-icon').innerHTML = state.icon ? this._badgeIconHtml(state, 'badge-icon badge-icon-lg') : '';
     overlay.querySelector('.badge-editor-preview-name').textContent = f('name').value.trim() || t('badges.editor.name');
     overlay.querySelectorAll('.badge-editor-builtin').forEach(el => el.classList.toggle('is-selected', state.iconType === 'builtin' && el.dataset.icon === state.icon));
+    const owner = usedBy.get(keyOf());
+    const note = overlay.querySelector('.badge-editor-icon-used');
+    note.hidden = !owner;
+    note.textContent = owner ? t('badges.editor.icon_in_use', { name: owner }) : '';
+    overlay.querySelector('[data-act="save"]').disabled = !!owner;
   };
   const setTab = (tab) => {
     overlay.querySelectorAll('.badge-editor-tab').forEach(el => el.classList.toggle('btn-accent', el.dataset.tab === tab));
@@ -367,7 +392,7 @@ _openBadgeEditor(badge) {
     if (tab === 'image') { state.iconType = 'image'; state.icon = state.image; }
     if (tab === 'builtin' && state.iconType !== 'builtin') {
       state.iconType = 'builtin';
-      state.icon = (data.builtinIcons || [])[0] || 'star';
+      state.icon = firstFree();
     }
     preview();
   };
@@ -380,7 +405,7 @@ _openBadgeEditor(badge) {
   overlay.querySelectorAll('.badge-editor-tab').forEach(el => el.addEventListener('click', () => setTab(el.dataset.tab)));
   overlay.querySelector('.badge-editor-builtins').addEventListener('click', (e) => {
     const btn = e.target.closest('.badge-editor-builtin');
-    if (!btn) return;
+    if (!btn || btn.classList.contains('is-used')) return;
     state.iconType = 'builtin';
     state.icon = btn.dataset.icon;
     preview();
@@ -393,11 +418,12 @@ _openBadgeEditor(badge) {
     const file = f('file').files[0];
     f('file').value = '';
     if (!file) return;
-    const path = await this._uploadBadgeIcon(file);
-    if (!path || !overlay.isConnected) return;
-    state.image = path;
+    const up = await this._uploadBadgeIcon(file);
+    if (!up || !overlay.isConnected) return;
+    state.image = up.path;
+    state.imageKey = up.iconKey || null;
     state.iconType = 'image';
-    state.icon = path;
+    state.icon = up.path;
     preview();
   });
   overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
@@ -432,7 +458,7 @@ _openBadgeEditor(badge) {
 },
 
 // Shrinks the picture to 64x64 (kept whole, centred) and uploads it.
-// Returns the stored path, or null after telling the user why not.
+// Returns { path, iconKey }, or null after telling the user why not.
 async _uploadBadgeIcon(file) {
   if (!/^image\/(png|gif|webp|jpeg)$/.test(file.type)) { this._showToast(t('badges.editor.bad_type'), 'error'); return null; }
   let blob = file;
@@ -456,7 +482,7 @@ async _uploadBadgeIcon(file) {
     const res = await fetch('/api/upload-badge-icon', { method: 'POST', headers: { Authorization: 'Bearer ' + this.token }, body: fd });
     const out = await res.json();
     if (!res.ok || !out.path) { this._showToast(out.error || t('badges.editor.upload_failed'), 'error'); return null; }
-    return out.path;
+    return { path: out.path, iconKey: out.iconKey };
   } catch (err) {
     console.warn('[badges] icon upload failed:', err?.message || err);
     this._showToast(t('badges.editor.upload_failed'), 'error');
