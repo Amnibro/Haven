@@ -1076,6 +1076,13 @@ function initDatabase() {
     );
   `);
 
+  // ── Migration: which messages a device gets pushed ──────
+  // 'all', or 'mentions' when that device has Notifications off in Settings >
+  // Sounds: then only DMs, replies to you and pings reach it, the same as its
+  // sounds and pop-ups. The device reports it when it registers.
+  addColumn('push_subscriptions', 'scope', "TEXT NOT NULL DEFAULT 'all'");
+  addColumn('fcm_tokens', 'scope', "TEXT NOT NULL DEFAULT 'all'");
+
   // ── Migration: per-user channel notification prefs ──────
   // Before 3.20.2 these lived only in localStorage, which meant the server
   // had no way to honor them when fanning out web-push / FCM pushes, so

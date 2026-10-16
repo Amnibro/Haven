@@ -417,6 +417,8 @@ _setupNotifications() {
 
   toggle.addEventListener('change', () => {
     this.notifications.setEnabled(toggle.checked);
+    // Push on this device follows the same choice.
+    this._syncPushScope();
   });
 
   if (voiceActionCuesToggle) {
@@ -927,7 +929,8 @@ async _setupPushNotifications() {
     const subJson = existingSub.toJSON();
     this.socket.emit('push-subscribe', {
       endpoint: subJson.endpoint,
-      keys: { p256dh: subJson.keys.p256dh, auth: subJson.keys.auth }
+      keys: { p256dh: subJson.keys.p256dh, auth: subJson.keys.auth },
+      scope: this._pushScope()
     });
   }
 
@@ -1243,7 +1246,8 @@ async _subscribePush() {
       keys: {
         p256dh: subJson.keys.p256dh,
         auth: subJson.keys.auth
-      }
+      },
+      scope: this._pushScope()
     });
 
     if (statusEl) statusEl.textContent = t('context.push_subscribing');

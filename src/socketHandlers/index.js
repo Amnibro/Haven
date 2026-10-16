@@ -71,7 +71,7 @@ const registerMessageHighlights = require('./messageHighlights');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
 const modCases = require('../modCases');
-const { quietRecipients } = require('../pushMutes');
+const { quietRecipients, pingedRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const forumUnread = require('../forumUnread');
 const registerForumVotes = require('./forumVotes');
@@ -1475,7 +1475,10 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // ── Push notification helper ────────────────────────────
-  function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent) {
+  // pushOpts.replyToUserId: the author of the message this one replies to.
+  // pushOpts.pingText: the real text to look for pings in, when the push
+  // shows a stand-in (a burn or self-destructing message).
+  function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent, pushOpts = {}) {
     try {
       const activeUserIds = new Set();
       for (const [, s] of io.sockets.sockets) {
@@ -1483,7 +1486,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       }
 
       const subs = db.prepare(`
-        SELECT ps.endpoint, ps.p256dh, ps.auth, ps.user_id
+        SELECT ps.endpoint, ps.p256dh, ps.auth, ps.user_id, ps.scope
         FROM push_subscriptions ps
         JOIN channel_members cm ON cm.user_id = ps.user_id
         WHERE cm.channel_id = ? AND ps.user_id != ?
@@ -1516,6 +1519,25 @@ function setupSocketHandlers(io, db, opts = {}) {
         throttledWarn('push personal mute lookup failed', err);
       }
 
+      // A device with Notifications off (Settings > Sounds) is pushed only
+      // DMs, replies to its owner and pings, like its sounds and pop-ups.
+      // Worked out only for the owners of such devices.
+      const pingedAmong = (rows) => {
+        const userIds = [...new Set(rows.filter(r => r.scope === 'mentions').map(r => r.user_id))];
+        if (!userIds.length) return new Set();
+        try {
+          return pingedRecipients(db, {
+            channelId, userIds, replyToUserId: pushOpts.replyToUserId,
+            messageContent: pushOpts.pingText != null ? pushOpts.pingText : messageContent,
+          });
+        } catch (err) {
+          // Push them anyway, as before this setting existed.
+          throttledWarn('push mention lookup failed', err);
+          return new Set(userIds);
+        }
+      };
+      const webPinged = pingedAmong(subs);
+
       // Detect E2E encrypted envelope; don't leak ciphertext in notifications
       let displayContent = messageContent;
       try {
@@ -1534,6 +1556,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (activeUserIds.has(sub.user_id)) continue;
         if (mutedUserIds.has(sub.user_id)) continue;
         if (quietFor.has(sub.user_id)) continue;
+        if (sub.scope === 'mentions' && !webPinged.has(sub.user_id)) continue;
         queuePush(sub, channelCode, payload);
       }
 
@@ -1552,8 +1575,9 @@ function setupSocketHandlers(io, db, opts = {}) {
 
         if (inactiveMembers.length) {
           const placeholders = inactiveMembers.map(() => '?').join(',');
-          const fcmRows = db.prepare(`SELECT token FROM fcm_tokens WHERE user_id IN (${placeholders})`).all(...inactiveMembers);
-          const tokens = fcmRows.map(r => r.token);
+          const fcmRows = db.prepare(`SELECT token, user_id, scope FROM fcm_tokens WHERE user_id IN (${placeholders})`).all(...inactiveMembers);
+          const fcmPinged = pingedAmong(fcmRows);
+          const tokens = fcmRows.filter(r => r.scope !== 'mentions' || fcmPinged.has(r.user_id)).map(r => r.token);
 
           if (tokens.length) {
             sendFcm(tokens, title, body, { channelCode, tag: `haven-${channelCode}` })

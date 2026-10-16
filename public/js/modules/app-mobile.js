@@ -442,7 +442,7 @@ _setupMobileBridge() {
       case 'haven:fcm-token':
         // Receive FCM token from native layer → send to server
         if (data.token && this.socket?.connected) {
-          this.socket.emit('register-fcm-token', { token: data.token });
+          this.socket.emit('register-fcm-token', { token: data.token, scope: this._pushScope() });
         }
         this._fcmToken = data.token;
         break;

@@ -1863,7 +1863,7 @@
       "voice_action_cues_hint": "Play short cue tones when muting, unmuting, deafening, or using push-to-talk in Haven Desktop.",
       "sound_manager_btn": "Sound Manager",
       "sound_manager_hint": "Browse sounds, assign to events, set hotkeys",
-      "notifications_hint": "General message sounds (off by default). @Mentions, replies, and DMs always notify.",
+      "notifications_hint": "Sounds, pop-ups and push notifications for every message on this device (off by default). @Mentions, replies, and DMs always notify.",
       "mute_server": "Mute this server",
       "mute_server_hint": "Silences sounds, pop-ups, push notifications and the taskbar badge from this server. DMs still come through. Saved on your account, so it applies on every device. You can also right-click the server's icon.",
       "direct_messages": "Direct Messages",

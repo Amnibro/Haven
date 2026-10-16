@@ -1662,7 +1662,8 @@ module.exports = function register(socket, ctx) {
       const pushContent = burnSeconds > 0 ? '🔥 Sent a burn message'
         : destructAt ? '🔥 Sent a self-destructing message' : finalContent;
       const pushDisplayName = personaUsername || socket.user.displayName;
-      sendPushNotifications(channel.id, code, channel.name, socket.user.id, pushDisplayName, pushContent);
+      sendPushNotifications(channel.id, code, channel.name, socket.user.id, pushDisplayName, pushContent,
+        { replyToUserId: message.replyContext?.user_id, pingText: finalContent });
       fireWebhookCallbacks(channel.id, code, message);
 
       // Deliberately after the broadcast: the Haven message is already sent and

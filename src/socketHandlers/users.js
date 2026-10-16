@@ -10,6 +10,8 @@ const { validHighScore, isKnownGame } = require('../highScores');
 const { badgesForProfile } = require('../badges');
 const { themePreferenceAllowed } = require('../themeMetadata');
 
+const PUSH_SCOPES = ['all', 'mentions'];
+
 // A personal sidebar order (#5779): category keys and, per category, channel
 // codes. Only that shape is kept, within limits, so the value cannot carry
 // anything else.
@@ -492,6 +494,10 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?, ?, ?)
           ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth
         `).run(socket.user.id, endpoint, keys.p256dh, keys.auth);
+        if (PUSH_SCOPES.includes(data.scope)) {
+          db.prepare('UPDATE push_subscriptions SET scope = ? WHERE user_id = ? AND endpoint = ?')
+            .run(data.scope, socket.user.id, endpoint);
+        }
         // Ten devices per person is plenty; the oldest go first. Without a cap
         // one account could register endless endpoints for the push queue.
         db.prepare(`
@@ -532,9 +538,28 @@ module.exports = function register(socket, ctx) {
       // cleans itself up.
       // saveFcmToken claims the token for this account and applies the
       // length and per-account caps.
-      saveFcmToken(db, socket.user.id, data.token.trim());
+      saveFcmToken(db, socket.user.id, data.token.trim(), data.scope);
     } catch (err) {
       console.error('FCM token register error:', err);
+    }
+  });
+
+  // Which messages this device is pushed: 'all', or 'mentions' while its
+  // Notifications switch (Settings > Sounds) is off, so push follows the same
+  // choice as the device's sounds and pop-ups. Only the caller's own rows.
+  socket.on('set-push-scope', (data) => {
+    if (!data || typeof data !== 'object' || !PUSH_SCOPES.includes(data.scope)) return;
+    try {
+      if (typeof data.endpoint === 'string' && data.endpoint) {
+        db.prepare('UPDATE push_subscriptions SET scope = ? WHERE user_id = ? AND endpoint = ?')
+          .run(data.scope, socket.user.id, data.endpoint);
+      }
+      if (typeof data.token === 'string' && data.token.trim()) {
+        db.prepare('UPDATE fcm_tokens SET scope = ? WHERE user_id = ? AND token = ?')
+          .run(data.scope, socket.user.id, data.token.trim());
+      }
+    } catch (err) {
+      console.error('Push scope update error:', err);
     }
   });
 

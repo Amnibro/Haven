@@ -264,7 +264,9 @@ function getRelayKey() {
 const FCM_TOKEN_MAX_LENGTH = 4096;
 const FCM_TOKENS_PER_USER = 10;
 
-function saveFcmToken(db, userId, token) {
+// scope, when given, is which messages this device is pushed: 'all', or
+// 'mentions' for DMs, replies and pings only (src/pushMutes.js).
+function saveFcmToken(db, userId, token, scope) {
   if (typeof token !== 'string' || !token || token.length > FCM_TOKEN_MAX_LENGTH) return false;
   db.transaction(() => {
     db.prepare('DELETE FROM fcm_tokens WHERE token = ? AND user_id != ?').run(token, userId);
@@ -273,6 +275,9 @@ function saveFcmToken(db, userId, token) {
       VALUES (?, ?)
       ON CONFLICT(user_id, token) DO NOTHING
     `).run(userId, token);
+    if (scope === 'all' || scope === 'mentions') {
+      db.prepare('UPDATE fcm_tokens SET scope = ? WHERE user_id = ? AND token = ?').run(scope, userId, token);
+    }
     db.prepare(`
       DELETE FROM fcm_tokens WHERE user_id = ? AND id NOT IN (
         SELECT id FROM fcm_tokens WHERE user_id = ? ORDER BY id DESC LIMIT ?

@@ -48,6 +48,19 @@ _notifyBlockedByMutes({ senderId, isDm, isMention }) {
   return false;
 },
 
+// Which messages this device is pushed: every one while its Notifications
+// switch (Settings > Sounds) is on, otherwise only DMs, replies and pings,
+// the same as its sounds and pop-ups (src/pushMutes.js).
+_pushScope() {
+  return this.notifications?.enabled ? 'all' : 'mentions';
+},
+
+_syncPushScope() {
+  const endpoint = this._pushSubscription?.endpoint;
+  const token = this._fcmToken;
+  if (endpoint || token) this.socket.emit('set-push-scope', { scope: this._pushScope(), endpoint, token });
+},
+
 _setServerMute(mode, { fromDesktop = false } = {}) {
   const next = MODES.includes(mode) ? mode : 'off';
   if (!this._userPrefs) this._userPrefs = {};

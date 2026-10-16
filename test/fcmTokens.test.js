@@ -14,6 +14,7 @@ test('FCM tokens are capped in length and in number per account', t => {
       user_id INTEGER NOT NULL,
       token TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      scope TEXT NOT NULL DEFAULT 'all',
       UNIQUE(user_id, token)
     );
   `);
@@ -27,4 +28,28 @@ test('FCM tokens are capped in length and in number per account', t => {
   // The device moves to whoever signs in on it.
   saveFcmToken(db, 6, 'token-14');
   assert.equal(db.prepare('SELECT user_id FROM fcm_tokens WHERE token = ?').all('token-14').map(r => r.user_id).join(), '6');
+});
+
+test('an FCM token keeps the push scope its device reports', t => {
+  const db = new Database(':memory:');
+  t.after(() => db.close());
+  db.exec(`
+    CREATE TABLE fcm_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      scope TEXT NOT NULL DEFAULT 'all',
+      UNIQUE(user_id, token)
+    );
+  `);
+  const scopeOf = () => db.prepare('SELECT scope FROM fcm_tokens WHERE token = ?').get('phone').scope;
+  saveFcmToken(db, 5, 'phone');
+  assert.equal(scopeOf(), 'all', 'a device that says nothing gets every message');
+  saveFcmToken(db, 5, 'phone', 'mentions');
+  assert.equal(scopeOf(), 'mentions');
+  saveFcmToken(db, 5, 'phone', 'bogus');
+  assert.equal(scopeOf(), 'mentions', 'an unknown scope leaves it alone');
+  saveFcmToken(db, 5, 'phone', 'all');
+  assert.equal(scopeOf(), 'all');
 });
