@@ -1851,6 +1851,27 @@
           </div>
         </div>
 
+        <!-- Pictures sent together (#5799): the grid, or each picture whole,
+            one under another. Server default follows the admin's choice. -->
+        <div class="settings-subsection" id="media-layout-subsection">
+          <small class="settings-group-label">🗂️ <span data-i18n="settings.image_display.media_layout.title">Pictures Sent Together</span></small>
+          <div class="density-picker" id="media-layout-picker">
+            <button type="button" class="density-btn active" data-media-layout="" title="Server default: whatever the server is set to">
+              <span class="density-icon">🏠</span>
+              <span class="density-label" data-i18n="settings.image_display.media_layout.default">Server default</span>
+            </button>
+            <button type="button" class="density-btn" data-media-layout="grid" data-i18n-title="settings.image_display.media_layout.grid_hint" title="Grid: fit them into one block, each picture cropped to its tile">
+              <span class="density-icon">🔲</span>
+              <span class="density-label" data-i18n="settings.image_display.media_layout.grid">Grid</span>
+            </button>
+            <button type="button" class="density-btn" data-media-layout="stacked" data-i18n-title="settings.image_display.media_layout.stacked_hint" title="Full size: every picture whole, one under another">
+              <span class="density-icon">🖼️</span>
+              <span class="density-label" data-i18n="settings.image_display.media_layout.stacked">Full size, one under another</span>
+            </button>
+          </div>
+          <small class="settings-hint" data-i18n="settings.image_display.media_layout.hint">How several pictures in one message show for you. The grid crops each picture to fill its tile; full size shows every one whole, at the Image Display Mode size above. Saved on your account, so it follows you to every device.</small>
+        </div>
+
         <!-- Animated profile pictures (viewer side). The pfp owner can already turn
             their own animation off for everyone; this is the other half, so a
             viewer who doesn't want moving avatars can stop seeing them. -->

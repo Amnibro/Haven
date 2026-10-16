@@ -196,8 +196,12 @@ test('the markup follows the layout in effect when none is given', () => {
 
 test('a change of layout redraws the groups already on the page, and the grid styles leave stacked alone', () => {
   const src = read('public/js/modules/app-media-grid.js');
-  assert.match(src, /this\.socket\?\.on\('server-setting-changed', \(data\) => \{\n\s+if \(data\?\.key === 'media_group_layout'\) this\._relayoutMediaGrids\(\);/);
-  assert.match(src, /this\.socket\?\.on\('preferences', \(\) => this\._relayoutMediaGrids\(\)\);/);
+  for (const ev of ['server-settings', 'preferences', 'server-setting-changed']) {
+    const at = src.indexOf(`this.socket?.on('${ev}'`);
+    assert.ok(at > 0, `listens for ${ev}`);
+    assert.match(src.slice(at, at + 260), /this\._relayoutMediaGrids\(\);\n\s+this\._syncMediaLayoutPicker\(\);/, `${ev} redraws and updates the picker`);
+  }
+  assert.match(src, /if \(data\?\.key !== 'media_group_layout'\) return;/);
   const css = read('public/css/style-media-grid.css');
   assert.match(css, /\.media-grid:not\(\.is-stacked\) \.media-grid-tile img\.chat-image,/);
   assert.doesNotMatch(css, /^\.media-grid \.media-grid-tile img\.chat-image/m, 'cropping applies to the grid only');
@@ -227,4 +231,32 @@ test('the admin panel fills and saves the server default with its other settings
   assert.match(admin, /if \(this\._saveMediaLayoutAdmin\?\.\(snap\)\) changed = true;/);
   assert.equal((admin.match(/this\._fillMediaLayoutAdmin\?\.\(/g) || []).length, 2, 'filled on open and on cancel');
   assert.match(read('public/app.html'), /<select id="media-group-layout" class="settings-select">/);
+});
+
+test('your own pick is saved on your account, and Server default clears it', () => {
+  const emitted = [];
+  const prevDoc = global.document;
+  global.document = { getElementById: () => null, querySelectorAll: () => [] };
+  try {
+    const app = Object.assign(Object.create(M), {
+      socket: { emit: (ev, data) => emitted.push([ev, data]) },
+      serverSettings: { media_group_layout: 'stacked' },
+    });
+    app._setMediaLayoutPref('grid');
+    assert.equal(app._userPrefs.media_group_layout, 'grid');
+    assert.equal(app._mediaGroupLayoutPref(), 'grid');
+    app._setMediaLayoutPref('');
+    assert.equal(app._userPrefs.media_group_layout, undefined);
+    assert.equal(app._mediaGroupLayoutPref(), 'stacked', 'back to the server default');
+    assert.deepEqual(emitted, [
+      ['set-preference', { key: 'media_group_layout', value: 'grid' }],
+      ['delete-preference', { key: 'media_group_layout' }],
+    ]);
+  } finally {
+    global.document = prevDoc;
+  }
+  const html = read('public/app.html');
+  const picker = html.slice(html.indexOf('id="media-layout-picker"'), html.indexOf('id="animate-pfp-subsection"'));
+  assert.deepEqual([...picker.matchAll(/data-media-layout="([^"]*)"/g)].map(m => m[1]), ['', 'grid', 'stacked']);
+  assert.ok(html.indexOf('id="media-layout-picker"') > html.indexOf('id="section-image-display"'), 'it sits in Image Display');
 });

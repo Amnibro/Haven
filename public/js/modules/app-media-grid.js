@@ -167,11 +167,53 @@ _setupMediaGrid() {
     const src = tile.dataset.videoSrc;
     if (src) this._openVideoLightbox?.(src);
   });
-  this.socket?.on('server-settings', () => this._relayoutMediaGrids());
-  this.socket?.on('preferences', () => this._relayoutMediaGrids());
-  this.socket?.on('server-setting-changed', (data) => {
-    if (data?.key === 'media_group_layout') this._relayoutMediaGrids();
+  this.socket?.on('server-settings', () => {
+    this._relayoutMediaGrids();
+    this._syncMediaLayoutPicker();
   });
+  this.socket?.on('preferences', () => {
+    this._relayoutMediaGrids();
+    this._syncMediaLayoutPicker();
+  });
+  this.socket?.on('server-setting-changed', (data) => {
+    if (data?.key !== 'media_group_layout') return;
+    this._relayoutMediaGrids();
+    this._syncMediaLayoutPicker();
+  });
+  document.getElementById('media-layout-picker')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-media-layout]');
+    if (btn) this._setMediaLayoutPref(btn.dataset.mediaLayout);
+  });
+  this._syncMediaLayoutPicker();
+},
+
+// Settings > Image Display: your own layout, saved on your account, or
+// Server default (no saved value) to follow the admin's choice.
+_setMediaLayoutPref(value) {
+  if (!this._userPrefs) this._userPrefs = {};
+  if (MEDIA_GROUP_LAYOUTS.includes(value)) {
+    this._userPrefs.media_group_layout = value;
+    this.socket?.emit('set-preference', { key: 'media_group_layout', value });
+  } else {
+    delete this._userPrefs.media_group_layout;
+    this.socket?.emit('delete-preference', { key: 'media_group_layout' });
+  }
+  this._syncMediaLayoutPicker();
+  this._relayoutMediaGrids();
+},
+
+_syncMediaLayoutPicker() {
+  const picker = document.getElementById('media-layout-picker');
+  if (!picker) return;
+  const mine = this._userPrefs?.media_group_layout;
+  const current = MEDIA_GROUP_LAYOUTS.includes(mine) ? mine : '';
+  picker.querySelectorAll('[data-media-layout]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.mediaLayout === current);
+  });
+  // The Server default button says what the server is set to.
+  const dflt = picker.querySelector('[data-media-layout=""]');
+  const server = this._mediaGroupLayoutFor(undefined, this.serverSettings?.media_group_layout);
+  if (dflt) dflt.title = t('settings.image_display.media_layout.default_hint', { layout: t(`settings.image_display.media_layout.${server}`) });
 },
 
 // Settings > Uploads & Limits: the server's default. Filled and saved with

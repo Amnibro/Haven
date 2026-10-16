@@ -1747,6 +1747,16 @@
         "full": "Full",
         "full_hint": "Full: large inline images like Discord"
       },
+      "media_layout": {
+        "title": "Pictures Sent Together",
+        "default": "Server default",
+        "default_hint": "Server default: {{layout}}",
+        "grid": "Grid",
+        "grid_hint": "Grid: fit them into one block, each picture cropped to its tile",
+        "stacked": "Full size, one under another",
+        "stacked_hint": "Full size: every picture whole, one under another",
+        "hint": "How several pictures in one message show for you. The grid crops each picture to fill its tile; full size shows every one whole, at the Image Display Mode size above. Saved on your account, so it follows you to every device."
+      },
       "animate_pfp": {
         "title": "Animated Profile Pictures",
         "always": "Always",
