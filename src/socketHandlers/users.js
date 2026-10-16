@@ -7,6 +7,7 @@ const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 const { saveFcmToken } = require('../fcm');
 const { validHighScore, isKnownGame } = require('../highScores');
+const { badgesForProfile } = require('../badges');
 
 // A personal sidebar order (#5779): category keys and, per category, channel
 // codes. Only that shape is kept, within limits, so the value cannot carry
@@ -351,6 +352,16 @@ module.exports = function register(socket, ctx) {
       const hidden = row.status === 'invisible' && data.userId !== socket.user.id;
       if (hidden) isOnline = false;
 
+      // Badges (#5632) are worked out here, when a card opens, and nowhere
+      // else, so member lists never pay for them. A card without its badges
+      // still beats no card.
+      let badges = [];
+      try {
+        badges = badgesForProfile(db, row.id, socket.user.id);
+      } catch (err) {
+        console.warn('[badges] profile badges failed:', err.message);
+      }
+
       socket.emit('user-profile', {
         id: row.id,
         username: row.username,
@@ -367,6 +378,7 @@ module.exports = function register(socket, ctx) {
         // null while they hide their birthday.
         birthday: row.birthday || null,
         roles: roles,
+        badges,
         online: isOnline,
         createdAt: row.created_at,
         // Profile card shows game AND music on separate lines; the sidebar
