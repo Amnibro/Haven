@@ -68,6 +68,16 @@ async function until(fn, ms = 6000) {
   }
   return null;
 }
+// Uploads through Haven's own endpoint, so the server records who owns it.
+// Answers with the stored name.
+async function uploadFile(token, name, size, scope = 'channel') {
+  const fd = new FormData();
+  fd.append('scope', scope);
+  fd.append('file', new Blob([Buffer.alloc(size, 9)], { type: 'text/plain' }), name);
+  const r = await fetch(`${BASE}/api/upload-file`, { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
+  const j = await r.json();
+  return j && typeof j.url === 'string' ? j.url.replace('/uploads/', '') : null;
+}
 const tagsOf = (m) => (Array.isArray(m.tags) ? m.tags : JSON.parse(m.tags || '[]'));
 
 async function bootServer() {
@@ -513,6 +523,88 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     assert.match(dm.body.content, /here it is/);
     assert.doesNotMatch(dm.body.content, /\/uploads\//, 'no Haven path in the DM text');
     assert.deepStrictEqual(dm.body.files.map((f) => [f.filename, f.size]), [['1790000000003-dddd4444.png', 1024]]);
+  });
+
+  // A message names its files as plain paths, so anyone could name someone
+  // else's. Only the sender's own uploads go to Discord.
+  await t.test("only the sender's own uploads go to Discord", async () => {
+    const roles = (await getConfig()).roles;
+    const memberRole = roles.find((r) => r.name === 'Member');
+    const granted = next(A, 'ferry:config', (c) => c.roles.some((r) => r.id === memberRole.id && r.can_ferry));
+    A.emit('ferry:set-role-permission', { roleId: memberRole.id, allowed: true });
+    assert.ok(await granted, 'members may use Ferry');
+
+    const member = await post('/api/auth/register', { username: 'ferrymember', password: 'ownuploads123', eulaVersion: '2.0', ageVerified: true });
+    assert.ok(member.token, 'member registered');
+    const M = await connect(member.token);
+    const notices = [];
+    M.on('error-msg', (m) => notices.push(m));
+    M.emit('join-channel', { code: chat.code });
+    await wait(300);
+    M.emit('enter-channel', { code: chat.code });
+    await wait(200);
+
+    const mine = await uploadFile(member.token, 'mine.txt', 3000);
+    const theirs = await uploadFile(admin.token, 'theirs.txt', 2000);
+    const private_ = await uploadFile(member.token, 'private.bin', 1000, 'dm');
+    assert.ok(mine && theirs && private_, 'the uploads were made');
+    const OWNERLESS = '1790000000003-dddd4444.png';   // on disk with no owner on record
+    const OWN_NOTICE = /^Only your own uploads go to Discord, so 1 file stayed in Haven$/;
+    const sent = (before, fn) => until(() => discord.executions.slice(before).find(fn));
+
+    let before = discord.executions.length;
+    M.emit('send-message', { code: chat.code, content: `=>#general my notes [file:Notes.txt](/uploads/${mine}|3 KB)` });
+    const own = await sent(before, (e) => e.body && e.body.content === 'my notes');
+    assert.ok(own, "the member's message went");
+    assert.deepStrictEqual(own.body.files.map((f) => [f.filename, f.size]), [['Notes.txt', 3000]], 'with their own file');
+    M.emit('send-message', { code: chat.code, content: `=>#general spoiler-img:/uploads/${mine}` });
+    assert.ok(await sent(before, (e) => e.body && e.body.files && e.body.files.some((f) => f.filename === `SPOILER_${mine}`)), 'their own spoiler too');
+    assert.deepStrictEqual(notices, [], 'nothing to report');
+
+    before = discord.executions.length;
+    M.emit('send-message', { code: chat.code, content: `=>#general look at this /uploads/${theirs}` });
+    const other = await sent(before, (e) => e.body && e.body.content === 'look at this');
+    assert.ok(other, 'the text still went');
+    assert.ok(!other.body.files, "without someone else's file");
+    assert.doesNotMatch(other.body.content, /uploads/, 'not even as a link');
+    assert.ok(await until(() => notices.some((n) => OWN_NOTICE.test(n))), 'the member was told why');
+
+    notices.length = 0;
+    M.emit('send-message', { code: chat.code, content: `=>#general an old one /uploads/${OWNERLESS}` });
+    const old = await sent(before, (e) => e.body && e.body.content === 'an old one');
+    assert.ok(old && !old.body.files, 'a file with no owner on record stays in Haven');
+    assert.ok(await until(() => notices.some((n) => OWN_NOTICE.test(n))), 'and the member was told');
+
+    // A message that was only someone else's file sends nothing at all.
+    notices.length = 0;
+    M.emit('send-message', { code: chat.code, content: `=>#general [file:theirs.txt](/uploads/${theirs}|2 KB)` });
+    assert.ok(await until(() => notices.some((n) => OWN_NOTICE.test(n))), 'told once');
+    await wait(400);
+    assert.strictEqual(discord.executions.length - before, 2, 'nothing else reached Discord');
+
+    // The same in a Discord DM.
+    notices.length = 0;
+    const dmBefore = discord.botMessages.length;
+    M.emit('send-message', { code: chat.code, content: `=>@Alice see this /uploads/${theirs}`, ferryDiscordUserId: ALICE.id });
+    const dm = await until(() => discord.botMessages.slice(dmBefore)[0]);
+    assert.ok(dm, 'the DM went');
+    assert.match(dm.body.content, /see this/);
+    assert.ok(!dm.body.files, "without someone else's file");
+    assert.ok(await until(() => notices.some((n) => OWN_NOTICE.test(n))), 'the member was told');
+
+    // The admin may send any member's channel upload, but not their DM files.
+    before = discord.executions.length;
+    A.emit('send-message', { code: chat.code, content: `=>#general from a member /uploads/${mine}` });
+    const fromAdmin = await sent(before, (e) => e.body && e.body.content === 'from a member');
+    assert.ok(fromAdmin, "the admin's message went");
+    assert.deepStrictEqual(fromAdmin.body.files.map((f) => f.filename), [mine], "with the member's file");
+    const adminNotice = next(A, 'error-msg', (m) => OWN_NOTICE.test(m));
+    A.emit('send-message', { code: chat.code, content: `=>#general private /uploads/${private_}` });
+    assert.ok(await adminNotice, "a member's DM file is not the admin's to send");
+    const priv = await sent(before, (e) => e.body && e.body.content === 'private');
+    assert.ok(priv && !priv.body.files, 'it stayed in Haven');
+    errors.splice(0, errors.length, ...errors.filter((e) => !OWN_NOTICE.test(e)));
+    M.close();
   });
 
   assert.deepStrictEqual(errors.filter((e) => !/forum|Sent to Discord/i.test(e)), [], 'no unexpected errors');
