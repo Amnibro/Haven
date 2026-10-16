@@ -460,6 +460,10 @@
   cursor: pointer;
 }
 .layout-opt:hover { border-color: var(--accent); }
+.theme-special-list { display: flex; flex-direction: column; gap: 4px; }
+.theme-special-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; border-radius: var(--radius); cursor: pointer; font-size: 0.8rem; color: var(--text-primary); }
+.theme-special-row:hover { background: var(--bg-tertiary); }
+.theme-special-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layout-opt.active {
   background: var(--accent);
   border-color: var(--accent);

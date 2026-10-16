@@ -1546,8 +1546,9 @@ function _setLayout(key) {
 }
 
 function _renderLayoutPicker() {
-  const picker = document.getElementById('layout-picker');
-  if (!picker) return;
+  document.querySelectorAll('.layout-picker').forEach(_renderOneLayoutPicker);
+}
+function _renderOneLayoutPicker(picker) {
   const active = _activeLayoutKey();
   const original = picker.querySelector('[data-layout=""]');
   picker.querySelectorAll('[data-layout]:not([data-layout=""])').forEach(b => b.remove());
@@ -1576,15 +1577,14 @@ function initEffectSelector() {
   applyEffects(mode);
   _updateEffectButtons(container, mode);
 
-  const layoutPicker = document.getElementById('layout-picker');
-  if (layoutPicker && !layoutPicker.dataset.bound) {
+  document.querySelectorAll('.layout-picker:not([data-bound])').forEach(layoutPicker => {
     layoutPicker.dataset.bound = '1';
     layoutPicker.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-layout]');
       if (btn) _setLayout(btn.dataset.layout);
     });
-    _renderLayoutPicker();
-  }
+  });
+  _renderLayoutPicker();
   if (!document.documentElement.dataset.layoutTogglesBound) {
     document.documentElement.dataset.layoutTogglesBound = '1';
     // A layout switched some other way (Braid's Ctrl+Shift+B, its own menu,

@@ -692,6 +692,23 @@ window.HavenPluginLoader = (function () {
         themeContainer.appendChild(card);
       }
     }
+    renderSpecialThemes();
+  }
+  function renderSpecialThemes() {
+    const list = document.getElementById('theme-popup-specials');
+    const section = document.getElementById('theme-popup-specials-section');
+    if (!list || !section) return;
+    const specials = [...loadedThemes].filter(([, r]) => !r.meta.published && (r.compatible || r.enabled));
+    section.style.display = specials.length ? '' : 'none';
+    list.innerHTML = '';
+    for (const [file, r] of specials) {
+      const row = document.createElement('label');
+      row.className = 'theme-special-row';
+      row.title = r.meta.description || '';
+      row.innerHTML = `<span class="theme-special-name">${escHtml(r.meta.name || file)}</span><span class="plugin-toggle"><input type="checkbox" ${r.enabled ? 'checked' : ''} ${suppressExtensions && !r.enabled ? 'disabled' : ''}><span class="plugin-toggle-slider"></span></span>`;
+      row.querySelector('input').addEventListener('change', (e) => e.target.checked ? enableTheme(file) : disableTheme(file));
+      list.appendChild(row);
+    }
   }
 
   function escHtml(str) {

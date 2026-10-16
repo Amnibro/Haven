@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.24.3">
+  <link rel="stylesheet" href="/css/style.css?v=4.24.4">
   <script src="/js/theme-compat.js?v=4.18.3"></script>
   <script src="/js/theme-init.js?v=4.22.9"></script>
 </head>
@@ -205,6 +205,16 @@
                 <button class="effect-btn" data-effect="chapel" data-i18n-title="app.theme.stained_glass" title="Stained Glass">⛪</button>
                 <button class="effect-btn" data-effect="gospel" data-i18n-title="app.theme.divine_radiance" title="Divine Radiance">🕊️</button>
               </div>
+            </div>
+            <div class="theme-popup-section" id="theme-popup-layout-section">
+              <div class="theme-popup-title" style="margin-top: 8px;" data-i18n="app.theme.layout">Layout</div>
+              <div class="layout-picker" id="theme-popup-layout-picker" role="radiogroup" data-i18n-aria-label="app.theme.layout" aria-label="Layout">
+                <button type="button" class="layout-opt active" data-layout="" role="radio" aria-checked="true" data-i18n="app.theme.layout_original">Original</button>
+              </div>
+            </div>
+            <div class="theme-popup-section" id="theme-popup-specials-section" style="display:none">
+              <div class="theme-popup-title" style="margin-top: 8px;" data-i18n="app.theme.special_themes">Special Themes</div>
+              <div class="theme-special-list" id="theme-popup-specials"></div>
             </div>
             <!-- Custom theme triangle picker -->
             <div id="custom-theme-editor" style="display:none">
@@ -5241,7 +5251,7 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=4.23.9"></script>
+  <script src="/js/theme.js?v=4.24.2"></script>
   <script src="/js/notifications.js?v=4.23.6"></script>
   <script src="/js/servers.js?v=4.23.9"></script>
   <script src="/js/voice-relay.js?v=4.14.2"></script>
@@ -5253,7 +5263,7 @@
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
   <script type="module" src="/js/app.js?v=4.24.3"></script>
-  <script src="/js/plugin-loader.js?v=4.23.9"></script>
+  <script src="/js/plugin-loader.js?v=4.24.2"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
 </body>
