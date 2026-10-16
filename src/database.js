@@ -1677,6 +1677,10 @@ function initDatabase() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_destruct_at ON messages(destruct_at) WHERE destruct_at IS NOT NULL");
   // Silent messages: no sound, pop-up or push for anyone (src/silentMessages.js).
   addColumn('messages', 'silent', 'INTEGER NOT NULL DEFAULT 0');
+  // Upload tags limited to a role (src/uploadTagRoles.js, #5751). No foreign
+  // key on purpose: a deleted role leaves the id behind, which nobody holds,
+  // so the tag stays limited (to admins) instead of opening up to everyone.
+  addColumn('upload_tags', 'role_id', 'INTEGER DEFAULT NULL');
 
   // Encrypted DM files (#5699). Deleting a message by any route (one message,
   // a whole DM or channel, auto-cleanup, a purge) notes its files here, and a

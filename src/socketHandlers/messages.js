@@ -16,6 +16,7 @@ const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
 const { takeSilent } = require('../silentMessages');
+const { tagAccess } = require('../uploadTagRoles');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -58,6 +59,11 @@ module.exports = function register(socket, ctx) {
           logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
   const { youngAccountWait, refuseYoungAccount } = require('./postingWait')(socket, ctx);
+  // The upload tags this person may use in a channel: those not limited to a
+  // role, and those limited to one they hold there (src/uploadTagRoles.js).
+  const tagAccessIn = (channelId) => tagAccess(db, {
+    userId: socket.user.id, isAdmin: !!socket.user.isAdmin, channelIds: getChannelRoleChain(channelId),
+  });
 
   // Membership alone is not access. A person can hold a membership row for a
   // channel whose required roles they lack (joining with the server code adds
@@ -1589,6 +1595,7 @@ module.exports = function register(socket, ctx) {
             canCreate,
             maxTags,
             maxLen,
+            access: tagAccessIn(channel.id),
           });
         } catch (e) {
           console.warn('send-message attachment tagging failed:', e.message);
@@ -1605,6 +1612,7 @@ module.exports = function register(socket, ctx) {
             canCreate,
             maxTags,
             maxLen,
+            access: tagAccessIn(channel.id),
           }) || [];
         } catch (e) {
           // Tags are best-effort and never sink the message, but the tags the
@@ -1757,6 +1765,7 @@ module.exports = function register(socket, ctx) {
         maxTags,
         maxLen,
         relPath,
+        access: tagAccessIn(channel.id),
       });
       io.to(`channel:${channel.code}`).emit('message-tags-updated', {
         channelCode: channel.code,
@@ -1818,6 +1827,7 @@ module.exports = function register(socket, ctx) {
     );
     const results = [];
     const { maxTags, maxLen } = effectiveLimits(db);
+    const access = tagAccessIn(channel.id);
     try {
       if (items) {
         const msgs = new Map();
@@ -1826,7 +1836,7 @@ module.exports = function register(socket, ctx) {
           const msg = msgs.get(it.messageId);
           if (!msg || msg.channel_id !== channel.id) continue;
           if (!extractUploadPaths(msg.content).includes(it.url)) continue;
-          const args = { messageId: msg.id, content: msg.content, userId: socket.user.id, canCreate: true, maxTags, maxLen };
+          const args = { messageId: msg.id, content: msg.content, userId: socket.user.id, canCreate: true, maxTags, maxLen, access };
           if (mode === 'replace') setMessageTags(db, { ...args, tagNames: data.tags, relPath: it.url });
           else applyTagsToFiles(db, { ...args, perFile: [{ url: it.url, tags: data.tags }] });
           results.push({ messageId: msg.id, url: it.url, tags: fileTags(db, msg.id, it.url) });
@@ -1843,7 +1853,7 @@ module.exports = function register(socket, ctx) {
         const msg = db.prepare('SELECT id, content, channel_id FROM messages WHERE id = ?').get(id);
         if (!msg || msg.channel_id !== channel.id) continue;
         if (!extractUploadPath(msg.content)) continue;
-        const args = { messageId: msg.id, content: msg.content, tagNames: data.tags, userId: socket.user.id, canCreate: true, maxTags, maxLen };
+        const args = { messageId: msg.id, content: msg.content, tagNames: data.tags, userId: socket.user.id, canCreate: true, maxTags, maxLen, access };
         if (mode === 'replace') setMessageTags(db, args);
         else applyTagsToMessage(db, args);
         // Read the full current set (append's return is only the new names).

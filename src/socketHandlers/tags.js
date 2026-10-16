@@ -11,6 +11,10 @@
  * through the tag_id the association carries; both rebroadcast the affected
  * messages so open footers repaint live. Gated by manage_tags (admins always).
  *
+ * A tag can be limited to a role (#5751, src/uploadTagRoles.js): the search
+ * leaves it out for anyone without that role, and `admin-set-tag-role` sets
+ * or lifts the limit.
+ *
  * The search fans out to an indexed LIKE, which is cheap, but it is still a DB
  * hit per keystroke, so it gets its own tight per-account flood bucket
  * (`tagSearch`) on top of the shared event budget; the composer also debounces.
@@ -19,9 +23,10 @@ const {
   searchTags, MAX_TAG_LEN, effectiveLimits,
   listAllTags, createTag, renameTag, deleteTag,
 } = require('../uploadTags');
+const { tagAccess, setTagRole } = require('../uploadTagRoles');
 
 module.exports = function register(socket, ctx) {
-  const { db, io, floodCheck, userHasPermission } = ctx;
+  const { db, io, floodCheck, userHasPermission, getChannelRoleChain } = ctx;
 
   const canManageTags = () =>
     socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_tags');
@@ -50,10 +55,22 @@ module.exports = function register(socket, ctx) {
     if (floodCheck('tagSearch')) return respond({ error: 'rate_limited', tags: [] });
 
     try {
+      // Roles held in the channel being tagged count too, when the picker
+      // names one the searcher belongs to; otherwise only server-wide roles.
+      let channelIds = [];
+      if (typeof data.code === 'string' && /^[a-f0-9]{8}$/i.test(data.code)) {
+        const ch = db.prepare(
+          'SELECT c.id FROM channels c JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ? WHERE c.code = ?'
+        ).get(socket.user.id, data.code);
+        if (ch) channelIds = getChannelRoleChain(ch.id);
+      }
+      const access = tagAccess(db, { userId: socket.user.id, isAdmin: !!socket.user.isAdmin, channelIds });
       // Empty query browses the whole vocabulary (picker just opened); a typed
       // query narrows by prefix. Both capped inside searchTags.
-      respond({ tags: searchTags(db, query, 100) });
+      respond({ tags: searchTags(db, query, 100, access) });
     } catch (e) {
+      // An empty list offers nothing, which is the safe answer here.
+      console.warn('[tags] search failed:', e.message);
       respond({ tags: [] });
     }
   });
@@ -63,8 +80,27 @@ module.exports = function register(socket, ctx) {
     const respond = typeof cb === 'function' ? cb : () => {};
     if (!canManageTags()) return respond({ error: 'forbidden' });
     try {
-      respond({ tags: listAllTags(db) });
+      // The roles a tag can be limited to (#5751), for the panel's picker.
+      const roles = db.prepare('SELECT id, name FROM roles ORDER BY level DESC, name COLLATE NOCASE').all();
+      respond({ tags: listAllTags(db), roles });
     } catch (e) {
+      console.warn('[tags] list failed:', e.message);
+      respond({ error: 'failed' });
+    }
+  });
+
+  // Limit a tag to a role, or lift the limit with roleId null (#5751).
+  socket.on('admin-set-tag-role', (data, cb) => {
+    const respond = typeof cb === 'function' ? cb : () => {};
+    if (!canManageTags()) return respond({ error: 'forbidden' });
+    if (!data || typeof data !== 'object' || !Number.isInteger(data.tagId)) return respond({ error: 'bad_request' });
+    const roleId = data.roleId === null || data.roleId === undefined ? null : data.roleId;
+    if (roleId !== null && !Number.isInteger(roleId)) return respond({ error: 'bad_request' });
+    if (floodCheck('tagEdit')) return respond({ error: 'rate_limited' });
+    try {
+      respond(setTagRole(db, { tagId: data.tagId, roleId }));
+    } catch (e) {
+      console.warn('[tags] set role failed:', e.message);
       respond({ error: 'failed' });
     }
   });
