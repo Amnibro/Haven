@@ -1,8 +1,10 @@
 /* Pictures sent together (#5799): one grid per message, laid out by count in
    app-media-grid.js. The grid's box is fixed by its aspect ratio before
    anything loads, so the feed keeps its place while the tiles fill in, and
-   every tile crops its picture to fit rather than growing. */
-.media-grid {
+   every tile crops its picture to fit rather than growing.
+   With the stacked layout (.is-stacked) the same tiles show full size, one
+   under another, as single pictures do; the grid rules below leave it alone. */
+.media-grid:not(.is-stacked) {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 3px;
@@ -12,7 +14,7 @@
   border-radius: var(--radius);
   overflow: hidden;
 }
-.image-mode-full .media-grid {
+.image-mode-full .media-grid:not(.is-stacked) {
   width: min(100%, 34rem);
   max-height: min(36rem, 70vh);
 }
@@ -21,15 +23,17 @@
   position: relative;
   min-width: 0;
   min-height: 0;
+}
+.media-grid:not(.is-stacked) > .media-grid-tile {
   overflow: hidden;
   background: var(--bg-tertiary);
 }
 .media-grid-tile.mg-hidden { display: none; }
 
-.media-grid .media-grid-tile img.chat-image,
-.media-grid .media-grid-tile > .spoiler-media,
-.media-grid .media-grid-tile > .hidden-image,
-.media-grid .media-grid-tile video {
+.media-grid:not(.is-stacked) .media-grid-tile img.chat-image,
+.media-grid:not(.is-stacked) .media-grid-tile > .spoiler-media,
+.media-grid:not(.is-stacked) .media-grid-tile > .hidden-image,
+.media-grid:not(.is-stacked) .media-grid-tile video {
   display: block;
   width: 100%;
   height: 100%;
@@ -42,7 +46,7 @@
   border-radius: 0;
   object-fit: cover;
 }
-.media-grid .media-grid-tile > .hidden-image {
+.media-grid:not(.is-stacked) .media-grid-tile > .hidden-image {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -53,8 +57,8 @@
 }
 
 /* Encrypted DM pictures wait as a placeholder while they decrypt. */
-.media-grid .media-grid-tile .e2e-img-pending,
-.media-grid .media-grid-tile .e2e-img-loading {
+.media-grid:not(.is-stacked) .media-grid-tile .e2e-img-pending,
+.media-grid:not(.is-stacked) .media-grid-tile .e2e-img-loading {
   width: 100%;
   height: 100%;
   border: 0;
@@ -97,4 +101,31 @@
 .media-grid-tile:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+/* Stacked: each picture whole, at the Image Display size, one under another,
+   spaced like single pictures. Its box comes from the picture itself, held
+   by the lazy loader the same way a single picture's is. */
+.media-grid.is-stacked {
+  display: block;
+  margin: 0.25rem 0;
+}
+.media-grid.is-stacked > .media-grid-tile { margin-top: 0.3rem; }
+.media-grid.is-stacked > .media-grid-tile:first-child { margin-top: 0; }
+.media-grid.is-stacked .media-grid-tile img.chat-image { margin-top: 0; }
+/* A video keeps its play button; a 16:9 box holds its place until it loads,
+   and the whole frame shows inside it. */
+.media-grid.is-stacked > .media-grid-tile.is-video {
+  width: min(100%, 24rem);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #000;
+}
+.image-mode-full .media-grid.is-stacked > .media-grid-tile.is-video { width: min(100%, 34rem); }
+.media-grid.is-stacked .media-grid-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }

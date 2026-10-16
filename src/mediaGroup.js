@@ -14,6 +14,10 @@
 const MAX_GROUP_MEDIA = 10;      // files one message carries at most
 const FORUM_TOPIC_MEDIA = 50;    // a forum topic written in New Post, the setting's ceiling
 const MEDIA_LINE_ROOM = 400;     // what one upload line may add past the typed limit
+// How a message's pictures show: the grid, or full size one under another.
+// The server setting media_group_layout holds the default, and a member's
+// preference of the same name overrides it for them.
+const MEDIA_GROUP_LAYOUTS = ['grid', 'stacked'];
 
 const PICTURE_LINE = /^(?:spoiler-img:)?\/uploads\/(?:[\w-]+\/)?[\w.-]+$/i;
 const FILE_LINE = /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/;
@@ -89,6 +93,7 @@ function refusal(content, { maxChars, maxAttachments, forumTopic = false } = {})
 
 module.exports = {
   MAX_GROUP_MEDIA,
+  MEDIA_GROUP_LAYOUTS,
   FORUM_TOPIC_MEDIA,
   MEDIA_LINE_ROOM,
   isMediaLine,

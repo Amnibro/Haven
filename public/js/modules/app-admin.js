@@ -423,6 +423,7 @@ _applyServerSettings() {
     if (maxAttach) {
       maxAttach.value = this.serverSettings.max_attachments || '10';
     }
+    this._fillMediaLayoutAdmin?.(this.serverSettings.media_group_layout);
     const maxTagsPer = document.getElementById('max-tags-per-attachment');
     if (maxTagsPer) {
       maxTagsPer.value = this.serverSettings.max_tags_per_attachment || '3';
@@ -907,6 +908,7 @@ _snapshotAdminSettings() {
     whitelist_enabled: this.serverSettings.whitelist_enabled || 'false',
     max_upload_mb: this.serverSettings.max_upload_mb || '25',
     max_attachments: this.serverSettings.max_attachments || '10',
+    media_group_layout: this.serverSettings.media_group_layout || 'grid',
     max_tags_per_attachment: this.serverSettings.max_tags_per_attachment || '3',
     max_tag_len: this.serverSettings.max_tag_len || '20',
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
@@ -1077,6 +1079,7 @@ _saveAdminSettings() {
     this.socket.emit('update-server-setting', { key: 'max_attachments', value: maxAttach });
     changed = true;
   }
+  if (this._saveMediaLayoutAdmin?.(snap)) changed = true;
 
   const maxTagsPer = String(Math.max(1, Math.min(20, parseInt(document.getElementById('max-tags-per-attachment')?.value) || 3)));
   if (maxTagsPer !== (snap.max_tags_per_attachment || '3')) {
@@ -1337,6 +1340,7 @@ _cancelAdminSettings() {
     if (mu) mu.value = snap.max_upload_mb || '25';
     const ma = document.getElementById('max-attachments');
     if (ma) ma.value = snap.max_attachments || '10';
+    this._fillMediaLayoutAdmin?.(snap.media_group_layout);
     const mtpa = document.getElementById('max-tags-per-attachment');
     if (mtpa) mtpa.value = snap.max_tags_per_attachment || '3';
     const mtl = document.getElementById('max-tag-len');
