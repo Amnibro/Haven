@@ -337,9 +337,12 @@ _bindMessageActions() {
         if (!replyMsgId) return;
         const target = threadMessages.querySelector(`[data-msg-id="${replyMsgId}"]`);
         if (target) {
+          // The same jump and flash as a reply in the channel.
           this._scrollToMessage(target);
-          target.classList.add('thread-highlight');
-          setTimeout(() => target.classList.remove('thread-highlight'), 1200);
+          target.classList.remove('highlight-flash');
+          void target.offsetWidth;
+          target.classList.add('highlight-flash');
+          setTimeout(() => target.classList.remove('highlight-flash'), 2000);
         }
         return;
       }
