@@ -12,11 +12,12 @@ const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
-let M;
+let M, MAX;
 test.before(async () => {
   global.t = (key, vars) => (vars ? `${key}:${JSON.stringify(vars)}` : key);
   const mod = await import(pathToFileURL(path.join(ROOT, 'public/js/modules/app-media-grid.js')).href);
   M = mod.default;
+  MAX = mod.MEDIA_GROUP_MAX;
 });
 
 const area = (layout) => layout.spans.reduce((sum, [c, r]) => sum + c * r, 0);
@@ -62,6 +63,18 @@ test('grid lines are pictures, encrypted pictures and videos', () => {
   assert.equal(M._mediaGridKind('hello'), null);
   assert.equal(M._mediaGridKind('https://example.com/a.png'), null);
   assert.deepEqual(M._mediaGridRun(['a', '/uploads/1.png', '/uploads/2.png', 'b'], 1), ['/uploads/1.png', '/uploads/2.png']);
+});
+
+test('a batch is ordered pictures and videos first, then split by ten', () => {
+  const f = (name, type) => ({ name, type });
+  const files = [f('a.pdf', 'application/pdf'), f('b.png', 'image/png'), f('c.mp4', 'video/mp4'), f('d.mov', ''), f('e.zip', 'application/zip')];
+  assert.deepEqual(M._mediaGroupOrder(files).map(x => x.name), ['b.png', 'c.mp4', 'd.mov', 'a.pdf', 'e.zip']);
+  assert.equal(MAX, 10);
+  const twelve = Array.from({ length: 12 }, (_, i) => i);
+  assert.deepEqual(M._mediaChunks(twelve, 10).map(c => c.length), [10, 2]);
+  assert.deepEqual(M._mediaChunks(twelve, 3).map(c => c.length), [3, 3, 3, 3]);
+  assert.equal(M._mediaGroupMax.call({ _maxAttachments: () => 50 }), 10);
+  assert.equal(M._mediaGroupMax.call({ _maxAttachments: () => 3 }), 3);
 });
 
 test('editing a batch edits its text and keeps its pictures', () => {

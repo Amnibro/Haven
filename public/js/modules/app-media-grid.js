@@ -7,6 +7,9 @@
 //
 // The layout and line helpers are pure, so the tests can drive them.
 
+// A message carries at most this many files; more go out as further messages.
+export const MEDIA_GROUP_MAX = 10;
+
 // Tiles per row for each count, on a six-column grid. Three is the one
 // layout that is not rows: a large picture on the left, two stacked beside it.
 const GRID_ROWS = { 2: [2], 4: [2, 2], 5: [2, 3], 6: [3, 3], 7: [1, 3, 3], 8: [2, 3, 3], 9: [3, 3, 3] };
@@ -18,6 +21,9 @@ const GRID_SHOWN = 9;
 const PICTURE_LINE = /^(?:spoiler-img:)?\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(?:jpg|jpeg|png|gif|webp|svg)$/i;
 const E2E_PICTURE_LINE = /^(?:spoiler-img:)?e2e-img:image\/(?:jpeg|png|gif|webp|svg\+xml):\/uploads\/[\w\-.]+$/i;
 const VIDEO_LINE = /^\[file:[^\]\n]+\]\((\/uploads\/[^\s|)]+\.(?:mp4|webm|mov|m4v))\|[^)\n]+\)$/i;
+const VIDEO_NAME = /\.(?:mp4|webm|mov|m4v)$/i;
+// The picture types an encrypted DM picture can be shown as; others go as files.
+const E2E_PICTURE_MIME = /^image\/(?:jpeg|png|gif|webp|svg\+xml)$/i;
 
 export default {
 
@@ -57,6 +63,37 @@ _mediaGridRun(lines, from) {
     run.push(l);
   }
   return run;
+},
+
+// A queued file's kind: pictures and videos go in the grid, anything else
+// is listed under it.
+_mediaFileKind(file) {
+  const type = (file && file.type) || '';
+  if (type.startsWith('image/')) return 'image';
+  if (type.startsWith('video/') || VIDEO_NAME.test((file && file.name) || '')) return 'video';
+  return 'file';
+},
+
+// Pictures and videos first, in the order they were picked, then the rest,
+// so the grid lines sit together.
+_mediaGroupOrder(files) {
+  const list = Array.from(files || []).filter(Boolean);
+  const grid = list.filter(f => this._mediaFileKind(f) !== 'file');
+  return [...grid, ...list.filter(f => this._mediaFileKind(f) === 'file')];
+},
+
+// Split a list into runs of at most `size`.
+_mediaChunks(list, size) {
+  const n = Math.max(1, Math.floor(size) || 1);
+  const out = [];
+  for (let i = 0; i < list.length; i += n) out.push(list.slice(i, i + n));
+  return out;
+},
+
+// Files per message: ten, or fewer when the admin allows fewer.
+_mediaGroupMax() {
+  const setting = this._maxAttachments ? this._maxAttachments() : MEDIA_GROUP_MAX;
+  return Math.max(1, Math.min(MEDIA_GROUP_MAX, setting));
 },
 
 // A message's text and its upload lines, for editing the text alone. Null
@@ -108,6 +145,131 @@ _mediaGridHtml(lines) {
   }).join('');
   const label = this._escapeHtml(t('media_grid.label', { count: lines.length }));
   return `<div class="media-grid" data-count="${lines.length}" role="group" aria-label="${label}" style="aspect-ratio:${layout.ratio};grid-template-rows:repeat(${layout.rows},minmax(0,1fr))">${tiles}</div>`;
+},
+
+// ── Sending ───────────────────────────────────────────────
+
+// Upload one file and return the line it takes in a message, or null when
+// it failed (already reported). In an encrypted DM the bytes are encrypted
+// first, as before, and the line is the encrypted picture or file marker.
+async _mediaUploadLine(file, { partner = null, isDm = false } = {}) {
+  const type = file.type || '';
+  const isImage = type.startsWith('image/');
+  const spoiler = file._spoiler ? 'spoiler-img:' : '';
+  try {
+    if (partner) {
+      const encrypted = await this._e2eEncryptBytes(partner, await file.arrayBuffer());
+      const fd = new FormData();
+      fd.append('scope', 'dm');
+      const asPicture = isImage && E2E_PICTURE_MIME.test(type);
+      fd.append('file', new Blob([encrypted], { type: 'application/octet-stream' }), asPicture ? 'e2e-image.enc' : 'e2e-file.enc');
+      const data = await this._uploadWithProgress('/api/upload-file', fd);
+      if (!data || !data.url) throw new Error(t('toasts.encrypted_image_failed'));
+      const line = asPicture
+        ? `${spoiler}e2e-img:${type}:${data.url}`
+        : `e2e-file:${JSON.stringify({ mime: type || 'application/octet-stream', size: file.size, url: data.url, name: file.name || 'file' })}`;
+      return { line, url: data.url };
+    }
+    const fd = new FormData();
+    fd.append('scope', isDm ? 'dm' : 'channel');
+    // SVG goes through /api/upload-file; the picture route takes rasters only.
+    const raster = isImage && type !== 'image/svg+xml';
+    fd.append(raster ? 'image' : 'file', file);
+    const data = await this._uploadWithProgress(raster ? '/api/upload' : '/api/upload-file', fd);
+    if (!data || data.error || !data.url) throw new Error((data && data.error) || t('toasts.upload_failed'));
+    const line = (raster || data.isImage)
+      ? `${spoiler}${data.url}`
+      : `[file:${data.originalName}](${data.url}|${this._formatFileSize(data.fileSize)})`;
+    return { line, url: data.url };
+  } catch (err) {
+    if (err?.aborted) return null;
+    if (partner) console.error('[E2E] Attachment encryption failed:', err);
+    this._showToast(err?.message || t('toasts.upload_failed'), 'error');
+    return null;
+  }
+},
+
+// The message box's queued pictures and files, sent as messages of up to
+// ten. A DM that cannot be encrypted asks first, and backing out keeps the
+// queue; when text goes with them that was already asked (`partner` given).
+async _flushComposerMedia({ code, text = '', base = {}, partner, prefix = '', bundled = false, ferryDiscordUserId = null, destructAt = null }) {
+  let to = partner;
+  if (to === undefined) {
+    const gate = await this._dmSendGate(code);
+    if (!gate) return;
+    to = gate.partner;
+  }
+  const files = [...(this._imageQueue || []), ...(this._fileQueue || [])];
+  this._imageQueue = [];
+  this._fileQueue = [];
+  this._renderImageQueue?.();
+  await this._sendMediaGroups({ code, files, text, base, partner: to, prefix, bundled, ferryDiscordUserId, destructAt });
+},
+
+// Upload `files` and send them as messages of up to ten. The first carries
+// `text` and `base` (reply, quote, official mark and the like); the rest
+// follow as media sent with it. `prefix` (a persona or Discord target) goes
+// in front of a message that has no text of its own. In a thread the
+// messages are thread replies instead. The × on the progress bar stops the
+// batch: what is already uploaded still goes, with the text.
+async _sendMediaGroups({ code, files, text = '', base = {}, partner = null, prefix = '', bundled = false, ferryDiscordUserId = null, destructAt = null, thread = null }) {
+  const ordered = this._mediaGroupOrder(files);
+  if (!ordered.length && !text) return;
+  const ch = code ? this.channels?.find(c => c.code === code) : null;
+  const isDm = !!(ch && ch.is_dm);
+  const chunks = ordered.length ? this._mediaChunks(ordered, this._mediaGroupMax()) : [[]];
+  this._uploadsCancelled = false;
+  for (let i = 0; i < chunks.length; i++) {
+    const first = i === 0;
+    const lines = [];
+    const urls = [];
+    const mediaTags = [];
+    for (const file of chunks[i]) {
+      if (this._uploadsCancelled) break;
+      const up = await this._mediaUploadLine(file, { partner, isDm });
+      if (!up) continue;
+      lines.push(up.line);
+      urls.push(up.url);
+      if (!partner && Array.isArray(file._tags) && file._tags.length) mediaTags.push({ url: up.url, tags: file._tags });
+    }
+    const ownText = first ? text : '';
+    let body = [ownText, ...lines].filter(Boolean).join('\n');
+    if (!body) { if (this._uploadsCancelled) break; continue; }
+    if (prefix && !ownText) body = prefix + body;
+    if (thread) {
+      const replyTo = first ? thread.replyTo : null;
+      this.socket.emit('send-thread-message', replyTo ? { parentId: thread.parentId, content: body, replyTo } : { parentId: thread.parentId, content: body }, (resp) => {
+        if (resp && resp.error) this._showToast(resp.error, 'error');
+      });
+    } else {
+      const payload = {
+        code,
+        content: body,
+        ...(first ? base : {}),
+        ...(ownText ? {} : { isImage: true }),
+        ...((!first || bundled) ? { bundled: true } : {}),
+        ...(ferryDiscordUserId ? { ferryDiscordUserId } : {}),
+        ...this._destructField(destructAt),
+        ...(mediaTags.length ? { mediaTags } : {}),
+      };
+      if (partner) {
+        try {
+          payload.content = await this._e2eEncryptText(partner, body);
+        } catch (err) {
+          console.warn('[E2E] Encryption failed:', err);
+          this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+          return;
+        }
+        payload.encrypted = true;
+        // So deleting the message removes its files too (#5699).
+        if (urls.length) payload.files = urls;
+      }
+      this.socket.emit('send-message', payload);
+    }
+    this.notifications?.play?.('sent');
+    if (mediaTags.length) this._recordFrequentTags?.(mediaTags.flatMap(m => m.tags));
+    if (this._uploadsCancelled) break;
+  }
 },
 
 };

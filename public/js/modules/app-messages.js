@@ -60,14 +60,18 @@ async _sendMessage() {
     if (picker) picker.style.display = 'none';
     this._uploadsCancelled = false;
     const lines = [];
+    // Each picture keeps its own tags (#5799).
+    const mediaTags = [];
     for (const file of files) {
       const line = await this._uploadImage(file, code, true, '', false, { returnContent: true });
-      if (line) lines.push(line);
+      if (line) {
+        lines.push(line);
+        if (file && Array.isArray(file._tags) && file._tags.length) mediaTags.push({ url: line.slice(line.indexOf('/uploads/')), tags: file._tags });
+      }
       if (this._uploadsCancelled) break;
     }
-    const topicTags = [...new Set(files.flatMap(f => (f && Array.isArray(f._tags)) ? f._tags : []))];
-    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n'), ...(topicTags.length ? { attachmentTags: topicTags } : {}), ...this._destructField(destructAt) });
-    if (topicTags.length) this._recordFrequentTags?.(topicTags);
+    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n'), ...(mediaTags.length ? { mediaTags } : {}), ...this._destructField(destructAt) });
+    if (mediaTags.length) this._recordFrequentTags?.(mediaTags.flatMap(m => m.tags));
     this.notifications.play('sent');
     if (hasFiles) this._flushFileQueue?.();
     return;
@@ -232,6 +236,16 @@ async _sendMessage() {
   }
   Object.assign(payload, this._destructField(destructAt));
 
+  // Text sent with pictures or files goes out with them, as one message
+  // (#5799). Not a command, not burn-after-read (the pictures never burned),
+  // not where text is switched off, and not in a blog, where each file is a
+  // piece of its own.
+  const sendCh = this.channels.find(c => c.code === this.currentChannel);
+  const groupMedia = (hasImages || hasFiles) && !this._forumBlogOn?.(this.currentChannel);
+  const combine = groupMedia && !!content && !ferryOnly && !content.startsWith('/') &&
+    !payload.burnSeconds && !(sendCh && sendCh.text_enabled === 0);
+  let groupPartner = null;
+
   // Clear UI immediately (before any async E2E work)
   input.value = '';
   input.style.height = 'auto';
@@ -338,21 +352,27 @@ async _sendMessage() {
       }
     }
 
-    if (partner) {
-      try {
-        const encrypted = await this._e2eEncryptText(partner, content);
-        payload.content = encrypted;
-        payload.encrypted = true;
-      } catch (err) {
-        // It used to go out unencrypted after a warning. It stays here now.
-        console.warn('[E2E] Encryption failed:', err);
-        this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
-        putBack();
-        return false;
+    if (combine) {
+      // Encrypted and sent with the attachments below.
+      payload.content = content;
+      groupPartner = partner;
+    } else {
+      if (partner) {
+        try {
+          const encrypted = await this._e2eEncryptText(partner, content);
+          payload.content = encrypted;
+          payload.encrypted = true;
+        } catch (err) {
+          // It used to go out unencrypted after a warning. It stays here now.
+          console.warn('[E2E] Encryption failed:', err);
+          this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+          putBack();
+          return false;
+        }
       }
+      this.socket.emit('send-message', payload);
+      this.notifications.play('sent');
     }
-    this.socket.emit('send-message', payload);
-    this.notifications.play('sent');
   }
 
   // Upload queued images. Mark as bundled when text was also sent so
@@ -372,6 +392,21 @@ async _sendMessage() {
           break;
         }
       }
+    }
+    if (groupMedia) {
+      // Everything queued goes out together, ten to a message (#5799).
+      const { content: groupText, code, ...base } = payload;
+      this._flushComposerMedia({
+        code,
+        text: combine ? groupText : '',
+        base: combine ? base : { replyTo: content && !ferryOnly ? null : imageReplyTo },
+        partner: combine ? groupPartner : undefined,
+        prefix: personaPrefix + ferryPrefix,
+        bundled: !combine && !!content && !ferryOnly,
+        ferryDiscordUserId: ferryDm,
+        destructAt,
+      });
+      return;
     }
     // (#5425) These were both inside `if (hasImages)`, so a non-image file
     // queued on its own (no image) never flushed and the attachment was stuck

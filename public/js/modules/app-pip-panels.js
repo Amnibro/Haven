@@ -968,6 +968,14 @@ _sendDMPiPMessage() {
     if (replyTo) payload.replyTo = replyTo;
     const quoteOf = this._takePendingQuote('_dmPipPendingQuote', code, typed);
     if (quoteOf) payload.quoteOf = quoteOf;
+    // Text sent with pictures goes out with them, as one message (#5799).
+    if (content && hasPiPImages && !content.startsWith('/')) {
+      const base = { ...payload };
+      delete base.code;
+      delete base.content;
+      await this._flushPiPImageQueue?.(false, { text: content, base, partner });
+      return;
+    }
     if (content) {
       if (partner) {
         try {
