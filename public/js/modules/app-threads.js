@@ -235,6 +235,7 @@ _openThread(parentId) {
   panel.style.display = 'flex';
   panel.dataset.parentId = parentId;
   this._setThreadPiPEnabled(localStorage.getItem('haven_thread_panel_pip') === '1');
+  if (this._channelBlocksPosting?.()) this._applyThreadClosed(false);
 
   // Request thread messages from server
   this.socket.emit('get-thread-messages', { parentId });
@@ -303,9 +304,10 @@ _applyThreadClosed(closed) {
   const note = document.getElementById('thread-closed-note');
   const text = document.getElementById('thread-closed-text');
   const canReply = !!(this.user?.isAdmin || this._hasPerm?.('delete_message'));
-  panel?.classList.toggle('thread-locked', !!closed && !canReply);
-  if (note) note.style.display = closed ? '' : 'none';
-  if (text) text.textContent = closed ? t(canReply ? 'forum.closed_you_can_reply' : 'forum.closed_no_replies') : '';
+  const readOnly = !!this._channelBlocksPosting?.();
+  panel?.classList.toggle('thread-locked', readOnly || (!!closed && !canReply));
+  if (note) note.style.display = closed || readOnly ? '' : 'none';
+  if (text) text.textContent = readOnly ? t('thread_runtime.read_only_no_replies') : closed ? t(canReply ? 'forum.closed_you_can_reply' : 'forum.closed_no_replies') : '';
 },
 
 _closeThread() {
@@ -330,6 +332,7 @@ _sendThreadMessage() {
   const content = input.value.trim();
   const parentId = this._activeThreadParent;
   if (!parentId) return;
+  if (this._channelBlocksPosting?.()) return this._showToast?.(t('thread_runtime.read_only_no_replies'), 'error');
   const hasPending = !!(this._threadPending && this._threadPending.length);
   // Nothing to send: no text and no held attachments.
   if (!content && !hasPending) return;

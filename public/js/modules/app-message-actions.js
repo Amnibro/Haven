@@ -194,7 +194,7 @@ _bindMessageActions() {
     // A double-click on a word selects it to copy; that is not a reply.
     if (window.getSelection?.()?.toString().trim()) return;
     const msgId = parseInt(msgEl.dataset.msgId, 10);
-    if (!msgId) return;
+    if (!msgId || this._channelBlocksPosting?.()) return;
     e.preventDefault();
     this._setReply(msgEl, msgId);
   });
@@ -246,6 +246,7 @@ _bindMessageActions() {
 
     const msgId = parseInt(msgEl.dataset.msgId);
     if (!msgId) return;
+    if (['reply', 'quote', 'thread'].includes(action) && this._channelBlocksPosting?.()) return this._showToast?.(t('thread_runtime.read_only_no_replies'), 'info');
 
     if (action === 'react') {
       this._showReactionPicker(msgEl, msgId);

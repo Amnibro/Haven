@@ -404,6 +404,7 @@ _showMessageContextMenu(e, msgEl) {
   const canPin       = !!(this.user?.isAdmin || this._hasPerm('pin_message'));
   const canArchive   = !!(this.user?.isAdmin || this._hasPerm('archive_messages'));
   const canShareLink = !isDm && !!this._canShareChannelLink?.(this.currentChannel);
+  const postBlocked = !isDm && !!this._channelBlocksPosting?.(this.currentChannel);
   // Same level-vs-permission gap as the toolbar above (#5461).
   const canDelete    = isOwn || this.user?.isAdmin || this._canModerate() ||
                        this._hasPerm('delete_message');
@@ -428,8 +429,7 @@ _showMessageContextMenu(e, msgEl) {
   }
   // First group (as originally defined)
   if (isOwn && !isArchived) items.push(`<button class="channel-ctx-item" data-action="edit">✏️ <span>${t('msg_toolbar.edit')}</span></button>`);
-  items.push(`<button class="channel-ctx-item" data-action="reply">↩️ <span>${t('msg_toolbar.reply')}</span></button>`);
-  items.push(`<button class="channel-ctx-item" data-action="quote">💬 <span>${t('msg_toolbar.quote')}</span></button>`);
+  if (!postBlocked) items.push(`<button class="channel-ctx-item" data-action="reply">↩️ <span>${t('msg_toolbar.reply')}</span></button>`, `<button class="channel-ctx-item" data-action="quote">💬 <span>${t('msg_toolbar.quote')}</span></button>`);
   if (canPin) {
     items.push(isPinned
       ? `<button class="channel-ctx-item" data-action="unpin">📌 <span>${t('msg_toolbar.unpin')}</span></button>`
@@ -438,7 +438,7 @@ _showMessageContextMenu(e, msgEl) {
   // Separator, then the rest of the hover-toolbar actions
   items.push('<hr class="channel-ctx-sep">');
   items.push(`<button class="channel-ctx-item" data-action="react">😀 <span>${t('msg_toolbar.react')}</span></button>`);
-  if (!isDm) items.push(`<button class="channel-ctx-item" data-action="thread">🧵 <span>${t('msg_toolbar.thread')}</span></button>`);
+  if (!isDm && !postBlocked) items.push(`<button class="channel-ctx-item" data-action="thread">🧵 <span>${t('msg_toolbar.thread')}</span></button>`);
   if (canShareLink) items.push(`<button class="channel-ctx-item" data-action="copy-link">🔗 <span>${t('msg_toolbar.copy_link')}</span></button>`);
   if (canArchive) {
     items.push(isArchived
@@ -484,6 +484,7 @@ _showMessageContextMenu(e, msgEl) {
     if (!btn) return;
     const action = btn.dataset.action;
     this._hideMessageContextMenu();
+    if (['reply', 'quote', 'thread'].includes(action) && this._channelBlocksPosting?.()) return this._showToast?.(t('thread_runtime.read_only_no_replies'), 'info');
     if (action === 'edit') {
       this._startEditMessage(msgEl, msgId);
     } else if (action === 'reply') {

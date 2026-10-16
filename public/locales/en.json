@@ -4373,7 +4373,8 @@
     "forum_full": "Full width",
     "forum_side": "Side panel",
     "forum_full_title": "Open topics across the whole chat area",
-    "forum_side_title": "Open topics in a panel beside the forum"
+    "forum_side_title": "Open topics in a panel beside the forum",
+    "read_only_no_replies": "This channel is read-only. Only members allowed to post here can reply or start a thread."
   },
   "dm_runtime": {
     "title": "DM",
