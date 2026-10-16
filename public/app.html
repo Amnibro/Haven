@@ -3475,9 +3475,9 @@
           <small class="settings-hint" data-i18n="settings.admin.max_attachments_hint">How many files someone can queue on one message by dropping, pasting or picking them (1 to 50, default 10). Each one still has to fit the size limit above.</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_tags_per_attachment">Max Tags per Attachment</span>
-            <input type="number" id="max-tags-per-attachment" min="1" max="10" value="3" class="settings-number-input">
+            <input type="number" id="max-tags-per-attachment" min="1" max="20" value="3" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_tags_per_attachment_hint">How many upload tags a user can put on one attachment (1 to 10, default 3).</small>
+          <small class="settings-hint" data-i18n="settings.admin.max_tags_per_attachment_hint">How many upload tags a user can put on one attachment (1 to 20, default 3).</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_tag_len">Max Tag Length (characters)</span>
             <input type="number" id="max-tag-len" min="1" max="50" value="20" class="settings-number-input">
@@ -5263,7 +5263,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
-  <script type="module" src="/js/app.js?v=4.24.7"></script>
+  <script type="module" src="/js/app.js?v=4.24.8"></script>
   <script src="/js/plugin-loader.js?v=4.23.9"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
