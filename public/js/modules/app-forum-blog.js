@@ -38,6 +38,8 @@ _forumBlogPrepareThread(data) {
   const blog = !!(data && data.blog);
   const picsOnly = blog && !!data.blogPicsOnly;
   this._forumBlogThread = blog ? { parentId: data.parentId, authorId: data.parentUserId || null, authorName: data.parentUsername || '', picsOnly, openPiece: null } : null;
+  // Likes and dislikes on each piece (#5784).
+  this._forumPieceVotesLoad?.(blog ? data.pieceVotes : null);
   panel?.classList.toggle('thread-blog', blog);
   panel?.classList.toggle('thread-blog-pics-only', picsOnly);
   this._forumBlogComposerHint();
@@ -106,6 +108,7 @@ _forumBlogPieceBar(id, piece) {
     bar.dataset.piece = String(Number(id));
     bar.innerHTML = '<button type="button" class="blog-piece-btn" aria-expanded="false"></button>';
     bar.querySelector('button').addEventListener('click', () => this._forumBlogTogglePiece(id));
+    this._forumPieceVotesPaint?.(id, bar);
     piece.after(bar);
   }
   return bar;
@@ -224,6 +227,7 @@ _forumBlogComposerHint() {
 
 _forumBlogClose() {
   this._forumBlogThread = null;
+  this._forumPieceVotesLoad?.(null);
   document.getElementById('thread-panel')?.classList.remove('thread-blog', 'thread-blog-pics-only', 'blog-reply-locked');
   this._forumBlogComposerHint();
 },
