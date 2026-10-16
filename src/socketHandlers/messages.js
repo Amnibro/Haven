@@ -3217,6 +3217,9 @@ module.exports = function register(socket, ctx) {
       // the first picture of a blog post, #5753).
       const replyMsg = db.prepare('SELECT thread_id FROM messages WHERE id = ?').get(replyTo);
       if (!replyMsg || (replyMsg.thread_id !== parentId && replyTo !== parentId)) replyTo = null;
+      // Outside a blog, a reply to the thread's first message is just a
+      // reply in the thread; some clients send it on every message.
+      if (replyTo === parentId && !forumBlog.blogOn(db, channel.id)) replyTo = null;
     }
     if (!forumBlog.commentAllowed(db, { channelId: channel.id, parentId, userId: socket.user.id, replyTo })) {
       return socket.emit('error-msg', 'In this blog, comments go on a picture: open its comments and write there');

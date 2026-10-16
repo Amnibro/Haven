@@ -401,7 +401,11 @@ _appendThreadMessage(msg, opts = {}) {
   }
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
-  const replyHtml = msg.replyContext ? this._renderReplyBanner(msg.replyContext) : '';
+  // Some clients send every thread reply as a reply to the thread's own
+  // first message; in the thread that says nothing, so no banner. A blog
+  // keeps it: there it is a comment on the post's first picture (#5753).
+  const toRoot = this._isThreadRootReply(msg);
+  const replyHtml = msg.replyContext && !toRoot ? this._renderReplyBanner(msg.replyContext) : '';
   const canDelete = msg.user_id === this.user.id || this.user.isAdmin || this._canModerate();
   const canEdit = msg.user_id === this.user.id;
   const iconPair = (emoji, monoSvg) => `<span class="tb-icon tb-icon-emoji" aria-hidden="true">${emoji}</span><span class="tb-icon tb-icon-mono" aria-hidden="true">${monoSvg}</span>`;
@@ -430,7 +434,7 @@ _appendThreadMessage(msg, opts = {}) {
   // name header of their own (#5742).
   if (this._forumBlogIsPart?.(msg)) {
     threadCompact = true;
-  } else if (prevEl && prevEl.classList?.contains('thread-message') && !msg.reply_to) {
+  } else if (prevEl && prevEl.classList?.contains('thread-message') && (!msg.reply_to || toRoot)) {
     const samePerson = parseInt(prevEl.dataset.userId, 10) === msg.user_id
       && (prevEl.dataset.personaId || '') === (msg.persona_id ? String(msg.persona_id) : '');
     const prevTime = prevEl.dataset.time ? new Date(prevEl.dataset.time).getTime() : 0;
@@ -502,6 +506,13 @@ _appendThreadMessage(msg, opts = {}) {
   // view only for a reader who is already there.
   if (opts.live && this._threadAfterLiveReply) this._threadAfterLiveReply(container, gapBefore, msg);
   else container.scrollTop = container.scrollHeight;
+},
+
+// Whether a thread reply answers the thread's own first message.
+_isThreadRootReply(msg) {
+  if (!msg || msg.reply_to == null || this._forumBlogThread) return false;
+  const root = msg.thread_id != null ? msg.thread_id : this._activeThreadParent;
+  return root != null && Number(msg.reply_to) === Number(root);
 },
 
 // Promote a compact thread reply back to a full row (avatar + author header
