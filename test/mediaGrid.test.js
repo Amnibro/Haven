@@ -114,3 +114,14 @@ test('the grid is loaded with the app and its styles sit in their own file', () 
   assert.match(read('public/js/modules/app-media.js'), /this\._lightboxScope = \(imgEl && imgEl\.closest && imgEl\.closest\('\.media-grid'\)\) \|\| null;/);
   assert.match(read('public/js/modules/app-forum.js'), /this\._mediaGridOff = !!this\._forumBlogOn\?\.\(\);/);
 });
+
+test('text goes with the attachments unless it is a command, a burn message or text is off', () => {
+  const app = Object.assign(Object.create(M), { channels: [{ code: 'aaaaaaaa' }, { code: 'bbbbbbbb', text_enabled: 0 }] });
+  assert.equal(app._mediaGroupTakesText('look at these', { code: 'aaaaaaaa' }), true);
+  assert.equal(app._mediaGroupTakesText('', { code: 'aaaaaaaa' }), false);
+  assert.equal(app._mediaGroupTakesText('/shrug', { code: 'aaaaaaaa' }), false);
+  assert.equal(app._mediaGroupTakesText('gone soon', { code: 'aaaaaaaa', burnSeconds: 30 }), false);
+  assert.equal(app._mediaGroupTakesText('caption', { code: 'bbbbbbbb' }), false);
+  assert.equal(Object.assign(Object.create(M), { _forumBlogOn: () => true })._mediaGroupOn('x'), false, 'a blog keeps one piece per file');
+  assert.equal(M._mediaGroupOn('x'), true);
+});

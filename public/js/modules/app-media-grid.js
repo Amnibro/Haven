@@ -189,12 +189,30 @@ async _mediaUploadLine(file, { partner = null, isDm = false } = {}) {
   }
 },
 
+// Attachments from the message box go out together, except in a blog, where
+// each file is a piece of its own (#5763).
+_mediaGroupOn(code) {
+  return !this._forumBlogOn?.(code);
+},
+
+// Whether the typed text goes in the same message as the attachments: not a
+// command, not burn-after-read (pictures never burned), and not where text is
+// switched off. `payload` is the text message the message box built.
+_mediaGroupTakesText(content, payload) {
+  if (!content || content.startsWith('/') || payload.burnSeconds) return false;
+  const ch = this.channels?.find(c => c.code === payload.code);
+  return !(ch && ch.text_enabled === 0);
+},
+
 // The message box's queued pictures and files, sent as messages of up to
-// ten. A DM that cannot be encrypted asks first, and backing out keeps the
-// queue; when text goes with them that was already asked (`partner` given).
-async _flushComposerMedia({ code, text = '', base = {}, partner, prefix = '', bundled = false, ferryDiscordUserId = null, destructAt = null }) {
+// ten. With `combine` the text message `payload` goes with them, already
+// cleared by the DM check (`partner`); otherwise a DM that cannot be
+// encrypted asks first, and backing out keeps the queue. `textSent` says the
+// text went on its own, carrying the reply.
+async _flushComposerMedia({ payload, combine = false, partner = null, textSent = false, replyTo = null, prefix = '', ferryDiscordUserId = null, destructAt = null }) {
+  const { content: text, code, ...base } = payload;
   let to = partner;
-  if (to === undefined) {
+  if (!combine) {
     const gate = await this._dmSendGate(code);
     if (!gate) return;
     to = gate.partner;
@@ -203,7 +221,12 @@ async _flushComposerMedia({ code, text = '', base = {}, partner, prefix = '', bu
   this._imageQueue = [];
   this._fileQueue = [];
   this._renderImageQueue?.();
-  await this._sendMediaGroups({ code, files, text, base, partner: to, prefix, bundled, ferryDiscordUserId, destructAt });
+  await this._sendMediaGroups({
+    code, files, partner: to, prefix, ferryDiscordUserId, destructAt,
+    text: combine ? text : '',
+    base: combine ? base : { replyTo: textSent ? null : replyTo },
+    bundled: !combine && textSent,
+  });
 },
 
 // Upload `files` and send them as messages of up to ten. The first carries
