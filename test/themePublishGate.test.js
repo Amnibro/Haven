@@ -11,10 +11,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const Database = require('better-sqlite3');
 const { createHarness, wait } = require('./socketServerHarness');
 const { themePreferenceAllowed } = require('../src/themeMetadata');
+
+const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 
 test('themePreferenceAllowed: built-in and published themes are open to everyone', () => {
   assert.equal(themePreferenceAllowed('matrix'), true);
@@ -30,6 +33,26 @@ test('themePreferenceAllowed: an unpublished file is refused unless it is kept o
   assert.equal(themePreferenceAllowed(file, { canManage: true }), true);
   assert.equal(themePreferenceAllowed(file, { canManage: 'yes' }), false, 'only a real true counts');
   assert.equal(themePreferenceAllowed(file, { published: 'braid.theme.css' }), false, 'a list, not a string');
+});
+
+test('the Settings list and the loader keep unpublished files from members', () => {
+  const loader = read('public/js/plugin-loader.js');
+  assert.match(loader, /function canUseUnpublished\(\)/);
+  assert.match(loader, /window\.app\?\._canPublishThemes\?\.\(\) === true/, 'fails closed until the app knows the viewer');
+  const enable = loader.slice(loader.indexOf('function enableTheme(file)'), loader.indexOf('function disableTheme(file)'));
+  assert.match(enable, /if \(!isOffered\(file\)\) return;/);
+  const select = loader.slice(loader.indexOf('function selectFileTheme(file)'), loader.indexOf('function applyFileTheme('));
+  assert.match(select, /!isOffered\(file\) && !t\.enabled/);
+  const render = loader.slice(loader.indexOf('function renderPluginUI()'), loader.indexOf('function escHtml('));
+  assert.match(render, /\.filter\(\(\[file, record\]\) => isListed\(file, record\)\)/);
+  assert.match(render, /settings\.plugins_section\.not_published/);
+  assert.match(loader, /function onThemeRefused\(value\)/);
+  const picker = read('public/js/modules/app-theme-picker.js');
+  assert.match(picker, /'preference-refused'/);
+  assert.match(picker, /_canPublishThemes\(\) \{\s+if \(!this\.user\) return false;/);
+  const en = JSON.parse(read('public/locales/en.json'));
+  assert.equal(typeof en.settings.plugins_section.not_published, 'string');
+  assert.equal(typeof en.settings.plugins_section.theme_not_published, 'string');
 });
 
 const PORT = 3449;

@@ -1926,7 +1926,10 @@
       "suppressed_safe_mode": "suppressed in Safe Mode",
       "incompatible_theme": "incompatible theme",
       "incompatible_theme_hint": "This theme declares an invalid or unsupported Theme API version.",
-      "theme_fallback": "The selected theme is missing or incompatible. Haven was restored."
+      "theme_fallback": "The selected theme is missing or incompatible. Haven was restored.",
+      "not_published": "Not published",
+      "theme_not_published": "That theme is not published on this server, so Haven was put back.",
+      "no_published_themes": "No theme files are published on this server yet."
     },
     "password_section": {
       "title": "Password",

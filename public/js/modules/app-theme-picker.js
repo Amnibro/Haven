@@ -110,12 +110,25 @@ _setupThemePicker() {
     this._onPublishedThemesChanged(data.value);
   });
 
+  // The server only saves a theme file a member may use (see set-preference).
+  this.socket?.on('preference-refused', (data) => {
+    if (data?.key === 'theme') window.HavenPluginLoader?.onThemeRefused?.(data.value);
+  });
+
+  // Whether unpublished files show depends on Manage Server, which can arrive
+  // or change after the theme list did. The app's own handlers update the
+  // permissions first, so the redraw waits for them.
+  const redrawForPermissions = () => setTimeout(() => window.HavenPluginLoader?.renderPluginUI?.(), 0);
+  this.socket?.on('session-info', redrawForPermissions);
+  this.socket?.on('roles-updated', redrawForPermissions);
+
   this._renderThemePicker();
 },
 
 // Whether this viewer can publish themes: the same check the server makes.
 _canPublishThemes() {
-  return !!(this.user?.isAdmin || this._hasPerm?.('manage_server'));
+  if (!this.user) return false;
+  return !!(this.user.isAdmin || this._hasPerm?.('manage_server'));
 },
 
 _activeThemeId() {
