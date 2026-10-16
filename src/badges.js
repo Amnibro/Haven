@@ -8,7 +8,9 @@
  * Tables:
  *   badges        one row per badge the admin made. kind is one of
  *                 account_age (threshold in days), messages and forum_likes
- *                 (threshold is a count), role (role_id), manual.
+ *                 (threshold is a count), role (role_id), manual. icon_key
+ *                 says which icon it shows (see iconKey); no two badges
+ *                 share one.
  *   user_badges   hand-given badges: who has them, who gave them and when.
  *   badge_hidden  badges a member chose to hide on their own card.
  *   badge_stats   running totals per member (messages posted in server
@@ -25,6 +27,10 @@
  *   - A forum like counts for the topic's author, never their own like.
  *     Taking the like back takes it off.
  */
+
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 const KINDS = ['account_age', 'messages', 'forum_likes', 'role', 'manual'];
 const EARNED_KINDS = new Set(['account_age', 'messages', 'forum_likes']);
@@ -60,6 +66,7 @@ function migrateBadges(db) {
       description TEXT    NOT NULL DEFAULT '',
       icon_type   TEXT    NOT NULL CHECK (icon_type IN ('emoji', 'image', 'builtin')),
       icon        TEXT    NOT NULL,
+      icon_key    TEXT    DEFAULT NULL,
       kind        TEXT    NOT NULL CHECK (kind IN ('account_age', 'messages', 'forum_likes', 'role', 'manual')),
       threshold   INTEGER DEFAULT NULL,
       role_id     INTEGER DEFAULT NULL REFERENCES roles(id) ON DELETE SET NULL,
@@ -126,7 +133,18 @@ function migrateBadges(db) {
         ON CONFLICT(user_id) DO UPDATE SET forum_likes = MAX(forum_likes + CASE WHEN NEW.value = 1 THEN 1 ELSE -1 END, 0);
     END;
   `);
-  if (!fresh) return;
+  if (!fresh) {
+    // Made before icon_key existed: add it. Built-in and emoji keys are
+    // worked out here; uploaded ones need the file (fillImageKeys).
+    if (!db.prepare('PRAGMA table_info(badges)').all().some(c => c.name === 'icon_key')) {
+      db.exec('ALTER TABLE badges ADD COLUMN icon_key TEXT DEFAULT NULL');
+    }
+    const set = db.prepare('UPDATE badges SET icon_key = ? WHERE id = ?');
+    for (const b of db.prepare("SELECT id, icon_type, icon FROM badges WHERE icon_key IS NULL AND icon_type <> 'image'").all()) {
+      set.run(iconKey(b.icon_type, b.icon), b.id);
+    }
+    return;
+  }
 
   // First run: count what is already there once, then the triggers keep it.
   db.transaction(() => {
@@ -139,9 +157,9 @@ function migrateBadges(db) {
       WHERE v.value = 1 AND m.user_id IS NOT NULL AND m.user_id <> v.user_id AND m.user_id IN (SELECT id FROM users)
       GROUP BY m.user_id
       ON CONFLICT(user_id) DO UPDATE SET forum_likes = excluded.forum_likes`).run();
-    const insert = db.prepare(`INSERT INTO badges (name, description, icon_type, icon, kind, threshold, enabled, position)
-      VALUES (?, ?, 'builtin', ?, ?, ?, 0, ?)`);
-    DEFAULT_BADGES.forEach((b, i) => insert.run(b.name, b.description, b.icon, b.kind, b.threshold, i));
+    const insert = db.prepare(`INSERT INTO badges (name, description, icon_type, icon, icon_key, kind, threshold, enabled, position)
+      VALUES (?, ?, 'builtin', ?, ?, ?, ?, 0, ?)`);
+    DEFAULT_BADGES.forEach((b, i) => insert.run(b.name, b.description, b.icon, iconKey('builtin', b.icon), b.kind, b.threshold, i));
   })();
 }
 
@@ -162,6 +180,48 @@ function cleanIcon(type, value) {
     return EMOJI_RE.test(v) ? v : null;
   }
   return null;
+}
+
+// ── Telling icons apart ───────────────────────────────────
+// Two badges never share an icon. What counts as the same icon: the same
+// built-in, the same emoji (with or without its text/emoji style marker), or
+// an uploaded picture with the same bytes, whatever its file is called.
+
+function imageKey(bytes) {
+  return 'image:' + crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+/**
+ * The key for a checked icon, or null when an uploaded picture's file is
+ * gone. Other read errors throw, and the caller refuses the save.
+ */
+function iconKey(type, icon, uploadsDir) {
+  if (type === 'builtin') return `builtin:${icon}`;
+  if (type === 'emoji') return `emoji:${icon.replace(/[\uFE0E\uFE0F]/g, '')}`;
+  if (type === 'image') {
+    try {
+      return imageKey(fs.readFileSync(path.join(uploadsDir, 'badges', path.basename(icon))));
+    } catch (err) {
+      if (err.code === 'ENOENT') return null;
+      throw err;
+    }
+  }
+  return null;
+}
+
+// Uploaded icons from before icon_key, keyed now that the folder is known.
+function fillImageKeys(db, uploadsDir) {
+  const rows = db.prepare("SELECT id, icon FROM badges WHERE icon_key IS NULL AND icon_type = 'image'").all();
+  const set = db.prepare('UPDATE badges SET icon_key = ? WHERE id = ?');
+  for (const b of rows) {
+    const key = iconKey('image', b.icon, uploadsDir);
+    if (key) set.run(key, b.id);
+  }
+}
+
+/** The other badge already showing this icon, or null. */
+function iconTakenBy(db, key, exceptId = null) {
+  return db.prepare('SELECT id, name FROM badges WHERE icon_key = ? AND id IS NOT ?').get(key, exceptId) || null;
 }
 
 /**
@@ -226,7 +286,7 @@ function publicDefinition(b) {
     id: b.id, name: b.name, description: b.description,
     iconType: b.icon_type, icon: b.icon, kind: b.kind,
     threshold: b.threshold, roleId: b.role_id, roleName: b.role_name || null, roleColor: b.role_color || null,
-    enabled: !!b.enabled, holders: b.holders || 0,
+    enabled: !!b.enabled, holders: b.holders || 0, iconKey: b.icon_key || null,
   };
 }
 
@@ -287,4 +347,5 @@ function badgesForProfile(db, userId, viewerId, now = Date.now()) {
 module.exports = {
   KINDS, EARNED_KINDS, BUILTIN_ICONS, MAX_BADGES, ICON_PATH_RE, DEFAULT_BADGES,
   migrateBadges, readBadgeInput, getBadge, listBadges, badgesForProfile, statsFor, earns, daysSince, cleanIcon,
+  iconKey, imageKey, fillImageKeys, iconTakenBy,
 };

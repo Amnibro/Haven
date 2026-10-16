@@ -70,6 +70,18 @@ module.exports = function register(socket, ctx) {
     });
   };
 
+  // The icon key for a checked badge, or the reason it cannot be used: the
+  // uploaded file is gone, or another badge already shows this icon.
+  const keyFor = (b, current = null) => {
+    const same = current && current.icon_type === b.icon_type && current.icon === b.icon && current.icon_key;
+    const key = same ? current.icon_key : badges.iconKey(b.icon_type, b.icon, UPLOADS_DIR);
+    if (!key) return { error: 'That uploaded icon is missing, upload it again' };
+    badges.fillImageKeys(db, UPLOADS_DIR);
+    const other = badges.iconTakenBy(db, key, current ? current.id : null);
+    if (other) return { error: `Another badge already uses this icon (${other.name})` };
+    return { key };
+  };
+
   const fullList = () => ({
     ok: true,
     badges: badges.listBadges(db),
@@ -101,10 +113,12 @@ module.exports = function register(socket, ctx) {
       const b = read.badge;
       const refusal = roleRefusal(b.role_id);
       if (refusal) return cb({ error: refusal });
+      const icon = keyFor(b);
+      if (icon.error) return cb({ error: icon.error });
       const position = (db.prepare('SELECT MAX(position) AS p FROM badges').get().p ?? -1) + 1;
-      const id = db.prepare(`INSERT INTO badges (name, description, icon_type, icon, kind, threshold, role_id, enabled, position, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(b.name, b.description, b.icon_type, b.icon, b.kind, b.threshold, b.role_id, b.enabled, position, socket.user.id).lastInsertRowid;
+      const id = db.prepare(`INSERT INTO badges (name, description, icon_type, icon, icon_key, kind, threshold, role_id, enabled, position, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(b.name, b.description, b.icon_type, b.icon, icon.key, b.kind, b.threshold, b.role_id, b.enabled, position, socket.user.id).lastInsertRowid;
       audit({ actor: socket.user, action: 'badge_create', target_type: 'badge', target_id: Number(id), target_name: b.name,
         details: { kind: b.kind, threshold: b.threshold, roleId: b.role_id, enabled: !!b.enabled } });
       cb({ ...fullList(), badgeId: Number(id) });
@@ -125,11 +139,13 @@ module.exports = function register(socket, ctx) {
       const b = read.badge;
       const refusal = roleRefusal(current.role_id) || roleRefusal(b.role_id);
       if (refusal) return cb({ error: refusal });
+      const icon = keyFor(b, current);
+      if (icon.error) return cb({ error: icon.error });
       // Hand-given copies only make sense on a hand-given badge.
       const dropHolders = current.kind === 'manual' && b.kind !== 'manual';
       db.transaction(() => {
-        db.prepare(`UPDATE badges SET name = ?, description = ?, icon_type = ?, icon = ?, kind = ?, threshold = ?, role_id = ?, enabled = ?
-          WHERE id = ?`).run(b.name, b.description, b.icon_type, b.icon, b.kind, b.threshold, b.role_id, b.enabled, current.id);
+        db.prepare(`UPDATE badges SET name = ?, description = ?, icon_type = ?, icon = ?, icon_key = ?, kind = ?, threshold = ?, role_id = ?, enabled = ?
+          WHERE id = ?`).run(b.name, b.description, b.icon_type, b.icon, icon.key, b.kind, b.threshold, b.role_id, b.enabled, current.id);
         if (dropHolders) db.prepare('DELETE FROM user_badges WHERE badge_id = ?').run(current.id);
       })();
       if (current.icon !== b.icon) dropIconFile(current.icon);

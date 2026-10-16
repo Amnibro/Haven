@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
+const { imageKey } = require('../badges');
 
 const MAX_BYTES = 256 * 1024;
 const EXT = { 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp', 'image/jpeg': '.jpg' };
@@ -72,25 +73,22 @@ module.exports = function registerBadgeRoutes(deps) {
         return res.status(400).json({ error: message });
       }
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      let hdr;
+      // 256 KB at most, so the whole file is read: the first bytes for the
+      // type check, all of it for the key the editor uses to spot a picture
+      // another badge already shows.
+      let bytes;
       try {
-        const fd = fs.openSync(req.file.path, 'r');
-        try {
-          hdr = Buffer.alloc(12);
-          hdr = hdr.subarray(0, fs.readSync(fd, hdr, 0, 12, 0));
-        } finally {
-          fs.closeSync(fd);
-        }
+        bytes = fs.readFileSync(req.file.path);
       } catch (readErr) {
         console.warn('[badges] could not read an uploaded icon:', readErr.message);
         discard(req.file);
         return res.status(400).json({ error: 'Failed to validate' });
       }
-      if (sniffImage(hdr) !== req.file.mimetype) {
+      if (sniffImage(bytes.subarray(0, 12)) !== req.file.mimetype) {
         discard(req.file);
         return res.status(400).json({ error: 'Invalid image' });
       }
-      res.json({ path: `/uploads/badges/${req.file.filename}` });
+      res.json({ path: `/uploads/badges/${req.file.filename}`, iconKey: imageKey(bytes) });
     });
   });
 };

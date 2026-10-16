@@ -93,7 +93,7 @@ test('profile badges', async (t) => {
       const r = await h.ask(A, 'create-badge', bad);
       assert.ok(r && r.error, `refused: ${JSON.stringify(bad)}`);
     }
-    const made = await h.ask(A, 'create-badge', { name: 'Temp <b>x</b>', description: 'short', iconType: 'builtin', icon: 'star', kind: 'manual' });
+    const made = await h.ask(A, 'create-badge', { name: 'Temp <b>x</b>', description: 'short', iconType: 'builtin', icon: 'trophy', kind: 'manual' });
     assert.ok(made.ok && made.badgeId, JSON.stringify(made));
     const stored = made.badges.find((b) => b.id === made.badgeId);
     assert.strictEqual(stored.name, 'Temp bx/b', 'markup brackets are dropped');
@@ -130,7 +130,7 @@ test('profile badges', async (t) => {
   await t.test('earned badges follow messages, forum likes and account age', async () => {
     const msg = await h.ask(A, 'create-badge', { name: 'Two posts', iconType: 'emoji', icon: '💬', kind: 'messages', threshold: 2 });
     const likes = await h.ask(A, 'create-badge', { name: 'Liked', iconType: 'builtin', icon: 'heart', kind: 'forum_likes', threshold: 1 });
-    const age = await h.ask(A, 'create-badge', { name: 'Old timer', iconType: 'builtin', icon: 'calendar', kind: 'account_age', threshold: 30 });
+    const age = await h.ask(A, 'create-badge', { name: 'Old timer', iconType: 'builtin', icon: 'shield', kind: 'account_age', threshold: 30 });
     assert.ok(msg.ok && likes.ok && age.ok);
 
     B.emit('send-message', { code, content: 'one' });
@@ -217,6 +217,33 @@ test('profile badges', async (t) => {
     assert.ok(log.some((r) => r.action === 'badge_create') && log.some((r) => r.action === 'badge_delete'), 'definition changes are logged too');
   });
 
+  await t.test('no two badges share an icon', async () => {
+    const list = (await h.ask(A, 'get-badges', {})).badges;
+    const keys = list.map((b) => b.iconKey);
+    assert.ok(keys.every(Boolean), 'every badge has an icon key');
+    assert.strictEqual(new Set(keys).size, keys.length, 'and they are all different');
+
+    const taken = /Another badge already uses this icon/;
+    // A built-in a default badge shows.
+    assert.match((await h.ask(A, 'create-badge', { name: 'Seedling', iconType: 'builtin', icon: 'sprout', kind: 'manual' })).error || '', taken);
+    // The same emoji, with or without its emoji-style marker.
+    assert.match((await h.ask(A, 'create-badge', { name: 'Guard', iconType: 'emoji', icon: '\u{1F6E1}\uFE0F', kind: 'manual' })).error || '', taken);
+    assert.match((await h.ask(A, 'create-badge', { name: 'Guard', iconType: 'emoji', icon: '\u{1F6E1}', kind: 'manual' })).error || '', taken);
+    // Changing a badge to an icon another one shows.
+    const liked = list.find((b) => b.name === 'Liked');
+    const moved = await h.ask(A, 'update-badge', { badgeId: liked.id, iconType: 'builtin', icon: 'star' });
+    assert.match(moved.error || '', /Regular/, 'the message names the badge using it');
+    // Keeping its own icon, or moving to a free one, is fine.
+    assert.ok((await h.ask(A, 'update-badge', { badgeId: liked.id, name: 'Well liked' })).ok);
+    const free = await h.ask(A, 'update-badge', { badgeId: liked.id, iconType: 'emoji', icon: '\u{1F44D}' });
+    assert.ok(free.ok, JSON.stringify(free));
+    assert.strictEqual(free.badges.find((b) => b.id === liked.id).iconKey, 'emoji:\u{1F44D}');
+    // Once the heart is free again, another badge may take it.
+    const heart = await h.ask(A, 'create-badge', { name: 'Kind', iconType: 'builtin', icon: 'heart', kind: 'manual' });
+    assert.ok(heart.ok, JSON.stringify(heart));
+    assert.ok((await h.ask(A, 'delete-badge', { badgeId: heart.badgeId })).ok);
+  });
+
   await t.test('members hide their own badges', async () => {
     const helpful = (await h.ask(A, 'get-badges', {})).badges.find((b) => b.name === 'Helpful');
     assert.ok((await h.ask(C, 'set-badge-hidden', { badgeId: helpful.id, hidden: true })).ok);
@@ -246,6 +273,18 @@ test('profile badges', async (t) => {
     assert.ok(pic.ok, JSON.stringify(pic));
     const file = path.join(h.dataDir, 'uploads', 'badges', path.basename(ok.body.path));
     assert.ok(require('node:fs').existsSync(file));
+
+    // The same picture uploaded again is a new file with the same key, and
+    // a second badge cannot show it.
+    const again = await uploadIcon(admin.token, PNG, 'image/png');
+    assert.strictEqual(again.status, 200);
+    assert.notStrictEqual(again.body.path, ok.body.path);
+    assert.strictEqual(again.body.iconKey, ok.body.iconKey);
+    assert.strictEqual(pic.badges.find((b) => b.id === pic.badgeId).iconKey, ok.body.iconKey);
+    const twin = await h.ask(A, 'create-badge', { name: 'Twin', iconType: 'image', icon: again.body.path, kind: 'manual' });
+    assert.match(twin.error || '', /Another badge already uses this icon \(Pictured\)/);
+    const missing = await h.ask(A, 'create-badge', { name: 'Gone', iconType: 'image', icon: '/uploads/badges/1700000000000-0123456789abcdef.png', kind: 'manual' });
+    assert.match(missing.error || '', /missing/, 'a picture that is not on disk is refused');
     assert.ok((await h.ask(M, 'delete-badge', { badgeId: pic.badgeId })).ok);
     await wait(100);
     assert.ok(!require('node:fs').existsSync(file), 'deleting the badge removes its unused icon');
