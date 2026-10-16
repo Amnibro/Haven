@@ -3504,6 +3504,14 @@
           </label>
           <small class="settings-hint" data-i18n="settings.admin.max_attachments_hint">How many files someone can queue on one message by dropping, pasting or picking them (1 to 50, default 10). Each one still has to fit the size limit above.</small>
           <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.media_group_layout">Pictures sent together</span>
+            <select id="media-group-layout" class="settings-select">
+              <option value="grid" data-i18n="settings.admin.media_group_layout_grid">Grid</option>
+              <option value="stacked" data-i18n="settings.admin.media_group_layout_stacked">Full size, one under another</option>
+            </select>
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.media_group_layout_hint">How several pictures in one message show for everyone. The grid fits them into one block and crops each picture to fill its tile. Full size shows every picture whole, one under another, at the size each member picked under Image Display, which suits artwork. Members can choose differently for themselves under Settings, Image Display.</small>
+          <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_tags_per_attachment">Max Tags per Attachment</span>
             <input type="number" id="max-tags-per-attachment" min="1" max="20" value="3" class="settings-number-input">
           </label>

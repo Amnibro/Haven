@@ -174,6 +174,20 @@ _setupMediaGrid() {
   });
 },
 
+// Settings > Uploads & Limits: the server's default. Filled and saved with
+// the rest of the admin panel (app-admin.js).
+_fillMediaLayoutAdmin(value) {
+  const sel = document.getElementById('media-group-layout');
+  if (sel) sel.value = MEDIA_GROUP_LAYOUTS.includes(value) ? value : 'grid';
+},
+
+_saveMediaLayoutAdmin(snap) {
+  const value = document.getElementById('media-group-layout')?.value;
+  if (!MEDIA_GROUP_LAYOUTS.includes(value) || value === (snap.media_group_layout || 'grid')) return false;
+  this.socket.emit('update-server-setting', { key: 'media_group_layout', value });
+  return true;
+},
+
 _mediaGridMoreHtml(count) {
   return `<span class="media-grid-more" title="${this._escapeHtml(t('media_grid.more', { count }))}">+${count}</span>`;
 },

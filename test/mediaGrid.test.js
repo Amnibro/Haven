@@ -203,3 +203,28 @@ test('a change of layout redraws the groups already on the page, and the grid st
   assert.doesNotMatch(css, /^\.media-grid \.media-grid-tile img\.chat-image/m, 'cropping applies to the grid only');
   assert.match(css, /\.media-grid\.is-stacked \{\n\s+display: block;/);
 });
+
+test('the admin panel fills and saves the server default with its other settings', () => {
+  const sel = { value: '' };
+  const emitted = [];
+  const prevDoc = global.document;
+  global.document = { getElementById: (id) => (id === 'media-group-layout' ? sel : null) };
+  try {
+    const app = Object.assign(Object.create(M), { socket: { emit: (ev, data) => emitted.push([ev, data]) } });
+    app._fillMediaLayoutAdmin(undefined);
+    assert.equal(sel.value, 'grid', 'an unset server shows the grid');
+    app._fillMediaLayoutAdmin('stacked');
+    assert.equal(sel.value, 'stacked');
+    assert.equal(app._saveMediaLayoutAdmin({ media_group_layout: 'stacked' }), false, 'unchanged: nothing sent');
+    sel.value = 'grid';
+    assert.equal(app._saveMediaLayoutAdmin({ media_group_layout: 'stacked' }), true);
+    assert.deepEqual(emitted, [['update-server-setting', { key: 'media_group_layout', value: 'grid' }]]);
+  } finally {
+    global.document = prevDoc;
+  }
+  const admin = read('public/js/modules/app-admin.js');
+  assert.match(admin, /media_group_layout: this\.serverSettings\.media_group_layout \|\| 'grid',/);
+  assert.match(admin, /if \(this\._saveMediaLayoutAdmin\?\.\(snap\)\) changed = true;/);
+  assert.equal((admin.match(/this\._fillMediaLayoutAdmin\?\.\(/g) || []).length, 2, 'filled on open and on cancel');
+  assert.match(read('public/app.html'), /<select id="media-group-layout" class="settings-select">/);
+});
