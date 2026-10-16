@@ -74,8 +74,11 @@ the stylesheet. The cache is only a flash-prevention optimisation.
 
 A published file is a selectable base theme. Haven applies the built-in Haven
 theme as the stable layout base, then loads the selected file after the core
-stylesheet. A file that is installed but not published can instead be enabled
-per browser as an additive CSS tweak from Plugins & Themes.
+stylesheet. A file that is installed but not published is only for people who
+manage the server: they can try it, or enable it per browser as an additive CSS
+tweak from Plugins & Themes. Members do not see it there or in the picker, and
+the server will not save it as a member's theme. A member who already uses a
+theme when it is unpublished keeps it until they pick another.
 
 Themes are server-managed files. Haven does not download themes from arbitrary
 URLs or provide a per-user raw CSS editor.
