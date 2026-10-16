@@ -192,6 +192,10 @@ _watchFeedBox(sc, main) {
       m.removedNodes.forEach(unwatch);
       m.addedNodes.forEach(watch);
     }
+    // Drawing a channel or adding a message usually scrolls in the same
+    // breath, and a scroll event may not follow before the next change
+    // (a window in the background gets few frames).
+    A.st = sc.scrollTop;
   });
   A.mo.observe(sc, { childList: true });
 
