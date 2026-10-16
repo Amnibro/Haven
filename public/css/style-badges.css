@@ -75,7 +75,8 @@
 .badge-admin-text { flex: 1 1 10rem; min-width: 0; }
 .badge-admin-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badge-admin-how { font-size: 0.75rem; color: var(--text-muted); }
-.badge-admin-switch { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; }
+/* The On/Off control is a standard .toggle-row, so it follows the Toggle Style setting. */
+.badge-admin-switch { display: inline-flex; cursor: pointer; }
 .badge-admin-actions { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .badge-admin-holder-list { flex: 1 0 100%; display: flex; flex-direction: column; gap: 0.25rem; padding-top: 0.25rem; border-top: 1px dashed var(--border); }
 .badge-admin-holder-list[hidden] { display: none; }

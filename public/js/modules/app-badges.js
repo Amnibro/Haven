@@ -192,9 +192,9 @@ _renderBadgeAdmin() {
             <div class="badge-admin-name">${esc(b.name)}</div>
             <div class="badge-admin-how">${esc(this._badgeHowText(b))}${b.description ? ` · ${esc(b.description)}` : ''}</div>
           </div>
-          <label class="badge-admin-switch" title="${esc(t('badges.admin.enabled'))}">
-            <input type="checkbox" class="badge-admin-enabled" data-badge-id="${b.id}"${b.enabled ? ' checked' : ''}${editable ? '' : ' disabled'}>
+          <label class="toggle-row badge-admin-switch" title="${esc(t('badges.admin.enabled'))}">
             <span>${esc(t(b.enabled ? 'badges.admin.on' : 'badges.admin.off'))}</span>
+            <input type="checkbox" class="badge-admin-enabled" data-badge-id="${b.id}" aria-label="${esc(t('badges.admin.enabled'))}"${b.enabled ? ' checked' : ''}${editable ? '' : ' disabled'}>
           </label>
           <div class="badge-admin-actions">
             ${b.kind === 'manual' ? `<button class="btn-sm badge-admin-holders">${esc(t('badges.admin.holders', { n: b.holders }))}</button>` : ''}
