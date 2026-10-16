@@ -15,6 +15,8 @@ const forumUnread = require('../forumUnread');
 const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
+const { takeSilent } = require('../silentMessages');
+const { tagAccess } = require('../uploadTagRoles');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -57,6 +59,11 @@ module.exports = function register(socket, ctx) {
           logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
   const { youngAccountWait, refuseYoungAccount } = require('./postingWait')(socket, ctx);
+  // The upload tags this person may use in a channel: those not limited to a
+  // role, and those limited to one they hold there (src/uploadTagRoles.js).
+  const tagAccessIn = (channelId) => tagAccess(db, {
+    userId: socket.user.id, isAdmin: !!socket.user.isAdmin, channelIds: getChannelRoleChain(channelId),
+  });
 
   // Membership alone is not access. A person can hold a membership row for a
   // channel whose required roles they lack (joining with the server code adds
@@ -206,7 +213,7 @@ module.exports = function register(socket, ctx) {
   // Likes minus dislikes, for the Most liked order (#5742).
   const FORUM_SCORE = '(SELECT COALESCE(SUM(v.value), 0) FROM forum_votes v WHERE v.message_id = m.id)';
   const FORUM_SELECT = `
-    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.title, m.tags, m.closed, m.nsfw,
+    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.title, m.tags, m.closed, m.nsfw,
            COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
            COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile,
            ${FORUM_ACTIVITY} AS activity_at, ${FORUM_SCORE} AS score
@@ -306,7 +313,7 @@ module.exports = function register(socket, ctx) {
       messages = forumHistory(channel.id, { before, after, around, limit, sort, tags, tagMode });
     } else if (before) {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -315,7 +322,7 @@ module.exports = function register(socket, ctx) {
       `).all(channel.id, before, limit);
     } else if (after) {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -325,7 +332,7 @@ module.exports = function register(socket, ctx) {
     } else if (around) {
       const half = Math.floor(limit / 2);
       const beforeMsgs = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -333,14 +340,14 @@ module.exports = function register(socket, ctx) {
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, around, half);
       const targetMsg = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id = ?
       `).all(channel.id, around);
       const afterMsgs = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -351,7 +358,7 @@ module.exports = function register(socket, ctx) {
       messages = [...beforeMsgs.reverse(), ...targetMsg, ...afterMsgs];
     } else {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -510,6 +517,7 @@ module.exports = function register(socket, ctx) {
       if (roleMenuMap.has(m.id)) obj.roleMenu = roleMenuMap.get(m.id);
       obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
       obj.is_archived = !!m.is_archived;
+      if (m.silent) obj.silent = true; else delete obj.silent;
       if (highlightMap.has(m.id)) obj.highlight = highlightMap.get(m.id);
       if (quoteMap.has(m.id)) obj.quoteOf = quoteMap.get(m.id);
       obj.thread = threadMap.get(m.id) || null;
@@ -1248,6 +1256,11 @@ module.exports = function register(socket, ctx) {
 
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     if (!content || content.trim().length === 0) return;
+    // Silent messages (src/silentMessages.js): "@silent" up front, or the
+    // composer's toggle. No sound, pop-up or push for anyone.
+    const _silentPick = takeSilent(content, data.silent);
+    content = _silentPick.content;
+    const silent = _silentPick.silent ? 1 : 0;
     const _maxCharsRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
     const _maxChars = parseInt(_maxCharsRow?.value) || 2000;
     // Nothing could be this long; the exact check waits for the channel.
@@ -1422,8 +1435,8 @@ module.exports = function register(socket, ctx) {
         const finalContent = slashResult.content;
 
         const result = db.prepare(
-          'INSERT INTO messages (channel_id, user_id, content, reply_to, break_chain, destruct_at) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(channel.id, socket.user.id, finalContent, null, breakChain, destructAt);
+          'INSERT INTO messages (channel_id, user_id, content, reply_to, break_chain, destruct_at, silent) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(channel.id, socket.user.id, finalContent, null, breakChain, destructAt, silent);
         if (destructAt) selfDestruct.schedule(destructAt);
 
         const message = {
@@ -1443,13 +1456,14 @@ module.exports = function register(socket, ctx) {
           edited_at: null,
           thread: null,
           break_chain: breakChain || undefined,
-          destruct_at: destructAt || undefined
+          destruct_at: destructAt || undefined,
+          silent: silent ? true : undefined
         };
         if (slashResult.tts) message.tts = true;
 
         io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
         sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName,
-          destructAt ? '🔥 Sent a self-destructing message' : slashResult.content);
+          destructAt ? '🔥 Sent a self-destructing message' : slashResult.content, { silent: !!silent });
         fireWebhookCallbacks(channel.id, code, message);
 
         try {
@@ -1557,8 +1571,8 @@ module.exports = function register(socket, ctx) {
 
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw, e2e_files, destruct_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw, e2eFiles, destructAt);
+        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw, e2e_files, destruct_at, silent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw, e2eFiles, destructAt, silent);
       if (destructAt) selfDestruct.schedule(destructAt);
 
       // Attachment tags (#tagging): the composer sends `attachmentTags` alongside
@@ -1581,6 +1595,7 @@ module.exports = function register(socket, ctx) {
             canCreate,
             maxTags,
             maxLen,
+            access: tagAccessIn(channel.id),
           });
         } catch (e) {
           console.warn('send-message attachment tagging failed:', e.message);
@@ -1597,6 +1612,7 @@ module.exports = function register(socket, ctx) {
             canCreate,
             maxTags,
             maxLen,
+            access: tagAccessIn(channel.id),
           }) || [];
         } catch (e) {
           // Tags are best-effort and never sink the message, but the tags the
@@ -1633,6 +1649,7 @@ module.exports = function register(socket, ctx) {
         break_chain: breakChain || undefined,
         ferry_target: ferryLabel || undefined,
         attachmentTags: appliedTags.length ? appliedTags : undefined,
+        silent: silent ? true : undefined,
       };
       // Sent as an official message (src/messageHighlights.js), when allowed.
       // The message is stored by now, so a failure here only drops the mark.
@@ -1672,7 +1689,7 @@ module.exports = function register(socket, ctx) {
         : destructAt ? '🔥 Sent a self-destructing message' : finalContent;
       const pushDisplayName = personaUsername || socket.user.displayName;
       sendPushNotifications(channel.id, code, channel.name, socket.user.id, pushDisplayName, pushContent,
-        { replyToUserId: message.replyContext?.user_id, pingText: finalContent });
+        { replyToUserId: message.replyContext?.user_id, pingText: finalContent, silent: !!silent });
       fireWebhookCallbacks(channel.id, code, message);
 
       // Deliberately after the broadcast: the Haven message is already sent and
@@ -1748,6 +1765,7 @@ module.exports = function register(socket, ctx) {
         maxTags,
         maxLen,
         relPath,
+        access: tagAccessIn(channel.id),
       });
       io.to(`channel:${channel.code}`).emit('message-tags-updated', {
         channelCode: channel.code,
@@ -1809,6 +1827,7 @@ module.exports = function register(socket, ctx) {
     );
     const results = [];
     const { maxTags, maxLen } = effectiveLimits(db);
+    const access = tagAccessIn(channel.id);
     try {
       if (items) {
         const msgs = new Map();
@@ -1817,7 +1836,7 @@ module.exports = function register(socket, ctx) {
           const msg = msgs.get(it.messageId);
           if (!msg || msg.channel_id !== channel.id) continue;
           if (!extractUploadPaths(msg.content).includes(it.url)) continue;
-          const args = { messageId: msg.id, content: msg.content, userId: socket.user.id, canCreate: true, maxTags, maxLen };
+          const args = { messageId: msg.id, content: msg.content, userId: socket.user.id, canCreate: true, maxTags, maxLen, access };
           if (mode === 'replace') setMessageTags(db, { ...args, tagNames: data.tags, relPath: it.url });
           else applyTagsToFiles(db, { ...args, perFile: [{ url: it.url, tags: data.tags }] });
           results.push({ messageId: msg.id, url: it.url, tags: fileTags(db, msg.id, it.url) });
@@ -1834,7 +1853,7 @@ module.exports = function register(socket, ctx) {
         const msg = db.prepare('SELECT id, content, channel_id FROM messages WHERE id = ?').get(id);
         if (!msg || msg.channel_id !== channel.id) continue;
         if (!extractUploadPath(msg.content)) continue;
-        const args = { messageId: msg.id, content: msg.content, tagNames: data.tags, userId: socket.user.id, canCreate: true, maxTags, maxLen };
+        const args = { messageId: msg.id, content: msg.content, tagNames: data.tags, userId: socket.user.id, canCreate: true, maxTags, maxLen, access };
         if (mode === 'replace') setMessageTags(db, args);
         else applyTagsToMessage(db, args);
         // Read the full current set (append's return is only the new names).
@@ -2021,18 +2040,21 @@ module.exports = function register(socket, ctx) {
           if (!chNow || chNow.text_enabled === 0) continue;
           if (!author.is_admin && chNow.read_only === 1 && !userHasPermission(author.id, 'read_only_override', chNow.id)) continue;
           if (!author.is_admin && !ctx.roleGateAllows(author.id, chNow)) continue;
-          const sendContent = pingSafe(row.content, author.id, chNow.id);
-          const result = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(row.channel_id, row.user_id, sendContent);
+          // A scheduled "@silent" message goes out silent too.
+          const sched = takeSilent(row.content);
+          const sendContent = pingSafe(sched.content, author.id, chNow.id);
+          const result = db.prepare('INSERT INTO messages (channel_id, user_id, content, silent) VALUES (?, ?, ?, ?)').run(row.channel_id, row.user_id, sendContent, sched.silent ? 1 : 0);
           const message = {
             id: result.lastInsertRowid, content: sendContent, created_at: new Date().toISOString(),
             username: author.display_name || author.username, user_id: author.id,
             avatar: author.avatar || null, avatar_shape: author.avatar_shape || 'circle',
             border: author.border || null, borderTransform: parseBorderTransform(author.border_transform),
             animateProfile: author.animate_profile || 'trigger',
-            reply_to: null, replyContext: null, reactions: [], edited_at: null, thread: null
+            reply_to: null, replyContext: null, reactions: [], edited_at: null, thread: null,
+            silent: sched.silent ? true : undefined
           };
           io.to(`channel:${row.code}`).emit('new-message', { channelCode: row.code, message });
-          sendPushNotifications(row.channel_id, row.code, row.channel_name, author.id, message.username, sendContent);
+          sendPushNotifications(row.channel_id, row.code, row.channel_name, author.id, message.username, sendContent, { silent: sched.silent });
           fireWebhookCallbacks(row.channel_id, row.code, message);
           for (const [, s] of io.sockets.sockets) {
             if (s.user && s.user.id === author.id) s.emit('scheduled-message-sent', { id: row.id, channelCode: row.code, channelName: row.channel_name });
@@ -3037,7 +3059,7 @@ module.exports = function register(socket, ctx) {
     }
 
     const messages = db.prepare(`
-      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
+      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.silent,
              COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
       FROM messages m LEFT JOIN users u ON m.user_id = u.id
       WHERE m.thread_id = ?
@@ -3089,6 +3111,7 @@ module.exports = function register(socket, ctx) {
 
     const enriched = messages.map(m => {
       const obj = { ...m };
+      if (m.silent) obj.silent = true; else delete obj.silent;
       const atags = threadTagMap.get(m.id);
       if (atags && atags.length) obj.attachmentTags = atags;
       // Border fit travels with the message (like avatar) so it renders even when
@@ -3142,6 +3165,9 @@ module.exports = function register(socket, ctx) {
     const parentId = isInt(data.parentId) ? data.parentId : null;
     let content = typeof data.content === 'string' ? data.content.trim() : '';
     if (!parentId || !content) return;
+    // A silent reply makes no sound for anyone (src/silentMessages.js).
+    const tSilent = takeSilent(content, data.silent);
+    content = tSilent.content.trim();
 
     if (floodCheck('message')) return;
 
@@ -3228,8 +3254,8 @@ module.exports = function register(socket, ctx) {
 
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to) VALUES (?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, safeContent, parentId, replyTo);
+        'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to, silent) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, safeContent, parentId, replyTo, tSilent.silent ? 1 : 0);
       // Your own reply is not news to you (#5641).
       db.prepare(`
         INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id) VALUES (?, ?, ?)
@@ -3251,7 +3277,8 @@ module.exports = function register(socket, ctx) {
         replyContext: null,
         reactions: [],
         edited_at: null,
-        thread_id: parentId
+        thread_id: parentId,
+        silent: tSilent.silent ? true : undefined
       };
 
       if (replyTo) {

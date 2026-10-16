@@ -344,7 +344,8 @@
       "embed_medium": "Medium",
       "embed_small": "Small",
       "embed_size_hint": "Embed size (use Settings ▸ Link Previews to turn off)",
-      "collapse": "Collapse"
+      "collapse": "Collapse",
+      "silent_hint": "Sent silently: nobody got a sound, pop-up or push for it"
     },
     "input_bar": {
       "emoji_btn": "Emoji",
@@ -362,7 +363,9 @@
       "highlight_btn_armed": "Official message is on for the next message",
       "highlight_btn_mode_on": "Official mode is on: this message goes out as your role. Click to send just this one plain",
       "highlight_btn_mode_skip": "Official mode is on, but this message goes out plain. Click to post it as your role",
-      "self_destruct_btn_armed": "Self-destruct is on: your next message deletes itself"
+      "self_destruct_btn_armed": "Self-destruct is on: your next message deletes itself",
+      "silent_btn": "Silent message: send without a sound, pop-up or push for anyone (or start it with @silent)",
+      "silent_btn_armed": "Silent is on: your next message notifies nobody"
     },
     "profile": {
       "login_username": "Your login username",
@@ -2652,7 +2655,7 @@
       "max_tag_len": "Max Tag Length (characters)",
       "max_tag_len_hint": "Maximum characters in an upload tag name (1 to 50, default 20).",
       "tags_title": "Tags",
-      "tags_hint": "Manage the upload-tag vocabulary. Renaming or deleting a tag applies to every attachment that uses it and cannot be undone.",
+      "tags_hint": "Manage the upload-tag vocabulary. Renaming or deleting a tag applies to every attachment that uses it and cannot be undone. A tag can be limited to a role: only members with that role are offered it and can put it on their uploads, while everyone still sees it on pictures that already have it.",
       "tags_add_placeholder": "New tag name",
       "tags_add_btn": "Add tag",
       "tags_loading": "Loading…",
@@ -2673,6 +2676,12 @@
       "tags_delete_title": "Delete this tag?",
       "tags_delete_body": "Deleting \"{{name}}\" removes it from every attachment that uses it ({{n}}). This is destructive and cannot be undone.",
       "tags_delete_confirm": "Delete",
+      "tags_role_label": "Who can use \"{{name}}\"",
+      "tags_role_anyone": "Anyone",
+      "tags_role_only": "Only {{role}}",
+      "tags_role_missing": "Only a deleted role (admins only)",
+      "tags_role_set": "Only {{role}} can use \"{{name}}\" now",
+      "tags_role_cleared": "Anyone can use \"{{name}}\" now",
       "max_sound_hint": "Max soundboard upload size (256-10240 KB, default 1024 / 1 MB)",
       "max_avatar_hint": "Largest profile picture, border or persona picture someone can upload (1 to 10 MB, default 2). Animated GIFs are often over 2 MB, but every picture is loaded next to every message its owner sends, so keep this as low as you can.",
       "max_emoji_hint": "Max custom emoji upload size (64-1024 KB, default 256)",

@@ -150,6 +150,7 @@ const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = req
 const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
 const { initFcm, setFcmAdminEnabled } = require('./src/fcm');
 const threadNotify = require('./src/threadNotify');
+const { takeSilent } = require('./src/silentMessages');
 
 const app = express();
 const BOT_AUDIO_DIR = path.join(UPLOADS_DIR, 'bot-audio');
@@ -1879,7 +1880,10 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     return res.status(404).json({ error: 'Webhook not found or inactive' });
   }
 
-  const content = typeof req.body.content === 'string' ? sanitizeText(req.body.content.trim()) : '';
+  // A bot can post silently too: "silent": true, or "@silent" up front.
+  const silentPick = takeSilent(typeof req.body.content === 'string' ? req.body.content.trim() : '', req.body.silent);
+  const silent = silentPick.silent;
+  const content = sanitizeText(silentPick.content.trim());
   if (!content || content.length > 4000) {
     return res.status(400).json({ error: 'Content required (max 4000 chars)' });
   }
@@ -1970,6 +1974,7 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     ephemeral,
     recipient_id: recipientId,
     thread_id: threadId,
+    silent: silent || undefined,
   };
 
   if (ephemeral) {
@@ -1991,8 +1996,8 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
 
   // Insert non-ephemeral messages into the DB/history.
   const result = db.prepare(
-    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id, webhook_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)'
-  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId, webhook.id);
+    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id, webhook_id, silent) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)'
+  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId, webhook.id, silent ? 1 : 0);
   message.id = result.lastInsertRowid;
 
   // Broadcast to all clients in this channel

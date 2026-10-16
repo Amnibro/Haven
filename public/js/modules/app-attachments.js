@@ -217,7 +217,7 @@ _renderTagBar() {
     const now = Date.now();
     if (this.socket && now - (this._uploadTagsProbedAt || 0) > 15000) {
       this._uploadTagsProbedAt = now;
-      this.socket.emit('search-upload-tags', { query: '' }, (res) => {
+      this.socket.emit('search-upload-tags', { query: '', code: this.currentChannel }, (res) => {
         if (!res || res.error || !(res.tags || []).length) return;
         this._uploadTagsExist = true;
         this._renderTagBar();
@@ -336,7 +336,7 @@ _tagPopupSearch(query) {
   const input = document.getElementById('tag-popup-input');
   if (!input || !this.socket) return;
   const q = query;
-  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+  this.socket.emit('search-upload-tags', { query: q, code: this.currentChannel }, (res) => {
     if (input.value !== q) return;                 // user moved on
     if (res && res.error === 'rate_limited') return;
     this._renderTagPopupList(q, (res && res.tags) || []);
@@ -484,7 +484,7 @@ _applyFrequentTag(name) {
   if (!this._activeAttachment || !this.socket) return;
   const norm = this._normalizeTag(name);
   if (!norm) { this._removeFrequentTag(name); this._renderFrequentTags(); return; }
-  this.socket.emit('search-upload-tags', { query: norm.name }, (res) => {
+  this.socket.emit('search-upload-tags', { query: norm.name, code: this.currentChannel }, (res) => {
     const exists = ((res && res.tags) || []).some(tg => String(tg.name).toLocaleLowerCase() === norm.norm);
     if (!exists) {
       this._showToast(t('tags.deleted_removed', { name: norm.name }), 'error');

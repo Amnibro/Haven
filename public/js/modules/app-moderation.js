@@ -484,6 +484,10 @@ _ensureAdminTagsBound() {
     else if (e.target.closest('.tag-admin-save')) this._adminTagSaveRename(row);
     else if (e.target.closest('.tag-admin-cancel')) this._renderAdminTagList(this._adminTags || []);
   });
+  // Who can use a tag (#5751): everyone, or the holders of one role.
+  list?.addEventListener('change', (e) => {
+    if (e.target.classList?.contains('tag-admin-role')) this._adminTagSetRole(e.target);
+  });
   list?.addEventListener('keydown', (e) => {
     if (!e.target.classList?.contains('tag-admin-edit-input')) return;
     if (e.key === 'Enter') { e.preventDefault(); this._adminTagSaveRename(e.target.closest('.tag-admin-row')); }
@@ -502,6 +506,7 @@ _loadAdminTags() {
       return;
     }
     this._adminTags = res.tags || [];
+    this._adminTagRoles = res.roles || [];
     this._renderAdminTagList(this._adminTags);
   });
 },
@@ -518,11 +523,44 @@ _renderAdminTagList(tags) {
     <div class="tag-admin-row" data-tag-id="${tg.id}">
       <span class="tag-admin-name">${esc(tg.name)}</span>
       <span class="tag-admin-uses">${t('settings.admin.tags_uses', { n: tg.uses || 0 })}</span>
+      ${this._adminTagRoleSelect(tg)}
       <span class="tag-admin-row-actions">
         <button class="btn-sm tag-admin-rename">${t('settings.admin.tags_rename_btn')}</button>
         <button class="btn-sm btn-danger-fill tag-admin-delete">${t('settings.admin.tags_delete_btn')}</button>
       </span>
     </div>`).join('');
+},
+
+// The "who can use it" picker on a tag's row: everyone, or one role. A role
+// that has since been deleted still shows, so the admin can see why nobody
+// but admins can use the tag (the server keeps it limited, #5751).
+_adminTagRoleSelect(tg) {
+  const esc = (s) => this._escapeHtml(s);
+  const roles = this._adminTagRoles || [];
+  const current = tg.roleId == null ? '' : String(tg.roleId);
+  const missing = current && !roles.some(r => String(r.id) === current)
+    ? `<option value="${esc(current)}" selected>${esc(t('settings.admin.tags_role_missing'))}</option>` : '';
+  const options = roles.map(r => `<option value="${r.id}"${String(r.id) === current ? ' selected' : ''}>${esc(t('settings.admin.tags_role_only', { role: r.name }))}</option>`).join('');
+  const label = esc(t('settings.admin.tags_role_label', { name: tg.name }));
+  return `<select class="tag-admin-role settings-select" title="${label}" aria-label="${label}">
+      <option value=""${current ? '' : ' selected'}>${esc(t('settings.admin.tags_role_anyone'))}</option>${missing}${options}
+    </select>`;
+},
+
+_adminTagSetRole(select) {
+  const row = select.closest('.tag-admin-row');
+  const tagId = parseInt(row?.dataset.tagId, 10);
+  if (!Number.isInteger(tagId)) return;
+  const roleId = select.value ? parseInt(select.value, 10) : null;
+  this.socket.emit('admin-set-tag-role', { tagId, roleId }, (res) => {
+    if (res && res.ok) {
+      const role = (this._adminTagRoles || []).find(r => r.id === roleId);
+      this._showToast?.(role ? t('settings.admin.tags_role_set', { name: res.tag.name, role: role.name }) : t('settings.admin.tags_role_cleared', { name: res.tag.name }), 'success');
+    } else {
+      this._showToast?.(t('settings.admin.tags_error'), 'error');
+    }
+    this._loadAdminTags();
+  });
 },
 
 _adminTagAdd() {

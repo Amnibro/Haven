@@ -695,7 +695,7 @@ _msgTagEditorSearch(query) {
   const input = document.getElementById('mte-input');
   if (!input || !this.socket || !this._msgTagEditor) return;
   const q = query;
-  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+  this.socket.emit('search-upload-tags', { query: q, code: this.currentChannel }, (res) => {
     if (!this._msgTagEditor || input.value !== q) return;
     if (res && res.error === 'rate_limited') return;
     this._msgTagEditorRenderList(q, (res && res.tags) || []);

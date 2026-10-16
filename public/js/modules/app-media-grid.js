@@ -209,7 +209,7 @@ _mediaGroupTakesText(content, payload) {
 // cleared by the DM check (`partner`); otherwise a DM that cannot be
 // encrypted asks first, and backing out keeps the queue. `textSent` says the
 // text went on its own, carrying the reply.
-async _flushComposerMedia({ payload, combine = false, partner = null, textSent = false, replyTo = null, prefix = '', ferryDiscordUserId = null, destructAt = null }) {
+async _flushComposerMedia({ payload, combine = false, partner = null, textSent = false, replyTo = null, prefix = '', ferryDiscordUserId = null, destructAt = null, silent = false }) {
   const { content: text, code, ...base } = payload;
   let to = partner;
   if (!combine) {
@@ -222,7 +222,7 @@ async _flushComposerMedia({ payload, combine = false, partner = null, textSent =
   this._fileQueue = [];
   this._renderImageQueue?.();
   await this._sendMediaGroups({
-    code, files, partner: to, prefix, ferryDiscordUserId, destructAt,
+    code, files, partner: to, prefix, ferryDiscordUserId, destructAt, silent,
     text: combine ? text : '',
     base: combine ? base : { replyTo: textSent ? null : replyTo },
     bundled: !combine && textSent,
@@ -234,8 +234,9 @@ async _flushComposerMedia({ payload, combine = false, partner = null, textSent =
 // follow as media sent with it. `prefix` (a persona or Discord target) goes
 // in front of a message that has no text of its own. In a thread the
 // messages are thread replies instead. The × on the progress bar stops the
-// batch: what is already uploaded still goes, with the text.
-async _sendMediaGroups({ code, files, text = '', base = {}, partner = null, prefix = '', bundled = false, ferryDiscordUserId = null, destructAt = null, thread = null }) {
+// batch: what is already uploaded still goes, with the text. `silent` keeps
+// every message of the batch silent (app-silent.js).
+async _sendMediaGroups({ code, files, text = '', base = {}, partner = null, prefix = '', bundled = false, ferryDiscordUserId = null, destructAt = null, thread = null, silent = false }) {
   const ordered = this._mediaGroupOrder(files);
   if (!ordered.length && !text) return;
   const ch = code ? this.channels?.find(c => c.code === code) : null;
@@ -261,7 +262,8 @@ async _sendMediaGroups({ code, files, text = '', base = {}, partner = null, pref
     if (prefix && !ownText) body = prefix + body;
     if (thread) {
       const replyTo = first ? thread.replyTo : null;
-      this.socket.emit('send-thread-message', replyTo ? { parentId: thread.parentId, content: body, replyTo } : { parentId: thread.parentId, content: body }, (resp) => {
+      const reply = { parentId: thread.parentId, content: body, ...(replyTo ? { replyTo } : {}), ...(silent ? { silent: true } : {}) };
+      this.socket.emit('send-thread-message', reply, (resp) => {
         if (resp && resp.error) this._showToast(resp.error, 'error');
       });
     } else {
@@ -274,6 +276,7 @@ async _sendMediaGroups({ code, files, text = '', base = {}, partner = null, pref
         ...(ferryDiscordUserId ? { ferryDiscordUserId } : {}),
         ...this._destructField(destructAt),
         ...(mediaTags.length ? { mediaTags } : {}),
+        ...(silent ? { silent: true } : {}),
       };
       if (partner) {
         try {

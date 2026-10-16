@@ -678,7 +678,7 @@ _mediaTagFilterSearch(query) {
   const input = document.getElementById('mtf-input');
   if (!input || !this.socket) return;
   const q = query;
-  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+  this.socket.emit('search-upload-tags', { query: q, code: this.currentChannel }, (res) => {
     if (input.value !== q) return;
     if (res && res.error === 'rate_limited') return;
     this._mediaTagFilterRenderList((res && res.tags) || []);
@@ -821,7 +821,7 @@ _mediaTagManageSearch(query) {
   const input = document.getElementById('mtm-input');
   if (!input || !this.socket || !this._mediaTagManage) return;
   const q = query;
-  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+  this.socket.emit('search-upload-tags', { query: q, code: this.currentChannel }, (res) => {
     if (!this._mediaTagManage || input.value !== q) return;
     if (res && res.error === 'rate_limited') return;
     this._mediaTagManageRenderList(q, (res && res.tags) || []);

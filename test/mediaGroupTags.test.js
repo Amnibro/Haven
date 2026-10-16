@@ -12,7 +12,7 @@ const tags = require('../src/uploadTags');
 function freshDb() {
   const db = new Database(':memory:');
   db.exec(`
-    CREATE TABLE upload_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_norm TEXT NOT NULL UNIQUE, created_by INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+    CREATE TABLE upload_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_norm TEXT NOT NULL UNIQUE, created_by INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, role_id INTEGER DEFAULT NULL);
     CREATE TABLE attachment_tags (message_id INTEGER NOT NULL, rel_path TEXT NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (message_id, rel_path, tag_id));
   `);
   return db;

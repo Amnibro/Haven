@@ -852,6 +852,9 @@ video:-webkit-full-screen {
 .tag-admin-uses { font-size: 0.72rem; color: var(--text-muted); }
 .tag-admin-row-actions { margin-left: auto; display: flex; gap: 0.375rem; flex-shrink: 0; }
 .tag-admin-edit-input { flex: 1; min-width: 0; }
+/* Who can use a tag (#5751); the row wraps on a narrow screen. */
+.tag-admin-row { flex-wrap: wrap; }
+.tag-admin-role { max-width: 12rem; min-width: 0; font-size: 0.75rem; padding: 0.125rem 0.25rem; }
 
 .whitelist-list {
   max-height: 12.5rem;

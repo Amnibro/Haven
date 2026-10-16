@@ -1479,7 +1479,10 @@ function setupSocketHandlers(io, db, opts = {}) {
   // pushOpts.replyToUserId: the author of the message this one replies to.
   // pushOpts.pingText: the real text to look for pings in, when the push
   // shows a stand-in (a burn or self-destructing message).
+  // pushOpts.silent: a silent message (src/silentMessages.js) pushes nobody,
+  // DMs and mentions included, on web push and FCM alike.
   function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent, pushOpts = {}) {
+    if (pushOpts && pushOpts.silent) return;
     try {
       const activeUserIds = new Set();
       for (const [, s] of io.sockets.sockets) {

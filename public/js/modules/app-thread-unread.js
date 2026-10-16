@@ -61,7 +61,8 @@ _onThreadReply(data) {
   const isReplyToMe = !!(msg.replyContext && msg.replyContext.user_id === this.user.id);
   const followed = Array.isArray(data.followerIds) && data.followerIds.includes(this.user.id);
   const open = this._threadIsOpen(parentId);
-  const quiet = !!this._notifyBlockedByMutes?.({ senderId: msg.user_id, isDm: false, isMention });
+  // A silent reply (app-silent.js) still marks the thread, but makes no sound.
+  const quiet = !!msg.silent || !!this._notifyBlockedByMutes?.({ senderId: msg.user_id, isDm: false, isMention });
   const sound = this._threadReplySound({ channelMuted, quiet, isMention, isReplyToMe, followed, open });
 
   // The bell in the header and the sidebar, unless the thread is on screen.

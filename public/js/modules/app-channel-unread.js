@@ -569,6 +569,8 @@ _resyncDesktopBadgeOnFocus() {
  *          to avoid duplicate notifications (server-side push handles the rest).
  */
 _fireNativeNotification(message, channelCode, opts) {
+  // A silent message (app-silent.js) pops up nowhere.
+  if (message && message.silent) return;
   // Server mute and members muted for you (app-server-mute.js). DMs still
   // come through a muted server, and with "except @mentions" so do those.
   const _muteCh = this.channels?.find(c => c.code === channelCode);
