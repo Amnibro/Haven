@@ -233,6 +233,9 @@ _handleMusicShared(data) {
   this._musicUrl = data.url;
   this._musicTrackId = data.trackId || null;
   this._musicRequestorId = data.userId || null;
+  this._musicTitle = data.title || '';
+  this._musicRequestorName = data.username || '';
+  this._musicPausedAt = 0;
   this._setMusicActivityHint('');
   this._pendingMusicSyncState = data.syncState || null;
   this._musicSuppressBroadcastUntil = 0;
@@ -365,6 +368,7 @@ _applyMusicControlPermissions() {
     pipStopBtn.disabled = !allowed;
     pipStopBtn.title = allowed ? t('media.music_stop') : restricted;
   }
+  this._syncMusicMediaKeys();
 },
 
 _updateMusicQueueState(payload) {
@@ -381,6 +385,7 @@ _updateMusicQueueState(payload) {
   } else if (nextBtn && queue.length > 0 && !this._musicUrl?.includes('spotify.com')) {
     nextBtn.style.display = '';
   }
+  this._syncMusicMediaKeys();
 },
 
 _syncMusicQueueUi() {
@@ -544,6 +549,7 @@ _setMusicPlayingUi(isPlaying) {
   if (ppBtn && ppBtn.style.display !== 'none') ppBtn.textContent = label;
   const pipPP = document.getElementById('music-pip-pp');
   if (pipPP) pipPP.textContent = label;
+  this._syncMusicMediaKeys();
 },
 
 _getEffectiveMusicSyncState(syncState) {
@@ -978,6 +984,7 @@ _hideMusicPanel() {
   this._pendingMusicSyncState = null;
   this._musicTrackId = null;
   this._musicRequestorId = null;
+  this._syncMusicMediaKeys();
 },
 
 _minimizeMusicPanel() {
