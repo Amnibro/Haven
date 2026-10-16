@@ -38,7 +38,7 @@ import ChannelContextMethods from './modules/app-channel-context.js?v=4.24.9';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.22.24';
 import MessageMethods  from './modules/app-messages.js?v=4.24.11';
-import LinkPreviewMethods from './modules/app-link-previews.js?v=4.23.9';
+import LinkPreviewMethods from './modules/app-link-previews.js?v=4.24.19';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.24.9';
 import UserMethods     from './modules/app-users.js?v=4.24.15';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
@@ -46,7 +46,8 @@ import VoiceMethods    from './modules/app-voice.js?v=4.24.5';
 import PushToMuteMethods from './modules/app-push-to-mute.js?v=4.24.5';
 import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.23.9';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.23.9';
-import MusicMethods from './modules/app-music.js?v=4.23.9';
+import MusicMethods from './modules/app-music.js?v=4.24.19';
+import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.23.9';
 import MessageContentMethods from './modules/app-message-content.js?v=4.24.4';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.23.9';
@@ -566,6 +567,7 @@ Object.assign(HavenApp.prototype,
   ScreenWebcamMethods,
   StreamTileMethods,
   MusicMethods,
+  MusicKeyMethods,
   UtilityMethods,
   MessageContentMethods,
   EmojiPickerMethods,

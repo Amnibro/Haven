@@ -78,6 +78,8 @@ _setupVideos(containerEl) {
       } catch { /* no MediaSession support: the PiP window just has no seek bar */ }
       video.removeEventListener('timeupdate', updatePos);
       video.removeEventListener('playing', updatePos);
+      // Hand the media keys and the system overlay back to Listen Together.
+      this._syncMusicMediaKeys();
     });
   });
 },
