@@ -1085,11 +1085,13 @@ _createMessageEl(msg, prevMsg) {
   const postBlocked = !isDmContext && !!this._channelBlocksPosting?.(this.currentChannel);
   const toolbarActions = [
     ...(reactionsAllowed ? [{ key: 'react', html: `<button data-action="react" title="${t('msg_toolbar.react')}">${iReact}</button>` }] : []),
-    ...(postBlocked ? [] : [{ key: 'reply', html: `<button data-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button>` }, { key: 'quote', html: `<button data-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>` }]),
+    // Always drawn, and hidden while posting is blocked, so they come back
+    // when a channel stops being read-only (_applyReactionLock toggles them).
+    { key: 'reply', html: `<button data-action="reply" title="${t('msg_toolbar.reply')}"${postBlocked ? ' hidden' : ''}>${iReply}</button>` }, { key: 'quote', html: `<button data-action="quote" title="${t('msg_toolbar.quote')}"${postBlocked ? ' hidden' : ''}>${iQuote}</button>` },
     // Threads are not available in DMs - omit the button entirely so there is
     // no entry point. Server-side `send-thread-message` and `get-thread-messages`
     // also reject DM channels as a defence in depth.
-    ...(isDmContext || postBlocked ? [] : [{ key: 'thread', html: `<button data-action="thread" title="${t('msg_toolbar.thread')}">${iThread}</button>` }]),
+    ...(isDmContext ? [] : [{ key: 'thread', html: `<button data-action="thread" title="${t('msg_toolbar.thread')}"${postBlocked ? ' hidden' : ''}>${iThread}</button>` }]),
     // Message links contain the DM channel code - never expose them in DM context.
     ...(canShareLink ? [{ key: 'copy-link', html: `<button data-action="copy-link" title="${t('msg_toolbar.copy_link')}">${iLink}</button>` }] : [])
   ];

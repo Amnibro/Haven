@@ -1053,6 +1053,7 @@ html.reduce-motion .forum-unread-dot { animation: none; }
 .thread-locked #thread-image-queue-bar,
 .thread-locked [data-thread-action="reply"],
 .thread-locked [data-thread-action="quote"] { display: none !important; }
+.msg-toolbar button[hidden] { display: none !important; }
 /* Comments on pictures only (#5765): no general Comments section, and no
    reply box until a picture's comments are open (the author keeps theirs). */
 .thread-blog-pics-only #blog-comments-head,

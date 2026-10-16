@@ -62,10 +62,13 @@ test('a blocked thread send stops before reaching the server', () => {
   assert.equal(emitted, 0);
   assert.deepEqual(toasts, [['thread_runtime.read_only_no_replies', 'error']]);
 });
-test('the message toolbar and context menu leave out reply, quote and thread when posting is blocked', () => {
+test('the message toolbar hides reply, quote and thread while posting is blocked, and the context menu leaves them out', () => {
+  // Drawn hidden rather than left out, so they come back when the channel
+  // stops being read-only.
   const toolbar = read('public/js/modules/app-messages.js');
-  assert.match(toolbar, /\.\.\.\(postBlocked \? \[\] : \[\{ key: 'reply'/);
-  assert.match(toolbar, /\.\.\.\(isDmContext \|\| postBlocked \? \[\] : \[\{ key: 'thread'/);
+  assert.match(toolbar, /data-action="reply" title="\$\{t\('msg_toolbar\.reply'\)\}"\$\{postBlocked \? ' hidden' : ''\}/);
+  assert.match(toolbar, /data-action="quote" title="\$\{t\('msg_toolbar\.quote'\)\}"\$\{postBlocked \? ' hidden' : ''\}/);
+  assert.match(toolbar, /data-action="thread" title="\$\{t\('msg_toolbar\.thread'\)\}"\$\{postBlocked \? ' hidden' : ''\}/);
   const menu = read('public/js/modules/app-message-tools.js');
   assert.match(menu, /if \(!postBlocked\) items\.push\(`<button class="channel-ctx-item" data-action="reply">/);
   assert.match(menu, /if \(!isDm && !postBlocked\) items\.push\(`<button class="channel-ctx-item" data-action="thread">/);
