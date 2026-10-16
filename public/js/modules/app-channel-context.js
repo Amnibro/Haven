@@ -313,9 +313,15 @@ _channelAllowsReactions(code) {
   if (!ch) return true;
   return ch.reactions_enabled !== 0;
 },
+_channelBlocksPosting(code) {
+  const ch = (this.channels || []).find(c => c.code === (code || this.currentChannel));
+  return !!(ch && ch.read_only === 1 && !ch.is_dm && !this.user?.isAdmin && !ch.canOverrideReadOnly);
+},
 
 _applyReactionLock() {
   const allowed = this._channelAllowsReactions(this.currentChannel);
+  const postBlocked = this._channelBlocksPosting(this.currentChannel);
+  document.querySelectorAll('#messages :is([data-action="reply"], [data-action="quote"], [data-action="thread"])').forEach(el => { el.hidden = postBlocked; });
   const lockRoots = [
     document.getElementById('messages'),
     document.getElementById('thread-messages')

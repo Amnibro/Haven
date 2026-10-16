@@ -2590,7 +2590,7 @@
       "max_upload_hint": "用户可上传的最大文件大小（MB，默认 25）。无硬性上限：受可用磁盘空间限制。",
       "max_attachments_hint": "某人可通过拖放、粘贴或选择在一条消息上排队的文件数（1 到 50，默认 10）。每个文件仍须符合上方大小限制。",
       "max_tags_per_attachment": "每个附件最大标签数",
-      "max_tags_per_attachment_hint": "用户可在一个附件上添加的上传标签数（1 到 10，默认 3）。",
+      "max_tags_per_attachment_hint": "用户可在一个附件上添加的上传标签数（1 到 20，默认 3）。",
       "max_tag_len": "标签最大长度（字符）",
       "max_tag_len_hint": "上传标签名称的最大字符数（1 到 50，默认 20）。",
       "tags_title": "标签",

@@ -143,6 +143,9 @@ _leaveVoice() {
 },
 
 _toggleMute() {
+  // While push to mute is held the mic stays muted; the toggle only changes
+  // what comes back on release (app-push-to-mute.js).
+  if (this._pushToMuteTakesToggle?.()) return;
   const wasMuted = this.voice.isMuted;
   if (wasMuted && this._mutedByDeafen) {
     // Mute was auto-applied by deafen, so clear both together
@@ -297,12 +300,14 @@ _startVoiceUiReconciler() {
 _syncMuteDeafenButtons() {
   const isMuted = this.voice.isMuted;
   const isDeafened = this.voice.isDeafened;
+  const ptmHeld = !!this._pushToMuteHeld?.();
   ['voice-mute-btn', 'voice-mute-btn-header'].forEach(id => {
     const btn = document.getElementById(id);
     if (!btn) return;
     btn.textContent = '🎙️';
-    btn.title = t(isMuted ? 'voice.unmute' : 'voice.mute');
+    btn.title = ptmHeld ? t('voice.push_to_mute_held') : t(isMuted ? 'voice.unmute' : 'voice.mute');
     btn.classList.toggle('muted', isMuted);
+    btn.classList.toggle('ptm-held', ptmHeld);
   });
   ['voice-deafen-btn', 'voice-deafen-btn-header'].forEach(id => {
     const btn = document.getElementById(id);
@@ -449,7 +454,8 @@ _updateVoiceBar() {
   if (!bar) return;
   if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
     const badges = [];
-    if (this.voice.isMuted) badges.push(`<span class="voice-bar-badge">${t('voice.status_muted')}</span>`);
+    if (this._pushToMuteHeld?.()) badges.push(`<span class="voice-bar-badge voice-bar-badge-ptm">${t('voice.status_push_to_mute')}</span>`);
+    else if (this.voice.isMuted) badges.push(`<span class="voice-bar-badge">${t('voice.status_muted')}</span>`);
     if (this.voice.isDeafened) badges.push(`<span class="voice-bar-badge">${t('voice.status_deafened')}</span>`);
     const channelName = this._getVoiceChannelLabel();
     bar.innerHTML = `

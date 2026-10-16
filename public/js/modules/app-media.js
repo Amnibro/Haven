@@ -197,6 +197,8 @@ _lightboxShow(imgEl, fallbackSrc = '') {
   if (!lbImg) return;
   const seq = (this._lightboxSeq = (this._lightboxSeq || 0) + 1);
   this._imageZoomReset?.();
+  // A picture of a blog post shows its likes and dislikes (#5784).
+  this._forumPieceVotesLightbox?.(imgEl);
   if (this._lightboxBlobUrl) {
     try { URL.revokeObjectURL(this._lightboxBlobUrl); } catch { /* already gone */ }
     this._lightboxBlobUrl = null;
@@ -262,6 +264,7 @@ _closeLightbox() {
   }
   this._lightboxIndex = -1;
   this._imageZoomReset?.();
+  this._forumPieceVotesLightbox?.(null);
   this._hideImageContextMenu();
 },
 

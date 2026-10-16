@@ -917,6 +917,9 @@ _appendMessage(message, forceScroll = false) {
   }
 
   const forumFeed = this._isForumFeed();
+  // A feed showing its newest message follows the new one, even when no
+  // scroll event coupled it (a jump to a message already on screen).
+  if (!forceScroll && !this._coupledToBottom && this._feedAtEnd?.()) this._coupledToBottom = true;
   const wasAtBottom = forceScroll || this._coupledToBottom;
   const nearTop = container.scrollTop < 40;
   const msgEl = this._createMessageEl(message, forumFeed ? null : prevMsg);
@@ -1079,14 +1082,14 @@ _createMessageEl(msg, prevMsg) {
   const canShareLink = !isDmContext && this._canShareChannelLink?.(this.currentChannel);
 
   const reactionsAllowed = isDmContext || this._channelAllowsReactions?.(this.currentChannel) !== false;
+  const postBlocked = !isDmContext && !!this._channelBlocksPosting?.(this.currentChannel);
   const toolbarActions = [
     ...(reactionsAllowed ? [{ key: 'react', html: `<button data-action="react" title="${t('msg_toolbar.react')}">${iReact}</button>` }] : []),
-    { key: 'reply', html: `<button data-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button>` },
-    { key: 'quote', html: `<button data-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>` },
+    ...(postBlocked ? [] : [{ key: 'reply', html: `<button data-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button>` }, { key: 'quote', html: `<button data-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>` }]),
     // Threads are not available in DMs - omit the button entirely so there is
     // no entry point. Server-side `send-thread-message` and `get-thread-messages`
     // also reject DM channels as a defence in depth.
-    ...(isDmContext ? [] : [{ key: 'thread', html: `<button data-action="thread" title="${t('msg_toolbar.thread')}">${iThread}</button>` }]),
+    ...(isDmContext || postBlocked ? [] : [{ key: 'thread', html: `<button data-action="thread" title="${t('msg_toolbar.thread')}">${iThread}</button>` }]),
     // Message links contain the DM channel code - never expose them in DM context.
     ...(canShareLink ? [{ key: 'copy-link', html: `<button data-action="copy-link" title="${t('msg_toolbar.copy_link')}">${iLink}</button>` }] : [])
   ];

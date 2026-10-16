@@ -166,7 +166,7 @@ _renderImageQueue() {
 // server enforces in src/uploadTags.js; falls back to the defaults.
 _maxTagsPerAttachment() {
   const n = parseInt(this.serverSettings?.max_tags_per_attachment, 10);
-  return Number.isFinite(n) ? Math.max(1, Math.min(10, n)) : 3;
+  return Number.isFinite(n) ? Math.max(1, Math.min(20, n)) : 3;
 },
 _maxTagLen() {
   const n = parseInt(this.serverSettings?.max_tag_len, 10);
