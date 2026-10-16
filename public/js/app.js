@@ -22,7 +22,7 @@ import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.23.9';
 import MobileMethods from './modules/app-mobile.js?v=4.23.9';
-import MediaMethods    from './modules/app-media.js?v=4.23.12';
+import MediaMethods    from './modules/app-media.js?v=4.24.3';
 import ImageZoomMethods from './modules/app-image-zoom.js?v=4.23.12';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.22.18';
 import AttachmentMethods from './modules/app-attachments.js?v=4.22.14';
@@ -63,9 +63,10 @@ import ModerationMethods from './modules/app-moderation.js?v=4.21.1';
 import PlatformMethods from './modules/app-platform.js?v=4.24.0';
 import SearchMethods   from './modules/app-search.js?v=4.21.0';
 import FerryMethods    from './modules/app-ferry.js?v=4.24.1';
-import ForumMethods    from './modules/app-forum.js?v=4.23.9';
-import ForumBlogMethods from './modules/app-forum-blog.js?v=4.22.14';
-import ForumVoteMethods from './modules/app-forum-votes.js?v=4.19.11';
+import ForumMethods    from './modules/app-forum.js?v=4.24.3';
+import ForumBlogMethods from './modules/app-forum-blog.js?v=4.24.3';
+import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
+import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.17.23';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.22.15';
 import CallMethods from './modules/app-calls.js?v=4.22.24';
@@ -582,6 +583,7 @@ Object.assign(HavenApp.prototype,
   ForumMethods,
   ForumVoteMethods,
   ForumBlogMethods,
+  ForumPictureVoteMethods,
   RoleToolMethods,
   PermMatrixMethods,
   CallMethods,
