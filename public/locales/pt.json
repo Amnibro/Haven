@@ -1827,7 +1827,9 @@
       "binding_hint": "Modificadores isolados (Alt / Ctrl / Shift) e botões extras do mouse (Mouse4 / Mouse5) podem ser vinculados aqui. Alguns atalhos exigem uma versão recente do Haven Desktop para serem registrados no sistema operacional.",
       "ptt_hold": "segurar",
       "ptt_toggle_mode": "alternar",
-      "ptt_mode_title": "Como a tecla de push-to-talk se comporta"
+      "ptt_mode_title": "Como a tecla de push-to-talk se comporta",
+      "ptm": "Segurar para silenciar",
+      "ptm_hint": "Segure para silenciar o microfone. Útil na mesma tecla do push-to-talk de um jogo."
     },
     "desktop_app_section": {
       "title": "Aplicativo para desktop",
