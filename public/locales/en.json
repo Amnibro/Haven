@@ -850,6 +850,7 @@
     "send_self_destruct": "Send Self-Destructing Messages",
     "manage_music_queue": "Manage Music Queue",
     "manage_tags": "Manage Tags",
+    "manage_badges": "Manage Badges",
     "manage_webhooks": "Manage Webhooks",
     "mention_everyone": "Mention @everyone",
     "view_history": "View Message History",

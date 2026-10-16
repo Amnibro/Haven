@@ -19,7 +19,7 @@ export const ALL_PERMS = [
   // see and manage only the links they made.
   'create_channel', 'create_temp_channel', 'invite_users',
   'upload_files', 'use_voice', 'use_tts', 'send_self_destruct', 'manage_webhooks', 'use_ferry', 'mention_everyone', 'view_history',
-  'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'manage_tags', 'promote_user',
+  'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'manage_tags', 'manage_badges', 'promote_user',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log', 'manage_display_names',
   // Post as your role: a coloured mark and badge on the message.
   'highlight_messages'
@@ -64,6 +64,7 @@ export const PERM_LABELS = {
   get manage_soundboard() { return t('permissions.manage_soundboard'); },
   get manage_music_queue() { return t('permissions.manage_music_queue'); },
   get manage_tags() { return t('permissions.manage_tags'); },
+  get manage_badges() { return t('permissions.manage_badges'); },
   get promote_user() { return t('permissions.promote_user'); },
   get manage_roles() { return t('permissions.manage_roles'); },
   get manage_server() { return t('permissions.manage_server'); },
