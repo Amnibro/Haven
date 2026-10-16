@@ -66,6 +66,12 @@ function extractUploadPath(content) {
   return m ? m[0] : null;
 }
 
+// Every /uploads/<file> path a message names, in order, once each. Pictures
+// sent together share one message (#5799), and each keeps its own tags.
+function extractUploadPaths(content) {
+  return [...new Set(String(content || '').match(/\/uploads\/[^\s)|"'<>]+/g) || [])];
+}
+
 // Escape LIKE wildcards so a query of "50%" or "a_b" matches literally.
 function escapeLike(s) {
   return String(s).replace(/[\\%_]/g, ch => '\\' + ch);
@@ -144,19 +150,90 @@ function applyTagsToMessage(db, { messageId, content, tagNames, userId, canCreat
   return applied;
 }
 
+// Tags for each file of a message that carries several (#5799). `perFile` is
+// [{ url, tags }], one entry per file; only files the message itself names are
+// tagged, each up to the per-attachment cap. Returns every applied name once.
+function applyTagsToFiles(db, { messageId, content, perFile, userId, canCreate, maxTags, maxLen }) {
+  const paths = new Set(extractUploadPaths(content));
+  if (!paths.size || !Array.isArray(perFile)) return [];
+  const applied = new Set();
+  const done = new Set();
+  db.transaction(() => {
+    for (const entry of perFile.slice(0, 50)) {
+      const relPath = entry && typeof entry.url === 'string' ? entry.url : '';
+      if (!paths.has(relPath) || done.has(relPath)) continue;
+      done.add(relPath);
+      const picked = pickTags(entry.tags, { maxTags, maxLen });
+      if (!picked.length) continue;
+      for (const name of linkPickedTags(db, { messageId, relPath, picked, userId, canCreate })) applied.add(name);
+    }
+  })();
+  return [...applied];
+}
+
+// The tags on one file of a message, by name.
+function fileTags(db, messageId, relPath) {
+  return db.prepare(
+    `SELECT ut.name FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
+      WHERE at.message_id = ? AND at.rel_path = ? ORDER BY ut.name_norm`
+  ).all(messageId, relPath).map(r => r.name);
+}
+
+// Every tag on a message's files, once each.
+function messageTags(db, messageId) {
+  return [...new Set(db.prepare(
+    `SELECT ut.name FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
+      WHERE at.message_id = ? ORDER BY ut.name_norm`
+  ).all(messageId).map(r => r.name))];
+}
+
 // Replace the full tag set on a message's attachment (retroactive edit). Unlike
 // applyTagsToMessage this is not additive: it clears the message's existing
 // links first, so an empty list removes every tag. Returns the applied names.
-function setMessageTags(db, { messageId, content, tagNames, userId, canCreate, maxTags, maxLen }) {
-  const relPath = extractUploadPath(content);
-  if (!relPath) return [];
-  const picked = pickTags(tagNames, { maxTags, maxLen });
-  let applied = [];
+//
+// A message with several files (#5799) shows one set for all of them, so an
+// edit there is a change to that set: a tag taken off leaves every file, a new
+// one goes on every file (up to each file's cap), and the rest stay on the
+// files that had them. `relPath` names one of the files to replace only its
+// set, as the media gallery does. Returns the message's resulting set, or for
+// one file that file's set.
+function setMessageTags(db, { messageId, content, tagNames, userId, canCreate, maxTags, maxLen, relPath = null }) {
+  const paths = extractUploadPaths(content);
+  if (!paths.length) return [];
+  if (relPath || paths.length === 1) {
+    const target = relPath || paths[0];
+    if (!paths.includes(target)) return [];
+    const picked = pickTags(tagNames, { maxTags, maxLen });
+    let applied = [];
+    db.transaction(() => {
+      if (paths.length === 1) db.prepare('DELETE FROM attachment_tags WHERE message_id = ?').run(messageId);
+      else db.prepare('DELETE FROM attachment_tags WHERE message_id = ? AND rel_path = ?').run(messageId, target);
+      applied = linkPickedTags(db, { messageId, relPath: target, picked, userId, canCreate });
+    })();
+    return applied;
+  }
+  const picked = pickTags(tagNames, { maxTags: maxTags * paths.length, maxLen });
+  const keep = new Set(picked.map(p => p.norm));
   db.transaction(() => {
-    db.prepare('DELETE FROM attachment_tags WHERE message_id = ?').run(messageId);
-    applied = linkPickedTags(db, { messageId, relPath, picked, userId, canCreate });
+    const links = db.prepare(
+      `SELECT at.rel_path, at.tag_id, ut.name_norm FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
+        WHERE at.message_id = ?`
+    ).all(messageId);
+    const drop = db.prepare('DELETE FROM attachment_tags WHERE message_id = ? AND rel_path = ? AND tag_id = ?');
+    const have = new Set();
+    for (const l of links) {
+      if (keep.has(l.name_norm)) have.add(l.name_norm);
+      else drop.run(messageId, l.rel_path, l.tag_id);
+    }
+    const added = picked.filter(p => !have.has(p.norm));
+    if (!added.length) return;
+    const count = db.prepare('SELECT COUNT(*) AS n FROM attachment_tags WHERE message_id = ? AND rel_path = ?');
+    for (const path of paths) {
+      const room = Math.max(0, maxTags - count.get(messageId, path).n);
+      if (room) linkPickedTags(db, { messageId, relPath: path, picked: added.slice(0, room), userId, canCreate });
+    }
   })();
-  return applied;
+  return messageTags(db, messageId);
 }
 
 // ── Admin tag management (Phase 4) ──────────────────────────────────────────
@@ -262,9 +339,13 @@ module.exports = {
   effectiveLimits,
   normalizeTagName,
   extractUploadPath,
+  extractUploadPaths,
   escapeLike,
   searchTags,
   applyTagsToMessage,
+  applyTagsToFiles,
+  fileTags,
+  messageTags,
   setMessageTags,
   listAllTags,
   messageTargetsForTag,

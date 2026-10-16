@@ -237,3 +237,34 @@ test('editing a grouped message keeps the text limit on the typed part only', as
   B.emit('edit-message', { messageId: msg.id, channelCode: code, content: ['z'.repeat(2001), ...pics].join('\n') });
   assert.ok(await err);
 });
+
+test('each picture keeps its own tags, in the message, the gallery and a gallery edit', async () => {
+  const { admin, A, code } = await setup();
+  const pics = await uploads(admin.token, 3);
+  const arrived = next(A, 'new-message', (d) => d.channelCode === code && d.message.content.startsWith('tagged'));
+  A.emit('send-message', {
+    code,
+    content: ['tagged', ...pics].join('\n'),
+    mediaTags: [{ url: pics[0], tags: ['cat'] }, { url: pics[2], tags: ['dog', 'park'] }],
+  });
+  const got = await arrived;
+  assert.deepEqual([...got.message.attachmentTags].sort(), ['cat', 'dog', 'park']);
+  const id = got.message.id;
+  const tagsOf = (url) => readDb(
+    'SELECT ut.name FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id WHERE at.message_id = ? AND at.rel_path = ? ORDER BY ut.name_norm', id, url,
+  ).map((r) => r.name);
+  assert.deepEqual(tagsOf(pics[0]), ['cat']);
+  assert.deepEqual(tagsOf(pics[1]), []);
+  assert.deepEqual(tagsOf(pics[2]), ['dog', 'park']);
+
+  const media = next(A, 'channel-media', (d) => d.channelCode === code);
+  A.emit('get-channel-media', { code });
+  const photos = (await media).photos.filter((p) => p.message_id === id);
+  assert.deepEqual(photos.map((p) => p.url).sort(), [...pics].sort(), 'the gallery lists every picture');
+  assert.deepEqual(photos.find((p) => p.url === pics[2]).tags, ['dog', 'park']);
+
+  const res = await new Promise((r) => A.emit('bulk-tag-messages', { code, mode: 'replace', tags: ['bird'], items: [{ messageId: id, url: pics[1] }] }, r));
+  assert.deepEqual(res.results, [{ messageId: id, url: pics[1], tags: ['bird'] }]);
+  assert.deepEqual(tagsOf(pics[0]), ['cat'], 'the other pictures keep theirs');
+  assert.deepEqual(tagsOf(pics[1]), ['bird']);
+});

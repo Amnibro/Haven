@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
-const { applyTagsToMessage, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, effectiveLimits } = require('../uploadTags');
+const { applyTagsToMessage, applyTagsToFiles, fileTags, messageTags, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, extractUploadPaths, effectiveLimits } = require('../uploadTags');
 const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
@@ -1557,8 +1557,26 @@ module.exports = function register(socket, ctx) {
       // carries. Not on E2E DMs (server never sees their plaintext). Minting a
       // new tag needs manage_tags; applying an existing one is open to uploaders.
       // Tagging is non-critical: a failure here never sinks the message.
+      // Pictures sent together (#5799) send `mediaTags` instead, one entry per
+      // file, so each keeps its own.
       let appliedTags = [];
-      if (!channel.is_dm && Array.isArray(data.attachmentTags) && data.attachmentTags.length) {
+      if (!channel.is_dm && Array.isArray(data.mediaTags) && data.mediaTags.length) {
+        try {
+          const canCreate = socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_tags', null);
+          const { maxTags, maxLen } = effectiveLimits(db);
+          appliedTags = applyTagsToFiles(db, {
+            messageId: result.lastInsertRowid,
+            content: finalContent,
+            perFile: data.mediaTags,
+            userId: socket.user.id,
+            canCreate,
+            maxTags,
+            maxLen,
+          });
+        } catch (e) {
+          console.warn('send-message attachment tagging failed:', e.message);
+        }
+      } else if (!channel.is_dm && Array.isArray(data.attachmentTags) && data.attachmentTags.length) {
         try {
           const canCreate = socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_tags', null);
           const { maxTags, maxLen } = effectiveLimits(db);
@@ -1705,6 +1723,10 @@ module.exports = function register(socket, ctx) {
     const canManage = isAdmin || userHasPermission(socket.user.id, 'manage_tags', channel.id);
     if (!isOwn && !canManage) return socket.emit('error-msg', 'You cannot edit tags on this message');
 
+    // One picture of several sent together (#5799) can be named by `url`.
+    const relPath = typeof data.url === 'string' ? data.url : null;
+    if (relPath && !extractUploadPaths(msg.content).includes(relPath)) return socket.emit('error-msg', 'That message has no attachment to tag');
+
     try {
       const { maxTags, maxLen } = effectiveLimits(db);
       const applied = setMessageTags(db, {
@@ -1715,11 +1737,12 @@ module.exports = function register(socket, ctx) {
         canCreate: canManage,   // creating a new tag always needs manage_tags
         maxTags,
         maxLen,
+        relPath,
       });
       io.to(`channel:${channel.code}`).emit('message-tags-updated', {
         channelCode: channel.code,
         messageId: msg.id,
-        tags: applied,
+        tags: relPath ? messageTags(db, msg.id) : applied,
       });
     } catch (e) {
       console.error('set-message-tags error:', e.message);
@@ -1742,9 +1765,17 @@ module.exports = function register(socket, ctx) {
     const mode = data.mode === 'append' ? 'append' : (data.mode === 'replace' ? 'replace' : null);
     if (!mode) return ack({ error: 'Bad mode' });
     if (!Array.isArray(data.tags)) return ack({ error: 'Bad request' });
-    const messageIds = Array.isArray(data.messageIds)
-      ? Array.from(new Set(data.messageIds.filter(isInt))).slice(0, 500)
-      : [];
+    // The gallery names each file it changes (`items`), so one picture of
+    // several sent together (#5799) keeps its own set. `messageIds` alone
+    // still works, on each message's first file as before.
+    const items = Array.isArray(data.items)
+      ? data.items.filter(it => it && isInt(it.messageId) && typeof it.url === 'string').slice(0, 500)
+      : null;
+    const messageIds = items
+      ? Array.from(new Set(items.map(it => it.messageId)))
+      : Array.isArray(data.messageIds)
+        ? Array.from(new Set(data.messageIds.filter(isInt))).slice(0, 500)
+        : [];
     if (!messageIds.length) return ack({ error: 'No messages selected' });
     if (floodCheck('tagEdit')) return ack({ error: 'Slow down a moment' });
 
@@ -1769,6 +1800,26 @@ module.exports = function register(socket, ctx) {
     const results = [];
     const { maxTags, maxLen } = effectiveLimits(db);
     try {
+      if (items) {
+        const msgs = new Map();
+        for (const it of items) {
+          if (!msgs.has(it.messageId)) msgs.set(it.messageId, db.prepare('SELECT id, content, channel_id FROM messages WHERE id = ?').get(it.messageId) || null);
+          const msg = msgs.get(it.messageId);
+          if (!msg || msg.channel_id !== channel.id) continue;
+          if (!extractUploadPaths(msg.content).includes(it.url)) continue;
+          const args = { messageId: msg.id, content: msg.content, userId: socket.user.id, canCreate: true, maxTags, maxLen };
+          if (mode === 'replace') setMessageTags(db, { ...args, tagNames: data.tags, relPath: it.url });
+          else applyTagsToFiles(db, { ...args, perFile: [{ url: it.url, tags: data.tags }] });
+          results.push({ messageId: msg.id, url: it.url, tags: fileTags(db, msg.id, it.url) });
+        }
+        for (const msg of msgs.values()) {
+          if (!msg || msg.channel_id !== channel.id) continue;
+          io.to(`channel:${channel.code}`).emit('message-tags-updated', {
+            channelCode: channel.code, messageId: msg.id, tags: messageTags(db, msg.id),
+          });
+        }
+        return ack({ ok: true, updated: results.length, results });
+      }
       for (const id of messageIds) {
         const msg = db.prepare('SELECT id, content, channel_id FROM messages WHERE id = ?').get(id);
         if (!msg || msg.channel_id !== channel.id) continue;
