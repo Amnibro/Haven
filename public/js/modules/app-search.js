@@ -536,7 +536,7 @@ _sfpRenderTagList(term) {
   const q = (term || '').trim();
   this._sfpTagTimer = setTimeout(() => {
     if (this._sfpActive !== 'tag') return;   // picker changed while waiting
-    this.socket.emit('search-upload-tags', { query: q }, (res) => {
+    this.socket.emit('search-upload-tags', { query: q, code: this.currentChannel }, (res) => {
       if (this._sfpActive !== 'tag') return;
       if (res && res.error === 'rate_limited') return;
       const tags = (res && res.tags) || [];
