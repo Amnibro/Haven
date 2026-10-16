@@ -877,7 +877,7 @@ async _setupPushNotifications() {
         console.warn('[push] could not ask the server about its certificate:', err.message);
         return null;
       });
-      reason = t(issue === 'missing_chain' || issue === 'untrusted' ? 'context.push_error.ssl_chain' : issue === 'expired' ? 'context.push_error.ssl_expired' : 'context.push_error.ssl_required');
+      reason = t(issue === 'missing_chain' ? 'context.push_error.ssl_chain' : issue === 'untrusted' ? 'context.push_error.ssl_untrusted' : issue === 'expired' ? 'context.push_error.ssl_expired' : 'context.push_error.ssl_required');
     }
     if (isBrave) {
       reason = t('context.push_error.brave_setup');

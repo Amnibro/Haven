@@ -25,6 +25,7 @@ async function pushReason(error, tlsIssue) {
 const sslError = Object.assign(new Error('Failed to register a ServiceWorker: An SSL certificate error occurred when fetching the script.'), { name: 'SecurityError' });
 test('an incomplete certificate chain is named instead of blaming a self-signed certificate', async () => {
   assert.equal((await pushReason(sslError, 'missing_chain')).reason, 'context.push_error.ssl_chain');
+  assert.equal((await pushReason(sslError, 'untrusted')).reason, 'context.push_error.ssl_untrusted');
   assert.equal((await pushReason(sslError, 'expired')).reason, 'context.push_error.ssl_expired');
   assert.equal((await pushReason(sslError, 'self_signed')).reason, 'context.push_error.ssl_required');
   assert.equal((await pushReason(sslError, null)).reason, 'context.push_error.ssl_required');
