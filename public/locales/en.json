@@ -613,6 +613,7 @@
     "camera_error": "Camera unavailable or permission denied",
     "stop_camera": "Stop Camera",
     "sharing_started": "{{who}} started sharing their screen",
+    "sharing_ended": "{{who}} is no longer sharing their screen",
     "status_muted": "Muted",
     "status_push_to_mute": "Muted (push to mute)",
     "push_to_mute_held": "Push to mute is held. Your mic is muted until you let go.",
