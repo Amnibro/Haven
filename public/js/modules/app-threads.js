@@ -251,8 +251,7 @@ _openThread(parentId) {
   const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
   const author = msgEl?.querySelector('.message-author')?.textContent || t('thread_runtime.starter');
   document.getElementById('thread-panel-title').textContent = t('msg_toolbar.thread');
-  const parentPreview = msgEl?.querySelector('.message-content')?.textContent || '';
-  document.getElementById('thread-parent-preview').textContent = parentPreview.length > 120 ? parentPreview.substring(0, 120) + '…' : parentPreview;
+  document.getElementById('thread-parent-preview').textContent = this._threadRootPreview(msgEl?.dataset?.rawContent ?? msgEl?.querySelector('.message-content')?.textContent ?? '');
 
   const avatarImg = msgEl?.querySelector('.message-avatar-img');
   let avatar = null;
@@ -506,6 +505,14 @@ _appendThreadMessage(msg, opts = {}) {
   // view only for a reader who is already there.
   if (opts.live && this._threadAfterLiveReply) this._threadAfterLiveReply(container, gapBefore, msg);
   else container.scrollTop = container.scrollHeight;
+},
+
+// The line under a thread's header, and its row in the Threads list:
+// pictures and files by name, as reply lines show them, never the address
+// they are stored under.
+_threadRootPreview(content, max = 120) {
+  const text = this._replyPreviewText ? this._replyPreviewText(content) : String(content || '');
+  return text.length > max ? text.substring(0, max) + '…' : text;
 },
 
 // Whether a thread reply answers the thread's own first message.

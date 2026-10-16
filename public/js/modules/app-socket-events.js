@@ -42,10 +42,7 @@ _listenFeatureEvents() {
     // Update parent preview from server (authoritative source)
     if (data.parentContent) {
       const preview = document.getElementById('thread-parent-preview');
-      if (preview) {
-        const text = data.parentContent.length > 120 ? data.parentContent.substring(0, 120) + '…' : data.parentContent;
-        preview.textContent = text;
-      }
+      if (preview) preview.textContent = this._threadRootPreview(data.parentContent);
     }
     const container = document.getElementById('thread-messages');
     if (!container) return;
