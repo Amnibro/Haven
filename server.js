@@ -1553,6 +1553,8 @@ require('./src/routes/uploads')({ uploadDiskGuard, app, recordUploadOwnership, u
 
 // ── Sounds, custom emoji and stickers: src/routes/media-library.js ──
 const { BUILTIN_SOUNDS, seedStarterStickers } = require('./src/routes/media-library')({ uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter });
+// Profile badge icons (#5632): src/routes/badges.js
+require('./src/routes/badges')({ app, verifyAdminFromDb, userHasPermission, uploadDir, uploadLimiter, uploadDiskGuard });
 
 // ── GIF search proxy (GIPHY, KLIPY, or a legacy Tenor fallback) ──
 // Three providers are supported. preferred_gif_search picks which one to use
