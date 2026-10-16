@@ -28,12 +28,14 @@ _forumScoreOf(msg) {
   return v.likes - v.dislikes;
 },
 
-_forumVotesHtml(msg) {
+// `forAttr` names what the buttons vote on: a topic, or one picture of a
+// blog post (app-forum-picture-votes.js).
+_forumVotesHtml(msg, forAttr = 'data-votes-for') {
   const mode = this._forumVotesMode();
   if (!mode || !msg) return '';
   const v = this._forumVotesOf(msg);
   const btn = (value, icon, count, label) => `<button type="button" class="forum-vote${v.mine === value ? ' active' : ''}" data-vote="${value}" title="${this._escapeHtml(label)}" aria-label="${this._escapeHtml(label)}" aria-pressed="${v.mine === value}">${icon} <span class="forum-vote-count">${count}</span></button>`;
-  return `<span class="forum-votes" data-votes-for="${msg.id}">${btn(1, '👍', v.likes, t('forum.votes_like'))}${mode === 2 ? btn(-1, '👎', v.dislikes, t('forum.votes_dislike')) : ''}</span>`;
+  return `<span class="forum-votes" ${forAttr}="${Number(msg.id)}">${btn(1, '👍', v.likes, t('forum.votes_like'))}${mode === 2 ? btn(-1, '👎', v.dislikes, t('forum.votes_dislike')) : ''}</span>`;
 },
 
 // Wire the buttons inside `root` for topic `msg`. The click stays on the
@@ -66,6 +68,8 @@ _forumCastVote(messageId, value) {
 // New counts (and maybe this reader's own vote) for one topic: repaint the
 // card and the open topic's bar in place, so nothing jumps while you click.
 _forumApplyVotes(data) {
+  // The same counts may belong to a picture of an open blog post (#5784).
+  this._forumPieceApplyVotes?.(data);
   const topic = data && this._forumTopics && this._forumTopics.get(data.messageId);
   if (!topic) return;
   const v = this._forumVotesOf(topic);
@@ -98,6 +102,7 @@ _listenForumVotes() {
     if (!ch) return;
     ch.forum_votes = { off: 0, likes: 1, both: 2 }[data.mode] || 0;
     if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
+    if (data.code === this.currentChannel) this._forumPieceVotesRepaint?.();
   });
 },
 
