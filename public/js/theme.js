@@ -1885,8 +1885,8 @@ function initThemeSwitcher(containerId, socket) {
   // File themes are restored by plugin-loader after it fetches theme metadata.
   // Nothing to do here for 'file:...'; it will be handled once the loader runs.
 
-  // Set active button (file: theme buttons are injected later by plugin-loader,
-  // so they will pick up the active state via injectPublishedThemeButtons)
+  // Set active button (theme files get theirs from the theme picker, which
+  // draws their cards once plugin-loader has the theme list)
   container.querySelectorAll('.theme-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.theme === saved);
     if (recoveryMode) btn.disabled = true;

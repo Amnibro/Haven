@@ -260,7 +260,24 @@
       "cross_light": "Cross Light",
       "stained_glass": "Stained Glass",
       "divine_radiance": "Divine Radiance",
-      "light_mode": "Light Mode"
+      "light_mode": "Light Mode",
+      "picker": {
+        "search": "Search themes",
+        "no_match": "No themes match your search.",
+        "results": "Themes found: {{count}}",
+        "section_community": "Community",
+        "section_available": "Available to publish",
+        "section_builtin": "Haven",
+        "available_hint": "Only people who manage the server see these. Turn a switch on to add that theme to everyone's picker.",
+        "card_by": "{{name}} by {{author}}",
+        "publish_label": "Publish {{name}} for everyone",
+        "publish": "Publish",
+        "published": "Published",
+        "published_hint": "Published: everyone can pick it",
+        "unpublished_hint": "Not published: only people who manage the server see it",
+        "published_toast": "{{name}} is now in everyone's theme picker",
+        "unpublished_toast": "{{name}} was taken out of everyone's theme picker"
+      }
     },
     "actions": {
       "logout": "Logout",

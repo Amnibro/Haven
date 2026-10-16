@@ -152,7 +152,17 @@
               <span class="theme-popup-title" data-i18n="app.theme.title">Theme</span>
               <button id="theme-popup-close" class="icon-btn small" data-i18n-title="app.theme.close" title="Close">&times;</button>
             </div>
-            <div class="theme-selector" id="theme-selector" data-haven-region="theme-picker">
+            <!-- Theme gallery (app-theme-picker.js): search, then sections of
+                 preview cards. Haven's own themes start as the buttons below,
+                 which theme.js wires up and the gallery turns into cards. -->
+            <div class="theme-selector theme-gallery" id="theme-selector" data-haven-region="theme-picker">
+              <div class="tp-search-row">
+                <input type="search" id="theme-search" class="tp-search" autocomplete="off" spellcheck="false" aria-controls="theme-gallery-sections" data-i18n-placeholder="app.theme.picker.search" placeholder="Search themes" data-i18n-aria-label="app.theme.picker.search" aria-label="Search themes">
+              </div>
+              <div class="tp-sections" id="theme-gallery-sections"></div>
+              <p class="tp-empty" id="theme-gallery-empty" hidden data-i18n="app.theme.picker.no_match">No themes match your search.</p>
+              <div class="tp-sr-only" id="theme-gallery-status" role="status" aria-live="polite"></div>
+              <div class="tp-builtin-source" hidden>
               <button class="theme-btn active" data-theme="haven" title="Haven"><span class="theme-icon">⬡</span></button>
               <button class="theme-btn" data-theme="discord" title="Discord"><span class="theme-icon">🎮</span></button>
               <button class="theme-btn" data-theme="matrix" title="Matrix"><span class="theme-icon">Ⅿ</span></button>
@@ -181,6 +191,7 @@
               <button class="theme-btn" data-theme="rgb" title="RGB"><span class="theme-icon">🌈</span></button>
               <button class="theme-btn" data-theme="daylight" title="Daylight (Light)"><span class="theme-icon">☀️</span></button>
               <button class="theme-btn" data-theme="cloudy" title="Cloudy (Light)"><span class="theme-icon">☁️</span></button>
+              </div>
             </div>
             <!-- Effect overlay picker (mashup) -->
             <div class="effect-overlay-section">
@@ -5266,6 +5277,7 @@
     </div>
   </div>
   <script src="/js/theme.js?v=4.24.16"></script>
+  <script src="/js/theme-gallery.js?v=4.24.13"></script>
   <script src="/js/notifications.js?v=4.23.6"></script>
   <script src="/js/servers.js?v=4.23.9"></script>
   <script src="/js/voice-relay.js?v=4.14.2"></script>
@@ -5277,7 +5289,7 @@
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
   <script type="module" src="/js/app.js?v=4.24.16"></script>
-  <script src="/js/plugin-loader.js?v=4.23.9"></script>
+  <script src="/js/plugin-loader.js?v=4.24.13"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
 </body>

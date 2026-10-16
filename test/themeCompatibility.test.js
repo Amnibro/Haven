@@ -245,6 +245,7 @@ async function runPluginLoader({
   await new Promise(resolve => setImmediate(resolve));
   return {
     api: window.HavenApi,
+    document,
     documentElement,
     fetches,
     links,
@@ -756,6 +757,56 @@ test('turning a palette theme on in Settings saves it as the account theme', asy
 
   assert.equal(result.localStorage.getItem('haven_theme'), 'file:neon.theme.css');
   assert.deepEqual(emitted, [JSON.stringify(['set-preference', { key: 'theme', value: 'file:neon.theme.css' }])]);
+});
+
+test('picking a published theme in the theme picker selects it and saves it to the account', async () => {
+  const emitted = [];
+  const socket = {
+    connected: true,
+    on() {},
+    off() {},
+    emit(event, payload) { emitted.push(JSON.stringify([event, payload])); },
+  };
+  const result = await runPluginLoader({
+    theme: 'matrix',
+    socket,
+    themes: [{ file: 'neon.theme.css', published: true, palette: true, compatible: true, compatibility: 'compatible', themeApi: 1 }],
+  });
+  let redraws = 0;
+  result.document.addEventListener('haven:themes-changed', () => { redraws++; });
+
+  assert.equal(result.loader.selectFileTheme('neon.theme.css'), true);
+  assert.equal(result.localStorage.getItem('haven_theme'), 'file:neon.theme.css');
+  assert.deepEqual(emitted, [JSON.stringify(['set-preference', { key: 'theme', value: 'file:neon.theme.css' }])]);
+  assert.ok(redraws > 0, 'the picker is told to redraw');
+
+  // Picking it again is not another save.
+  result.loader.selectFileTheme('neon.theme.css');
+  assert.equal(emitted.length, 1);
+});
+
+test('picking a theme that only adds CSS switches it on and off without changing the theme', async () => {
+  const result = await runPluginLoader({
+    theme: 'matrix',
+    themes: [{ file: 'fonts.theme.css', published: false, palette: false, compatible: true, compatibility: 'legacy' }],
+  });
+
+  result.loader.selectFileTheme('fonts.theme.css');
+  assert.equal(result.loader.loadedThemes.get('fonts.theme.css').enabled, true);
+  assert.equal(result.localStorage.getItem('haven_theme'), 'matrix');
+  result.loader.selectFileTheme('fonts.theme.css');
+  assert.equal(result.loader.loadedThemes.get('fonts.theme.css').enabled, false);
+  assert.equal(result.localStorage.getItem('haven_enabled_themes'), '[]');
+});
+
+test('safe mode refuses a theme picked in the theme picker', async () => {
+  const result = await runPluginLoader({
+    safe: true,
+    themes: [{ file: 'neon.theme.css', published: true, palette: true, compatible: true, compatibility: 'compatible', themeApi: 1 }],
+  });
+  assert.equal(result.loader.selectFileTheme('neon.theme.css'), false);
+  assert.equal(result.loader.suppressed, true);
+  assert.equal(result.links.length, 0);
 });
 
 test('a palette theme left in the enabled list is shown off while a built-in theme is active', async () => {

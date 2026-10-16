@@ -43,6 +43,7 @@ import MessageToolMethods from './modules/app-message-tools.js?v=4.24.9';
 import UserMethods     from './modules/app-users.js?v=4.24.15';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
 import VoiceMethods    from './modules/app-voice.js?v=4.24.5';
+import ThemePickerMethods from './modules/app-theme-picker.js?v=4.24.13';
 import PushToMuteMethods from './modules/app-push-to-mute.js?v=4.24.5';
 import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.23.9';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.23.9';
@@ -371,6 +372,7 @@ class HavenApp {
     this._initLinkPolicy?.();
     this._setupUI();
     this._setupThemes();
+    this._setupThemePicker();
     this._setupServerBar();
     this._applyGuestMode(); // (#5381) hide DM UI / lock down features for guests
     this._setupNotifications();
@@ -604,6 +606,7 @@ Object.assign(HavenApp.prototype,
   ChannelPersonalOrderMethods,
   PushToMuteMethods,
   BadgeMethods,
+  ThemePickerMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────
