@@ -28,7 +28,7 @@ test.before(async () => {
 });
 test.after(() => {
   if (db) db.close();
-  h.stop();
+  return h.stop();
 });
 
 const row = (id) => db.prepare('SELECT id, user_id, content, is_archived, destruct_at FROM messages WHERE id = ?').get(id);

@@ -43,10 +43,17 @@ function createHarness(port, name) {
     throw new Error('server did not start');
   }
 
-  function stop() {
+  // Waits for the server to exit before removing its data folder: Windows
+  // will not delete files a running process still holds open, which left a
+  // test folder behind in the temp directory on every run.
+  async function stop() {
     for (const s of sockets) s.close();
-    if (server) server.kill();
-    try { fs.rmSync(DATA, { recursive: true, force: true }); } catch (err) { console.warn('could not remove test data:', err.message); }
+    if (server && server.exitCode === null) {
+      const exited = new Promise((r) => server.once('exit', r));
+      server.kill();
+      await exited;
+    }
+    try { fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (err) { console.warn('could not remove test data:', err.message); }
   }
 
   async function register(username) {
