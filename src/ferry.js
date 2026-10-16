@@ -219,24 +219,27 @@ function rateLimitError(waitMs) {
   return err;
 }
 
+function requestBody(payload, files = []) {
+  if (!files.length) return { body: payload === undefined ? undefined : JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } };
+  const form = new FormData();
+  form.append('payload_json', JSON.stringify({ ...payload, attachments: files.map((f, i) => ({ id: i, filename: f.name })) }));
+  files.forEach((f, i) => form.append(`files[${i}]`, new Blob([fs.readFileSync(f.path)]), f.name));
+  return { body: form, headers: {} };
+}
 /**
  * One REST call with bot auth. Waits out short 429s using Discord's own
  * retry_after, retries once on a 5xx. Everything else surfaces to the caller
  * so the admin UI can show the real reason a pairing is broken.
  */
-async function discordRequest(method, path, body, attempt = 0) {
+async function discordRequest(method, path, body, { files = [] } = {}, attempt = 0) {
   const { token } = getConfig();
   if (!token) throw new Error('No Discord bot token configured');
-
+  const req = requestBody(body, files);
   const res = await fetch(`${API}${path}`, {
     method,
-    headers: {
-      'Authorization': `Bot ${token}`,
-      'Content-Type': 'application/json',
-      'User-Agent': USER_AGENT,
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(15000),
+    headers: { 'Authorization': `Bot ${token}`, 'User-Agent': USER_AGENT, ...req.headers },
+    body: req.body,
+    signal: AbortSignal.timeout(files.length ? 60000 : 15000),
   });
 
   if (res.status === 429) {
@@ -244,13 +247,13 @@ async function discordRequest(method, path, body, attempt = 0) {
     console.warn(`[ferry] Discord rate limit on ${method} ${path}: retry after ${Math.ceil(wait / 1000)}s`);
     if (attempt < RATE_LIMIT_ATTEMPTS - 1 && wait <= RATE_LIMIT_MAX_WAIT_MS) {
       await sleep(wait);
-      return discordRequest(method, path, body, attempt + 1);
+      return discordRequest(method, path, body, { files }, attempt + 1);
     }
     throw rateLimitError(wait);
   }
   if (res.status >= 500 && attempt < 1) {
     await sleep(1500);
-    return discordRequest(method, path, body, attempt + 1);
+    return discordRequest(method, path, body, { files }, attempt + 1);
   }
 
   if (res.status === 204) return null;
@@ -277,19 +280,10 @@ async function discordRequest(method, path, body, attempt = 0) {
  */
 async function executeWebhook(webhookId, webhookToken, payload, { threadId = null, files = [] } = {}, attempt = 0) {
   const thread = threadId && SNOWFLAKE.test(String(threadId)) ? `&thread_id=${threadId}` : '';
-  // Files go up with the message as multipart, the way Discord takes uploads.
-  let body = JSON.stringify(payload);
-  const headers = { 'User-Agent': USER_AGENT };
-  if (files.length) {
-    body = new FormData();
-    body.append('payload_json', JSON.stringify({ ...payload, attachments: files.map((f, i) => ({ id: i, filename: f.name })) }));
-    files.forEach((f, i) => body.append(`files[${i}]`, new Blob([fs.readFileSync(f.path)]), f.name));
-  } else {
-    headers['Content-Type'] = 'application/json';
-  }
+  const { body, headers } = requestBody(payload, files);
   const res = await fetch(`${API}/webhooks/${webhookId}/${webhookToken}?wait=true${thread}`, {
     method: 'POST',
-    headers,
+    headers: { 'User-Agent': USER_AGENT, ...headers },
     body,
     signal: AbortSignal.timeout(files.length ? 60000 : 15000),
   });
@@ -1540,7 +1534,7 @@ function takeUploads(content) {
   const files = [];
   let total = 0;
   // Returns null when the file goes along, or why it cannot.
-  const take = (stored, shownName) => {
+  const take = (stored, shownName, spoiler = false) => {
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(stored)) return '(file not found)';
     const full = path.join(UPLOADS_DIR, stored);
     let size;
@@ -1553,7 +1547,7 @@ function takeUploads(content) {
       return '(too large to send to Discord)';
     }
     total += size;
-    files.push({ path: full, name: attachmentName(shownName || stored) });
+    files.push({ path: full, name: (spoiler ? 'SPOILER_' : '') + attachmentName(shownName || stored) });
     return null;
   };
   const base = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
@@ -1563,10 +1557,9 @@ function takeUploads(content) {
       if (!why) return '';
       return `📎 ${name || stored} ${base ? `${base}/uploads/${stored}` : why}`;
     })
-    .replace(/(^|\s)\/uploads\/([^\s]+)/g, (m, pre, stored) => {
-      const why = take(stored);
-      if (!why) return pre;
-      return base ? m : `${pre}${why}`;
+    .replace(/(^|\s)(spoiler-img:)?\/uploads\/([^\s]+)/g, (m, pre, spoiler, stored) => {
+      const why = take(stored, null, !!spoiler);
+      return !why ? pre : spoiler ? `${pre}||${base ? `${base}/uploads/${stored}` : why}||` : base ? m : `${pre}${why}`;
     });
   text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   return { text, files };
@@ -1898,8 +1891,9 @@ async function sendDiscordDm(discordUserId, { fromName, content }) {
   const cfg = getConfig();
   if (!cfg.allowDms) throw new Error('Discord DMs are turned off for this server');
 
-  const body = absolutizeUploads(String(content || '')).trim();
-  if (!body) throw new Error('Message is empty');
+  const { text, files } = takeUploads(content);
+  const body = absolutizeUploads(text).trim();
+  if (!body && !files.length) throw new Error('Message is empty');
 
   return enqueue(`dm:${discordUserId}`, async () => {
     let channel;
@@ -1919,7 +1913,7 @@ async function sendDiscordDm(discordUserId, { fromName, content }) {
       await discordRequest('POST', `/channels/${channel.id}/messages`, {
         content: prefix + body.slice(0, room) + footer,
         allowed_mentions: mentionPolicy(),
-      });
+      }, { files });
     } catch (err) {
       // 50007 is Discord's "this user does not accept DMs from me".
       if (err.discordCode === 50007) {

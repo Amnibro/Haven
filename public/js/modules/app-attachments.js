@@ -527,7 +527,7 @@ _makeSpoilerToggle(file, isPip = false) {
   return btn;
 },
 
-async _flushImageQueue(bundled = false, personaPrefix = '', replyTo = null) {
+async _flushImageQueue(bundled = false, personaPrefix = '', replyTo = null, ferryDiscordUserId = null) {
   if (!this._imageQueue || this._imageQueue.length === 0) return;
   // A DM that can't be encrypted asks first; backing out keeps the queue.
   if (!(await this._dmSendGate(this.currentChannel))) return;
@@ -540,7 +540,7 @@ async _flushImageQueue(bundled = false, personaPrefix = '', replyTo = null) {
   // one carries it, the rest follow without the banner.
   let reply = bundled ? null : replyTo;
   for (const file of files) {
-    await this._uploadImage(file, undefined, bundled, personaPrefix, false, { replyTo: reply });
+    await this._uploadImage(file, undefined, bundled, personaPrefix, false, { replyTo: reply, ferryDiscordUserId });
     reply = null;
     if (this._uploadsCancelled) break;   // × on the progress bar stops the batch
   }
@@ -576,13 +576,13 @@ _clearFileQueue() {
   this._renderImageQueue();
 },
 
-async _flushFileQueue() {
+async _flushFileQueue(prefix = '', ferryDiscordUserId = null) {
   if (!this._fileQueue || this._fileQueue.length === 0) return;
   if (!(await this._dmSendGate(this.currentChannel))) return;
   const files = [...this._fileQueue];
   this._clearFileQueue();
   for (const file of files) {
-    this._uploadGeneralFile(file);
+    this._uploadGeneralFile(file, undefined, { prefix, ferryDiscordUserId });
   }
 },
 

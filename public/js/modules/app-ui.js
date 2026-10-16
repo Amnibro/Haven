@@ -739,6 +739,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
       content: line,
       isImage: true,
       replyTo,
+      ...(opts.ferryDiscordUserId && { ferryDiscordUserId: opts.ferryDiscordUserId }),
       ...(bundled && { bundled: true }),
       ...this._destructField(file && file._destructAt),
       ...(file && file._tags && file._tags.length ? { attachmentTags: file._tags } : {})
@@ -769,7 +770,7 @@ _handleFileUpload(input) {
 },
 
 /** Upload any file via /api/upload-file (used by drag & drop, paste, and 📎 button) */
-_uploadGeneralFile(file, targetCode) {
+_uploadGeneralFile(file, targetCode, { prefix = '', ferryDiscordUserId = null } = {}) {
   const code = targetCode || this.currentChannel;
   if (!code) return this._showToast(t('media.select_channel_first'), 'error');
   // Block media uploads if disabled in this channel
@@ -813,7 +814,8 @@ _uploadGeneralFile(file, targetCode) {
       }
       this.socket.emit('send-message', {
         code,
-        content,
+        content: prefix + content,
+        ...(ferryDiscordUserId && { ferryDiscordUserId }),
         replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null,
         ...(file && file._tags && file._tags.length ? { attachmentTags: file._tags } : {}),
         ...this._destructField(file && file._destructAt)

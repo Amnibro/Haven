@@ -1320,9 +1320,10 @@ module.exports = function register(socket, ctx) {
     // The flag comes from the client, so it only counts for an attachment
     // (optionally after a persona prefix) that follows the sender's own
     // counted message within a minute; set on anything, it skipped slow mode.
-    const _trimmed = String(content || '').trim();
-    const _mediaOnly = /^(?:::\S+\s+)?(?:spoiler-img:)?\/uploads\/\S+$/i.test(_trimmed) ||
-      /^(?:::\S+\s+)?\[file:[^\]]+\]\(\/uploads\//i.test(_trimmed) || (channel.is_dm && data.encrypted === true);
+    const _bare = String(content || '').trim().replace(/^::\S+\s+/, '');
+    const _ferryTo = data.bundled === true && !channel.is_dm && parseFerryTarget(channel.id, _bare, data.ferryDiscordUserId);
+    const _media = _ferryTo ? _ferryTo.body : _bare;
+    const _mediaOnly = /^(?:spoiler-img:)?\/uploads\/\S+$/i.test(_media) || /^\[file:[^\]]+\]\(\/uploads\//i.test(_media) || (channel.is_dm && data.encrypted === true);
     const _lastCounted = slowModeTracker.get(`slow:${socket.user.id}:${channel.id}`) || 0;
     const _bundledOk = data.bundled === true && _mediaOnly && Date.now() - _lastCounted < 60000;
     if (channel.slow_mode_interval > 0 && !socket.user.isAdmin && getUserEffectiveLevel(socket.user.id, channel.id) < 25 && !_bundledOk) {

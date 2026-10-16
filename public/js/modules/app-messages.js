@@ -210,6 +210,8 @@ async _sendMessage() {
   // resolved Discord user id rather than leaving the server to guess.
   const ferryDm = this._ferryPendingDm?.(content);
   if (ferryDm) payload.ferryDiscordUserId = ferryDm;
+  const ferryPrefix = (hasImages || hasFiles) ? (this._ferryPrefix?.(content) || '') : '';
+  const ferryOnly = !!ferryPrefix && !content.replace(/^::[^\s:]+[: ]\s*/, '').slice(ferryPrefix.length).trim();
   if (this.replyingTo) {
     payload.replyTo = this.replyingTo.id;
   }
@@ -242,7 +244,7 @@ async _sendMessage() {
   if (picker) picker.style.display = 'none';
 
   // Send text message if there is one
-  if (content) {
+  if (content && !ferryOnly) {
     // E2E: encrypt DM messages
     const ch = this.channels.find(c => c.code === this.currentChannel);
     const isDm = ch && ch.is_dm && (ch.dm_target || ch.is_group);
@@ -374,8 +376,8 @@ async _sendMessage() {
     // (#5425) These were both inside `if (hasImages)`, so a non-image file
     // queued on its own (no image) never flushed and the attachment was stuck
     // in the queue forever. Flush each queue based on its own contents.
-    if (hasImages) this._flushImageQueue(!!content, personaPrefix, imageReplyTo);
-    if (hasFiles) this._flushFileQueue?.();
+    if (hasImages) this._flushImageQueue(!!content && !ferryOnly, personaPrefix + ferryPrefix, imageReplyTo, ferryDm);
+    if (hasFiles) this._flushFileQueue?.(ferryPrefix, ferryDm);
   }
 },
 
