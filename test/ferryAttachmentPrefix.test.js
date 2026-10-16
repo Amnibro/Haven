@@ -9,7 +9,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
-const FILES = ['app-messages.js', 'app-attachments.js', 'app-ferry.js', 'app-media-grid.js'];
+const FILES = ['app-messages.js', 'app-attachments.js', 'app-ferry.js', 'app-media-grid.js', 'app-silent.js'];
 function loadApp(globals) {
   const methods = {};
   FILES.forEach(name => {
