@@ -468,6 +468,9 @@ _showMessageContextMenu(e, msgEl) {
                           !!(this.user?.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('promote_user'));
   if (canEditRoleMenu) items.push(`<button class="channel-ctx-item" data-action="edit-role-menu">🎭 <span>${t('settings.admin.role_menu.edit')}</span></button>`);
   if (canEditTags) items.push(`<button class="channel-ctx-item" data-action="edit-tags">🏷️ <span>${t('tags.edit')}</span></button>`);
+  // Picking messages to move or put in a thread, starting with this one. The
+  // header's Select button is hidden on phones, so this is their way in.
+  if (!isDm && (this.user?.isAdmin || this._canModerate())) items.push(`<button class="channel-ctx-item" data-action="select-messages">☑️ <span>${t('header.select_messages_to_move')}</span></button>`);
   // Official message: mark your own; take the mark off your own, or anyone's
   // you could delete.
   const isHighlighted = msgEl.dataset.highlighted === '1';
@@ -541,6 +544,10 @@ _showMessageContextMenu(e, msgEl) {
       this._openRoleMenuBuilder?.({ messageId: msgId });
     } else if (action === 'edit-tags') {
       this._openMessageTagEditor(msgId, msgEl);
+    } else if (action === 'select-messages') {
+      this._enterMoveSelectionMode();
+      this._toggleMoveSelect(msgEl);
+      this._lastMoveSelectedEl = msgEl;
     } else if (action === 'highlight-on' || action === 'highlight-off') {
       this.socket.emit('set-message-highlight', { messageId: msgId, on: action === 'highlight-on' });
     } else if (action === 'delete') {
