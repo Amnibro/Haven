@@ -256,10 +256,13 @@ module.exports = function registerImport(deps) {
   // job: this starts it and answers at once, and the page asks for progress
   // until the result is ready.
   const fetchJobs = new Map();
+  const executeJobs = new Map(); // the write step below runs the same way
   const FETCH_JOB_TTL = 30 * 60 * 1000;
   setInterval(() => {
     const cutoff = Date.now() - FETCH_JOB_TTL;
-    for (const [id, job] of fetchJobs) if (job.updatedAt < cutoff) fetchJobs.delete(id);
+    for (const jobs of [fetchJobs, executeJobs]) {
+      for (const [id, job] of jobs) if (job.updatedAt < cutoff) jobs.delete(id);
+    }
   }, 5 * 60 * 1000).unref();
 
   app.post('/api/import/discord/fetch', express.json(), (req, res) => {
@@ -471,6 +474,13 @@ module.exports = function registerImport(deps) {
   }
 
   // ── Step 2: Execute the import ───────────────────────────
+  // Writing a large import takes a while. Held open as one request it was cut
+  // off by proxies in front of Haven (Cloudflare answers 524 after about 100
+  // seconds), and as one transaction it froze the server for everyone until
+  // it ended. So it runs as a job like the read above, writing a batch of
+  // messages per transaction and letting other requests in between batches.
+  const EXECUTE_BATCH = 1000;
+
   app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
@@ -490,15 +500,53 @@ module.exports = function registerImport(deps) {
     if (!fs.existsSync(tempPath)) {
       return res.status(404).json({ error: 'Import data expired or not found. Please re-upload.' });
     }
+    // One at a time: two imports writing the same channels would only slow
+    // each other down.
+    if ([...executeJobs.values()].some(j => j.state === 'running')) {
+      return res.status(429).json({ error: 'Another import is being written. Try again when it finishes.' });
+    }
+
+    const jobId = crypto.randomBytes(16).toString('hex');
+    const job = { userId: user.id, state: 'running', channelsDone: 0, channelsTotal: 0, messagesDone: 0, messagesTotal: 0, updatedAt: Date.now() };
+    executeJobs.set(jobId, job);
+    res.status(202).json({ jobId });
+    writeImport(job, user, tempPath, selectedChannels);
+  });
+
+  app.get('/api/import/discord/execute/:jobId', (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
+    const job = executeJobs.get(String(req.params.jobId));
+    if (!job || job.userId !== user.id) {
+      return res.status(404).json({ error: 'That import is no longer running. Check the imported channels, and run the import again if messages are missing; messages already in Haven are skipped.' });
+    }
+    if (job.state === 'running') {
+      return res.json({ state: 'running', channelsDone: job.channelsDone, channelsTotal: job.channelsTotal, messagesDone: job.messagesDone, messagesTotal: job.messagesTotal });
+    }
+    executeJobs.delete(String(req.params.jobId));
+    res.status(job.status).json({ state: 'done', ...job.body });
+  });
+
+  // Writes the selected channels. Every step can run again safely: a channel
+  // is found again by its Discord id, a thread by its starting message, and a
+  // message already written is skipped. That is what makes batches safe: if
+  // the import stops halfway, what was written stays, the job reports a
+  // failure with how much got in, and running the import again finishes it.
+  async function writeImport(job, user, tempPath, selectedChannels) {
+    const stats = { channelsCreated: 0, channelsReused: 0, messagesImported: 0, messagesSkipped: 0, threadsImported: 0 };
+    const finish = (status, body) => Object.assign(job, { state: 'done', status, body, updatedAt: Date.now() });
+    const nextBatch = () => {
+      job.updatedAt = Date.now();
+      return new Promise(resolve => setImmediate(resolve));
+    };
 
     try {
-      const data = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
+      const data = JSON.parse(await fs.promises.readFile(tempPath, 'utf-8'));
       const { getDb } = require('../database');
       const db = getDb();
       const { generateChannelCode } = require('../auth');
       const { generateUniqueChannelCode } = require('../channelRotation');
-
-      const stats = { channelsCreated: 0, channelsReused: 0, messagesImported: 0, messagesSkipped: 0, threadsImported: 0 };
 
       // Where an imported message goes. user_id is NULL: imported messages
       // belong to no Haven account (#5771, src/importAuthors.js).
@@ -507,54 +555,79 @@ module.exports = function registerImport(deps) {
         VALUES (?, NULL, ?, ?, ?, ?, 0, 'discord', ?, ?, ?, ?, ?)
       `);
       const lookupByDiscordId = db.prepare('SELECT id FROM messages WHERE channel_id = ? AND discord_message_id = ?');
+      const insertPin = db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)');
+      const insertReaction = db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)');
+      const channelByDiscordId = db.prepare('SELECT id, is_forum FROM channels WHERE discord_channel_id = ?');
       const toTs = (raw) => {
         try { return new Date(raw).toISOString().replace('T', ' ').replace('Z', ''); }
         catch { return raw; }
       };
+      // Oldest first. Each time is worked out once, not on every comparison,
+      // which on a channel of half a million messages saves seconds.
+      const byTime = (list) => list
+        .map(m => ({ m, t: +new Date(m.timestamp) }))
+        .sort((a, b) => a.t - b.t)
+        .map(e => e.m);
 
-      // Adds one channel's (or one thread's) messages, oldest first. Duplicates
-      // (same Discord id in the same channel) are skipped, which is what makes
-      // importing again, or importing what Ferry already carried, safe.
-      const importMessages = (channelId, messages, { threadId = null } = {}) => {
-        const sorted = messages.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-        const idMap = {}; // Discord message id -> Haven id, for replies
-        for (const msg of sorted) {
-          const content = (msg.content || '').trim();
-          if (!content) continue;
-          const replyTo = msg.replyTo && idMap[msg.replyTo] ? idMap[msg.replyTo] : null;
-          const result = insertMsg.run(
-            channelId, content, toTs(msg.timestamp), msg.author || 'Unknown', msg.authorAvatar || null,
-            replyTo, msg.discordId || null, threadId, null, null
-          );
-          if (result.changes === 0) {
-            if (msg.discordId) {
-              const existing = lookupByDiscordId.get(channelId, msg.discordId);
-              if (existing) idMap[msg.discordId] = existing.id;
-            }
-            stats.messagesSkipped++;
-            continue;
+      const writeMessage = (channelId, threadId, msg, idMap) => {
+        const content = (msg.content || '').trim();
+        if (!content) return;
+        const replyTo = msg.replyTo && idMap.has(msg.replyTo) ? idMap.get(msg.replyTo) : null;
+        const result = insertMsg.run(
+          channelId, content, toTs(msg.timestamp), msg.author || 'Unknown', msg.authorAvatar || null,
+          replyTo, msg.discordId || null, threadId, null, null
+        );
+        if (result.changes === 0) {
+          if (msg.discordId) {
+            const existing = lookupByDiscordId.get(channelId, msg.discordId);
+            if (existing) idMap.set(msg.discordId, existing.id);
           }
-          if (msg.discordId) idMap[msg.discordId] = result.lastInsertRowid;
-          stats.messagesImported++;
+          stats.messagesSkipped++;
+          return;
+        }
+        if (msg.discordId) idMap.set(msg.discordId, result.lastInsertRowid);
+        stats.messagesImported++;
 
-          if (msg.isPinned && !threadId) {
+        if (msg.isPinned && !threadId) {
+          try {
+            insertPin.run(result.lastInsertRowid, channelId, user.id);
+          } catch (err) {
+            // Do not abort the import over one pin, but do not lose it silently either.
+            console.warn('[import] Could not pin an imported message:', err.message);
+          }
+        }
+        if (Array.isArray(msg.reactions)) {
+          for (const r of msg.reactions) {
+            if (!r || !isReactionEmoji(r.emoji)) continue;
             try {
-              db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)')
-                .run(result.lastInsertRowid, channelId, user.id);
-            } catch (err) {
-              // Do not abort the import over one pin, but do not lose it silently either.
-              console.warn('[import] Could not pin an imported message:', err.message);
-            }
+              insertReaction.run(result.lastInsertRowid, user.id, r.emoji);
+            } catch { /* a reaction is cosmetic and can number in the thousands; never abort the import over one */ }
           }
-          if (Array.isArray(msg.reactions)) {
-            for (const r of msg.reactions) {
-              if (!r || !isReactionEmoji(r.emoji)) continue;
-              try {
-                db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)')
-                  .run(result.lastInsertRowid, user.id, r.emoji);
-              } catch { /* a reaction is cosmetic and can number in the thousands; never abort the import over one */ }
-            }
+        }
+      };
+
+      // Adds one channel's (or one thread's) messages, oldest first, a batch
+      // per transaction. Duplicates (same Discord id in the same channel) are
+      // skipped, which is what makes importing again, or importing what Ferry
+      // already carried, safe. The reply map lives across batches, so a reply
+      // still finds a message written in an earlier one.
+      const importMessages = async (channelId, messages, { threadId = null } = {}) => {
+        const sorted = byTime(messages);
+        const idMap = new Map(); // Discord message id -> Haven id, for replies
+        for (let i = 0; i < sorted.length; i += EXECUTE_BATCH) {
+          const batch = sorted.slice(i, i + EXECUTE_BATCH);
+          const counted = { ...stats };
+          try {
+            db.transaction(() => {
+              for (const msg of batch) writeMessage(channelId, threadId, msg, idMap);
+            })();
+          } catch (err) {
+            // The batch was rolled back, so its messages do not count.
+            Object.assign(stats, counted);
+            throw err;
           }
+          job.messagesDone += batch.length;
+          await nextBatch();
         }
       };
 
@@ -563,14 +636,13 @@ module.exports = function registerImport(deps) {
       // topic, its first message the opening post. In a chat channel the
       // thread hangs from the message it was started from, or from a line with
       // its name when that message is not in Haven.
-      const importThread = (parent, channelData) => {
+      const importThread = async (parent, channelData) => {
         const threadDiscordId = channelData.discordId;
         const messages = channelData.messages || [];
         let root = lookupByDiscordId.get(parent.id, threadDiscordId);
         let replies = messages;
         if (parent.is_forum) {
-          const starter = messages.find(m => m.discordId === threadDiscordId)
-            || messages.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))[0];
+          const starter = messages.find(m => m.discordId === threadDiscordId) || byTime(messages)[0];
           if (!root) {
             if (!starter) return;
             const title = sanitizeText(String(channelData.name || '').trim().replace(/\s+/g, ' ').slice(0, 120)) || 'Untitled';
@@ -582,9 +654,10 @@ module.exports = function registerImport(deps) {
             root = { id: r.lastInsertRowid };
             stats.messagesImported++;
           }
+          if (starter) job.messagesDone++;
           replies = messages.filter(m => m !== starter);
         } else if (!root) {
-          const first = messages.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))[0];
+          const first = byTime(messages)[0];
           if (!first) return;
           const r = insertMsg.run(
             parent.id, `🧵 ${sanitizeText(String(channelData.name || '').slice(0, 100)) || 'Thread'}`, toTs(first.timestamp),
@@ -592,80 +665,84 @@ module.exports = function registerImport(deps) {
           );
           root = { id: r.lastInsertRowid };
         }
-        importMessages(parent.id, replies, { threadId: root.id });
+        await importMessages(parent.id, replies, { threadId: root.id });
         stats.threadsImported++;
       };
 
-      const txn = db.transaction(() => {
-        // Channels first, so a thread finds its parent already in Haven.
-        const entries = [];
-        for (const sel of selectedChannels) {
-          // Find channel data by discordId or original name
-          const channelData = data.channels.find(c =>
-            (sel.discordId && c.discordId === sel.discordId) ||
-            c.name === sel.originalName
-          );
-          if (!channelData || !channelData.messages) continue;
-          entries.push({ sel, channelData });
+      // Finds the Haven channel made from this Discord channel, or makes one.
+      // Reusing it makes re-importing (or importing a second overlapping
+      // export) idempotent: new messages are appended, duplicates are
+      // skipped, and native Haven messages are untouched.
+      const channelFor = db.transaction((sel, channelData) => {
+        const discordChannelId = channelData.discordId || null;
+        if (discordChannelId) {
+          const existing = channelByDiscordId.get(discordChannelId);
+          if (existing) {
+            stats.channelsReused++;
+            return existing.id;
+          }
         }
-        entries.sort((a, b) => (a.channelData.kind === 'thread') - (b.channelData.kind === 'thread'));
-
-        for (const { sel, channelData } of entries) {
-          const discordChannelId = channelData.discordId || null;
-
-          if (channelData.kind === 'thread' && channelData.parentId) {
-            const parent = db.prepare('SELECT id, is_forum FROM channels WHERE discord_channel_id = ?').get(channelData.parentId);
-            if (parent) { importThread(parent, channelData); continue; }
-            // Its channel is not in Haven: the thread gets a channel of its own.
-          }
-
-          const channelName = [...(sel.name || channelData.name)].slice(0, 50).join('');
-          const code = generateUniqueChannelCode(db, generateChannelCode);
-
-          // Reuse an existing Haven channel if it was created from the same Discord channel.
-          // This makes re-importing (or importing a second overlapping export) idempotent:
-          // new messages are appended, duplicates are skipped, and native Haven messages are untouched.
-          let channelId;
-          if (discordChannelId) {
-            const existing = db.prepare('SELECT id FROM channels WHERE discord_channel_id = ?').get(discordChannelId);
-            if (existing) {
-              channelId = existing.id;
-              stats.channelsReused++;
-            }
-          }
-
-          if (!channelId) {
-            // A Discord forum (or media channel) becomes a Haven forum with the
-            // same tags; its posts come in as topics (#5772).
-            const isForum = channelData.kind === 'forum' || channelData.kind === 'media';
-            const forumTags = isForum && Array.isArray(channelData.tags) && channelData.tags.length
-              ? JSON.stringify(channelData.tags.slice(0, 20).map(name => ({ name })))
-              : null;
-            const chResult = db.prepare(
-              'INSERT INTO channels (name, code, created_by, topic, discord_channel_id, is_forum, forum_tags) VALUES (?, ?, ?, ?, ?, ?, ?)'
-            ).run(channelName, code, user.id, channelData.topic || '', discordChannelId, isForum ? 1 : 0, forumTags);
-            channelId = chResult.lastInsertRowid;
-
-            // Auto-join the importing admin
-            db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, user.id);
-            stats.channelsCreated++;
-          }
-
-          importMessages(channelId, channelData.messages);
-        }
+        const channelName = [...(sel.name || channelData.name)].slice(0, 50).join('');
+        const code = generateUniqueChannelCode(db, generateChannelCode);
+        // A Discord forum (or media channel) becomes a Haven forum with the
+        // same tags; its posts come in as topics (#5772).
+        const isForum = channelData.kind === 'forum' || channelData.kind === 'media';
+        const forumTags = isForum && Array.isArray(channelData.tags) && channelData.tags.length
+          ? JSON.stringify(channelData.tags.slice(0, 20).map(name => ({ name })))
+          : null;
+        const chResult = db.prepare(
+          'INSERT INTO channels (name, code, created_by, topic, discord_channel_id, is_forum, forum_tags) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(channelName, code, user.id, channelData.topic || '', discordChannelId, isForum ? 1 : 0, forumTags);
+        // Auto-join the importing admin
+        db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(chResult.lastInsertRowid, user.id);
+        stats.channelsCreated++;
+        return chResult.lastInsertRowid;
       });
 
-      txn();
+      // Channels first, so a thread finds its parent already in Haven.
+      const entries = [];
+      for (const sel of selectedChannels) {
+        // Find channel data by discordId or original name
+        const channelData = data.channels.find(c =>
+          (sel.discordId && c.discordId === sel.discordId) ||
+          c.name === sel.originalName
+        );
+        if (!channelData || !channelData.messages) continue;
+        entries.push({ sel, channelData });
+      }
+      entries.sort((a, b) => (a.channelData.kind === 'thread') - (b.channelData.kind === 'thread'));
+      job.channelsTotal = entries.length;
+      job.messagesTotal = entries.reduce((n, e) => n + (Array.isArray(e.channelData.messages) ? e.channelData.messages.length : 0), 0);
+      await nextBatch();
+
+      for (const { sel, channelData } of entries) {
+        let parent = null;
+        if (channelData.kind === 'thread' && channelData.parentId) {
+          parent = channelByDiscordId.get(channelData.parentId);
+          // Without it in Haven, the thread gets a channel of its own.
+        }
+        if (parent) await importThread(parent, channelData);
+        else await importMessages(channelFor(sel, channelData), channelData.messages);
+        job.channelsDone++;
+      }
 
       // Clean up temp file
       try { fs.unlinkSync(tempPath); } catch { /* cleanupTempImports() sweeps any haven-import leftover */ }
 
-      res.json({ success: true, ...stats });
+      finish(200, { success: true, ...stats });
     } catch (err) {
       console.error('Import execute error:', err);
-      res.status(500).json({ error: 'Import failed: ' + err.message });
+      // The batches written so far stay. Keep the import file a while longer
+      // so running the import again can finish the rest.
+      try {
+        const now = new Date();
+        fs.utimesSync(tempPath, now, now);
+      } catch (touchErr) {
+        console.warn('[import] Could not keep the import file for a retry:', touchErr.message);
+      }
+      finish(500, { error: 'Import failed: ' + err.message, ...stats });
     }
-  });
+  }
 
   // ── Periodic cleanup of orphaned import temp files (1 hour TTL) ──
   function cleanupTempImports() {

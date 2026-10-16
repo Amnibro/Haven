@@ -685,8 +685,28 @@ async _importExecute(importId, selectedChannels) {
       },
       body: JSON.stringify({ importId, selectedChannels })
     });
-    const data = await this._importReadJson(res);
-    if (!res.ok) throw new Error(data.error || t('settings.admin.import_failed'));
+    const started = await this._importReadJson(res);
+    if (!res.ok) throw new Error(started.error || t('settings.admin.import_failed'));
+    // The server writes in the background; ask how it is going until it is done.
+    let data = started;
+    while (started.jobId) {
+      await new Promise(r => setTimeout(r, 1500));
+      const poll = await fetch('/api/import/discord/execute/' + encodeURIComponent(started.jobId), { headers: { 'Authorization': 'Bearer ' + this.token } });
+      const status = await this._importReadJson(poll);
+      if (!poll.ok) {
+        let msg = status.error || t('settings.admin.import_failed');
+        if (status.messagesImported > 0) msg += ' ' + t('settings.admin.import_write_partial', { count: status.messagesImported.toLocaleString() });
+        throw new Error(msg);
+      }
+      if (status.state === 'running') {
+        executeBtn.textContent = '⏳ ' + (status.messagesTotal > 0
+          ? t('settings.admin.import_write_progress', { done: status.messagesDone.toLocaleString(), total: status.messagesTotal.toLocaleString() })
+          : t('settings.admin.import_importing'));
+        continue;
+      }
+      data = status;
+      break;
+    }
 
     // Show done step
     stepPreview.style.display = 'none';

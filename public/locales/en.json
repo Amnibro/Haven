@@ -2845,6 +2845,8 @@
       "import_skipped": "{{count}} duplicate(s) skipped.",
       "import_reused": "{{count}} existing channel(s) updated.",
       "import_failed_alert": "Import failed: {{error}}",
+      "import_write_progress": "Writing messages: {{done}} of {{total}}",
+      "import_write_partial": "{{count}} messages were written before it stopped. Run the import again to finish it; messages already in Haven are skipped.",
       "roles_no_custom": "No custom roles",
       "roles_level_invalid": "Level must be 0 to 99",
       "roles_create_title": "Create Role",
