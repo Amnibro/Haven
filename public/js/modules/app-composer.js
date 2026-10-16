@@ -4,6 +4,15 @@
 
 export default {
 
+/** Whether this Enter keypress should send. On phones and tablets (a finger
+ *  is the main pointer, even when a stylus is around too) Enter starts a new
+ *  line, as in other mobile chat apps, and the send button sends; elsewhere
+ *  Enter sends and Shift+Enter starts a new line. */
+_enterSends(e) {
+  if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return false;
+  return !window.matchMedia?.('(pointer: coarse)').matches;
+},
+
 _bindComposer() {
   const msgInput = document.getElementById('message-input');
 
@@ -123,8 +132,8 @@ _bindComposer() {
     if (this._composerListKey(e, msgInput)) return;
 
     // Ctrl + Enter opens scheduled send modal
-    // Just Enter sends the message
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Just Enter sends the message (on a phone it starts a new line instead)
+    if (this._enterSends(e)) {
       if (e.ctrlKey) {
         this._openScheduleModal();
       } else {
