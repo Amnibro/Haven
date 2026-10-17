@@ -181,8 +181,9 @@ test('imports are checked strictly', () => {
   assert.ok(ok.warnings.some((w) => /turn_password/.test(w)));
   assert.equal(ok.template.channels[0].topic, 'Hello');
 });
-test('a template never sets level thresholds for admin-only permissions', () => {
+test('an older template\'s level thresholds become ticks on its roles, never admin-only ones', () => {
   const t = JSON.parse(JSON.stringify(exported().template));
+  assert.equal(t.server.settings.permission_thresholds, undefined, 'exports no longer carry thresholds');
   t.server.settings.permission_thresholds = JSON.stringify({ transfer_admin: 1, manage_server: 1, manage_roles: 1, pin_message: 10 });
   const v = tpl.validateTemplate(t);
   assert.ok(v.template, JSON.stringify(v.errors));
@@ -191,10 +192,18 @@ test('a template never sets level thresholds for admin-only permissions', () => 
   const dst = dirs('thresholds');
   const db = freshDb('thresholds');
   const admin = db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('a', 'x').lastInsertRowid;
-  db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('permission_thresholds', ?)").run(JSON.stringify({ create_channel: 50, view_all_channels: 90 }));
+  db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('permission_thresholds', '{}')").run();
+  const roles = v.template.roles.filter((r) => r.scope === 'server' && r.level > 0 && !r.denied.includes('pin_message'));
+  const ticked = new Map(roles.map((r) => [r.name, r.permissions.includes('pin_message')]));
   tpl.applyTemplate(db, v.template, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
-  const after = JSON.parse(db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get().value);
-  assert.deepEqual(after, { pin_message: 10, view_all_channels: 90 }, 'the admin\'s own admin-only threshold is kept, none are added');
+  const after = db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get().value;
+  assert.equal(after, '{}', 'the setting itself is not brought back');
+  const has = (name, perm) => !!db.prepare('SELECT 1 FROM role_permissions rp JOIN roles r ON r.id = rp.role_id WHERE r.name = ? AND rp.permission = ? AND rp.allowed = 1').get(name, perm);
+  assert.ok(roles.length, 'the template has server roles to check');
+  for (const role of roles) {
+    assert.equal(has(role.name, 'pin_message'), role.level >= 10 || ticked.get(role.name), `${role.name} (level ${role.level})`);
+    assert.equal(has(role.name, 'transfer_admin'), false);
+  }
   db.close();
 });
 test('a template cannot hand out power through roles, role menus or channel default roles', () => {

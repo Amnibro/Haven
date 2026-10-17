@@ -74,11 +74,11 @@ test('uploads honour level thresholds and permissions set on the person', async 
   });
   assert.equal(await uploadAs(bob.body.token), 403, 'no permission anywhere: refused');
 
-  // Level threshold: everyone at level 1 or above may upload.
+  // Level thresholds are retired (src/permissionThresholds.js): a leftover
+  // one hands out nothing.
   withDb((db) => db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('permission_thresholds', ?)").run(JSON.stringify({ upload_files: 1 })));
-  assert.equal(await uploadAs(bob.body.token), 200, 'allowed by the level threshold');
+  assert.equal(await uploadAs(bob.body.token), 403, 'a level threshold grants nothing');
   withDb((db) => db.prepare("DELETE FROM server_settings WHERE key = 'permission_thresholds'").run());
-  assert.equal(await uploadAs(bob.body.token), 403, 'threshold removed: refused again');
 
   // Granted to bob on his own.
   assert.ok(memberRole, 'bob holds a server role to hang the grant on');

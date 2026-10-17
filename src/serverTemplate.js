@@ -134,7 +134,7 @@ function exportTemplate(db, opts = {}) {
   const rows = new Map(db.prepare('SELECT key, value FROM server_settings').all().map((r) => [r.key, r.value]));
   const settings = {};
   for (const key of Object.keys(SETTINGS)) {
-    if (!rows.has(key)) continue;
+    if (!rows.has(key) || key === 'permission_thresholds') continue;
     const v = checkSetting(key, rows.get(key));
     v === null ? warnings.push(`Left out setting ${key}: its stored value is not valid`) : (settings[key] = v);
   }
@@ -430,7 +430,25 @@ function summarizeTemplate(tpl) {
     settings: Object.keys(tpl.server.settings).length, assets: Object.keys(tpl.assets).length,
   };
 }
+// Templates made before level thresholds were retired may carry them: each
+// server role of the template at or above a threshold gets that permission
+// ticked, unless the template denies it there. Admin-only permissions were
+// already left out when the template was checked.
+function thresholdsToTicks(tpl) {
+  let thresholds = {};
+  try { thresholds = JSON.parse(tpl.server.settings.permission_thresholds || '{}') || {}; } catch { thresholds = {}; }
+  for (const [perm, min] of Object.entries(isObj(thresholds) ? thresholds : {})) {
+    if (!Number.isInteger(min)) continue;
+    for (const role of tpl.roles) {
+      if (role.scope !== 'server' || role.level <= 0 || role.level < min) continue;
+      if (role.denied.includes(perm) || role.permissions.includes(perm)) continue;
+      role.permissions.push(perm);
+    }
+  }
+}
+
 function applyTemplate(db, tpl, opts = {}) {
+  thresholdsToTicks(tpl);
   const { mode = 'merge', actorId = null, uploadsDir = null, themesDir = null, dryRun = false, posts: withPosts = true, webhooks: withWebhooks = true, joinMembers = true, installThemes = false, hasRoom = diskGuard.hasHeadroom } = opts;
   const replace = mode === 'replace';
   const r = {
@@ -598,13 +616,8 @@ function applyTemplate(db, tpl, opts = {}) {
       try { published = JSON.parse(cur.get('published_themes') || '[]'); } catch { published = []; }
       if (Array.isArray(published) && !published.includes(dflt)) set('published_themes', JSON.stringify([...published, dflt]), true);
     }
-    if (s.permission_thresholds) {
-      // Thresholds the admin set for admin-only permissions stay as they are.
-      let mine = {};
-      try { mine = JSON.parse(cur.get('permission_thresholds') || '{}'); } catch { mine = {}; }
-      const keep = isObj(mine) ? Object.fromEntries(adminOnlyKeys(mine).map((k) => [k, mine[k]])) : {};
-      s.permission_thresholds = JSON.stringify({ ...JSON.parse(s.permission_thresholds), ...keep });
-    }
+    // Turned into ticks on the template's roles (thresholdsToTicks).
+    delete s.permission_thresholds;
     for (const [key, value] of Object.entries(s)) set(key, value);
     set('server_icon', url(tpl.server.icon));
     set('server_banner', url(tpl.server.banner));

@@ -77,9 +77,12 @@ export default {
       if (levelStr === null) return;
       const level = parseInt(levelStr, 10);
       if (isNaN(level) || level < 0 || level > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
+      // A role made at level 50 or above starts able to create channels and
+      // change their settings. Only a default: both can be unticked after.
+      const levelDefaults = level >= 50 ? ['create_channel', 'manage_channel_settings'] : [];
       this._roleEmit('create-role', {
         name: name.trim().slice(0, 30), level, color: tp.color,
-        permissions: level > 0 ? tp.perms : [],
+        permissions: level > 0 ? [...new Set([...tp.perms, ...levelDefaults])] : [],
         maxUploadMb: tp.maxUploadMb || null
       }, (res) => {
         if (res.error) { this._showToast(res.error, 'error'); return; }
