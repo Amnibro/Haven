@@ -6,6 +6,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.26.0] - 2026-10-17
+
+Location data removed from uploaded photos and videos, Ukrainian and complete
+Russian, Spanish and Polish translations, per-sound soundboard volume, idle
+voice disconnect, role menu pick limits, NSFW marking for messages, and a long
+list of fixes.
+
+### Security
+- Photos and videos lose their location data when they're uploaded. Every server cleans JPEG, PNG and WebP photos with nothing to install. With exiftool and ffmpeg installed (the Docker image has both), videos and every other photo format are cleaned too. Files uploaded before this are cleaned on the first start. Files in encrypted DMs reach the server already encrypted, so they can't be cleaned, and DMs now say so. See "Location Data in Photos and Videos" in the guide (#5805, thanks Bo0sted).
+
+### Added
+- Ukrainian, plus complete Russian, Spanish and Polish translations. Before, most of the app showed in English for those three.
+- Each soundboard sound has its own volume, set by admins and soundboard managers, and everyone gets a personal soundboard volume in Settings (#5804).
+- A channel can disconnect people who sit idle in voice, from its AFK settings (#5801).
+- Role menus can limit how many roles each person picks. With a limit of one, picking another role swaps it (#5800).
+- Mark any message NSFW from its menu, pictures and video links included. It stays blurred until clicked.
+- You're told when someone starts a thread on your message.
+- A blog post's author can answer comments as comments.
+- The thread side panel makes room for itself instead of covering the chat.
+- See who's typing in DM and group chat pop-outs.
+- A new forum post shows its pictures and which one is the thumbnail.
+- The Organize windows suggest existing tags, and a sub-channel can get its tag when it's created.
+- YouTube cards have a volume slider, and a new setting pauses videos and audio that scroll off screen.
+- The Permissions grid shows channel roles, and changes there wait for Save changes (or Discard).
+- The topic bar folds away to a small tab.
+- Ferry relays a stream bot's channel link from its embed or link button.
+- Swipe sideways in the picture viewer on touch screens (#5802, thanks Amnibro).
+
+### Changed
+- The hidden "level 50 and up" permission rule is gone. Servers keep the same access, because it's turned into normal permission ticks you can see and change. New roles at level 50 or above from role templates start with Create Channel and Manage Channel Settings ticked.
+- A profile card shows only the highest earned badge of each kind (#5800).
+- A role's upload cap raises the admin's own cap too.
+- Edit Profile leads with a larger avatar.
+- Theme effects draw behind messages instead of over them.
+- The status bar switch moved to Settings > Debug.
+- Text boxes without a style of their own follow the theme.
+- Missing Simplified Chinese translations filled in (#5803, thanks TianLaiEric).
+
+### Fixed
+- Edit Profile opened with an empty bio and birthday, and saving it wiped the bio.
+- Dragging an edit box taller moved the message up instead of growing the box.
+- A blank line after a list showed as two.
+- The who-reacted list closed as the pointer moved onto it.
+- The New Post body box could be dragged outside its window.
+- Group chat messages went missing when the same chat was open in the main view and a pop-out.
+- Group chat pop-outs and grouped thread replies were spaced differently from the main chat.
+- The GIF item in the composer menu was drawn differently from the others.
+
 ## [4.25.0] - 2026-10-16
 
 Profile badges, pictures sent together as one message, push to mute, a new
