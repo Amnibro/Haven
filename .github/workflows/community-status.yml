@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Get the checker
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           sparse-checkout: scripts/community-status.js
           sparse-checkout-cone-mode: false
