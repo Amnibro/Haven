@@ -791,11 +791,17 @@ _bindInputResizer(handle) {
     ta = null;
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
+    // The last resize report lands after this; let it see the pin first.
+    if (below) requestAnimationFrame(() => requestAnimationFrame(() => { this._feedPinnedEdit = null; }));
   };
 
   handle.addEventListener('mousedown', (e) => {
     ta = handle.parentElement?.querySelector('textarea');
     if (!ta) return;
+    // While an edit box is dragged, its message stays put in the feed
+    // (app-feed-anchor.js) rather than the feed holding to its newest line.
+    const msg = below ? handle.closest('[data-msg-id]') : null;
+    this._feedPinnedEdit = msg ? { el: msg, top: msg.getBoundingClientRect().top } : null;
     startY = e.clientY;
     startHeight = ta.getBoundingClientRect().height;
     // Cap manual expansion at ~60% of viewport so the textarea can never

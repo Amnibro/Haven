@@ -131,6 +131,16 @@ _watchFeedBox(sc, main) {
   };
 
   const hold = (grew) => {
+    // A message whose edit box is being dragged taller keeps its top where
+    // it is, so the box visibly grows downward. Sticking to the bottom here
+    // slid the message up under the pointer instead.
+    const pin = this._feedPinnedEdit;
+    if (pin && pin.el.isConnected && sc.contains(pin.el)) {
+      const drift = pin.el.getBoundingClientRect().top - pin.top;
+      if (Math.abs(drift) >= 1) sc.scrollTop += drift;
+      A.st = sc.scrollTop;
+      return;
+    }
     const gapBefore = this._feedGapBefore(sc, grew, A.st);
     if (!main) {
       const blog = sc.id === 'thread-messages' && !!this._forumBlogThread;
