@@ -114,9 +114,12 @@ function judge(cert, health, now) {
   if (!cert.reached) {
     return { state: 'down', code: 'unreachable', message: "The community server can't be reached right now." };
   }
+  // Only the chain's middle links missing: browsers fetch them and the Haven
+  // apps carry them, so for the people who use the server it is online. The
+  // code still says so, for anyone reading status.json.
   if (cert.chainOnlyMissing) {
     if (!health.online) return { state: 'down', code: 'not-answering', message: "The community server isn't answering right now." };
-    return { state: 'warn', code: 'chain-incomplete', message: "The community server is online, but its certificate is missing its chain, so some apps (phones especially) can't connect. Browsers usually can." };
+    return { state: 'ok', code: 'online-chain-incomplete', message: 'The community server is online.' };
   }
   if (!cert.authorized) {
     if (cert.error === 'CERT_HAS_EXPIRED') {
@@ -186,7 +189,9 @@ async function main() {
   };
 
   const settled = out.state === 'ok' || out.streak >= DOWN_AFTER;
-  if (out.code !== out.alerted && settled) {
+  // Both kinds of online count as the same thing for alerts.
+  const alertKey = (code) => (code === 'online-chain-incomplete' ? 'online' : code);
+  if (alertKey(out.code) !== alertKey(out.alerted) && settled) {
     const back = out.state === 'ok';
     const sent = await sendAlert(back
       ? { title: 'Haven community server is back', message: out.message, priority: 3, tags: ['white_check_mark'] }
