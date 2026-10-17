@@ -270,7 +270,32 @@
     :root { --topbar: 96px; }
   }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } .btn.pulse { animation: none; box-shadow: 0 0 0 3px var(--accent); } }
+  html.i18n-wait body { opacity: 0; }
+  .lang-pick { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: var(--muted); }
+  .lang-pick select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 4px; padding: 5px 6px; }
 </style>
+<script>
+// Pick the page language before anything is drawn: the visitor's earlier
+// choice, else the first browser language the page has, else English.
+(() => {
+  const LANGS = ['en', 'fr', 'de', 'es', 'pl', 'ru', 'uk', 'zh', 'pt', 'fa', 'ja', 'ko'];
+  let lang = null;
+  try { lang = localStorage.getItem('haven_site_lang'); } catch { /* storage blocked: detect instead */ }
+  if (!LANGS.includes(lang)) {
+    lang = 'en';
+    for (const l of navigator.languages || [navigator.language || 'en']) {
+      const code = String(l || '').split('-')[0].toLowerCase();
+      if (LANGS.includes(code)) { lang = code; break; }
+    }
+  }
+  window.SITE_LANG = lang;
+  if (lang !== 'en') {
+    document.documentElement.classList.add('i18n-wait');
+    // Never stay hidden if the translation is slow or missing.
+    setTimeout(() => document.documentElement.classList.remove('i18n-wait'), 1500);
+  }
+})();
+</script>
 </head>
 <body>
 
@@ -290,6 +315,22 @@
       <a href="#download">Download</a>
       <a href="https://github.com/ancsemi/Haven">GitHub</a>
       <a class="btn-try" id="try-now" href="#top">Try it now</a>
+      <label class="lang-pick"><span aria-hidden="true">🌐</span>
+        <select id="site-lang" aria-label="Language">
+          <option value="en">English</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+          <option value="pl">Polski</option>
+          <option value="ru">Русский</option>
+          <option value="uk">Українська</option>
+          <option value="zh">中文</option>
+          <option value="pt">Português</option>
+          <option value="fa">فارسی</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+        </select>
+      </label>
     </nav>
   </div>
 </header>
@@ -381,7 +422,7 @@
             <li>Bots and webhooks</li>
             <li>Sign in with your own identity provider</li>
             <li>Guest access, invite links and channel codes</li>
-            <li>Available in 11 languages: English, Français, Deutsch, Español, Polski, Русский, 中文, Português, فارسی, 日本語 and 한국어</li>
+            <li>Available in 12 languages: English, Français, Deutsch, Español, Polski, Русский, Українська, 中文, Português, فارسی, 日本語 and 한국어</li>
           </ul>
         </div>
         <div>
@@ -598,6 +639,78 @@
 </div>
 
 <script>
+// Page translations. The English is the page itself; i18n/<lang>.json maps
+// each piece of it (by its English HTML) to the translation, plus a few
+// strings the scripts below build. A piece with no translation, say after
+// the English was reworded, simply stays in English.
+(() => {
+  const TEXT = [
+    'nav.nav > a', '.hero-title', '.lead', '.actions a', '.term-cap', '.section-head h2', '.section-head p',
+    '.prose > p', '.prose li', '.prose h3', '.cols h3', '.cols li', 'table th', 'table td', '.compare-cap',
+    '.steps li', 'figcaption', '.facts dt', '.dl-row h3', '.dl-row p', '.dl-links a', '.try', '.status-text',
+    'footer nav a', 'footer .wrap > span',
+  ].join(', ');
+  const norm = (h) => h.replace(/\s+/g, ' ').trim();
+  const english = new WeakMap();
+  let dict = { html: {}, js: {} };
+  let resolveReady;
+  const ready = new Promise((r) => { resolveReady = r; });
+  const listeners = [];
+
+  const t = (key, fallback, vars) => {
+    let out = (dict.js && dict.js[key]) || fallback;
+    if (vars) for (const [k, v] of Object.entries(vars)) out = out.split('{' + k + '}').join(v);
+    return out;
+  };
+  const apply = () => {
+    document.querySelectorAll(TEXT).forEach((el) => {
+      if (el.querySelector('.ver, [data-stat], select')) return;
+      if (!english.has(el)) english.set(el, el.innerHTML);
+      const en = english.get(el);
+      el.innerHTML = (dict.html && dict.html[norm(en)]) || en;
+    });
+    document.querySelectorAll('img[alt]').forEach((img) => {
+      if (!img.dataset.altEn) img.dataset.altEn = img.alt;
+      img.alt = (dict.html && dict.html[img.dataset.altEn]) || img.dataset.altEn;
+    });
+  };
+  // Longer words can wrap the menu onto a second line; links to a section
+  // then need to stop below the taller bar.
+  const fitTopbar = () => {
+    const bar = document.querySelector('header.top');
+    if (bar) document.documentElement.style.setProperty('--topbar', bar.offsetHeight + 'px');
+  };
+  window.addEventListener('resize', fitTopbar);
+  const use = async (lang) => {
+    dict = { html: {}, js: {} };
+    if (lang !== 'en') {
+      try {
+        const res = await fetch('i18n/' + lang + '.json');
+        if (res.ok) dict = await res.json();
+      } catch { /* offline or blocked: the page stays in English */ }
+    }
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
+    apply();
+    fitTopbar();
+    document.documentElement.classList.remove('i18n-wait');
+    listeners.forEach((fn) => fn(lang));
+  };
+
+  window.siteI18n = { t, ready, onChange: (fn) => listeners.push(fn) };
+  const pick = document.getElementById('site-lang');
+  if (pick) {
+    pick.value = window.SITE_LANG || 'en';
+    pick.addEventListener('change', () => {
+      try { localStorage.setItem('haven_site_lang', pick.value); } catch { /* storage blocked: the choice lasts this visit */ }
+      use(pick.value);
+    });
+  }
+  use(window.SITE_LANG || 'en').then(resolveReady);
+})();
+</script>
+
+<script>
 // Screenshots open full size. The arrow keys, or the arrows on screen, step
 // through every screenshot on the page; click anywhere else or press Escape
 // to close.
@@ -615,7 +728,7 @@
   const open = (img) => { show(shots.indexOf(img)); box.hidden = false; document.body.style.overflow = 'hidden'; box.focus(); };
   const close = () => { box.hidden = true; big.removeAttribute('src'); document.body.style.overflow = ''; };
   shots.forEach((img) => {
-    img.tabIndex = 0; img.setAttribute('role', 'button'); img.setAttribute('aria-label', 'Enlarge screenshot');
+    img.tabIndex = 0; img.setAttribute('role', 'button'); img.setAttribute('aria-label', window.siteI18n.t('enlarge', 'Enlarge screenshot'));
     img.addEventListener('click', () => open(img));
     img.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(img); } });
   });
@@ -644,24 +757,29 @@
   const when = line.querySelector('.status-when');
   const SOURCE = 'https://raw.githubusercontent.com/ancsemi/Haven/site-status/status.json';
   const STALE_MS = 40 * 60 * 1000;
+  const { t } = window.siteI18n;
   const ago = (iso) => {
     const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
-    if (min < 1) return 'just now';
-    if (min < 60) return min === 1 ? '1 minute ago' : `${min} minutes ago`;
+    if (min < 1) return t('ago_now', 'just now');
+    if (min < 60) return min === 1 ? t('ago_minute', '1 minute ago') : t('ago_minutes', '{n} minutes ago', { n: min });
     const h = Math.round(min / 60);
-    return h === 1 ? '1 hour ago' : `${h} hours ago`;
+    return h === 1 ? t('ago_hour', '1 hour ago') : t('ago_hours', '{n} hours ago', { n: h });
   };
-  const at = (isoTime) => new Date(isoTime).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  // Certificate dates in the visitor's own time; anything else as the
-  // checker wrote it.
+  const at = (isoTime) => new Date(isoTime).toLocaleString(document.documentElement.lang || [], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  // Certificate dates in the visitor's own time; the rest by the checker's
+  // code, so it can be translated, else as the checker wrote it.
   const say = (s) => {
     if (s.code === 'cert-expired' && s.certificateExpires) {
-      return `The community server's security certificate expired ${at(s.certificateExpires)}, so browsers won't connect until it's renewed.`;
+      return t('status_cert_expired', "The community server's security certificate expired {date}, so browsers won't connect until it's renewed.", { date: at(s.certificateExpires) });
     }
     if (s.code === 'cert-expiring' && s.certificateExpires) {
-      return `The community server is online. Its security certificate runs out ${at(s.certificateExpires)}.`;
+      return t('status_cert_expiring', 'The community server is online. Its security certificate runs out {date}.', { date: at(s.certificateExpires) });
     }
-    return s.message || 'The community server is online.';
+    if (s.code === 'online' || s.code === 'online-chain-incomplete') return t('status_online', 'The community server is online.');
+    if (s.code === 'unreachable') return t('status_unreachable', "The community server can't be reached right now.");
+    if (s.code === 'not-answering') return t('status_not_answering', "The community server isn't answering right now.");
+    if (s.code === 'cert-invalid') return t('status_cert_invalid', "The community server's security certificate isn't valid, so browsers won't connect.");
+    return s.message || t('status_online', 'The community server is online.');
   };
   const show = (state, message, detail) => {
     line.dataset.state = state;
@@ -674,17 +792,18 @@
       if (!res.ok) throw new Error(`status ${res.status}`);
       const s = await res.json();
       if (!s || !s.checkedAt || Date.now() - Date.parse(s.checkedAt) > STALE_MS) {
-        show('unknown', "The community server's status hasn't been checked lately.");
+        show('unknown', t('status_stale', "The community server's status hasn't been checked lately."));
         return;
       }
       const state = ['ok', 'warn', 'down'].includes(s.state) ? s.state : 'unknown';
-      const since = state === 'down' && s.code !== 'cert-expired' && s.since ? `Since ${at(s.since)}. ` : '';
-      show(state, say(s), `${since}Checked ${ago(s.checkedAt)}.`);
+      const since = state === 'down' && s.code !== 'cert-expired' && s.since ? t('status_since', 'Since {date}.', { date: at(s.since) }) + ' ' : '';
+      show(state, say(s), since + t('status_checked', 'Checked {ago}.', { ago: ago(s.checkedAt) }));
     } catch (err) {
-      show('unknown', "Couldn't load the community server's status.");
+      show('unknown', t('status_failed', "Couldn't load the community server's status."));
     }
   };
-  check();
+  window.siteI18n.onChange(() => check());
+  window.siteI18n.ready.then(check);
   setInterval(check, 2 * 60 * 1000);
 })();
 </script>
@@ -713,13 +832,13 @@
 (async () => {
   const api = 'https://api.github.com/repos/ancsemi/Haven';
   const headers = { Accept: 'application/vnd.github+json' };
-  const fmt = (n) => Number(n).toLocaleString('en-US');
+  const fmt = (n) => Number(n).toLocaleString(document.documentElement.lang || 'en-US');
   const set = (k, v) => { const el = document.querySelector('[data-stat="' + k + '"]'); if (el && v != null && v !== '') el.textContent = v; };
   const apply = (d) => {
     set('stars', fmt(d.stars)); set('releases', fmt(d.releases)); set('commits', fmt(d.commits)); set('contributors', fmt(d.contributors));
-    if (d.started) set('started', new Date(d.started).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
+    if (d.started) set('started', new Date(d.started).toLocaleDateString(document.documentElement.lang || 'en-US', { month: 'short', year: 'numeric' }));
     const cap = document.getElementById('stats-caption');
-    if (cap) cap.textContent = 'Live from GitHub.';
+    if (cap) cap.textContent = window.siteI18n.t('stats_live', 'Live from GitHub.');
   };
   const cacheKey = 'haven_site_stats_v1';
   try {
