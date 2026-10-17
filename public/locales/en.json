@@ -3078,7 +3078,9 @@
         "content_label": "Message text",
         "content_hint": "Reword the message as you like. The list below is what people can pick: untick a role to take it off the menu, along with its chip.",
         "updated": "Role menu updated",
-        "gone": "That role menu is gone"
+        "gone": "That role menu is gone",
+        "max_picks_label": "How many each person can pick",
+        "max_picks_hint": "0 lets people take any number. With 1, picking another role swaps it for the one they had."
       }
     },
     "nsfw": {
@@ -4510,6 +4512,8 @@
     "unavailable_in_dm": "Threads are not available in DMs"
   },
   "role_menu": {
+    "pick_one_only": "Pick one",
+    "pick_up_to": "Pick up to {{count}}",
     "join": "Get the {{name}} role",
     "leave": "Drop the {{name}} role"
   },
