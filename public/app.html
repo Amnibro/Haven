@@ -4688,7 +4688,8 @@
         <button class="btn-sm" id="organize-move-down" data-i18n="modals.organize.move_down" data-i18n-title="modals.organize.move_down_title" title="Move selected channel down">⬇ Down</button>
         <div class="organize-spacer"></div>
         <div class="organize-tag-group">
-          <input type="text" id="organize-tag-input" class="organize-tag-input" maxlength="30" data-i18n-placeholder="modals.organize.tag_placeholder" placeholder="Tag name…">
+          <input type="text" id="organize-tag-input" class="organize-tag-input" maxlength="30" list="organize-tag-suggestions" autocomplete="off" data-i18n-placeholder="modals.organize.tag_placeholder" placeholder="Tag name…">
+          <datalist id="organize-tag-suggestions"></datalist>
           <button class="btn-sm organize-tag-btn" id="organize-set-tag" data-i18n-title="modals.organize.tag_set_title" title="Apply tag">🏷️ <span data-i18n="modals.organize.tag_set_btn">Set</span></button>
           <button class="btn-sm organize-tag-btn danger" id="organize-remove-tag" data-i18n="modals.organize.tag_remove_btn" data-i18n-title="modals.organize.tag_remove_title" title="Remove tag">✕</button>
         </div>
@@ -4735,7 +4736,8 @@
         <button class="btn-sm" id="dm-organize-move-down" data-i18n="modals.organize.move_down" data-i18n-title="modals.organize.move_down_title" title="Move down">⬇ Down</button>
         <div class="organize-spacer"></div>
         <div class="organize-tag-group">
-          <input type="text" id="dm-organize-tag-input" class="organize-tag-input" maxlength="30" data-i18n-placeholder="modals.dm_organize.category_placeholder" placeholder="Category…">
+          <input type="text" id="dm-organize-tag-input" class="organize-tag-input" maxlength="30" list="dm-organize-tag-suggestions" autocomplete="off" data-i18n-placeholder="modals.dm_organize.category_placeholder" placeholder="Category…">
+          <datalist id="dm-organize-tag-suggestions"></datalist>
           <button class="btn-sm organize-tag-btn" id="dm-organize-set-tag" data-i18n-title="modals.dm_organize.category_set_title" title="Apply category">🏷️ <span data-i18n="modals.organize.tag_set_btn">Set</span></button>
           <button class="btn-sm organize-tag-btn danger" id="dm-organize-remove-tag" data-i18n="modals.organize.tag_remove_btn" data-i18n-title="modals.dm_organize.category_remove_title" title="Remove category">✕</button>
         </div>
@@ -5336,7 +5338,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
-  <script type="module" src="/js/app.js?v=4.25.10"></script>
+  <script type="module" src="/js/app.js?v=4.25.11"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
