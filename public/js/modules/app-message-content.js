@@ -627,6 +627,9 @@ _formatContent(str) {
     closeTo(0);
     return '\n' + out;
   });
+  // A list is a block, so it already ends its line. The newline typed after
+  // it would add a second, empty line that the edit box never showed.
+  html = html.replace(/(<\/[ou]l>)\n/g, '$1');
 
   html = html.replace(/\n/g, '<br>');
 
