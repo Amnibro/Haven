@@ -1493,7 +1493,6 @@
           <div class="settings-nav-item" data-target="section-embed-size">📺 <span data-i18n="settings.nav.embeds_media">Embeds &amp; Media</span></div>
           <div class="settings-nav-item" data-target="section-banner-display">🏞️ <span data-i18n="settings.nav.banner_display">Banner Display</span></div>
           <div class="settings-nav-item" data-target="section-toggle-style">🎚️ <span data-i18n="settings.nav.toggle_style">Toggle Style</span></div>
-          <div class="settings-nav-item" data-target="section-statusbar">📊 <span data-i18n="settings.nav.status_bar">Status Bar</span></div>
 
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_chat">Chat</div>
           <div class="settings-nav-item" data-target="section-chat-behavior">💬 <span data-i18n="settings.nav.chat_behavior">Chat Behavior</span></div>
@@ -1990,16 +1989,6 @@
           </button>
         </div>
         <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.toggle_style.hint">Applies to on/off settings. Lists you tick items in, like permissions and channel pickers, always stay as boxes.</small>
-      </div>
-
-      <!-- Status Bar -->
-      <div class="settings-section" id="section-statusbar" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">📊 <span data-i18n="settings.status_bar_section.title">Status Bar</span></h5>
-        <label class="toggle-row">
-          <span data-i18n="settings.status_bar_section.show">Show Status Bar</span>
-          <input type="checkbox" id="show-status-bar">
-        </label>
-        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.status_bar_section.hint">Show the status bar at the bottom of the screen with server, ping, channel, and online info.</small>
       </div>
 
       <!-- Chat Behavior -->
@@ -2589,6 +2578,15 @@
       <div class="settings-section" id="section-debug">
         <h5 class="settings-section-title">🐞 <span data-i18n="settings.debug_section.title">Debug</span></h5>
         <p class="settings-desc" data-i18n="settings.debug_section.desc">Experimental client-side toggles. These don't change anything on the server.</p>
+
+        <!-- The status bar (debug footer) was a section of its own for one switch. -->
+        <div class="desktop-pref-row">
+          <label class="toggle-row">
+            <input type="checkbox" id="show-status-bar">
+            <span class="toggle-label" data-i18n="settings.status_bar_section.show">Show Status Bar</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.status_bar_section.hint">Show the status bar at the bottom of the screen with server, ping, channel, and online info.</p>
+        </div>
 
         <div class="desktop-pref-row">
           <label class="toggle-row">
