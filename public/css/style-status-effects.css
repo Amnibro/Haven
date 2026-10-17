@@ -508,7 +508,7 @@
   box-shadow: inset 0 0 120px rgba(20, 254, 23, 0.12);
 }
 [data-theme="fallout"] .main::before {
-  content: ''; position: fixed; inset: 0; z-index: 99998; pointer-events: none;
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
   background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 10, 0, 0.55) 100%);
 }
 
@@ -543,8 +543,8 @@
 }
 [data-theme="ffx"] .main { position: relative; }
 [data-theme="ffx"] .main::after {
-  content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 0.375rem;
-  pointer-events: none; z-index: 99998;
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 0.375rem;
+  pointer-events: none; z-index: 0;
   background: linear-gradient(90deg,
     transparent, rgba(64,168,224,0.6), rgba(100,200,255,0.8), rgba(64,168,224,0.6), transparent
   );
@@ -597,7 +597,7 @@
 }
 [data-theme="ice"] .main { position: relative; }
 [data-theme="ice"] .main::after {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background:
     radial-gradient(3px 3px at 10% 25%, rgba(200,235,255,0.8), transparent),
     radial-gradient(2px 2px at 25% 60%, rgba(200,235,255,0.6), transparent),
@@ -620,7 +620,7 @@
 /* ── Dark Souls: Campfire glow (muted, sporadic flicker) ── */
 [data-theme="darksouls"] .sidebar::after {
   content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 55vh;
-  pointer-events: none; z-index: 1;
+  pointer-events: none; z-index: 0;
   background: linear-gradient(0deg,
     rgba(180, 70, 10, 0.22) 0%,
     rgba(140, 45, 5, 0.12) 25%,
@@ -631,8 +631,8 @@
 }
 [data-theme="darksouls"] .main { position: relative; }
 [data-theme="darksouls"] .main::before {
-  content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 0.625rem;
-  pointer-events: none; z-index: 99998;
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 0.625rem;
+  pointer-events: none; z-index: 0;
   background: linear-gradient(90deg,
     transparent 0%,
     rgba(180, 60, 5, 0.25) 15%,
@@ -646,8 +646,8 @@
   animation: ds-fireline calc(3s * var(--fx-mult, 1)) ease-in-out infinite alternate;
 }
 [data-theme="darksouls"] .main::after {
-  content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 50vh;
-  pointer-events: none; z-index: 99997;
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 50vh;
+  pointer-events: none; z-index: 0;
   background: radial-gradient(ellipse 80% 70% at 50% 100%,
     rgba(180, 70, 10, 0.10) 0%,
     rgba(140, 45, 5, 0.05) 40%,
@@ -691,7 +691,7 @@
 /* ── Bloodborne: Blood vignette pulse ──────────────── */
 [data-theme="bloodborne"] .main { position: relative; }
 [data-theme="bloodborne"] .main::before {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background: radial-gradient(ellipse at center, transparent 40%, rgba(120, 10, 10, 0.35) 100%);
   animation: bb-vignette calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
@@ -745,7 +745,7 @@
 /* ── Abyss: Deep ocean pressure vignette ───────────── */
 [data-theme="abyss"] .main { position: relative; }
 [data-theme="abyss"] .main::before {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 40, 0.35) 100%);
 }
 
@@ -768,12 +768,32 @@
 [data-fx-custom] .sidebar,
 [data-fx-custom] .main { position: relative; }
 
-/* Full-screen overlay container */
+/* Effects sit behind what a panel shows, never on top of messages, media or
+   the message box (owner, 2026-10-16). An effect is drawn inside its panel at
+   z-index 0: #fx-layers in the chat column, the theme's ::before/::after and
+   the .fx-layer elements in the chat column or sidebar. The panel's own
+   content is lifted to 1. :where keeps that at zero specificity, so a child
+   with its own position or z-index (the resize handles, the banner, the
+   channel header, the message box) keeps it. */
+:where(.main, .sidebar) > :where(:not(.fx-layer, #fx-layers, #fx-matrix-rain)) { position: relative; z-index: 1; }
+
+/* Effects for the chat column. contain: paint makes it the box its fixed
+   children (vignettes, glows, the particle canvases) fill, instead of the
+   window. */
 #fx-layers {
+  position: absolute; inset: 0; z-index: 0;
+  pointer-events: none; overflow: hidden; contain: paint;
+}
+#fx-layers > * { pointer-events: none; }
+#fx-layers.fx-layers-page { position: fixed; z-index: -1; }
+
+/* The CRT screen is the one effect meant to sit over everything: scanlines
+   and the tube's vignette on top of the whole window. */
+#fx-overlay {
   position: fixed; inset: 0; z-index: 99990;
   pointer-events: none; overflow: hidden;
 }
-#fx-layers > * { pointer-events: none; }
+#fx-overlay > * { pointer-events: none; }
 
 /* Canvas layers (matrix rain, embers) */
 .fx-canvas {
