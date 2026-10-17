@@ -4,12 +4,20 @@ name: Community server status
 # status.json on the site-status branch, which the homepage's status line
 # reads (docs/index.html). The branch holds that one file in a single
 # commit, replaced each run, so main's history stays clean and nothing that
-# builds or publishes runs on it. scripts/community-status.js does the check.
+# builds or publishes runs on it. scripts/community-status.js does the check
+# and sends a phone alert through ntfy when the status changes (the topic is
+# the NTFY_TOPIC repository secret). Run it by hand with "send a test alert"
+# ticked to check the alerts reach the phone.
 
 on:
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
+    inputs:
+      test_alert:
+        description: Send a test alert
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -36,6 +44,9 @@ jobs:
           fi
 
       - name: Check the community server
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          ALERT_TEST: ${{ inputs.test_alert && 'true' || 'false' }}
         run: node scripts/community-status.js status.json "$( [ -s previous.json ] && echo previous.json )"
 
       - name: Publish the result

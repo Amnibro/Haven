@@ -10,6 +10,13 @@
 // says why: the certificate expired, it is not valid, the server does not
 // answer, or it cannot be reached at all.
 //
+// It also sends a phone alert through ntfy (https://ntfy.sh) when the status
+// changes: once when the server goes down, with the reason, and once when it
+// is back. A down alert waits for two checks in a row, so one dropped
+// connection does not page anyone; coming back is sent at once. The topic is
+// the NTFY_TOPIC secret (whoever knows it can read the alerts, so it is never
+// in the repo); without it no alert is sent. ALERT_TEST=true sends a test.
+//
 //   node scripts/community-status.js [out.json] [previous.json]
 //
 // HOST overrides the server (default haven.moviethingy.xyz).
@@ -22,6 +29,10 @@ const HOST = process.env.HOST || 'haven.moviethingy.xyz';
 const OUT = process.argv[2] || 'status.json';
 const PREV = process.argv[3] || null;
 const TIMEOUT_MS = 15000;
+const NTFY_TOPIC = (process.env.NTFY_TOPIC || '').trim();
+const ALERT_TEST = process.env.ALERT_TEST === 'true';
+// Checks in a row a bad status needs before it alerts.
+const DOWN_AFTER = 2;
 // A certificate this close to its end gets a warning while still working.
 const SOON_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -84,21 +95,43 @@ function judge(cert, health, now) {
   return { state: 'ok', code: 'online', message: 'The community server is online.' };
 }
 
+// One phone alert through ntfy. Errors are reported, never fatal: the status
+// still gets published, and the next change tries again.
+async function sendAlert({ title, message, priority, tags }) {
+  if (!NTFY_TOPIC) { console.log('[alert] no NTFY_TOPIC set, not sent:', title); return false; }
+  try {
+    const res = await fetch('https://ntfy.sh/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic: NTFY_TOPIC, title, message, priority, tags, click: 'https://haven-app.com/' }),
+    });
+    if (!res.ok) { console.warn('[alert] ntfy answered', res.status); return false; }
+    console.log('[alert] sent:', title);
+    return true;
+  } catch (err) {
+    console.warn('[alert] could not reach ntfy:', err.message);
+    return false;
+  }
+}
+
+function readPrevious() {
+  if (!PREV) return null;
+  try { return JSON.parse(fs.readFileSync(PREV, 'utf8')); } catch { return null; /* no earlier result yet */ }
+}
+
 async function main() {
   const now = Date.now();
   const cert = await readCertificate();
   const health = cert.reached ? await readHealth() : { status: 0, online: false };
   const verdict = judge(cert, health, now);
+  const prev = readPrevious();
+  const same = !!(prev && prev.code === verdict.code);
 
   // "Since" carries over while the verdict stays the same. An expired
   // certificate has been down since the moment it ran out.
-  let since = verdict.code === 'cert-expired' && cert.validTo ? cert.validTo : new Date(now).toISOString();
-  if (PREV && verdict.code !== 'cert-expired') {
-    try {
-      const prev = JSON.parse(fs.readFileSync(PREV, 'utf8'));
-      if (prev && prev.code === verdict.code && typeof prev.since === 'string') since = prev.since;
-    } catch { /* no earlier result yet: this one starts the clock */ }
-  }
+  let since = new Date(now).toISOString();
+  if (verdict.code === 'cert-expired' && cert.validTo) since = cert.validTo;
+  else if (same && typeof prev.since === 'string') since = prev.since;
 
   const out = {
     host: HOST,
@@ -107,7 +140,24 @@ async function main() {
     checkedAt: new Date(now).toISOString(),
     certificateExpires: cert.validTo || null,
     certificateIssuer: cert.issuer || null,
+    // How many checks in a row have said this, and the status the last
+    // alert was about (alerts go out when the two differ).
+    streak: same && Number.isInteger(prev.streak) ? prev.streak + 1 : (same ? 2 : 1),
+    alerted: prev && typeof prev.alerted === 'string' ? prev.alerted : 'online',
   };
+
+  const settled = out.state === 'ok' || out.streak >= DOWN_AFTER;
+  if (out.code !== out.alerted && settled) {
+    const back = out.state === 'ok';
+    const sent = await sendAlert(back
+      ? { title: 'Haven community server is back', message: out.message, priority: 3, tags: ['white_check_mark'] }
+      : { title: out.state === 'warn' ? 'Haven community server: certificate running out' : 'Haven community server is down', message: out.message, priority: out.state === 'warn' ? 3 : 4, tags: [out.state === 'warn' ? 'hourglass' : 'warning'] });
+    if (sent) out.alerted = out.code;
+  }
+  if (ALERT_TEST) {
+    await sendAlert({ title: 'Haven status alerts are set up', message: `This is a test. Right now: ${out.message}`, priority: 3, tags: ['bell'] });
+  }
+
   fs.writeFileSync(OUT, JSON.stringify(out, null, 2) + '\n');
   console.log(`${out.state}: ${out.message}`);
 }
