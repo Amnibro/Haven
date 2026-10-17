@@ -386,7 +386,6 @@
     "popup_blocked": "O pop-up foi bloqueado — verifique as configurações do navegador",
     "upload_failed": "Falha no envio",
     "upload_cancelled": "Envio cancelado",
-    "privacy_tools_missing": "O envio de fotos e vídeos está desativado devido a um erro de configuração do servidor",
     "privacy_gps_remains": "Seu arquivo contém dados de GPS que o Haven não conseguiu remover. Tente novamente ou remova os dados de GPS manualmente",
     "privacy_failed": "O Haven não conseguiu processar este arquivo. Tente novamente ou envie outro arquivo.",
     "invalid_json_response": "Resposta inválida do servidor",

@@ -407,7 +407,6 @@
     "channel_link_unavailable": "Kanal auf diesem Server nicht verfügbar",
     "popup_blocked": "Popup blockiert – prüfe deine Browsereinstellungen",
     "upload_cancelled": "Upload abgebrochen",
-    "privacy_tools_missing": "Foto- und Video-Uploads sind wegen einer Fehlkonfiguration des Servers deaktiviert",
     "privacy_gps_remains": "Deine Datei enthält GPS-Daten, die Haven nicht entfernen konnte. Bitte versuche es erneut oder entferne die GPS-Daten selbst",
     "privacy_failed": "Haven konnte diese Datei nicht verarbeiten. Bitte versuche es erneut oder lade eine andere Datei hoch.",
     "invalid_json_response": "Ungültige Antwort vom Server",

@@ -543,11 +543,7 @@ _listenMessageChanges() {
   });
 
   // ── Privacy pass ─────────────────────────────────
-  // Whether photo and video uploads are open (the server has the tools to
-  // remove their location data), and how far a video's cleaning has got.
-  this.socket.on('privacy-status', (data) => {
-    this._privacyToolsMissing = !data?.ready;
-  });
+  // How far a video's location cleaning has got (src/privacyPass.js).
   this.socket.on('upload-processing', (data) => {
     this._uploadProcessing?.get(data?.uploadId)?.(Math.max(0, Math.min(100, Number(data.percent) || 0)));
   });

@@ -3286,9 +3286,8 @@ try {
   console.error('[fcm] Could not read the FCM Privacy setting, leaving FCM off:', err.message);
 }
 initFcm(DATA_DIR);
-// Clean photos and videos uploaded before the privacy pass existed, and tell
-// everyone when photo and video uploads open (the tools were installed).
-privacyPass.start(db, { onReady: () => io.emit('privacy-status', { ready: true }) });
+// Clean photos and videos uploaded before the privacy pass existed.
+privacyPass.start(db);
 // How far a video's cleaning has got, for the uploader's progress bar.
 privacyPass.setProgressEmitter((req, percent) => {
   const uploadId = String(req.headers['x-upload-id'] || '').slice(0, 64);

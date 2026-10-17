@@ -395,7 +395,6 @@
     "popup_blocked": "ポップアップがブロックされました。ブラウザの設定を確認してください",
     "upload_failed": "アップロードに失敗しました",
     "upload_cancelled": "アップロードをキャンセルしました",
-    "privacy_tools_missing": "サーバーの設定に問題があるため、写真と動画のアップロードは無効になっています",
     "privacy_gps_remains": "ファイルにHavenが削除できなかったGPSデータが含まれています。もう一度試すか、GPSデータを手動で削除してください",
     "privacy_failed": "Havenはこのファイルを処理できませんでした。もう一度試すか、別のファイルをアップロードしてください。",
     "invalid_json_response": "サーバーからの応答が無効です",

@@ -563,12 +563,8 @@ _setupCollapsibleSections() {
 // the last one settles rather than whenever any single one does.
 _uploadWithProgress(url, formData) {
   // Photos and videos have their location data removed on the server once
-  // they arrive. Without the tools for it they are refused, so say so before
-  // sending anything rather than after a whole video has gone up.
+  // they arrive; the bar says so while that happens.
   const media = [...formData.values()].find(v => v instanceof Blob && /^(image|video)\//.test(v.type));
-  if (media && this._privacyToolsMissing) {
-    return Promise.reject(new Error(t('toasts.privacy_tools_missing')));
-  }
   return new Promise((resolve, reject) => {
     const bar = document.getElementById('upload-progress-bar');
     const fill = document.getElementById('upload-progress-fill');
@@ -622,14 +618,12 @@ _uploadWithProgress(url, formData) {
       } else {
         let errMsg = t('toasts.upload_failed_status', { status: xhr.status });
         const privacyToasts = {
-          PRIVACY_TOOLS_MISSING: 'toasts.privacy_tools_missing',
           PRIVACY_GPS_REMAINS: 'toasts.privacy_gps_remains',
           PRIVACY_FAILED: 'toasts.privacy_failed',
         };
         try {
           const d = JSON.parse(xhr.responseText);
           errMsg = privacyToasts[d.code] ? t(privacyToasts[d.code]) : (d.error || errMsg);
-          if (d.code === 'PRIVACY_TOOLS_MISSING') this._privacyToolsMissing = true;
         } catch { /* no JSON error body: keep the status message */ }
         reject(new Error(errMsg));
       }

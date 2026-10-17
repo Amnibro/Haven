@@ -439,7 +439,6 @@
     "popup_blocked": "Popup blocked. Check your browser settings",
     "upload_failed": "Upload failed",
     "upload_cancelled": "Upload cancelled",
-    "privacy_tools_missing": "Photo/Videos uploads are disabled due to a misconfiguration of the server",
     "privacy_gps_remains": "Your file contains GPS data that Haven failed to remove. Please try again or remove the GPS data manually",
     "privacy_failed": "Haven couldn't process this file. Please try again or upload a different file.",
     "invalid_json_response": "Invalid response from the server",

@@ -427,7 +427,6 @@
     "popup_blocked": "弹窗被拦截。请检查浏览器设置",
     "upload_failed": "上传失败",
     "upload_cancelled": "上传已取消",
-    "privacy_tools_missing": "由于服务器配置错误，照片和视频上传已被停用",
     "privacy_gps_remains": "你的文件包含 Haven 无法删除的 GPS 数据。请重试，或手动删除 GPS 数据",
     "privacy_failed": "Haven 无法处理此文件。请重试或上传其他文件。",
     "invalid_json_response": "服务器返回无效响应",

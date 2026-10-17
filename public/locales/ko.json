@@ -395,7 +395,6 @@
     "popup_blocked": "팝업이 차단되었습니다. 브라우저 설정을 확인하세요",
     "upload_failed": "업로드에 실패했습니다",
     "upload_cancelled": "업로드가 취소되었습니다",
-    "privacy_tools_missing": "서버 설정 오류로 사진/동영상 업로드가 비활성화되었습니다",
     "privacy_gps_remains": "파일에 Haven이 제거하지 못한 GPS 데이터가 있습니다. 다시 시도하거나 GPS 데이터를 직접 제거하세요",
     "privacy_failed": "Haven이 이 파일을 처리하지 못했습니다. 다시 시도하거나 다른 파일을 업로드하세요.",
     "invalid_json_response": "서버의 응답이 올바르지 않습니다",

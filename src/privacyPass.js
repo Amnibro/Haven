@@ -7,6 +7,10 @@
 // every upload kept them, so anyone who could see a picture could find where
 // it was taken. This cannot be switched off.
 //
+// exiftool and ffmpeg are optional. Without them, JPEG, PNG and WebP photos
+// are cleaned by Haven's own code (src/imageMetadata.js) and other files go
+// through as before, so a server works the same with or without them.
+//
 // Why exiftool and ffmpeg rather than our own code: both are tried and true,
 // kept up to date as cameras and phones change their formats, and thorough,
 // which is the whole job here. exiftool knows where every camera hides GPS
@@ -41,6 +45,7 @@ const path = require('path');
 const multer = require('multer');
 const tools = require('./mediaTools');
 const { UPLOADS_DIR, UNPROCESSED_DIR } = require('./paths');
+const { stripImageMetadata } = require('./imageMetadata');
 
 const HELD_DIR = path.join(UNPROCESSED_DIR, 'held');
 const FAILED_JSON = path.join(HELD_DIR, 'failed.json');
@@ -48,7 +53,6 @@ const TMP_MARK = '.privacy-tmp';
 const MAX_RETRIES = 3;
 
 const MESSAGES = {
-  PRIVACY_TOOLS_MISSING: 'Photo/Videos uploads are disabled due to a misconfiguration of the server',
   PRIVACY_GPS_REMAINS: 'Your file contains GPS data that Haven failed to remove. Please try again or remove the GPS data manually',
   PRIVACY_FAILED: "Haven couldn't process this file. Please try again or upload a different file.",
 };
@@ -190,7 +194,10 @@ async function cleanVideo(file, info, { signal, onProgress } = {}) {
  */
 async function cleanFile(file, { signal, onProgress } = {}) {
   if (!tools.toolsReady()) {
-    if (await sniffMediaKind(file)) throw new PrivacyError('PRIVACY_TOOLS_MISSING');
+    // Haven's own cleaner: JPEG, PNG and WebP photos; anything else is left
+    // as it is. The file keeps its date, as it does below.
+    const stat = fs.statSync(file);
+    if (stripImageMetadata(file)) keepTimes(file, stat);
     return { kind: null, ext: null };
   }
   const first = await inspect(file);
@@ -208,77 +215,6 @@ async function cleanFile(file, { signal, onProgress } = {}) {
   else await cleanVideo(file, { ...info, ext: first.ext }, { signal, onProgress });
   keepTimes(file, stat);
   return { kind, ext, mime };
-}
-
-// ── Without the tools ────────────────────────────────────
-// With exiftool missing nothing can be cleaned, so photo and video uploads
-// are refused. Telling them apart from other files then falls to us: the
-// first bytes for pictures, and for containers that can hold sound alone
-// (MP4, WebM), whether there is a picture track in them, so voice messages
-// still go through.
-
-const PHOTO_BRANDS = /^(heic|heix|hevc|hevx|heim|heis|mif1|msf1|avif|avis|crx |jxl )$/;
-
-function readAt(fd, pos, len) {
-  const b = Buffer.alloc(len);
-  const n = fs.readSync(fd, b, 0, len, pos);
-  return b.subarray(0, n);
-}
-
-function isoHasVideoTrack(fd, size) {
-  // Walk the top-level boxes to moov (often at the end), then look for a
-  // handler box of type 'vide' inside it.
-  let pos = 0;
-  while (pos + 8 <= size) {
-    const h = readAt(fd, pos, 16);
-    let len = h.readUInt32BE(0);
-    const type = h.toString('latin1', 4, 8);
-    if (len === 1 && h.length >= 16) len = Number(h.readBigUInt64BE(8));
-    else if (len === 0) len = size - pos;
-    if (len < 8) return true;                           // malformed: assume the worst
-    if (type === 'moov') {
-      const moov = readAt(fd, pos, Math.min(len, 32 * 1024 * 1024));
-      for (let i = moov.indexOf('hdlr'); i !== -1; i = moov.indexOf('hdlr', i + 4)) {
-        if (moov.toString('latin1', i + 12, i + 16) === 'vide') return true;
-      }
-      return false;
-    }
-    pos += len;
-  }
-  return true;                                          // no moov found: assume the worst
-}
-
-async function sniffMediaKind(file) {
-  let fd;
-  try {
-    fd = fs.openSync(file, 'r');
-    const size = fs.fstatSync(fd).size;
-    const b = readAt(fd, 0, 64 * 1024);
-    const s = (a, z) => b.toString('latin1', a, z);
-    if (b[0] === 0xFF && b[1] === 0xD8) return 'photo';
-    if (s(1, 4) === 'PNG' || s(0, 3) === 'GIF' || s(0, 4) === '8BPS') return 'photo';
-    if ((s(0, 4) === 'II*\0') || (s(0, 4) === 'MM\0*') || s(0, 4) === 'IIRO' || s(0, 4) === 'IIRS' || s(0, 4) === 'IIU\0') return 'photo';
-    if (s(0, 8) === 'FUJIFILM' || (b[0] === 0xFF && b[1] === 0x0A) || s(4, 8) === 'JXL ') return 'photo';
-    if (s(0, 4) === 'RIFF') return s(8, 12) === 'WEBP' ? 'photo' : s(8, 11) === 'AVI' ? 'video' : null;
-    if (s(4, 8) === 'ftyp') {
-      if (PHOTO_BRANDS.test(s(8, 12))) return 'photo';
-      return isoHasVideoTrack(fd, size) ? 'video' : null;
-    }
-    if (['moov', 'mdat', 'wide', 'free', 'skip'].includes(s(4, 8))) return isoHasVideoTrack(fd, size) ? 'video' : null;
-    if (b.readUInt32BE(0) === 0x1A45DFA3) {
-      // Matroska / WebM: a codec id starting "V_" means a picture track.
-      for (let i = b.indexOf(0x86); i !== -1; i = b.indexOf(0x86, i + 1)) {
-        if (s(i + 2, i + 4) === 'V_') return 'video';
-      }
-      return null;
-    }
-    if (s(0, 3) === 'FLV') return b[4] & 0x01 ? 'video' : null;
-    if (b.readUInt32BE(0) === 0x3026B275 || b.readUInt32BE(0) === 0x000001BA || b.readUInt32BE(0) === 0x000001B3) return 'video';
-    if (b[0] === 0x47 && b[188] === 0x47 && b[376] === 0x47) return 'video';
-    return null;
-  } catch { return null; } finally {
-    if (fd !== undefined) try { fs.closeSync(fd); } catch { /* already closed */ }
-  }
 }
 
 // ── New uploads ──────────────────────────────────────────
@@ -462,7 +398,11 @@ function writeFailedJson() {
 }
 
 async function sweepUploads() {
-  const state = getState();
+  const full = tools.toolsReady();
+  let state = getState();
+  // A sweep without the tools only reached JPEG, PNG and WebP; once they are
+  // installed, everything is gone through again.
+  if ((state.done || state.cursor) && !!state.full !== full && full) state = {};
   if (state.done) return;
   const files = listFiles(UPLOADS_DIR).filter(r => !r.includes(TMP_MARK)).sort();
   const todo = state.cursor ? files.filter(r => r > state.cursor) : files;
@@ -480,9 +420,9 @@ async function sweepUploads() {
         console.error(`[privacy] Could not move ${rel} to unprocessed/held:`, err.message);
       }
     }
-    if (Date.now() - lastSave > 5000) { setState({ cursor: rel }); lastSave = Date.now(); }
+    if (Date.now() - lastSave > 5000) { setState({ cursor: rel, full }); lastSave = Date.now(); }
   }
-  setState({ done: true });
+  setState({ done: true, full });
   if (todo.length) console.log(`[privacy] Existing uploads checked${held ? `; ${held} could not be cleaned and are held in unprocessed/held` : ''}.`);
 }
 
@@ -525,15 +465,15 @@ async function runSweep() {
 }
 
 function reportMissing() {
-  console.error(`❌ [privacy] ${tools.missingTools().join(' and ')} not found. Photo and video uploads are refused until it is installed, ` +
-    'because location data cannot be removed without it. Install it, or point HAVEN_EXIFTOOL_PATH / HAVEN_FFMPEG_PATH at it.');
+  console.log(`ℹ️  [privacy] ${tools.missingTools().join(' and ')} not found, so location data is removed from JPEG, PNG and WebP photos only. ` +
+    'Install exiftool and ffmpeg (or point HAVEN_EXIFTOOL_PATH / HAVEN_FFMPEG_PATH at them) to clean videos and other photo formats too.');
 }
 
 /**
- * Find the tools, clean up after any crash, and start the sweep. `onReady`
- * runs if the tools turn up later, without a restart.
+ * Find the tools, clean up after any crash, and start the sweep. When the
+ * tools turn up later, the sweep runs again with them, without a restart.
  */
-function start(database, { onReady } = {}) {
+function start(database) {
   db = database;
   db.exec(`CREATE TABLE IF NOT EXISTS privacy_held (
     rel_path TEXT PRIMARY KEY,
@@ -550,20 +490,17 @@ function start(database, { onReady } = {}) {
     runSweep();
   };
   if (tools.locateTools()) return ready();
-  tools.downloadMissingTools().then((ok) => {
-    if (ok) { onReady?.(); return ready(); }
-    reportMissing();
-    watchForTools(onReady);
-  });
+  reportMissing();
+  runSweep();
+  watchForTools();
 }
 
-function watchForTools(onReady) {
-  // Installing a tool should not need a restart.
+function watchForTools() {
+  // Installing the tools should not need a restart.
   toolRecheck = setInterval(() => {
     if (!tools.locateTools()) return;
     clearInterval(toolRecheck); toolRecheck = null;
-    console.log('🔒 Privacy pass tools found; photo and video uploads are open again.');
-    onReady?.();
+    console.log('🔒 Privacy pass tools found; videos and every photo format are cleaned from now on.');
     runSweep();
   }, 5 * 60 * 1000);
   toolRecheck.unref?.();
@@ -579,6 +516,6 @@ function heldState(rel) {
 }
 
 module.exports = {
-  start, diskStorage, admitFile, cleanFile, inspect, sniffMediaKind, correctExt, heldState,
+  start, diskStorage, admitFile, cleanFile, inspect, correctExt, heldState,
   setProgressEmitter, PrivacyError, toolsReady: tools.toolsReady,
 };

@@ -1,8 +1,8 @@
 'use strict';
 
-// The privacy pass (src/privacyPass.js): telling photos and videos apart
-// without the tools, naming files by what they really are, and, where
-// exiftool and ffmpeg are installed, actually removing location data.
+// The privacy pass (src/privacyPass.js): Haven's own photo cleaner when
+// exiftool and ffmpeg are missing, naming files by what they really are,
+// and, where the tools are installed, removing location data with them.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -13,7 +13,6 @@ const { spawnSync } = require('node:child_process');
 
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-privacy-'));
 process.env.HAVEN_DATA_DIR = DATA;
-process.env.HAVEN_NO_TOOL_DOWNLOAD = '1';
 const tools = require('../src/mediaTools');
 const pp = require('../src/privacyPass');
 
@@ -48,21 +47,24 @@ test('a misleading extension is replaced, a different spelling of the right one 
   assert.strictEqual(pp.correctExt('.png', ''), null, 'an unknown type renames nothing');
 });
 
-test('without the tools, photos and videos are recognised by their bytes', async () => {
-  const ftyp = (brand) => box('ftyp', brand, Buffer.alloc(4), brand);
-  assert.strictEqual(await pp.sniffMediaKind(write('a', Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(20)]))), 'photo');
-  assert.strictEqual(await pp.sniffMediaKind(write('b', PNG)), 'photo');
-  assert.strictEqual(await pp.sniffMediaKind(write('c', ftyp('heic'))), 'photo');
-  assert.strictEqual(await pp.sniffMediaKind(write('d', Buffer.concat([ftyp('isom'), box('moov', box('trak', hdlr('vide')))]))), 'video');
-  assert.strictEqual(await pp.sniffMediaKind(write('e', Buffer.concat([ftyp('M4A '), box('moov', box('trak', hdlr('soun')))]))), null,
-    'sound alone in an MP4 (a voice message) is not a video');
-  const ebml = (codec) => Buffer.concat([Buffer.from([0x1A, 0x45, 0xDF, 0xA3]), Buffer.alloc(30), Buffer.from([0x86, 0x80 | codec.length]), Buffer.from(codec)]);
-  assert.strictEqual(await pp.sniffMediaKind(write('f', ebml('V_VP9'))), 'video');
-  assert.strictEqual(await pp.sniffMediaKind(write('g', ebml('A_OPUS'))), null, 'a WebM voice message is not a video');
-  assert.strictEqual(await pp.sniffMediaKind(write('h', require('node:crypto').randomBytes(4096))), null, 'encrypted DM files are left alone');
-});
-
 const haveTools = tools.locateTools();
+
+test('without the tools, a JPEG still loses its EXIF block and nothing is refused', { skip: haveTools && 'the tools are installed, so they do the cleaning' }, async () => {
+  const exif = Buffer.concat([Buffer.from('Exif\0\0MM\0*', 'latin1'), Buffer.from([0, 0, 0, 8, 0, 0])]);
+  const app1 = Buffer.concat([Buffer.from([0xFF, 0xE1, 0, exif.length + 2]), exif]);
+  const scan = Buffer.from([0xFF, 0xDA, 0, 4, 1, 2, 9, 9, 0xFF, 0xD9]);
+  const file = write('photo.jpg', Buffer.concat([Buffer.from([0xFF, 0xD8]), app1, scan]));
+  const old = new Date('2020-01-01T00:00:00Z');
+  fs.utimesSync(file, old, old);
+  assert.deepStrictEqual(await pp.cleanFile(file), { kind: null, ext: null });
+  const after = fs.readFileSync(file);
+  assert.ok(!after.includes(Buffer.from('Exif')), 'the EXIF block is gone');
+  assert.ok(after.subarray(-10).equals(scan), 'the picture itself is untouched');
+  assert.strictEqual(fs.statSync(file).mtime.getTime(), old.getTime(), 'it keeps its date');
+  const text = write('notes.txt', 'nothing to see here');
+  assert.deepStrictEqual(await pp.cleanFile(text), { kind: null, ext: null });
+  assert.strictEqual(fs.readFileSync(text, 'utf8'), 'nothing to see here');
+});
 
 test('photos lose their location, XMP and IPTC but keep their rotation', { skip: !haveTools && 'exiftool and ffmpeg are not installed' }, async () => {
   const file = write('photo.bin', PNG);

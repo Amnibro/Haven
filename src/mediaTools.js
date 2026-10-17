@@ -1,12 +1,16 @@
 'use strict';
 
 // The two outside programs Haven leans on for photos and videos: exiftool
-// (reads and writes metadata) and ffmpeg (rewrites video files). Both are
-// required for photo and video uploads; see src/privacyPass.js for why.
+// (reads and writes metadata) and ffmpeg (rewrites video files); see
+// src/privacyPass.js for what they do.
+//
+// Both are optional. Without them photos are still cleaned by Haven's own
+// code (src/imageMetadata.js: JPEG, PNG and WebP); with them, videos and
+// every other photo format are cleaned too. The Docker image includes both.
 //
 // Each is looked for, in order, at the path in its environment variable, in
-// the data folder's tools/ (where Haven's own download puts it), and on the
-// PATH. Whichever answers its version check first is used.
+// the data folder's tools/, and on the PATH. Whichever answers its version
+// check first is used.
 
 const fs = require('fs');
 const os = require('os');
@@ -170,100 +174,4 @@ function stopExiftool() {
   et = null;
 }
 
-// ── Downloading them ─────────────────────────────────────
-// When either is not installed, Haven fetches a pinned version from GitHub
-// into the data folder's tools/ and checks it against a fixed SHA-256 before
-// using it, so a changed or tampered file is refused rather than run.
-// ExifTool comes from its author's own repository (the program and library
-// are byte for byte the release on exiftool.org); it is a Perl program, so it
-// needs Perl, which Linux and macOS ship. Its Windows build is not on GitHub,
-// so on Windows it is installed by hand. ffmpeg comes from the ffmpeg-static
-// project's release, which packages the widely used static builds for each
-// platform as a single file. Turn downloading off with
-// HAVEN_NO_TOOL_DOWNLOAD=1 and install both yourself.
-
-const EXIFTOOL_DOWNLOAD = {
-  url: 'https://github.com/exiftool/exiftool/archive/refs/tags/13.59.tar.gz',
-  sha256: '87d3317882fdae9cb4dcfe57a96a378d0132ffc02c731315bf128b19ddcf7aac',
-};
-const FFMPEG_RELEASE = 'https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1';
-// SHA-256 of the gzipped download, then of the program inside it.
-const FFMPEG_DOWNLOADS = {
-  'linux-x64':    ['bfe8a8fc511530457b528c48d77b5737527b504a3797a9bc4866aeca69c2dffa', 'e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99'],
-  'linux-arm64':  ['754a678672298bc68156adff58aa7385a592c2b30b1d0ae8750c45c915c4bac0', '6bb182d0d75d23028db82e9e4f723ca69b853d055698486e6984ddb2c06fb8ce'],
-  'darwin-x64':   ['929b375c1182d956c51f7ac25e0b2b0411fb01f6f407aa15c9758efeb4242106', 'ebdddc936f61e14049a2d4b549a412b8a40deeff6540e58a9f2a2da9e6b18894'],
-  'darwin-arm64': ['8923876afa8db5585022d7860ec7e589af192f441c56793971276d450ed3bbfa', 'a90e3db6a3fd35f6074b013f948b1aa45b31c6375489d39e572bea3f18336584'],
-  'win32-x64':    ['8883a3dffbd0a16cf4ef95206ea05283f78908dbfb118f73c83f4951dcc06d77', '04e1307997530f9cf2fe35cba2ca7e8875ca91da02f89d6c7243df819c94ad00'],
-};
-
-const sha256 = (buf) => require('crypto').createHash('sha256').update(buf).digest('hex');
-
-async function fetchChecked(url, expected, maxBytes) {
-  const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(10 * 60 * 1000) });
-  if (!res.ok) throw new Error(`${url} answered HTTP ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > maxBytes) throw new Error(`${url} is larger than expected`);
-  if (sha256(buf) !== expected) throw new Error(`${url} does not match its pinned checksum, so it was not used`);
-  return buf;
-}
-
-async function downloadFfmpeg() {
-  const key = `${process.platform}-${process.arch}`;
-  const sums = FFMPEG_DOWNLOADS[key];
-  if (!sums) throw new Error(`no ffmpeg download for ${key}; install ffmpeg yourself`);
-  const gz = await fetchChecked(`${FFMPEG_RELEASE}/ffmpeg-${key}.gz`, sums[0], 64 * 1024 * 1024);
-  const bin = require('zlib').gunzipSync(gz);
-  if (sha256(bin) !== sums[1]) throw new Error('the unpacked ffmpeg does not match its pinned checksum');
-  const dir = path.join(TOOLS_DIR, 'ffmpeg');
-  fs.mkdirSync(dir, { recursive: true });
-  const dest = path.join(dir, 'ffmpeg' + EXE);
-  fs.writeFileSync(dest + '.part', bin, { mode: 0o755 });
-  fs.renameSync(dest + '.part', dest);
-}
-
-async function downloadExiftool() {
-  if (process.platform === 'win32') {
-    throw new Error('ExifTool for Windows is not on GitHub; install it from https://exiftool.org and set HAVEN_EXIFTOOL_PATH');
-  }
-  const archive = await fetchChecked(EXIFTOOL_DOWNLOAD.url, EXIFTOOL_DOWNLOAD.sha256, 64 * 1024 * 1024);
-  const staging = path.join(TOOLS_DIR, `exiftool-${Date.now()}.part`);
-  fs.mkdirSync(staging, { recursive: true });
-  try {
-    // tar ships with every system this runs on.
-    const file = path.join(staging, 'exiftool.tar.gz');
-    fs.writeFileSync(file, archive);
-    const r = spawnSync('tar', ['-xzf', file, '-C', staging], { timeout: 60000 });
-    if (r.status !== 0) throw new Error(`could not unpack exiftool: ${String(r.stderr || r.error?.message || '').trim()}`);
-    fs.unlinkSync(file);
-    const top = fs.readdirSync(staging).find(n => /exiftool/i.test(n) && fs.statSync(path.join(staging, n)).isDirectory());
-    if (!top) throw new Error('the exiftool download did not contain the expected folder');
-    const dest = path.join(TOOLS_DIR, 'exiftool');
-    fs.rmSync(dest, { recursive: true, force: true });
-    fs.renameSync(path.join(staging, top), dest);
-  } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
-  }
-}
-
-/**
- * Download whichever tools are missing, then look again. Resolves true when
- * both are usable. Every failure is logged and leaves the tool missing.
- */
-async function downloadMissingTools() {
-  if (process.env.HAVEN_NO_TOOL_DOWNLOAD === '1') return toolsReady();
-  for (const tool of missingTools()) {
-    console.log(`⬇️  [privacy] Downloading ${tool}…`);
-    try {
-      await (tool === 'ffmpeg' ? downloadFfmpeg() : downloadExiftool());
-    } catch (err) {
-      console.error(`[privacy] Could not download ${tool}: ${err.message}`);
-    }
-  }
-  const ok = locateTools();
-  if (!ok && found.exiftool === null && process.platform !== 'win32' && fs.existsSync(path.join(TOOLS_DIR, 'exiftool', 'exiftool'))) {
-    console.error('[privacy] exiftool was downloaded but will not run. It needs Perl; install perl and restart.');
-  }
-  return ok;
-}
-
-module.exports = { TOOLS_DIR, locateTools, toolsReady, missingTools, toolInfo, toolPath, run, exiftool, stopExiftool, downloadMissingTools };
+module.exports = { TOOLS_DIR, locateTools, toolsReady, missingTools, toolInfo, toolPath, run, exiftool, stopExiftool };
