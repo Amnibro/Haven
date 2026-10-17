@@ -25,3 +25,26 @@
   color: var(--text-primary);
 }
 :where(select option:disabled) { color: var(--text-muted); }
+
+/* Text boxes and text areas get the same fallback. A box with no styling of
+   its own (the Auto-Mod domain box, the webhook address, the Create
+   Sub-channel fields, and boxes built by scripts) drew as the system's white
+   or grey field. Zero specificity again: anything that styles its own box
+   keeps it. */
+:where(
+  input:not([type]),
+  input[type="text"], input[type="search"], input[type="email"], input[type="url"],
+  input[type="number"], input[type="password"], input[type="tel"],
+  input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"],
+  textarea
+) {
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.375rem 0.625rem;
+  font-family: inherit;
+  transition: border-color var(--transition);
+}
+:where(input, textarea):where(:focus) { border-color: var(--accent); }
+:where(input, textarea)::placeholder { color: var(--text-muted); }
