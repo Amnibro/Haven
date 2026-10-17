@@ -1063,6 +1063,7 @@ _createMessageEl(msg, prevMsg) {
   const iDelete = iconPair('🗑️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14" stroke-width="1.8" stroke-linecap="round"></path><path d="M9 7V5h6v2" stroke-width="1.8" stroke-linecap="round"></path><path d="M7 7l1 12h8l1-12" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
   const iLink = iconPair('🔗', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>');
   const iMore = iconPair('⋯', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"></circle></svg>');
+  const iNsfw = iconPair('🔞', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" stroke-width="1.8" stroke-linejoin="round"></path><circle cx="12" cy="12" r="2.5" stroke-width="1.8"></circle><path d="M4 4l16 16" stroke-width="1.8" stroke-linecap="round"></path></svg>');
   const canShareLink = !isDmContext && this._canShareChannelLink?.(this.currentChannel);
 
   const reactionsAllowed = isDmContext || this._channelAllowsReactions?.(this.currentChannel) !== false;
@@ -1107,6 +1108,11 @@ _createMessageEl(msg, prevMsg) {
         : `<button data-action="archive" title="${t('app.messages.protect_btn')}">${iArchive}</button>`
     });
   }
+  // NSFW mark (app-message-nsfw.js): your own message, or anyone's you could
+  // delete; in a DM only your own.
+  if (isDmContext ? msg.user_id === this.user.id : canDelete) {
+    toolbarActions.push({ key: 'nsfw', html: this._messageNsfwToolbarHtml(!!msg.nsfw, iNsfw) });
+  }
   if (msg.user_id === this.user.id) {
     toolbarActions.push({ key: 'edit', html: `<button data-action="edit" title="${t('msg_toolbar.edit')}">${iEdit}</button>` });
   }
@@ -1114,7 +1120,7 @@ _createMessageEl(msg, prevMsg) {
     toolbarActions.push({ key: 'delete', html: `<button data-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>` });
   }
 
-  const defaultToolbarOrder = ['react', 'reply', 'quote', 'thread', 'copy-link', 'pin', 'archive', 'edit', 'delete'];
+  const defaultToolbarOrder = ['react', 'reply', 'quote', 'thread', 'copy-link', 'pin', 'archive', 'nsfw', 'edit', 'delete'];
   let savedToolbarOrder = [];
   try {
     savedToolbarOrder = JSON.parse(localStorage.getItem('haven-toolbar-order') || '[]');
@@ -1198,6 +1204,7 @@ _createMessageEl(msg, prevMsg) {
     // Only with Coloured text or the look turned off does an official
     // message land here, as part of a run.
     if (msg.highlight) this._applyMessageHighlight(el, msg.highlight);
+    if (msg.nsfw) this._applyMessageNsfw(el, true);
     return el;
   }
 
@@ -1345,6 +1352,7 @@ _createMessageEl(msg, prevMsg) {
     </div>
   `;
   if (msg.highlight) this._applyMessageHighlight(el, msg.highlight);
+  if (msg.nsfw) this._applyMessageNsfw(el, true);
   return el;
 },
 

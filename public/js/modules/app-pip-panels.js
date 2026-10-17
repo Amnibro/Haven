@@ -189,6 +189,8 @@ _bindThreadAndDmPanels() {
           this.socket.emit('unarchive-message', { messageId: msgId });
         } else if (action === 'copy-link') {
           this._copyChannelLink?.(this._activeDMPip, msgId);
+        } else if (action === 'nsfw' || action === 'unnsfw') {
+          this._setMessageNsfw?.(msgId, action === 'nsfw');
         } else if (action === 'thread') {
           // Threads are not available in DMs - swallow the click. The button
           // should already be filtered out at render time, this is defence

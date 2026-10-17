@@ -78,6 +78,7 @@ const registerForumVotes = require('./forumVotes');
 const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
+const registerMessageNsfw = require('./messageNsfw');
 const createLiveAccess = require('./liveAccess');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -2928,6 +2929,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);
+    registerMessageNsfw(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made

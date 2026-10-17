@@ -569,6 +569,9 @@
   },
   "msg_toolbar": {
     "react": "React",
+    "mark_nsfw": "Mark NSFW",
+    "unmark_nsfw": "Remove NSFW mark",
+    "nsfw_hidden": "🔞 NSFW: click to show",
     "highlight_on": "Mark as official",
     "highlight_off": "Remove official mark",
     "reply": "Reply",
@@ -3068,8 +3071,8 @@
     "nsfw": {
       "hide": "Hide NSFW channels",
       "hide_hint": "Channels an admin marked 🔞 leave your sidebar, and forum topics marked 🔞 leave their forum, until you turn this off. Handy on a phone in public.",
-      "blur": "Blur NSFW topics until clicked",
-      "blur_hint": "The picture and preview of a topic marked 🔞 sit behind a blur, like a spoiler. Turn this off to see them plainly."
+      "blur": "Blur NSFW topics and messages until clicked",
+      "blur_hint": "Topics and messages marked 🔞 sit behind a blur, like a spoiler. Turn this off to see them plainly."
     },
     "search_placeholder": "Search settings (Ctrl+F)"
   },
@@ -3861,7 +3864,9 @@
         "badge_grant": "gave a badge to",
         "badge_revoke": "took a badge back from",
         "messages_move": "moved messages to",
-        "messages_move_to_thread": "moved messages into a thread in"
+        "messages_move_to_thread": "moved messages into a thread in",
+        "message_nsfw_on": "marked a message NSFW in",
+        "message_nsfw_off": "took the NSFW mark off a message in"
       }
     },
     "ip_bans": {

@@ -468,6 +468,7 @@ _showMessageContextMenu(e, msgEl) {
                           !!(this.user?.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('promote_user'));
   if (canEditRoleMenu) items.push(`<button class="channel-ctx-item" data-action="edit-role-menu">🎭 <span>${t('settings.admin.role_menu.edit')}</span></button>`);
   if (canEditTags) items.push(`<button class="channel-ctx-item" data-action="edit-tags">🏷️ <span>${t('tags.edit')}</span></button>`);
+  if (this._canSetMessageNsfw?.(msgEl, isDm)) items.push(this._messageNsfwMenuHtml(msgEl.dataset.nsfw === '1'));
   // Picking messages to move or put in a thread, starting with this one. The
   // header's Select button is hidden on phones, so this is their way in.
   if (!isDm && (this.user?.isAdmin || this._canModerate())) items.push(`<button class="channel-ctx-item" data-action="select-messages">☑️ <span>${t('header.select_messages_to_move')}</span></button>`);
@@ -544,6 +545,8 @@ _showMessageContextMenu(e, msgEl) {
       this._openRoleMenuBuilder?.({ messageId: msgId });
     } else if (action === 'edit-tags') {
       this._openMessageTagEditor(msgId, msgEl);
+    } else if (action === 'nsfw' || action === 'unnsfw') {
+      this._setMessageNsfw(msgId, action === 'nsfw');
     } else if (action === 'select-messages') {
       this._enterMoveSelectionMode();
       this._toggleMoveSelect(msgEl);

@@ -13,6 +13,7 @@ const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
+const { migrateMessageNsfw } = require('./messageNsfw');
 const { migrateBadges } = require('./badges');
 const { installGuard: installProtectedGuard } = require('./protectedMessages');
 
@@ -1180,6 +1181,7 @@ function initDatabase() {
   migrateSelfDms(db, addColumn);
   migrateForumVotes(db, addColumn);
   migrateForumBlog(addColumn);
+  migrateMessageNsfw(addColumn);
   db.exec(`
     CREATE TABLE IF NOT EXISTS dm_group_invites (
       channel_id INTEGER NOT NULL,

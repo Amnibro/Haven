@@ -314,7 +314,7 @@ module.exports = function register(socket, ctx) {
       messages = forumHistory(channel.id, { before, after, around, limit, sort, tags, tagMode });
     } else if (before) {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -323,7 +323,7 @@ module.exports = function register(socket, ctx) {
       `).all(channel.id, before, limit);
     } else if (after) {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -333,7 +333,7 @@ module.exports = function register(socket, ctx) {
     } else if (around) {
       const half = Math.floor(limit / 2);
       const beforeMsgs = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -341,14 +341,14 @@ module.exports = function register(socket, ctx) {
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, around, half);
       const targetMsg = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id = ?
       `).all(channel.id, around);
       const afterMsgs = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -359,7 +359,7 @@ module.exports = function register(socket, ctx) {
       messages = [...beforeMsgs.reverse(), ...targetMsg, ...afterMsgs];
     } else {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -540,7 +540,8 @@ module.exports = function register(socket, ctx) {
       const atags = attachmentTagMap.get(m.id);
       if (atags && atags.length) obj.attachmentTags = atags;
       if ('closed' in m) obj.closed = !!m.closed;
-      if ('nsfw' in m) obj.nsfw = !!m.nsfw;
+      // Sent only when set, so ordinary messages carry nothing extra.
+      if (m.nsfw) obj.nsfw = true; else delete obj.nsfw;
       if (m.poll_data) {
         try {
           obj.poll = JSON.parse(m.poll_data);
@@ -3070,7 +3071,7 @@ module.exports = function register(socket, ctx) {
     }
 
     const messages = db.prepare(`
-      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.silent,
+      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.silent, m.nsfw,
              COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
       FROM messages m LEFT JOIN users u ON m.user_id = u.id
       WHERE m.thread_id = ?
@@ -3123,6 +3124,7 @@ module.exports = function register(socket, ctx) {
     const enriched = messages.map(m => {
       const obj = { ...m };
       if (m.silent) obj.silent = true; else delete obj.silent;
+      if (m.nsfw) obj.nsfw = true; else delete obj.nsfw;
       const atags = threadTagMap.get(m.id);
       if (atags && atags.length) obj.attachmentTags = atags;
       // Border fit travels with the message (like avatar) so it renders even when

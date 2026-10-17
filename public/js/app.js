@@ -13,8 +13,8 @@ import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.25.4';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.21.0';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.24.32';
-import MessageActionMethods from './modules/app-message-actions.js?v=4.25.2';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.25.8';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.25.10';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.25.10';
 import PeopleMethods from './modules/app-people.js?v=4.23.11';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.23.9';
@@ -38,9 +38,9 @@ import ChannelMethods  from './modules/app-channels.js?v=4.25.8';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.24.9';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.21.0';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.32';
-import MessageMethods  from './modules/app-messages.js?v=4.25.1';
+import MessageMethods  from './modules/app-messages.js?v=4.25.10';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.24.19';
-import MessageToolMethods from './modules/app-message-tools.js?v=4.24.32';
+import MessageToolMethods from './modules/app-message-tools.js?v=4.25.10';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
 import UserMethods     from './modules/app-users.js?v=4.25.8';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
@@ -55,7 +55,7 @@ import UtilityMethods  from './modules/app-utilities.js?v=4.23.9';
 import MessageContentMethods from './modules/app-message-content.js?v=4.24.22';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
-import ThreadMethods from './modules/app-threads.js?v=4.25.6';
+import ThreadMethods from './modules/app-threads.js?v=4.25.10';
 import AdminMethods    from './modules/app-admin.js?v=4.24.34';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.23.7';
@@ -88,6 +88,7 @@ import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.25.3';
 import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
 import TypingMethods from './modules/app-typing.js?v=4.25.8';
+import MessageNsfwMethods from './modules/app-message-nsfw.js?v=4.25.10';
 import ThreadScrollMethods from './modules/app-thread-scroll.js?v=4.24.26';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
@@ -437,6 +438,7 @@ class HavenApp {
     this._setupThreadScroll();
     this._setupThreadDock();
     this._setupTyping();
+    this._setupMessageNsfw();
     this._setupSilentToggle();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
@@ -623,6 +625,7 @@ Object.assign(HavenApp.prototype,
   ThreadUnreadMethods,
   ThreadDockMethods,
   TypingMethods,
+  MessageNsfwMethods,
   ThreadScrollMethods,
   MoveToThreadMethods,
   ChannelCategoryMethods,
