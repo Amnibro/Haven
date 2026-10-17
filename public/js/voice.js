@@ -1053,6 +1053,13 @@ class VoiceManager {
       if (this.onAfkMove) this.onAfkMove(data.channelCode);
     });
 
+    // AFK disconnect (#5801): left voice after a channel's idle time.
+    this.socket.on('voice-afk-leave', (data) => {
+      if (!data || data.channelCode !== this.currentChannel) return;
+      this.leave();
+      if (this.onAfkLeave) this.onAfkLeave(data.minutes);
+    });
+
     // Kicked from voice because user joined from another client/tab
     this.socket.on('voice-kicked', (data) => {
       if (!data || !data.channelCode) return;
