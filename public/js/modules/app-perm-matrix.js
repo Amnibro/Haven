@@ -88,7 +88,7 @@ _setPermView(view) {
 
 _applyPermPanel({ roles, users } = {}) {
   if (Array.isArray(roles)) {
-    this._permPanel.roles = roles.filter(r => (r.scope || 'server') === 'server' && Number(r.level) > 0);
+    this._permPanel.roles = roles.filter(r => Number(r.level) > 0);
   }
   if (Array.isArray(users)) {
     // Alphabetical by the name people see, ignoring case.
@@ -152,8 +152,17 @@ _loadPermUsersFallback() {
   });
 },
 
+// Every role in the grid: server roles, then channel roles (given in a
+// channel, so what is ticked applies only where someone holds them).
 _matrixRoles() {
-  return (this._permPanel.roles || []).filter(r => (r.scope || 'server') === 'server' && Number(r.level) > 0);
+  const roles = (this._permPanel.roles || []).filter(r => Number(r.level) > 0);
+  const server = roles.filter(r => (r.scope || 'server') === 'server');
+  return [...server, ...roles.filter(r => r.scope === 'channel')];
+},
+
+// The roles a person can be given server-wide from the Users tab.
+_serverMatrixRoles() {
+  return this._matrixRoles().filter(r => (r.scope || 'server') === 'server');
 },
 
 _sortedGroupPerms(group) {
@@ -178,10 +187,12 @@ _renderPermMatrix() {
         <span class="perm-matrix-level" title="${esc(t('settings.admin.perm_matrix.level_hint'))}">${esc(t('settings.admin.perm_matrix.level', { level: role.level }))}</span>
         <button type="button" class="perm-matrix-remove" data-remove-role="${role.id}" title="${esc(t('settings.admin.perm_matrix.remove_role'))}">−</button>
       </div>
-      <label class="perm-matrix-auto${(this._draftAutoRoleId() === role.id) !== !!role.auto_assign ? ' perm-pending' : ''}">
+      ${role.scope === 'channel'
+        ? `<span class="perm-matrix-auto muted-text" title="${esc(t('settings.admin.perm_matrix.channel_role_hint'))}">${esc(t('settings.admin.perm_matrix.channel_role'))}</span>`
+        : `<label class="perm-matrix-auto${(this._draftAutoRoleId() === role.id) !== !!role.auto_assign ? ' perm-pending' : ''}">
         <input type="radio" name="perm-auto-role" value="${role.id}" ${this._draftAutoRoleId() === role.id ? 'checked' : ''}>
         ${esc(t('settings.admin.perm_matrix.auto_assign'))}
-      </label>
+      </label>`}
     </th>`;
   }
   head += `<th class="perm-matrix-role perm-matrix-admin">
@@ -280,7 +291,7 @@ _renderPermUsersList() {
     const active = u.id === this._permPanel.userId ? ' is-active' : '';
     const badge = u.isAdmin
       ? t('settings.admin.perm_matrix.admin')
-      : (this._matrixRoles().filter(r => (u.roleIds || []).includes(r.id)).map(r => r.name).join(', ') || t('settings.admin.perm_matrix.no_role'));
+      : (this._serverMatrixRoles().filter(r => (u.roleIds || []).includes(r.id)).map(r => r.name).join(', ') || t('settings.admin.perm_matrix.no_role'));
     return `<button type="button" class="perm-user-row${active}" data-user="${u.id}">
       <span class="perm-user-name">${esc(u.displayName)}</span>
       <span class="perm-user-badge">${esc(badge)}</span>
@@ -306,7 +317,7 @@ _renderPermUserDetail() {
   }
   const self = user.id === this.user?.id;
   const locked = user.isAdmin || self;
-  const roles = this._matrixRoles();
+  const roles = this._serverMatrixRoles();
   const perms = user.permissions || [];
   const allOn = perms.includes('*') || user.isAdmin;
 

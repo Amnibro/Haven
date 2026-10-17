@@ -2810,6 +2810,8 @@
         "exception_removed": "taken away from them",
         "exception_hint": "Different from what their roles give. This was set for this person alone.",
         "reset_to_roles": "Reset to roles",
+        "channel_role": "Channel role",
+        "channel_role_hint": "Given to people in a channel. What is ticked applies only in the channels where they hold it.",
         "save": "Save changes",
         "save_count": "Save changes ({{count}})",
         "discard": "Discard",
