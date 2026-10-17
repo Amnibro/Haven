@@ -257,6 +257,7 @@ _openRenameModal() {
   // Populate bio
   const bioInput = document.getElementById('edit-profile-bio');
   if (bioInput) bioInput.value = this.user.bio || '';
+  this._bioOpened = bioInput ? bioInput.value : null;
   this._syncBirthdayEditor();
   // Load personas list (#86, #5349)
   this._loadPersonas?.();
@@ -294,9 +295,10 @@ _saveRename() {
   if (newName !== (this.user.displayName || this.user.username)) {
     this.socket.emit('rename-user', { username: newName });
   }
-  // Save bio
+  // Save bio, only when it was changed here: a save that is about the name
+  // or the avatar leaves the bio as the server has it.
   const bioInput = document.getElementById('edit-profile-bio');
-  if (bioInput) {
+  if (bioInput && bioInput.value !== this._bioOpened) {
     this.socket.emit('set-bio', { bio: bioInput.value });
   }
   // Only an actual birthday change goes out. The date goes once, the first

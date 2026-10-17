@@ -227,6 +227,15 @@ _listenSession() {
     if (data.animateProfile !== undefined) {
       this.user.animateProfile = data.animateProfile === 'disabled' ? 'disabled' : 'trigger';
     }
+    // What Edit Profile opens with. Without these it opened with an empty bio
+    // and birthday, and saving it wiped the bio.
+    if (typeof data.bio === 'string') this.user.bio = data.bio;
+    if (data.birthdayHidden !== undefined) {
+      this.user.birthday = data.birthday || null;
+      this.user.birthdaySetAt = data.birthdaySetAt || null;
+      this.user.birthdayHideYear = data.birthdayHideYear !== false;
+      this.user.birthdayHidden = data.birthdayHidden === true;
+    }
     localStorage.setItem('haven_user', JSON.stringify(this.user));
     // (#5394) Server-stored nicknames are the record. localStorage is only a
     // cache for the first paint before this event lands. The old merge also

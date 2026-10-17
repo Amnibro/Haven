@@ -2204,7 +2204,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     try {
       // created_at feeds the automod new-account link gate (v3.42.0).
-      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden FROM users WHERE id = ?').get(user.id);
+      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio FROM users WHERE id = ?').get(user.id);
       if (!uRow || uRow.username !== user.username) {
         return next(new Error('Session expired'));
       }
@@ -2225,6 +2225,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       socket.user.birthdaySetAt = uRow.birthday_set_at || null;
       socket.user.birthdayHideYear = uRow.birthday_hide_year !== 0;
       socket.user.birthdayHidden = uRow.birthday_hidden !== 0;
+      socket.user.bio = uRow.bio || '';
       // (#12) The client needs this to ask for the right secret: an SSO
       // account unlocks E2E with its encryption passphrase, not a password.
       socket.user.isSso = !!uRow.oidc_subject;
@@ -2420,7 +2421,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       globalPermissions: getUserGlobalPermissions(socket.user.id),
       status: socket.user.status || 'online',
       statusText: socket.user.statusText || '',
-      // The full date, its privacy and when it was set, for Edit Profile.
+      // Their own bio, the full birthday, its privacy and when it was set,
+      // for Edit Profile.
+      bio: socket.user.bio || '',
       birthday: socket.user.birthday || null,
       birthdaySetAt: socket.user.birthdaySetAt || null,
       birthdayHideYear: socket.user.birthdayHideYear !== false,

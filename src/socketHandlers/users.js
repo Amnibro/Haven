@@ -402,6 +402,7 @@ module.exports = function register(socket, ctx) {
     if (bio && enforceAutomod(bio, { surface: 'profile' })) return;
     try {
       db.prepare('UPDATE users SET bio = ? WHERE id = ?').run(bio, socket.user.id);
+      socket.user.bio = bio;
       socket.emit('bio-updated', { bio });
     } catch (err) {
       console.error('Set bio error:', err);
