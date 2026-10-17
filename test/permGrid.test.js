@@ -74,10 +74,11 @@ test('permissions grid: defaults, chips, and per-user ticks', async (t) => {
     assert.ok(byName.Mod.permissions.includes('manage_tags'), 'Mod can manage tags like the Server Mod on main');
   });
 
-  await t.test('get-perm-panel lists server roles with perms and every user with role ids', async () => {
+  await t.test('get-perm-panel lists every role with perms and every user with role ids', async () => {
     const panel = await ask(A, 'get-perm-panel', {});
     assert.ok(Array.isArray(panel.roles) && Array.isArray(panel.users), 'panel has roles and users');
-    assert.ok(panel.roles.every((r) => r.scope === 'server' && r.level > 0), 'only server roles above level 0');
+    assert.ok(panel.roles.every((r) => r.level > 0), 'roles above level 0');
+    assert.ok(panel.roles.some((r) => r.scope === 'channel'), 'channel roles are in the grid too');
     const bobRow = panel.users.find((u) => u.id === bob.user.id);
     assert.ok(bobRow && bobRow.roleIds.includes(byName.Member.id), 'bob holds the auto-assigned Member role');
     const denied = await ask(C, 'get-perm-panel', {});

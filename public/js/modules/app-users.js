@@ -1557,14 +1557,4 @@ _refreshNicknameDisplays() {
   this._closeProfilePopup();
 },
 
-_showTyping(username) {
-  const el = document.getElementById('typing-indicator');
-  // Look up nickname by username from online users
-  const onlineUser = this._lastOnlineUsers && this._lastOnlineUsers.find(u => u.username === username);
-  const display = onlineUser ? this._getNickname(onlineUser.id, username) : username;
-  el.textContent = t('users.typing', { name: display });
-  clearTimeout(this.typingTimeout);
-  this.typingTimeout = setTimeout(() => { el.textContent = ''; }, 3000);
-},
-
 };

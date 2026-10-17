@@ -344,6 +344,7 @@
       "embed_medium": "Medium",
       "embed_small": "Small",
       "embed_size_hint": "Embed size (use Settings ▸ Link Previews to turn off)",
+      "embed_volume": "Volume",
       "collapse": "Collapse",
       "silent_hint": "Sent silently: nobody got a sound, pop-up or push for it"
     },
@@ -569,6 +570,9 @@
   },
   "msg_toolbar": {
     "react": "React",
+    "mark_nsfw": "Mark NSFW",
+    "unmark_nsfw": "Remove NSFW mark",
+    "nsfw_hidden": "🔞 NSFW: click to show",
     "highlight_on": "Mark as official",
     "highlight_off": "Remove official mark",
     "reply": "Reply",
@@ -1102,6 +1106,8 @@
     "nickname_cleared": "Nickname cleared",
     "nickname_set": "Nickname set to \"{{name}}\"",
     "typing": "{{name}} is typing...",
+    "typing_two": "{{first}} and {{second}} are typing...",
+    "typing_many": "Several people are typing...",
     "set_nickname_title": "Set Nickname",
     "nickname_hint": "Only you will see this nickname for {{name}}.",
     "nickname_clear_btn": "Clear",
@@ -1790,7 +1796,9 @@
       "medium": "Medium",
       "medium_hint": "Medium: balanced card with medium media",
       "full": "Full",
-      "full_hint": "Full: large media, author, and post stats"
+      "full_hint": "Full: large media, author, and post stats",
+      "pause_offscreen": "Pause videos and audio scrolled out of view",
+      "pause_offscreen_hint": "A video, sound file or YouTube card in chat stops when you scroll past it."
     },
     "banner_display": {
       "title": "Banner Display",
@@ -2802,6 +2810,14 @@
         "exception_removed": "taken away from them",
         "exception_hint": "Different from what their roles give. This was set for this person alone.",
         "reset_to_roles": "Reset to roles",
+        "channel_role": "Channel role",
+        "channel_role_hint": "Given to people in a channel. What is ticked applies only in the channels where they hold it.",
+        "save": "Save changes",
+        "save_count": "Save changes ({{count}})",
+        "discard": "Discard",
+        "saved": "Permissions saved",
+        "unsaved_title": "Discard unsaved changes?",
+        "unsaved_body": "The highlighted changes have not been saved.",
         "reset_confirm": "Remove every exception for {{name}}? They keep their roles and get exactly what those roles give.",
         "reset_done": "{{name}} now has exactly what their roles give",
         "view_roles": "Roles",
@@ -3066,8 +3082,8 @@
     "nsfw": {
       "hide": "Hide NSFW channels",
       "hide_hint": "Channels an admin marked 🔞 leave your sidebar, and forum topics marked 🔞 leave their forum, until you turn this off. Handy on a phone in public.",
-      "blur": "Blur NSFW topics until clicked",
-      "blur_hint": "The picture and preview of a topic marked 🔞 sit behind a blur, like a spoiler. Turn this off to see them plainly."
+      "blur": "Blur NSFW topics and messages until clicked",
+      "blur_hint": "Topics and messages marked 🔞 sit behind a blur, like a spoiler. Turn this off to see them plainly."
     },
     "search_placeholder": "Search settings (Ctrl+F)"
   },
@@ -3859,7 +3875,9 @@
         "badge_grant": "gave a badge to",
         "badge_revoke": "took a badge back from",
         "messages_move": "moved messages to",
-        "messages_move_to_thread": "moved messages into a thread in"
+        "messages_move_to_thread": "moved messages into a thread in",
+        "message_nsfw_on": "marked a message NSFW in",
+        "message_nsfw_off": "took the NSFW mark off a message in"
       }
     },
     "ip_bans": {
@@ -4494,7 +4512,7 @@
     "title": "Title",
     "title_placeholder": "What is this topic about?",
     "body": "Body",
-    "body_placeholder": "Write the first message of the topic…",
+    "body_placeholder": "Optional. Text, pictures or a link; a title alone is enough.",
     "tags": "Tags",
     "tags_hint": "(up to 5)",
     "nsfw": "NSFW",
@@ -4505,6 +4523,8 @@
     "attach_hint": "To attach an image or a file, paste or drop it into the message box below the topics instead.",
     "attach_file": "Add a picture or file",
     "attach_hint_inline": "or paste or drop one into the body. It goes where the cursor is.",
+    "thumb_badge": "Thumbnail",
+    "thumb_none": "No picture yet: the first picture you add becomes the topic's thumbnail.",
     "wait_upload": "Still uploading, one moment",
     "delete_topic": "Delete topic",
     "sort": "Sort",

@@ -291,6 +291,8 @@ _bindMessageActions() {
       this.socket.emit('unarchive-message', { messageId: msgId });
     } else if (action === 'copy-link') {
       this._copyChannelLink(this.currentChannel, msgId);
+    } else if (action === 'nsfw' || action === 'unnsfw') {
+      this._setMessageNsfw(msgId, action === 'nsfw');
     }
   });
 
@@ -332,6 +334,8 @@ _bindMessageActions() {
           this._quoteThreadMessage(msgEl);
         } else if (action === 'edit') {
           this._startEditMessage(msgEl, msgId);
+        } else if (action === 'nsfw' || action === 'unnsfw') {
+          this._setMessageNsfw(msgId, action === 'nsfw');
         } else if (action === 'delete') {
           if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
             this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });

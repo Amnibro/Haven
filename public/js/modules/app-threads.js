@@ -357,7 +357,7 @@ _sendThreadMessage() {
   if (content) {
     // Kept so a reply refused as too long comes back to the box (#5691).
     this._lastSendDraft = { text: input.value, code: parentId, at: Date.now(), inputId: 'thread-input' };
-    this.socket.emit('send-thread-message', { parentId, content, replyTo }, (resp) => {
+    this.socket.emit('send-thread-message', { parentId, content, replyTo, ...this._forumBlogSendExtras?.(parentId, replyTo) }, (resp) => {
       if (resp && resp.error) {
         this._showToast(resp.error, 'error');
         return;
@@ -416,6 +416,13 @@ _appendThreadMessage(msg, opts = {}) {
   const iMore = iconPair('⋯', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"></circle></svg>');
   const threadCoreToolbarBtns = `<button data-thread-action="react" title="${t('msg_toolbar.react')}" aria-label="${t('msg_toolbar.react')}">${iReact}</button><button data-thread-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button><button data-thread-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>`;
   let threadOverflowToolbarBtns = '';
+  // NSFW mark (app-message-nsfw.js): your own reply, or anyone's you could delete.
+  if (canEdit || this.user.isAdmin || this._canModerate() || this._hasPerm?.('delete_message')) {
+    const iNsfw = iconPair('🔞', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" stroke-width="1.8" stroke-linejoin="round"></path><circle cx="12" cy="12" r="2.5" stroke-width="1.8"></circle><path d="M4 4l16 16" stroke-width="1.8" stroke-linecap="round"></path></svg>');
+    threadOverflowToolbarBtns += msg.nsfw
+      ? `<button data-thread-action="unnsfw" title="${t('msg_toolbar.unmark_nsfw')}">${iNsfw}</button>`
+      : `<button data-thread-action="nsfw" title="${t('msg_toolbar.mark_nsfw')}">${iNsfw}</button>`;
+  }
   if (canEdit) threadOverflowToolbarBtns += `<button data-thread-action="edit" title="${t('msg_toolbar.edit')}">${iEdit}</button>`;
   if (canDelete) threadOverflowToolbarBtns += `<button data-thread-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>`;
   const threadOverflowHtml = threadOverflowToolbarBtns
@@ -494,6 +501,7 @@ _appendThreadMessage(msg, opts = {}) {
       </div>
     `;
   }
+  if (msg.nsfw) this._applyMessageNsfw?.(el, true);
   target.appendChild(el);
   if (target !== container) this._forumBlogRecount?.();
   // Link cards in threads, the same as in the channel (#5620).

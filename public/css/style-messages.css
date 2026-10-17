@@ -681,6 +681,35 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   border-radius: 0.5rem;
 }
 
+/* A message marked NSFW (app-message-nsfw.js): text, pictures, videos and
+   link cards stay blurred under a label until clicked. Text blurs through a
+   shadow, so the label on top of it stays sharp. */
+[data-nsfw="1"]:not([data-nsfw-shown]) :is(.message-content, .thread-msg-content) {
+  position: relative;
+  min-height: 2.25rem;
+  overflow: hidden;
+  border-radius: var(--radius);
+  cursor: pointer;
+  user-select: none;
+  color: transparent;
+  text-shadow: 0 0 12px var(--text-primary);
+}
+[data-nsfw="1"]:not([data-nsfw-shown]) :is(.message-content, .thread-msg-content) a { color: transparent; }
+[data-nsfw="1"]:not([data-nsfw-shown]) :is(.message-content, .thread-msg-content) > * { filter: blur(18px); pointer-events: none; }
+[data-nsfw="1"]:not([data-nsfw-shown]) :is(.message-content, .thread-msg-content)::after {
+  content: var(--nsfw-message-label, "NSFW");
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-shadow: none;
+  background: color-mix(in srgb, var(--bg-tertiary) 55%, transparent);
+}
+
 .typing-indicator {
   padding: 0 1.25rem;
   height: 1.25rem;

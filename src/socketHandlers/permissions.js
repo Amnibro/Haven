@@ -56,13 +56,6 @@ module.exports = function createPermissions(db) {
     return level;
   }
 
-  function getPermissionThresholds() {
-    try {
-      const row = db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get();
-      return row ? JSON.parse(row.value) : {};
-    } catch { return {}; }
-  }
-
   function userHasPermission(userId, permission, channelId = null) {
     const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
     if (user && user.is_admin) return true;
@@ -91,13 +84,6 @@ module.exports = function createPermissions(db) {
       // Fail closed: carrying on to the role checks would ignore a deny.
       warnOverrideRead('userHasPermission', err);
       return false;
-    }
-
-    // Check level-based permission thresholds
-    const thresholds = getPermissionThresholds();
-    if (thresholds[permission]) {
-      const level = getUserEffectiveLevel(userId);
-      if (level >= thresholds[permission]) return true;
     }
 
     // Check server-scoped roles
@@ -158,11 +144,6 @@ module.exports = function createPermissions(db) {
       return [];
     }
 
-    const thresholds = getPermissionThresholds();
-    const level = getUserEffectiveLevel(userId);
-    for (const [perm, minLevel] of Object.entries(thresholds)) {
-      if (level >= minLevel && !perms.includes(perm)) perms.push(perm);
-    }
     return perms;
   }
 
@@ -206,14 +187,6 @@ module.exports = function createPermissions(db) {
       return [];
     }
 
-    // getUserEffectiveLevel(userId) with no channelId arg already only
-    // considers server-scoped roles, so threshold-derived perms are
-    // inherently global here, so no extra filtering needed.
-    const thresholds = getPermissionThresholds();
-    const level = getUserEffectiveLevel(userId);
-    for (const [perm, minLevel] of Object.entries(thresholds)) {
-      if (level >= minLevel && !perms.includes(perm)) perms.push(perm);
-    }
     return perms;
   }
 
@@ -340,7 +313,7 @@ module.exports = function createPermissions(db) {
   }
 
   return {
-    getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
+    getChannelRoleChain, getUserEffectiveLevel,
     userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles,
     getUserHighestRole, getUserAllRoles,
     parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships

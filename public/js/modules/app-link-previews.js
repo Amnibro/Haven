@@ -243,7 +243,7 @@ _fetchLinkPreviews(containerEl) {
       wrapper.dataset.url = url;
       wrapper.style.setProperty('--lp-accent', '#ff0000');
       wrapper.innerHTML =
-        this._embedHeaderHtml('YouTube', ytCollapsed) +
+        this._embedHeaderHtml('YouTube', ytCollapsed, this._ytVolumeHtml()) +
         // referrerpolicy is set per-iframe on purpose. Haven's document-level
         // Referrer-Policy has defaulted to same-origin since 3.41.0, which
         // sends NOTHING cross-origin. YouTube's embed player treats a missing
@@ -252,8 +252,11 @@ _fetchLinkPreviews(containerEl) {
         // (scheme + host, no path and no query), which is enough for YouTube
         // and still keeps invite codes out of the referrer, since those live
         // in the query string. That was the whole reason for same-origin.
-        `<div class="lp-content"><div class="link-preview-yt"><iframe src="https://www.youtube.com/embed/${this._escapeHtml(ytVideoId)}?rel=0${ytStart ? `&start=${ytStart}` : ''}" width="100%" height="270" frameborder="0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div></div>`;
+        // enablejsapi lets the volume slider and the off-screen pause drive
+        // the player (app-media-playback.js).
+        `<div class="lp-content"><div class="link-preview-yt"><iframe src="https://www.youtube.com/embed/${this._escapeHtml(ytVideoId)}?rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}${ytStart ? `&start=${ytStart}` : ''}" width="100%" height="270" frameborder="0" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div></div>`;
       this._wireEmbedControls(wrapper, url);
+      this._wireYtVolume(wrapper);
       this._applyEmbedSpoiler(wrapper, link);
       msgContent.appendChild(wrapper);
       if (this._coupledToBottom) this._scrollToBottom(true);
@@ -462,11 +465,12 @@ _applyEmbedSpoiler(embedEl, link) {
 },
 
 /** Header row markup: site name (accent), size cycle button, collapse caret. */
-_embedHeaderHtml(siteName, collapsed) {
+_embedHeaderHtml(siteName, collapsed, extraHtml = '') {
   const size = this._embedSize();
   const label = t(`settings.embed_display.${size}`);
   return '<div class="lp-header">'
     + `<span class="lp-site">${this._escapeHtml(siteName || t('app.messages.link'))}</span>`
+    + extraHtml
     + `<button type="button" class="lp-size" title="${t('app.messages.embed_size_hint')}">⤢ ${label}</button>`
     + `<button type="button" class="lp-collapse" title="${t('app.messages.collapse')}">${collapsed ? '▸' : '▾'}</button>`
     + '</div>';

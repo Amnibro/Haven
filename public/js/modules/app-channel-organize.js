@@ -295,6 +295,19 @@ _openOrganizeModal(parentCode, serverLevel) {
   document.getElementById('organize-modal').style.display = 'flex';
 },
 
+// The tag box offers the tags already in use, so moving a channel into one
+// is a pick rather than retyping its name.
+_fillTagSuggestions(listId, tags) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  list.textContent = '';
+  for (const tag of [...tags].sort((a, b) => a.localeCompare(b))) {
+    const opt = document.createElement('option');
+    opt.value = tag;
+    list.appendChild(opt);
+  }
+},
+
 _renderOrganizeList() {
   const listEl = document.getElementById('organize-channel-list');
   let globalSort = document.getElementById('organize-global-sort').value;
@@ -310,6 +323,7 @@ _renderOrganizeList() {
     if (!_orgTagMap.has(key)) _orgTagMap.set(key, c.category);
   });
   const realTags = [..._orgTagMap.values()];
+  this._fillTagSuggestions('organize-tag-suggestions', realTags);
   const hasUntagged = displayList.some(c => !c.category);
   const hasTags = realTags.length > 0;
   // Build the full ordered keys list: real tags + __untagged__ (if applicable)
@@ -711,6 +725,7 @@ _renderDmOrganizeList() {
 
   // Collect unique tags
   const allTags = [...new Set(displayList.map(c => assignments[c.code]).filter(Boolean))].sort();
+  this._fillTagSuggestions('dm-organize-tag-suggestions', allTags);
   const hasTags = allTags.length > 0;
 
   const getDmName = (ch) => ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');

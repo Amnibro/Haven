@@ -194,6 +194,21 @@ test('roles wishlist: gates, caps, menus, templates', async (t) => {
     const noUp = await upload(cara.token, 'big.bin', twoMb);
     assert.strictEqual(noUp.status, 400, 'cara is held to the 1 MB server cap');
     assert.match(noUp.body.error, /max 1 MB/);
+
+    // The admin follows the same rule: a role with a higher cap raises theirs
+    // too (an owner who lowered the setting for everyone was held to it).
+    const adminFlat = await upload(admin.token, 'big.bin', twoMb);
+    assert.strictEqual(adminFlat.status, 400, 'no cap-raising role yet: the setting');
+    const me = await new Promise((res) => { A.once('server-settings', (s) => res(s)); A.emit('get-server-settings'); });
+    const adminId = JSON.parse(Buffer.from(admin.token.split('.')[1], 'base64').toString()).id;
+    const given = await new Promise((res) => A.emit('assign-role', { userId: adminId, roleId: beta.roleId }, res));
+    assert.ok(given && given.success, `beta given to the admin: ${JSON.stringify(given)}`);
+    await wait(200);
+    const meNow = await new Promise((res) => { A.once('server-settings', (s) => res(s)); A.emit('get-server-settings'); });
+    assert.strictEqual(me.max_upload_mb_effective, '1');
+    assert.strictEqual(meNow.max_upload_mb_effective, '5', 'the admin holds Beta (5 MB)');
+    const adminUp = await upload(admin.token, 'big.bin', twoMb);
+    assert.strictEqual(adminUp.status, 200, `the admin's 2 MB upload accepted: ${JSON.stringify(adminUp.body)}`);
   });
 
   await t.test('a role menu hands out roles by click and by reaction', async () => {

@@ -674,8 +674,8 @@ let _scrambleTargets = [];  // tracked { el, original } for multi-element scramb
 
 // Layer definitions: each effect -> array of { id, parent, cls }
 const FX_LAYERS = {
-  crt:        [{ id: 'fx-crt-vignette', parent: '#fx-layers', cls: 'fx-crt-vignette' },
-               { id: 'fx-crt-scanlines', parent: '#fx-layers', cls: 'fx-crt-scanlines' }],
+  crt:        [{ id: 'fx-crt-vignette', parent: '#fx-overlay', cls: 'fx-crt-vignette' },
+               { id: 'fx-crt-scanlines', parent: '#fx-overlay', cls: 'fx-crt-scanlines' }],
   matrix:     [],  // digital rain handled entirely by JS canvas
   matrixbars: [{ id: 'fx-matrix-bars', parent: '.sidebar', cls: 'fx-matrix-bars' }],
   fallout:    [{ id: 'fx-fallout-vignette', parent: '#fx-layers', cls: 'fx-fallout-vignette' }],
@@ -709,14 +709,47 @@ const FX_CANVAS = {
   cyberpunk: { start: _startTextScramble, stop: _stopTextScramble }
 };
 
+// Effects are drawn in the chat column, behind its messages (the stacking
+// rules are in style-status-effects.css). Only the CRT screen goes over the
+// whole window, in #fx-overlay.
 function _ensureFxLayers() {
+  const main = document.querySelector('.main');
   let c = document.getElementById('fx-layers');
   if (!c) {
     c = document.createElement('div');
     c.id = 'fx-layers';
+  }
+  if (main && c.parentElement !== main) main.prepend(c);
+  else if (!main && !c.isConnected) document.body.appendChild(c);
+  // Pages without a chat column (sign-in) draw it behind the whole page.
+  c.classList.toggle('fx-layers-page', !main);
+  return c;
+}
+
+function _ensureFxOverlay() {
+  let c = document.getElementById('fx-overlay');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'fx-overlay';
     document.body.appendChild(c);
   }
   return c;
+}
+
+// The particle canvases match the chat column, which changes size without
+// the window doing so (the member list, the thread panel beside it).
+const _fxResizers = new Set();
+let _fxResizeObserver = null;
+function _fxWatchSize(canvas, resize) {
+  _fxResizers.add({ canvas, resize });
+  if (_fxResizeObserver || typeof ResizeObserver !== 'function') return;
+  _fxResizeObserver = new ResizeObserver(() => {
+    for (const r of _fxResizers) {
+      if (!r.canvas.isConnected) { _fxResizers.delete(r); continue; }
+      r.resize();
+    }
+  });
+  _fxResizeObserver.observe(_ensureFxLayers());
 }
 
 function _activateEffect(name) {
@@ -729,12 +762,13 @@ function _activateEffect(name) {
   // Overlay layers
   (FX_LAYERS[name] || []).forEach(layer => {
     if (document.getElementById(layer.id)) return;
-    const parent = layer.parent === '#fx-layers'
-      ? _ensureFxLayers()
+    const own = layer.parent === '#fx-layers' || layer.parent === '#fx-overlay';
+    const parent = layer.parent === '#fx-layers' ? _ensureFxLayers()
+      : layer.parent === '#fx-overlay' ? _ensureFxOverlay()
       : document.querySelector(layer.parent);
     if (!parent) return;
     // Ensure parent is positioned
-    if (layer.parent !== '#fx-layers') {
+    if (!own) {
       const pos = getComputedStyle(parent).position;
       if (pos === 'static') parent.style.position = 'relative';
     }
@@ -1180,9 +1214,10 @@ function _startEmbers() {
   container.appendChild(canvas);
 
   function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = container.clientWidth || window.innerWidth;
+    canvas.height = container.clientHeight || window.innerHeight;
   }
+  _fxWatchSize(canvas, resize);
   resize();
 
   _emberCtx = canvas.getContext('2d');
@@ -1283,9 +1318,10 @@ function _startGraceEmbers() {
   container.appendChild(canvas);
 
   function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = container.clientWidth || window.innerWidth;
+    canvas.height = container.clientHeight || window.innerHeight;
   }
+  _fxWatchSize(canvas, resize);
   resize();
 
   _graceCtx = canvas.getContext('2d');
@@ -1400,9 +1436,10 @@ function _startNordSnow() {
   container.appendChild(canvas);
 
   function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = container.clientWidth || window.innerWidth;
+    canvas.height = container.clientHeight || window.innerHeight;
   }
+  _fxWatchSize(canvas, resize);
   resize();
 
   _snowCtx = canvas.getContext('2d');

@@ -1302,6 +1302,18 @@ ul.chat-list { list-style-type: disc; }
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
 }
+/* A YouTube card's own volume (app-media-playback.js): YouTube's player
+   shows only a mute button on narrow and Shorts layouts. */
+.lp-volume {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.lp-volume input { width: 5rem; accent-color: var(--lp-accent, var(--accent)); cursor: pointer; }
 .lp-size:hover,
 .lp-collapse:hover {
   background: rgba(255, 255, 255, 0.07);

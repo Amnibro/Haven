@@ -157,6 +157,7 @@ function createAdminThemeHarness() {
     automod: { invalidate() {}, settings: () => ({}) },
     getIdleOnlineUsers: () => [],
     getUploadUsage: () => ({ byUser: new Map() }),
+    getUserUploadMb: () => 25,
     revokeBotVoiceAccess() {},
   });
   return { db, handlers, outgoing };

@@ -81,10 +81,7 @@ module.exports = function register(socket, ctx) {
 
   // The client sizes its upload pre-checks from this; a role change can move it.
   function pushUploadCap(userId) {
-    const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
-    const cap = row && row.is_admin
-      ? (parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get()?.value, 10) || 25)
-      : ctx.getUserUploadMb(userId);
+    const cap = ctx.getUserUploadMb(userId);
     for (const [, s] of io.sockets.sockets) {
       if (s.user && s.user.id === userId) s.emit('server-setting-changed', { key: 'max_upload_mb_effective', value: String(cap) });
     }
@@ -842,10 +839,14 @@ module.exports = function register(socket, ctx) {
     return !!(socket.user && (socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_roles')));
   }
 
-  function serverRolesWithPerms() {
+  // Every role with permissions, server-wide and channel roles alike: the
+  // grid used to leave channel roles out, so a role someone held (Channel
+  // Mod, given in a channel) was nowhere to be found in it. Level 0 groups
+  // carry no permissions and stay out.
+  function rolesWithPerms() {
     const roles = db.prepare(`
       SELECT * FROM roles
-      WHERE (scope = 'server' OR scope IS NULL) AND level > 0
+      WHERE level > 0
       ORDER BY level DESC
     `).all();
     const permissions = db.prepare('SELECT * FROM role_permissions').all();
@@ -872,7 +873,7 @@ module.exports = function register(socket, ctx) {
     const cb = typeof callback === 'function' ? callback : () => {};
     if (!canManagePermPanel(socket)) return cb({ error: 'Only admins can manage permissions' });
     try {
-      const roles = serverRolesWithPerms();
+      const roles = rolesWithPerms();
       let users = [];
       try {
         const rows = db.prepare(`

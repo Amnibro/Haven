@@ -634,7 +634,9 @@ _openForumComposer(existing = null, draft = null) {
   const maxChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
   // Pictures and files go into the body where the cursor is, each on a line
   // of its own, so a post can be text with pictures between it (#5689, #5690).
-  const attachRow = `<div class="forum-attach-row"><button type="button" class="btn-sm forum-attach-btn" id="forum-post-attach">📎 ${t('forum.attach_file')}</button><input type="file" id="forum-post-file" multiple hidden><small class="settings-hint">${t('forum.attach_hint_inline')}</small></div>`;
+  // The pictures in the body show under it, the thumbnail marked, so a bare
+  // /uploads/ line does not leave the poster guessing what the card will show.
+  const attachRow = `<div class="forum-attach-row"><button type="button" class="btn-sm forum-attach-btn" id="forum-post-attach">📎 ${t('forum.attach_file')}</button><input type="file" id="forum-post-file" multiple hidden><small class="settings-hint">${t('forum.attach_hint_inline')}</small></div><div class="forum-thumb-preview" id="forum-post-thumbs"></div>`;
   const bodyField = !existing
     ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}">${draft ? this._escapeHtml(draft.body || '') : ''}</textarea></label>${attachRow}`
     : (canEditBody ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" maxlength="${maxChars}">${this._escapeHtml(existing.content || '')}</textarea></label>${attachRow}` : '');
@@ -669,6 +671,10 @@ _openForumComposer(existing = null, draft = null) {
   const bodyInput = overlay.querySelector('#forum-post-body');
   if (bodyInput) {
     const fileInput = overlay.querySelector('#forum-post-file');
+    const thumbs = overlay.querySelector('#forum-post-thumbs');
+    const paintThumbs = () => this._forumComposerThumbs(bodyInput.value, thumbs);
+    bodyInput.addEventListener('input', paintThumbs);
+    paintThumbs();
     overlay.querySelector('#forum-post-attach')?.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => { this._forumUploadIntoBody(fileInput.files, bodyInput, code); fileInput.value = ''; });
     bodyInput.addEventListener('paste', (e) => {
@@ -726,6 +732,27 @@ _openForumComposer(existing = null, draft = null) {
     this.notifications && this.notifications.play && this.notifications.play('sent');
     close();
   });
+},
+
+// The pictures a post's body holds, as the New Post window shows them. The
+// first is the topic card's thumbnail (_forumThumbOf); with none, a post
+// that opens with a link uses the link's own picture, and otherwise the
+// card shows the title alone.
+_forumComposerThumbs(body, holder) {
+  if (!holder) return;
+  const pics = [];
+  for (const word of String(body || '').split(/\s+/)) {
+    const w = word.trim();
+    if (!w || w.startsWith('e2e-img:') || w.startsWith('spoiler-img:')) continue;
+    if (this._isImageUrl(w) && !pics.includes(w)) pics.push(w);
+  }
+  if (!pics.length) {
+    holder.innerHTML = `<small class="settings-hint">${t('forum.thumb_none')}</small>`;
+    return;
+  }
+  const shown = pics.slice(0, 6);
+  holder.innerHTML = shown.map((url, i) => `<span class="forum-thumb-item${i === 0 ? ' forum-thumb-first' : ''}"><img ${this._imgSrcAttr(url)} alt="">${i === 0 ? `<span class="forum-thumb-badge">${t('forum.thumb_badge')}</span>` : ''}</span>`).join('')
+    + (pics.length > shown.length ? `<span class="forum-thumb-more">+${pics.length - shown.length}</span>` : '');
 },
 
 // A line that is only an uploaded file: a picture's link, or a file line.
@@ -794,6 +821,7 @@ async _forumUploadIntoBody(fileList, textarea, code) {
       const caret = before.length + insert.length;
       textarea.setSelectionRange(caret, caret);
       textarea.focus();
+      textarea.dispatchEvent(new Event('input'));
     } catch (err) {
       if (!err?.aborted) this._showToast(err?.message || t('toasts.upload_failed'), 'error');
     } finally {

@@ -769,7 +769,7 @@ async _flushThreadPending(parentId, { text = '', replyTo } = {}) {
       // A picture dropped while replying (or in a picture's open comments,
       // #5765) answers what the text would.
       const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : (this._forumBlogDefaultReply?.() || null);
-      this.socket.emit('send-thread-message', replyTo ? { parentId, content, replyTo } : { parentId, content });
+      this.socket.emit('send-thread-message', replyTo ? { parentId, content, replyTo, ...this._forumBlogSendExtras?.(parentId, replyTo) } : { parentId, content });
     } catch (err) {
       if (err?.aborted) break;
       this._showToast(err.message || t('media.upload_failed'), 'error');

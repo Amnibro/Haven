@@ -145,15 +145,14 @@ _forumBlogPieceRemoved(id) {
 },
 
 // Opens or closes a piece's comments. Opening one also points the reply box
-// at that piece, so what you write lands under it. The author's own replies
-// are always more of the post, so for them it only shows the comments.
+// at that piece, so what you write lands under it, the author's too: with a
+// piece's comments open they answer there instead of adding to the post.
 _forumBlogTogglePiece(id) {
   const box = this._forumBlogPieceComments(id, true);
   const b = this._forumBlogThread;
   if (!box || !b) return;
   box.hidden = !box.hidden;
-  const isAuthor = !!(this.user && b.authorId && b.authorId === this.user.id);
-  if (!box.hidden && !isAuthor) {
+  if (!box.hidden) {
     const piece = this._forumBlogPieceEl(id);
     if (piece && !piece.dataset.username) piece.dataset.username = b.authorName || '';
     if (piece) this._setThreadReply?.(piece, Number(id));
@@ -164,6 +163,7 @@ _forumBlogTogglePiece(id) {
   }
   this._forumBlogRecount();
   this._forumBlogComposerState();
+  this._forumBlogComposerHint();
 },
 
 // Comments on pictures only (#5765): someone other than the author gets the
@@ -179,9 +179,19 @@ _forumBlogComposerState() {
 
 _forumBlogDefaultReply() {
   const b = this._forumBlogThread;
-  if (!b || !b.picsOnly || !b.openPiece) return null;
+  if (!b || !b.openPiece) return null;
   const isAuthor = !!(this.user && b.authorId && b.authorId === this.user.id);
-  return isAuthor ? null : b.openPiece;
+  return isAuthor || b.picsOnly ? b.openPiece : null;
+},
+
+// Extra fields for a thread reply. The author answering the opening post is
+// a comment; the server cannot tell that from an addition on its own, since
+// some clients point every reply at the topic (src/forumBlog.js).
+_forumBlogSendExtras(parentId, replyTo) {
+  const b = this._forumBlogThread;
+  if (!b || !replyTo || Number(b.parentId) !== Number(parentId) || Number(replyTo) !== Number(parentId)) return {};
+  const isAuthor = !!(this.user && b.authorId && b.authorId === this.user.id);
+  return isAuthor ? { asComment: true } : {};
 },
 
 _forumBlogIsPart(msg) {
@@ -222,7 +232,7 @@ _forumBlogComposerHint() {
   const b = this._forumBlogThread;
   if (!b) { input.placeholder = t('thread_runtime.reply_placeholder'); return; }
   const isAuthor = !!(this.user && b.authorId && b.authorId === this.user.id);
-  input.placeholder = t(isAuthor ? 'forum.blog_add_to_post' : 'forum.blog_write_comment');
+  input.placeholder = t(isAuthor && !b.openPiece ? 'forum.blog_add_to_post' : 'forum.blog_write_comment');
 },
 
 _forumBlogClose() {

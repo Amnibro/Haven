@@ -148,7 +148,7 @@ _sendGifToThread(url) {
   const parentId = this._activeThreadParent;
   if (!url || !parentId || !this.socket) return;
   const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
-  this.socket.emit('send-thread-message', { parentId, content: url, replyTo }, (resp) => {
+  this.socket.emit('send-thread-message', { parentId, content: url, replyTo, ...this._forumBlogSendExtras?.(parentId, replyTo) }, (resp) => {
     if (resp && resp.error) { this._showToast?.(resp.error, 'error'); return; }
     this._clearThreadReply?.();
   });

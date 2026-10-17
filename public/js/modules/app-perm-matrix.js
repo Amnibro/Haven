@@ -19,16 +19,25 @@ export default {
 _initPermMatrix() {
   this._permPanel = { roles: [], users: [], view: 'roles', userId: null, filter: '' };
   document.getElementById('open-role-editor-btn')?.addEventListener('click', () => this._openPermMatrix());
-  document.getElementById('close-perm-matrix-btn')?.addEventListener('click', () => this._closePermMatrix());
+  // Changes wait for Save (app-perm-draft.js), so leaving asks first.
+  document.getElementById('close-perm-matrix-btn')?.addEventListener('click', () => this._requestClosePermMatrix());
   document.getElementById('perm-matrix-overlay')?.addEventListener('click', (e) => {
-    if (e.target.id === 'perm-matrix-overlay') this._closePermMatrix();
+    if (e.target.id === 'perm-matrix-overlay') this._requestClosePermMatrix();
   });
+  // The corner close button and Escape hide the panel first, then say so:
+  // with changes waiting, it comes back and asks.
+  document.getElementById('perm-matrix-overlay')?.addEventListener('modal-dismiss', (e) => {
+    if (!this._permDraftCount()) return;
+    e.currentTarget.style.display = 'flex';
+    this._requestClosePermMatrix();
+  });
+  document.getElementById('perm-save-btn')?.addEventListener('click', () => this._savePermDraft());
+  document.getElementById('perm-discard-btn')?.addEventListener('click', () => this._discardPermDraft());
   document.getElementById('perm-view-roles')?.addEventListener('click', () => this._setPermView('roles'));
   document.getElementById('perm-view-users')?.addEventListener('click', () => this._setPermView('users'));
   document.getElementById('perm-add-role-btn')?.addEventListener('click', () => this._addPermRole());
-  document.getElementById('perm-open-classic-btn')?.addEventListener('click', () => {
-    this._closePermMatrix();
-    this._openRoleModal();
+  document.getElementById('perm-open-classic-btn')?.addEventListener('click', async () => {
+    if (await this._requestClosePermMatrix()) this._openRoleModal();
   });
   document.getElementById('perm-user-search')?.addEventListener('input', (e) => {
     this._permPanel.filter = e.target.value || '';
@@ -49,7 +58,9 @@ _openPermMatrix() {
   const ov = document.getElementById('perm-matrix-overlay');
   if (!ov) return;
   ov.style.display = 'flex';
+  this._permDraftReset();
   this._setPermView(this._permPanel.view || 'roles');
+  this._permDraftChanged();
   this._loadPermPanel();
 },
 
@@ -77,7 +88,7 @@ _setPermView(view) {
 
 _applyPermPanel({ roles, users } = {}) {
   if (Array.isArray(roles)) {
-    this._permPanel.roles = roles.filter(r => (r.scope || 'server') === 'server' && Number(r.level) > 0);
+    this._permPanel.roles = roles.filter(r => Number(r.level) > 0);
   }
   if (Array.isArray(users)) {
     // Alphabetical by the name people see, ignoring case.
@@ -141,8 +152,17 @@ _loadPermUsersFallback() {
   });
 },
 
+// Every role in the grid: server roles, then channel roles (given in a
+// channel, so what is ticked applies only where someone holds them).
 _matrixRoles() {
-  return (this._permPanel.roles || []).filter(r => (r.scope || 'server') === 'server' && Number(r.level) > 0);
+  const roles = (this._permPanel.roles || []).filter(r => Number(r.level) > 0);
+  const server = roles.filter(r => (r.scope || 'server') === 'server');
+  return [...server, ...roles.filter(r => r.scope === 'channel')];
+},
+
+// The roles a person can be given server-wide from the Users tab.
+_serverMatrixRoles() {
+  return this._matrixRoles().filter(r => (r.scope || 'server') === 'server');
 },
 
 _sortedGroupPerms(group) {
@@ -167,10 +187,12 @@ _renderPermMatrix() {
         <span class="perm-matrix-level" title="${esc(t('settings.admin.perm_matrix.level_hint'))}">${esc(t('settings.admin.perm_matrix.level', { level: role.level }))}</span>
         <button type="button" class="perm-matrix-remove" data-remove-role="${role.id}" title="${esc(t('settings.admin.perm_matrix.remove_role'))}">−</button>
       </div>
-      <label class="perm-matrix-auto">
-        <input type="radio" name="perm-auto-role" value="${role.id}" ${role.auto_assign ? 'checked' : ''}>
+      ${role.scope === 'channel'
+        ? `<span class="perm-matrix-auto muted-text" title="${esc(t('settings.admin.perm_matrix.channel_role_hint'))}">${esc(t('settings.admin.perm_matrix.channel_role'))}</span>`
+        : `<label class="perm-matrix-auto${(this._draftAutoRoleId() === role.id) !== !!role.auto_assign ? ' perm-pending' : ''}">
+        <input type="radio" name="perm-auto-role" value="${role.id}" ${this._draftAutoRoleId() === role.id ? 'checked' : ''}>
         ${esc(t('settings.admin.perm_matrix.auto_assign'))}
-      </label>
+      </label>`}
     </th>`;
   }
   head += `<th class="perm-matrix-role perm-matrix-admin">
@@ -187,8 +209,9 @@ _renderPermMatrix() {
     for (const perm of this._sortedGroupPerms(group)) {
       body += `<tr><th scope="row">${esc(t(`permissions.${perm}`))}</th>`;
       for (const role of roles) {
-        const on = (role.permissions || []).includes(perm);
-        body += `<td><input type="checkbox" data-role="${role.id}" data-perm="${perm}" ${on ? 'checked' : ''}></td>`;
+        const on = this._draftRolePerms(role).has(perm);
+        const pending = on !== (role.permissions || []).includes(perm);
+        body += `<td${pending ? ' class="perm-pending"' : ''}><input type="checkbox" data-role="${role.id}" data-perm="${perm}" ${on ? 'checked' : ''}></td>`;
       }
       body += `<td><input type="checkbox" checked disabled></td></tr>`;
     }
@@ -197,46 +220,15 @@ _renderPermMatrix() {
   table.innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
 
   table.querySelectorAll('input[data-role][data-perm]').forEach(box => {
-    box.addEventListener('change', () => this._toggleRolePerm(parseInt(box.dataset.role, 10), box.dataset.perm, box.checked, box));
+    box.addEventListener('change', () => this._draftToggleRolePerm(parseInt(box.dataset.role, 10), box.dataset.perm, box.checked));
   });
   table.querySelectorAll('input[name="perm-auto-role"]').forEach(radio => {
     radio.addEventListener('change', () => {
-      if (radio.checked) this._setAutoAssign(parseInt(radio.value, 10));
+      if (radio.checked) this._draftSetAutoRole(parseInt(radio.value, 10));
     });
   });
   table.querySelectorAll('[data-remove-role]').forEach(btn => {
     btn.addEventListener('click', () => this._removePermRole(parseInt(btn.dataset.removeRole, 10)));
-  });
-},
-
-_toggleRolePerm(roleId, perm, allowed, box) {
-  const role = this._matrixRoles().find(r => r.id === roleId);
-  if (!role) return;
-  const next = new Set(role.permissions || []);
-  if (allowed) next.add(perm);
-  else next.delete(perm);
-  this._roleEmit('update-role', { roleId, permissions: [...next] }, (res) => {
-    if (res?.error) {
-      if (box) box.checked = !allowed;
-      this._showToast(res.error, 'error');
-      return;
-    }
-    role.permissions = [...next];
-    if (res?.roles) {
-      const fresh = res.roles.find(r => r.id === roleId);
-      if (fresh) role.permissions = fresh.permissions || [...next];
-    }
-  });
-},
-
-_setAutoAssign(roleId) {
-  this._roleEmit('update-role', { roleId, autoAssign: true }, (res) => {
-    if (res?.error) {
-      this._showToast(res.error, 'error');
-      this._loadPermPanel();
-      return;
-    }
-    for (const role of this._permPanel.roles) role.auto_assign = role.id === roleId ? 1 : 0;
   });
 },
 
@@ -299,7 +291,7 @@ _renderPermUsersList() {
     const active = u.id === this._permPanel.userId ? ' is-active' : '';
     const badge = u.isAdmin
       ? t('settings.admin.perm_matrix.admin')
-      : (this._matrixRoles().filter(r => (u.roleIds || []).includes(r.id)).map(r => r.name).join(', ') || t('settings.admin.perm_matrix.no_role'));
+      : (this._serverMatrixRoles().filter(r => (u.roleIds || []).includes(r.id)).map(r => r.name).join(', ') || t('settings.admin.perm_matrix.no_role'));
     return `<button type="button" class="perm-user-row${active}" data-user="${u.id}">
       <span class="perm-user-name">${esc(u.displayName)}</span>
       <span class="perm-user-badge">${esc(badge)}</span>
@@ -325,13 +317,15 @@ _renderPermUserDetail() {
   }
   const self = user.id === this.user?.id;
   const locked = user.isAdmin || self;
-  const roles = this._matrixRoles();
+  const roles = this._serverMatrixRoles();
   const perms = user.permissions || [];
   const allOn = perms.includes('*') || user.isAdmin;
 
+  const heldRoles = this._draftUserRoleIds(user);
   const chips = roles.map(r => {
-    const on = (user.roleIds || []).includes(r.id);
-    return `<button type="button" class="perm-user-chip${on ? ' is-on' : ''}" data-set-role="${r.id}" ${locked ? 'disabled' : ''}>${esc(r.name)} <span class="perm-user-chip-level">${esc(t('settings.admin.perm_matrix.level', { level: r.level }))}</span></button>`;
+    const on = heldRoles.has(r.id);
+    const pending = on !== (user.roleIds || []).includes(r.id);
+    return `<button type="button" class="perm-user-chip${on ? ' is-on' : ''}${pending ? ' perm-pending' : ''}" data-set-role="${r.id}" ${locked ? 'disabled' : ''}>${esc(r.name)} <span class="perm-user-chip-level">${esc(t('settings.admin.perm_matrix.level', { level: r.level }))}</span></button>`;
   }).join('');
   // Exceptions made for this one person (the server works them out), so a
   // box that disagrees with their roles says why.
@@ -341,12 +335,13 @@ _renderPermUserDetail() {
   for (const group of PERM_GROUPS) {
     rows += `<div class="perm-user-group">${esc(t(`settings.admin.perm_matrix.group_${group.key}`))}</div>`;
     for (const perm of this._sortedGroupPerms(group)) {
-      const on = allOn || perms.includes(perm);
+      const draft = this._draftUserPerm(user, perm, allOn || perms.includes(perm));
+      const on = draft.on;
       const exception = !locked && Object.prototype.hasOwnProperty.call(exceptions, perm);
       const tag = exception
         ? `<span class="perm-user-exception" title="${esc(t('settings.admin.perm_matrix.exception_hint'))}">${esc(t(exceptions[perm] ? 'settings.admin.perm_matrix.exception_added' : 'settings.admin.perm_matrix.exception_removed'))}</span>`
         : '';
-      rows += `<label class="perm-user-perm${exception ? ' is-exception' : ''}">
+      rows += `<label class="perm-user-perm${exception ? ' is-exception' : ''}${draft.pending ? ' perm-pending' : ''}">
         <input type="checkbox" data-user-perm="${perm}" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''}>
         <span>${esc(t(`permissions.${perm}`))}</span>${tag}
       </label>`;
@@ -369,40 +364,11 @@ _renderPermUserDetail() {
   box.querySelector('[data-reset-user]')?.addEventListener('click', () => this._resetUserPerms(user));
 
   box.querySelectorAll('[data-set-role]').forEach(btn => {
-    btn.addEventListener('click', () => this._setUserRole(user.id, parseInt(btn.dataset.setRole, 10)));
+    btn.addEventListener('click', () => this._draftToggleUserRole(user, parseInt(btn.dataset.setRole, 10)));
   });
   box.querySelectorAll('[data-user-perm]').forEach(boxEl => {
-    boxEl.addEventListener('change', () => this._saveUserPerm(user, boxEl));
-  });
-},
-
-// One chip adds or removes that one role; people can hold several, and the
-// role menus hand them out, so the chips go through assign-role / revoke-role
-// (level checks and audit log included) instead of replacing the whole set.
-_setUserRole(userId, roleId) {
-  const user = this._permPanel.users.find(u => u.id === userId);
-  const has = !!user && (user.roleIds || []).includes(roleId);
-  this._roleEmit(has ? 'revoke-role' : 'assign-role', { userId, roleId }, (res) => {
-    if (res?.error) { this._showToast(res.error, 'error'); return; }
-    if (user) user.roleIds = has ? (user.roleIds || []).filter(id => id !== roleId) : [...(user.roleIds || []), roleId];
-    this._renderPermUsersList();
-    this._renderPermUserDetail();
-    this._loadPermPanel();
-  });
-},
-
-// One box saves only its own permission. The server keeps it as an
-// exception only while it differs from what the person's roles give.
-_saveUserPerm(user, boxEl) {
-  const permission = boxEl.dataset.userPerm;
-  const allowed = boxEl.checked;
-  this._roleEmit('set-user-server-perm', { userId: user.id, permission, allowed }, (res) => {
-    if (res?.error) {
-      boxEl.checked = !allowed;
-      this._showToast(res.error, 'error');
-      return;
-    }
-    this._loadPermPanel();
+    const perm = boxEl.dataset.userPerm;
+    boxEl.addEventListener('change', () => this._draftSetUserPerm(user, perm, boxEl.checked, allOn || perms.includes(perm)));
   });
 },
 

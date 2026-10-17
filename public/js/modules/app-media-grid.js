@@ -395,7 +395,7 @@ async _sendMediaGroups({ code, files, text = '', base = {}, partner = null, pref
     if (prefix && !ownText) body = prefix + body;
     if (thread) {
       const replyTo = first ? thread.replyTo : null;
-      const reply = { parentId: thread.parentId, content: body, ...(replyTo ? { replyTo } : {}), ...(silent ? { silent: true } : {}) };
+      const reply = { parentId: thread.parentId, content: body, ...(replyTo ? { replyTo, ...this._forumBlogSendExtras?.(thread.parentId, replyTo) } : {}), ...(silent ? { silent: true } : {}) };
       this.socket.emit('send-thread-message', reply, (resp) => {
         if (resp && resp.error) this._showToast(resp.error, 'error');
       });

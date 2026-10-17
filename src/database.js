@@ -13,6 +13,8 @@ const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
+const { migrateMessageNsfw } = require('./messageNsfw');
+const { convertPermissionThresholds } = require('./permissionThresholds');
 const { migrateBadges } = require('./badges');
 const { installGuard: installProtectedGuard } = require('./protectedMessages');
 
@@ -467,7 +469,7 @@ function initDatabase() {
   // back to Haven when that is unset too. (#5489)
   insertSetting.run('server_name', '');                // displayed in sidebar header + server bar
   insertSetting.run('server_icon', '');                // path to uploaded server icon image
-  insertSetting.run('permission_thresholds', '{"create_channel":50,"manage_channel_settings":50}');    // JSON: { permission: minLevel }; auto-grant perms at level
+  insertSetting.run('permission_thresholds', '{}');    // retired: permissions come from ticks only (src/permissionThresholds.js)
   insertSetting.run('server_code', '');                // server-wide invite code (joins all channels)
   insertSetting.run('default_join_channels', '');       // (#5345) JSON array of channel IDs that server-code/vanity-code joiners get added to (empty = all public)
   insertSetting.run('registration_token_enabled', 'false'); // (#5344) require a token on the registration form
@@ -1180,6 +1182,7 @@ function initDatabase() {
   migrateSelfDms(db, addColumn);
   migrateForumVotes(db, addColumn);
   migrateForumBlog(addColumn);
+  migrateMessageNsfw(addColumn);
   db.exec(`
     CREATE TABLE IF NOT EXISTS dm_group_invites (
       channel_id INTEGER NOT NULL,
@@ -1228,20 +1231,6 @@ function initDatabase() {
   addColumn('users', 'oidc_subject', "TEXT DEFAULT NULL");
   addColumn('users', 'oidc_issuer', "TEXT DEFAULT NULL");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc ON users(oidc_issuer, oidc_subject) WHERE oidc_subject IS NOT NULL");
-
-  // ── Migration: ensure create_channel default threshold ──
-  try {
-    const row = db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get();
-    if (row) {
-      const thresholds = JSON.parse(row.value);
-      if (!thresholds.create_channel) {
-        thresholds.create_channel = 50;
-        db.prepare("UPDATE server_settings SET value = ? WHERE key = 'permission_thresholds'").run(JSON.stringify(thresholds));
-      }
-    }
-  } catch (err) {
-    console.warn('permission_thresholds is not valid JSON, left as it is:', err.message);
-  }
 
   // ── Migration: imported_from column on messages (Discord import) ──
   addColumn('messages', 'imported_from', "TEXT DEFAULT NULL");
@@ -1621,6 +1610,15 @@ function initDatabase() {
     }
   } catch (e) {
     console.warn('manage_channel_settings backfill failed:', e.message);
+  }
+
+  // ── Migration: level thresholds become ticks (src/permissionThresholds.js) ──
+  // After the backfill above, which still reads them.
+  try {
+    const { converted } = convertPermissionThresholds(db);
+    if (converted) console.log(`[perms] Level-based permissions are now ticked on their roles (${converted} added)`);
+  } catch (e) {
+    console.warn('[perms] converting level-based permissions failed, left as they were:', e.message);
   }
 
   // ── Migration: let SERVER_NAME through on existing installs (#5489) ──

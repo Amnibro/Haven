@@ -189,6 +189,8 @@ _bindThreadAndDmPanels() {
           this.socket.emit('unarchive-message', { messageId: msgId });
         } else if (action === 'copy-link') {
           this._copyChannelLink?.(this._activeDMPip, msgId);
+        } else if (action === 'nsfw' || action === 'unnsfw') {
+          this._setMessageNsfw?.(msgId, action === 'nsfw');
         } else if (action === 'thread') {
           // Threads are not available in DMs - swallow the click. The button
           // should already be filtered out at render time, this is defence
@@ -517,6 +519,7 @@ _openDMPiP(code) {
   }
   panel.style.display = 'flex';
   panel.dataset.code = code;
+  this._typingRender?.();
   // Title: partner name, or the group's name for a group DM
   const partnerName = ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
   const titleEl = document.getElementById('dm-pip-title');

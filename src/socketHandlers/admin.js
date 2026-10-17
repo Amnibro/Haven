@@ -83,10 +83,8 @@ module.exports = function register(socket, ctx) {
     settings.server_name_effective = settings.server_name || (process.env.SERVER_NAME || '').trim() || '';
 
     // The cap this user's uploads are actually checked against: the server
-    // setting, or a higher one from a role they hold. Admins get the setting.
-    settings.max_upload_mb_effective = String(socket.user.isAdmin
-      ? (parseInt(settings.max_upload_mb, 10) || 25)
-      : ctx.getUserUploadMb(socket.user.id));
+    // setting, or a higher one from a role they hold, admins included.
+    settings.max_upload_mb_effective = String(ctx.getUserUploadMb(socket.user.id));
 
     // Only the people who can open the admin panel get told what the
     // environment holds, and secrets are reported as present without ever
@@ -130,7 +128,7 @@ module.exports = function register(socket, ctx) {
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'cleanup_max_uploads_mb',
       'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
       'keep_self_destructed_attachments', // off removes a self destructed message's files for good instead of holding them
-      'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
+      'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
       'max_sound_kb', 'max_avatar_mb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'hide_disabled_channel_badges',
@@ -470,32 +468,6 @@ module.exports = function register(socket, ctx) {
         } catch { return; }
       }
     }
-    if (key === 'permission_thresholds') {
-      try {
-        const obj = JSON.parse(value);
-        if (typeof obj !== 'object' || Array.isArray(obj)) return;
-        for (const [k, v] of Object.entries(obj)) {
-          if (!VALID_ROLE_PERMS.includes(k)) return;
-          if (!Number.isInteger(v) || v < 1 || v > 100) return;
-        }
-        // A threshold hands a permission to everyone at or above a level, the
-        // person setting it included. Anyone but an admin sets them only for
-        // permissions they hold server-wide and that are not admin-only; the
-        // rest keep whatever an admin set.
-        if (!socket.user.isAdmin) {
-          const adminOnly = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
-          const mine = new Set(ctx.getUserGlobalPermissions(socket.user.id));
-          const mayTouch = (perm) => !adminOnly.includes(perm) && (mine.has('*') || mine.has(perm));
-          let prev = {};
-          try { prev = JSON.parse(db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get()?.value || '{}') || {}; } catch { prev = {}; }
-          const merged = {};
-          for (const [k, v] of Object.entries(prev)) if (!mayTouch(k)) merged[k] = v;
-          for (const [k, v] of Object.entries(obj)) if (mayTouch(k)) merged[k] = v;
-          value = JSON.stringify(merged);
-        }
-      } catch { return; }
-    }
-
     try {
       const save = () => {
         db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(key, value);

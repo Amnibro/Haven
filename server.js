@@ -499,7 +499,8 @@ app.set('isIpBanned', isIpBanned);
 function uploadCapMb(user) {
   const db = require('./src/database').getDb();
   const base = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get()?.value, 10) || 25;
-  if (verifyAdminFromDb(user)) return base;
+  // The admin too: a server owner who lowers the setting for everyone and
+  // gives their own role a higher cap was held to the setting.
   try {
     const row = db.prepare(`
       SELECT MAX(r.max_upload_mb) AS cap FROM roles r JOIN user_roles ur ON ur.role_id = r.id
