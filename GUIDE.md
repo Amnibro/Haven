@@ -282,6 +282,20 @@ You can also click **Rotate Now** to manually change the code immediately.
 
 ---
 
+## Location Data in Photos and Videos
+
+Phones save where a photo or video was taken inside the file itself. Haven removes that when someone uploads to a channel, so nobody can work out where it was taken.
+
+- **Every server:** JPEG, PNG and WebP photos are cleaned. There's nothing to install.
+- **With exiftool and ffmpeg installed:** videos and every other photo format (HEIC, RAW and so on) are cleaned too. The Docker image already has both.
+  - Linux: `sudo apt install ffmpeg libimage-exiftool-perl` (or your distro's equivalent), then restart Haven.
+  - Windows: `winget install Gyan.FFmpeg`, and download exiftool from [exiftool.org](https://exiftool.org). Rename `exiftool(-k).exe` to `exiftool.exe` and either put it on your PATH or set `HAVEN_EXIFTOOL_PATH` to it, then restart Haven.
+- **What it can't reach:** files in encrypted DMs (they're encrypted before the server ever sees them), copies people already downloaded, files Ferry already sent to Discord, and your backups.
+
+The first start after updating also goes through files uploaded before this existed. With the tools installed, a file that can't be cleaned is held back instead of shown, and its message says so. The server log says at startup which of the two modes it's in.
+
+---
+
 ## Avatars
 
 ### Uploading a Profile Picture
