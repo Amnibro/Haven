@@ -75,7 +75,8 @@ _setPermView(view) {
   }
 },
 
-_applyPermPanel({ roles, users } = {}) {
+_applyPermPanel({ roles, users, levelPerms } = {}) {
+  if (levelPerms && typeof levelPerms === 'object') this._permPanel.levelPerms = levelPerms;
   if (Array.isArray(roles)) {
     this._permPanel.roles = roles.filter(r => (r.scope || 'server') === 'server' && Number(r.level) > 0);
   }
@@ -110,7 +111,7 @@ _loadPermPanel() {
       this._loadPermUsersFallback();
       return;
     }
-    this._applyPermPanel({ roles: res.roles || [], users: res.users || [] });
+    this._applyPermPanel({ roles: res.roles || [], users: res.users || [], levelPerms: res.levelPerms });
   };
   if (typeof sock.timeout === 'function') {
     sock.timeout(8000).emit('get-perm-panel', {}, (err, res) => {
@@ -143,6 +144,13 @@ _loadPermUsersFallback() {
 
 _matrixRoles() {
   return (this._permPanel.roles || []).filter(r => (r.scope || 'server') === 'server' && Number(r.level) > 0);
+},
+
+// The level from which every role holds `perm` without it being ticked, or
+// null. Such a box is shown on and locked: unticking it would change nothing.
+_permLevelFloor(perm) {
+  const n = Number(this._permPanel.levelPerms?.[perm]);
+  return Number.isFinite(n) && n > 0 ? n : null;
 },
 
 _sortedGroupPerms(group) {
@@ -186,7 +194,12 @@ _renderPermMatrix() {
     body += `<tr class="perm-matrix-group"><td colspan="${roles.length + 2}">${esc(t(`settings.admin.perm_matrix.group_${group.key}`))}</td></tr>`;
     for (const perm of this._sortedGroupPerms(group)) {
       body += `<tr><th scope="row">${esc(t(`permissions.${perm}`))}</th>`;
+      const floor = this._permLevelFloor(perm);
       for (const role of roles) {
+        if (floor !== null && Number(role.level) >= floor) {
+          body += `<td><input type="checkbox" class="perm-by-level" checked disabled title="${esc(t('settings.admin.perm_matrix.by_level', { level: floor }))}"></td>`;
+          continue;
+        }
         const on = (role.permissions || []).includes(perm);
         body += `<td><input type="checkbox" data-role="${role.id}" data-perm="${perm}" ${on ? 'checked' : ''}></td>`;
       }
@@ -336,18 +349,24 @@ _renderPermUserDetail() {
   // Exceptions made for this one person (the server works them out), so a
   // box that disagrees with their roles says why.
   const exceptions = user.exceptions || {};
+  // Their rank, from the roles they hold, for permissions given by level.
+  const userLevel = Math.max(0, ...roles.filter(r => (user.roleIds || []).includes(r.id)).map(r => Number(r.level) || 0));
 
   let rows = '';
   for (const group of PERM_GROUPS) {
     rows += `<div class="perm-user-group">${esc(t(`settings.admin.perm_matrix.group_${group.key}`))}</div>`;
     for (const perm of this._sortedGroupPerms(group)) {
       const on = allOn || perms.includes(perm);
-      const exception = !locked && Object.prototype.hasOwnProperty.call(exceptions, perm);
-      const tag = exception
-        ? `<span class="perm-user-exception" title="${esc(t('settings.admin.perm_matrix.exception_hint'))}">${esc(t(exceptions[perm] ? 'settings.admin.perm_matrix.exception_added' : 'settings.admin.perm_matrix.exception_removed'))}</span>`
-        : '';
+      const floor = this._permLevelFloor(perm);
+      const byLevel = !user.isAdmin && floor !== null && userLevel >= floor;
+      const exception = !locked && !byLevel && Object.prototype.hasOwnProperty.call(exceptions, perm);
+      const tag = byLevel
+        ? `<span class="perm-user-by-level" title="${esc(t('settings.admin.perm_matrix.by_level', { level: floor }))}">${esc(t('settings.admin.perm_matrix.by_level_tag', { level: floor }))}</span>`
+        : exception
+          ? `<span class="perm-user-exception" title="${esc(t('settings.admin.perm_matrix.exception_hint'))}">${esc(t(exceptions[perm] ? 'settings.admin.perm_matrix.exception_added' : 'settings.admin.perm_matrix.exception_removed'))}</span>`
+          : '';
       rows += `<label class="perm-user-perm${exception ? ' is-exception' : ''}">
-        <input type="checkbox" data-user-perm="${perm}" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''}>
+        <input type="checkbox" data-user-perm="${perm}" ${on || byLevel ? 'checked' : ''} ${locked || byLevel ? 'disabled' : ''}>
         <span>${esc(t(`permissions.${perm}`))}</span>${tag}
       </label>`;
     }

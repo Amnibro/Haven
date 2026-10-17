@@ -1416,6 +1416,17 @@ html.reduce-motion .forum-unread-dot { animation: none; }
   color: var(--text-secondary);
 }
 .perm-user-reset { margin-top: 0.5rem; }
+/* A permission given by level, not by a tick (permission_thresholds). */
+.perm-user-by-level {
+  margin-left: auto;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.6875rem;
+  background: rgba(127, 127, 127, 0.15);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.perm-matrix-table input.perm-by-level { cursor: help; }
 /* A box on the Users tab that differs from what the person's roles give. */
 .perm-user-exception {
   margin-left: auto;

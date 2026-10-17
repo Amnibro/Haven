@@ -11,7 +11,7 @@ module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole,
-    emitOnlineUsers, broadcastChannelLists, getEnrichedChannels,
+    getPermissionThresholds, emitOnlineUsers, broadcastChannelLists, getEnrichedChannels,
     transferAdminRef, HAVEN_VERSION, logAudit
   } = ctx;
   const { channelUsers } = state;
@@ -919,7 +919,11 @@ module.exports = function register(socket, ctx) {
       } catch (userErr) {
         console.error('get-perm-panel users error:', userErr);
       }
-      cb({ roles, users });
+      // Permissions every role at or above a level holds, whatever is ticked
+      // (server_settings.permission_thresholds). The panel shows them as on
+      // and locked, so a role does not look like it lacks one it has.
+      const levelPerms = typeof getPermissionThresholds === 'function' ? getPermissionThresholds() : {};
+      cb({ roles, users, levelPerms });
     } catch (err) {
       console.error('get-perm-panel error:', err);
       cb({ error: 'Failed to load permissions' });
