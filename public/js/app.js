@@ -73,7 +73,7 @@ import ForumBlogMethods from './modules/app-forum-blog.js?v=4.25.6';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.25.16';
-import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.25.16';
+import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.25.17';
 import CallMethods from './modules/app-calls.js?v=4.22.24';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 import GroupMethods from './modules/app-groups.js?v=4.25.5';
@@ -90,6 +90,7 @@ import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
 import TypingMethods from './modules/app-typing.js?v=4.25.8';
 import MessageNsfwMethods from './modules/app-message-nsfw.js?v=4.25.10';
 import MediaPlaybackMethods from './modules/app-media-playback.js?v=4.25.13';
+import PermDraftMethods from './modules/app-perm-draft.js?v=4.25.17';
 import ThreadScrollMethods from './modules/app-thread-scroll.js?v=4.24.26';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
@@ -629,6 +630,7 @@ Object.assign(HavenApp.prototype,
   TypingMethods,
   MessageNsfwMethods,
   MediaPlaybackMethods,
+  PermDraftMethods,
   ThreadScrollMethods,
   MoveToThreadMethods,
   ChannelCategoryMethods,

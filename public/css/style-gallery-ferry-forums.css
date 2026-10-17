@@ -1405,6 +1405,11 @@ html.reduce-motion .forum-unread-dot { animation: none; }
   font-size: 0.78rem;
   cursor: pointer;
 }
+/* A change in the Permissions panel waiting for Save (app-perm-draft.js). */
+.perm-matrix-table td.perm-pending { box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.perm-matrix-auto.perm-pending,
+.perm-user-perm.perm-pending { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: var(--radius-sm); }
+.perm-user-chip.perm-pending { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .perm-user-chip.is-on { background: var(--accent, #6b4fdb); color: var(--accent-text, #fff); border-color: transparent; }
 .perm-user-chip:disabled { opacity: 0.55; cursor: default; }
 .perm-user-group {
