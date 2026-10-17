@@ -83,10 +83,8 @@ module.exports = function register(socket, ctx) {
     settings.server_name_effective = settings.server_name || (process.env.SERVER_NAME || '').trim() || '';
 
     // The cap this user's uploads are actually checked against: the server
-    // setting, or a higher one from a role they hold. Admins get the setting.
-    settings.max_upload_mb_effective = String(socket.user.isAdmin
-      ? (parseInt(settings.max_upload_mb, 10) || 25)
-      : ctx.getUserUploadMb(socket.user.id));
+    // setting, or a higher one from a role they hold, admins included.
+    settings.max_upload_mb_effective = String(ctx.getUserUploadMb(socket.user.id));
 
     // Only the people who can open the admin panel get told what the
     // environment holds, and secrets are reported as present without ever

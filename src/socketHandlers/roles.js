@@ -81,10 +81,7 @@ module.exports = function register(socket, ctx) {
 
   // The client sizes its upload pre-checks from this; a role change can move it.
   function pushUploadCap(userId) {
-    const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
-    const cap = row && row.is_admin
-      ? (parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get()?.value, 10) || 25)
-      : ctx.getUserUploadMb(userId);
+    const cap = ctx.getUserUploadMb(userId);
     for (const [, s] of io.sockets.sockets) {
       if (s.user && s.user.id === userId) s.emit('server-setting-changed', { key: 'max_upload_mb_effective', value: String(cap) });
     }
