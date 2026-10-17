@@ -17,6 +17,17 @@ _updateAvatarPreview() {
     const initial = this.user.username.charAt(0).toUpperCase();
     preview.innerHTML = `<div style="background-color:${color};width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.125rem;color:white">${initial}</div>`;
   }
+  this._applyAvatarPreviewShape();
+},
+
+// The Edit Profile preview takes the chosen shape, unsaved picks included,
+// so the picture and its Shape buttons right under it agree.
+_applyAvatarPreviewShape() {
+  const preview = document.getElementById('avatar-upload-preview');
+  if (!preview) return;
+  const shape = this._pendingAvatarShape || this.user.avatarShape || 'circle';
+  preview.classList.remove('avatar-circle', 'avatar-rounded', 'avatar-squircle', 'avatar-hex', 'avatar-diamond');
+  preview.classList.add('avatar-' + shape);
 },
 
 // Border preview mirrors the avatar preview; the empty state is a muted dot
@@ -1056,6 +1067,7 @@ _setupAvatarUpload() {
       if (container) container.querySelectorAll('.avatar-shape-btn').forEach(b => b.classList.remove('active'));
       shapeBtn.classList.add('active');
       this._pendingAvatarShape = shapeBtn.dataset.shape;
+      this._applyAvatarPreviewShape();
       this._markAvatarUnsaved();
       return;
     }

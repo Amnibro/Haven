@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.25.25">
+  <link rel="stylesheet" href="/css/style.css?v=4.25.28">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.24.18"></script>
 </head>
@@ -1250,6 +1250,14 @@
         </div>
         <small class="muted-text" style="display:block;margin-top:-4px;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.avatar_hint">JPG, PNG, GIF (animated!), WebP · Max 2 MB</small>
         <small class="muted-text" id="avatar-edit-note" style="display:none;margin-top:-4px;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.avatar_edit_animated">Animated images can't be edited.</small>
+        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.shape_title">Shape</h5>
+        <div class="avatar-shape-picker" id="avatar-shape-picker">
+          <button type="button" class="avatar-shape-btn active" data-shape="circle" data-i18n-title="modals.edit_profile.shape_circle" title="Circle"><div class="shape-preview shape-circle"></div></button>
+          <button type="button" class="avatar-shape-btn" data-shape="rounded" data-i18n-title="modals.edit_profile.shape_rounded" title="Rounded"><div class="shape-preview shape-rounded"></div></button>
+          <button type="button" class="avatar-shape-btn" data-shape="squircle" data-i18n-title="modals.edit_profile.shape_squircle" title="Squircle"><div class="shape-preview shape-squircle"></div></button>
+          <button type="button" class="avatar-shape-btn" data-shape="hex" data-i18n-title="modals.edit_profile.shape_hexagon" title="Hexagon"><div class="shape-preview shape-hex"></div></button>
+          <button type="button" class="avatar-shape-btn" data-shape="diamond" data-i18n-title="modals.edit_profile.shape_diamond" title="Diamond"><div class="shape-preview shape-diamond"></div></button>
+        </div>
       </div>
 
       <!-- Display Name -->
@@ -1304,14 +1312,6 @@
           <small class="muted-text" style="display:block;margin-bottom:6px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_intro">Controls how animations on your profile will appear for every user on Haven. This applies to both your avatar and border, assuming you upload an animated image such as a GIF or APNG.</small>
           <small class="muted-text" style="display:block;margin-bottom:4px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_trigger">Trigger: Animations on your profile will loop when a user puts their cursor over your message, or opens your profile card.</small>
           <small class="muted-text" style="display:block;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_disabled">Disabled: Animations will be completely disabled for your profile. Existing animated images uploaded to your profile will remain untouched, however, only the first frame of the image will be displayed on your profile.</small>
-        </div>
-        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.shape_title">Shape</h5>
-        <div class="avatar-shape-picker" id="avatar-shape-picker">
-          <button type="button" class="avatar-shape-btn active" data-shape="circle" data-i18n-title="modals.edit_profile.shape_circle" title="Circle"><div class="shape-preview shape-circle"></div></button>
-          <button type="button" class="avatar-shape-btn" data-shape="rounded" data-i18n-title="modals.edit_profile.shape_rounded" title="Rounded"><div class="shape-preview shape-rounded"></div></button>
-          <button type="button" class="avatar-shape-btn" data-shape="squircle" data-i18n-title="modals.edit_profile.shape_squircle" title="Squircle"><div class="shape-preview shape-squircle"></div></button>
-          <button type="button" class="avatar-shape-btn" data-shape="hex" data-i18n-title="modals.edit_profile.shape_hexagon" title="Hexagon"><div class="shape-preview shape-hex"></div></button>
-          <button type="button" class="avatar-shape-btn" data-shape="diamond" data-i18n-title="modals.edit_profile.shape_diamond" title="Diamond"><div class="shape-preview shape-diamond"></div></button>
         </div>
       </div>
 
@@ -5354,7 +5354,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.21.0"></script>
-  <script type="module" src="/js/app.js?v=4.25.27"></script>
+  <script type="module" src="/js/app.js?v=4.25.28"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

@@ -274,6 +274,7 @@ _openRenameModal() {
     });
     this._pendingAvatarShape = currentShape;
   }
+  this._applyAvatarPreviewShape?.();
 },
 
 _saveRename() {
