@@ -344,6 +344,7 @@
       "embed_medium": "Medium",
       "embed_small": "Small",
       "embed_size_hint": "Embed size (use Settings ▸ Link Previews to turn off)",
+      "embed_volume": "Volume",
       "collapse": "Collapse",
       "silent_hint": "Sent silently: nobody got a sound, pop-up or push for it"
     },
@@ -1795,7 +1796,9 @@
       "medium": "Medium",
       "medium_hint": "Medium: balanced card with medium media",
       "full": "Full",
-      "full_hint": "Full: large media, author, and post stats"
+      "full_hint": "Full: large media, author, and post stats",
+      "pause_offscreen": "Pause videos and audio scrolled out of view",
+      "pause_offscreen_hint": "A video, sound file or YouTube card in chat stops when you scroll past it."
     },
     "banner_display": {
       "title": "Banner Display",

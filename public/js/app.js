@@ -39,7 +39,7 @@ import ChannelContextMethods from './modules/app-channel-context.js?v=4.24.9';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.25.11';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.32';
 import MessageMethods  from './modules/app-messages.js?v=4.25.10';
-import LinkPreviewMethods from './modules/app-link-previews.js?v=4.24.19';
+import LinkPreviewMethods from './modules/app-link-previews.js?v=4.25.13';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.25.10';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
 import UserMethods     from './modules/app-users.js?v=4.25.8';
@@ -89,6 +89,7 @@ import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.25.3';
 import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
 import TypingMethods from './modules/app-typing.js?v=4.25.8';
 import MessageNsfwMethods from './modules/app-message-nsfw.js?v=4.25.10';
+import MediaPlaybackMethods from './modules/app-media-playback.js?v=4.25.13';
 import ThreadScrollMethods from './modules/app-thread-scroll.js?v=4.24.26';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
@@ -439,6 +440,7 @@ class HavenApp {
     this._setupThreadDock();
     this._setupTyping();
     this._setupMessageNsfw();
+    this._setupMediaPlayback();
     this._setupSilentToggle();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
@@ -626,6 +628,7 @@ Object.assign(HavenApp.prototype,
   ThreadDockMethods,
   TypingMethods,
   MessageNsfwMethods,
+  MediaPlaybackMethods,
   ThreadScrollMethods,
   MoveToThreadMethods,
   ChannelCategoryMethods,
