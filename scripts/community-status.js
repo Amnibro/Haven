@@ -36,23 +36,57 @@ const DOWN_AFTER = 2;
 // A certificate this close to its end gets a warning while still working.
 const SOON_MS = 3 * 24 * 60 * 60 * 1000;
 
-// The certificate as the server presents it, valid or not.
-function readCertificate() {
+// The certificate as the server presents it, valid or not. `ca` adds to the
+// usual trusted roots (for the chain check below).
+function readCertificate(ca = null) {
   return new Promise((resolve) => {
-    const sock = tls.connect({ host: HOST, port: 443, servername: HOST, rejectUnauthorized: false, timeout: TIMEOUT_MS }, () => {
+    const opts = { host: HOST, port: 443, servername: HOST, rejectUnauthorized: false, timeout: TIMEOUT_MS };
+    if (ca) opts.ca = [...tls.rootCertificates, ...ca];
+    const sock = tls.connect(opts, () => {
       const cert = sock.getPeerCertificate();
+      const issuersAt = cert && cert.infoAccess ? cert.infoAccess['CA Issuers - URI'] || [] : [];
       resolve({
         reached: true,
         authorized: sock.authorized,
         error: sock.authorizationError ? String(sock.authorizationError) : null,
         validTo: cert && cert.valid_to ? new Date(cert.valid_to).toISOString() : null,
         issuer: cert && cert.issuer ? (cert.issuer.O || cert.issuer.CN || null) : null,
+        issuerUrl: issuersAt.find(u => /^https?:\/\//.test(u)) || null,
       });
       sock.end();
     });
     sock.on('timeout', () => { sock.destroy(); resolve({ reached: false, error: 'timeout' }); });
     sock.on('error', (err) => resolve({ reached: false, error: err.code || err.message }));
   });
+}
+
+// A server that sends its own certificate without the issuer's (the chain's
+// middle link) fails in strict apps, while most browsers fetch the missing
+// link themselves and carry on. Fetch it the same way: if the certificate
+// then checks out, the only fault is the incomplete chain.
+async function chainOnlyMissing(cert) {
+  if (cert.authorized || cert.error !== 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || !cert.issuerUrl) return false;
+  // Up to three links: a new root (Let's Encrypt's Root YE, say) may need its
+  // cross-signed copy from an older root before a trusted root is reached.
+  try {
+    const { X509Certificate } = require('crypto');
+    const links = [];
+    let url = cert.issuerUrl;
+    for (let i = 0; i < 3 && url; i++) {
+      const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (!res.ok) break;
+      const x = new X509Certificate(Buffer.from(await res.arrayBuffer()));
+      links.push(x.toString());
+      const next = (x.infoAccess || '').match(/CA Issuers - URI:(https?:\/\/\S+)/);
+      url = next && next[1] !== url ? next[1] : null;
+    }
+    if (!links.length) return false;
+    const again = await readCertificate(links);
+    return again.reached && again.authorized;
+  } catch (err) {
+    console.warn('[chain] could not fetch the issuer certificate:', err.message);
+    return false;
+  }
 }
 
 // Haven's own health check, read even through a bad certificate, so an
@@ -79,6 +113,10 @@ const day = (iso) => new Date(iso).toUTCString().replace(/:\d\d GMT$/, ' UTC');
 function judge(cert, health, now) {
   if (!cert.reached) {
     return { state: 'down', code: 'unreachable', message: "The community server can't be reached right now." };
+  }
+  if (cert.chainOnlyMissing) {
+    if (!health.online) return { state: 'down', code: 'not-answering', message: "The community server isn't answering right now." };
+    return { state: 'warn', code: 'chain-incomplete', message: "The community server is online, but its certificate is missing its chain, so some apps (phones especially) can't connect. Browsers usually can." };
   }
   if (!cert.authorized) {
     if (cert.error === 'CERT_HAS_EXPIRED') {
@@ -122,6 +160,7 @@ function readPrevious() {
 async function main() {
   const now = Date.now();
   const cert = await readCertificate();
+  cert.chainOnlyMissing = await chainOnlyMissing(cert);
   const health = cert.reached ? await readHealth() : { status: 0, online: false };
   const verdict = judge(cert, health, now);
   const prev = readPrevious();
@@ -151,7 +190,9 @@ async function main() {
     const back = out.state === 'ok';
     const sent = await sendAlert(back
       ? { title: 'Haven community server is back', message: out.message, priority: 3, tags: ['white_check_mark'] }
-      : { title: out.state === 'warn' ? 'Haven community server: certificate running out' : 'Haven community server is down', message: out.message, priority: out.state === 'warn' ? 3 : 4, tags: [out.state === 'warn' ? 'hourglass' : 'warning'] });
+      : out.state === 'warn'
+        ? { title: out.code === 'cert-expiring' ? 'Haven community server: certificate running out' : 'Haven community server is up, with a certificate problem', message: out.message, priority: 3, tags: ['hourglass'] }
+        : { title: 'Haven community server is down', message: out.message, priority: 4, tags: ['warning'] });
     if (sent) out.alerted = out.code;
   }
   if (ALERT_TEST) {
