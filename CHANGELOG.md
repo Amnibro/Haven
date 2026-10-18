@@ -6,6 +6,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.26.1] - 2026-10-17
+
+Fixes for problems in 4.26.0. Update if you're on 4.26.0, and if you're still
+on 4.25.0, update straight to this one.
+
+### Fixed
+- Menus in the sidebar, like the status menu, opened underneath the sections below them.
+- The first start after updating could freeze a server without exiftool for a long time on a big uploads folder, while it checked old files for location data. Only photos are read now, and the server keeps answering while it works.
+- With exiftool and ffmpeg installed, a file that couldn't be checked (a timeout, an odd video) was taken out of chat. Now only a file that still carries location data after cleaning is held back. Animated PNGs and SVG pictures are no longer refused, and .weba audio keeps its name.
+- The Permissions panel's Save could hang if the server didn't answer, boxes ticked while saving were lost, and Reset to roles or removing a role could be undone by a pending Save.
+- Turning level-based permissions into ticks could give Create Channels and Manage Channel Settings to people who didn't have them before: someone ranked below their role, or holding the role only inside one channel. Servers that update from 4.25.0 now convert without that. If you already ran 4.26.0, check who holds those two in the Permissions panel.
+- The folded topic tab could cover the top of the channel header's menus.
+- An admin using a theme or overlay they haven't published couldn't see it in the theme picker.
+
+### Changed
+- Edit Profile puts Shape right under your picture, and the picture takes the shape you pick.
+- The Threads window can sort unread first and show only unread threads.
+- In the theme picker, the effects stay pinned below the theme list, and admins' publish switches sit behind a Publish button.
+
 ## [4.26.0] - 2026-10-17
 
 Location data removed from uploaded photos and videos, Ukrainian and complete
