@@ -29,7 +29,7 @@ _initPermMatrix() {
   document.getElementById('perm-matrix-overlay')?.addEventListener('modal-dismiss', (e) => {
     if (!this._permDraftCount()) return;
     e.currentTarget.style.display = 'flex';
-    this._requestClosePermMatrix();
+    if (!this._permCloseAsking) this._requestClosePermMatrix();
   });
   document.getElementById('perm-save-btn')?.addEventListener('click', () => this._savePermDraft());
   document.getElementById('perm-discard-btn')?.addEventListener('click', () => this._discardPermDraft());
@@ -264,6 +264,12 @@ async _removePermRole(roleId) {
     t('settings.admin.perm_matrix.remove_role_confirm', { name: role.name })
   );
   if (!ok) return;
+  // Pending changes for a role that is gone would fail the next Save.
+  const d = this._permDraft();
+  d.rolePerms.delete(roleId);
+  if (d.autoRole === roleId) d.autoRole = null;
+  for (const held of d.userRoles.values()) held.delete(roleId);
+  this._permDraftChanged();
   this._roleEmit('delete-role', { roleId }, (res) => {
     if (res?.error) { this._showToast(res.error, 'error'); return; }
     this._loadPermPanel();
@@ -378,6 +384,8 @@ async _resetUserPerms(user) {
     { confirmLabel: t('settings.admin.perm_matrix.reset_to_roles') }
   );
   if (!ok) return;
+  // Their pending boxes go too, or Save would put the exceptions straight back.
+  if (this._permDraft().userPerms.delete(user.id)) this._permDraftChanged();
   this._roleEmit('reset-user-server-perms', { userId: user.id }, (res) => {
     if (res?.error) { this._showToast(res.error, 'error'); return; }
     this._showToast(t('settings.admin.perm_matrix.reset_done', { name: user.displayName }), 'success');

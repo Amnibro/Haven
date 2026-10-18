@@ -49,6 +49,7 @@ _draftUserPerm(user, perm, base) {
 // ── Changing the draft ──
 
 _draftToggleRolePerm(roleId, perm, on) {
+  if (this._permSaving) { this._permDraftChanged(); return; }
   const role = (this._permPanel.roles || []).find(r => r.id === roleId);
   if (!role) return;
   const d = this._permDraft();
@@ -61,12 +62,14 @@ _draftToggleRolePerm(roleId, perm, on) {
 },
 
 _draftSetAutoRole(roleId) {
+  if (this._permSaving) { this._permDraftChanged(); return; }
   const current = (this._permPanel.roles || []).find(r => r.auto_assign)?.id ?? null;
   this._permDraft().autoRole = roleId === current ? null : roleId;
   this._permDraftChanged();
 },
 
 _draftToggleUserRole(user, roleId) {
+  if (this._permSaving) { this._permDraftChanged(); return; }
   const d = this._permDraft();
   const next = new Set(this._draftUserRoleIds(user));
   if (next.has(roleId)) next.delete(roleId); else next.add(roleId);
@@ -77,6 +80,7 @@ _draftToggleUserRole(user, roleId) {
 },
 
 _draftSetUserPerm(user, perm, on, base) {
+  if (this._permSaving) { this._permDraftChanged(); return; }
   const d = this._permDraft();
   const own = d.userPerms.get(user.id) || new Map();
   if (on === base) own.delete(perm); else own.set(perm, on);
@@ -109,7 +113,7 @@ _permDraftChanged() {
   const save = document.getElementById('perm-save-btn');
   const discard = document.getElementById('perm-discard-btn');
   if (save) {
-    save.disabled = n === 0;
+    save.disabled = n === 0 || !!this._permSaving;
     save.textContent = n ? t('settings.admin.perm_matrix.save_count', { count: n }) : t('settings.admin.perm_matrix.save');
   }
   if (discard) discard.hidden = n === 0;
@@ -124,9 +128,14 @@ _discardPermDraft() {
 
 // Closing with changes waiting asks first. Returns whether it closed.
 async _requestClosePermMatrix() {
+  if (this._permCloseAsking) return false;
   if (this._permDraftCount() > 0) {
-    const ok = await this._showConfirmModal(t('settings.admin.perm_matrix.unsaved_title'), t('settings.admin.perm_matrix.unsaved_body'),
-      { danger: true, confirmLabel: t('settings.admin.perm_matrix.discard') });
+    this._permCloseAsking = true;
+    let ok;
+    try {
+      ok = await this._showConfirmModal(t('settings.admin.perm_matrix.unsaved_title'), t('settings.admin.perm_matrix.unsaved_body'),
+        { danger: true, confirmLabel: t('settings.admin.perm_matrix.discard') });
+    } finally { this._permCloseAsking = false; }
     if (!ok) return false;
     this._permDraftReset();
   }
@@ -140,10 +149,14 @@ async _requestClosePermMatrix() {
 // boxes.
 
 _permAsk(event, payload) {
-  return new Promise(resolve => this._roleEmit(event, payload, (res) => resolve(res || {})));
+  return new Promise(resolve => this.socket.timeout(10000).emit(event, payload, (err, res) => {
+    resolve(err ? { error: t('toasts.role_server_no_response') } : (res || {}));
+  }));
 },
 
 async _savePermDraft() {
+  if (this._permSaving) return;
+  this._permSaving = true;
   const d = this._permDraft();
   const save = document.getElementById('perm-save-btn');
   if (save) save.disabled = true;
@@ -164,6 +177,7 @@ async _savePermDraft() {
     for (const [permission, allowed] of own) note(await this._permAsk('set-user-server-perm', { userId, permission, allowed }));
   }
 
+  this._permSaving = false;
   this._permDraftReset();
   this._permDraftChanged();
   this._loadPermPanel();
