@@ -132,11 +132,27 @@ function startExiftool() {
   };
   child.stdout.on('data', (d) => { state.out += d; check(); });
   child.stderr.on('data', (d) => { state.err += d; check(); });
+  // When the copy dies (or is stopped over a file that hung it), only the job
+  // it was on fails. The others waiting had nothing to do with it and go to a
+  // fresh copy, once; a job that already moved fails too, so a copy that
+  // cannot start at all does not loop.
   const fail = (err) => {
     if (et === state) et = null;
-    const jobs = [state.current, ...state.queue].filter(Boolean);
+    const current = state.current;
+    const rest = state.queue;
     state.current = null; state.queue = [];
-    for (const j of jobs) { clearTimeout(j.timer); j.reject(err); }
+    if (current) { clearTimeout(current.timer); current.reject(err); }
+    for (const j of rest.filter(j => j.moved)) j.reject(err);
+    const again = rest.filter(j => !j.moved);
+    if (!again.length) return;
+    if (!et) et = startExiftool();
+    for (const j of again) {
+      j.moved = true;
+      et.seq += 1;
+      j.id = et.seq;
+      et.queue.push(j);
+    }
+    next(et);
   };
   child.on('error', fail);
   child.on('close', () => fail(new Error('exiftool stopped unexpectedly')));
