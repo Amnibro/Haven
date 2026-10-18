@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.26.2] - 2026-10-17
+
+Two fixes on top of 4.26.1.
+
+### Fixed
+- Uploading a file whose name contains a website (like `ssstwitter.com_123.mp4` from a downloader site) counted as posting a link, so on servers that restrict links it was blocked and could give a strike.
+
+### Changed
+- Videos, audio files and YouTube cards in chat now pause when you scroll them out of view by default. Turn it off under Settings > Link Previews.
+
 ## [4.26.1] - 2026-10-17
 
 Fixes for problems in 4.26.0. Update if you're on 4.26.0, and if you're still
