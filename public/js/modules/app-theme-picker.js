@@ -66,6 +66,14 @@ _setupThemePicker() {
   });
   root.querySelector('.tp-builtin-source')?.remove();
 
+  // Publish switches and the themes only admins can see stay out of the way
+  // until an admin asks for them.
+  document.getElementById('theme-publish-mode')?.addEventListener('click', (e) => {
+    const on = !root.classList.contains('tp-publishing');
+    root.classList.toggle('tp-publishing', on);
+    e.currentTarget.setAttribute('aria-pressed', String(on));
+  });
+
   const search = document.getElementById('theme-search');
   search?.addEventListener('input', () => {
     this._renderThemePicker();
@@ -234,6 +242,9 @@ _renderThemePicker() {
     activeTheme,
     query,
   });
+
+  const publishMode = document.getElementById('theme-publish-mode');
+  if (publishMode) publishMode.hidden = !this._canPublishThemes();
 
   const focused = container.contains(document.activeElement) ? document.activeElement : null;
   const fragment = document.createDocumentFragment();

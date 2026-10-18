@@ -272,6 +272,8 @@
         "card_by": "{{name}}, autor: {{author}}",
         "publish_label": "Opublikuj {{name}} dla wszystkich",
         "publish": "Opublikuj",
+        "publish_mode": "Publikuj",
+        "publish_mode_hint": "Pokaż motywy, które możesz opublikować, wraz z przełącznikami",
         "published": "Opublikowano",
         "published_hint": "Opublikowany: każdy może go wybrać",
         "unpublished_hint": "Nieopublikowany: widzą go tylko osoby zarządzające serwerem",

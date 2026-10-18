@@ -257,6 +257,8 @@
         "card_by": "{{name}}，作者 {{author}}",
         "no_match": "没有匹配你搜索的主题。",
         "publish": "发布",
+        "publish_mode": "发布",
+        "publish_mode_hint": "显示可发布的主题及其开关",
         "publish_label": "向所有人发布 {{name}}",
         "published": "已发布",
         "published_hint": "已发布：所有人都可以选用",

@@ -314,7 +314,8 @@ _bindAppChrome() {
   // Theme popup toggle
   document.getElementById('theme-popup-toggle')?.addEventListener('click', () => {
     const popup = document.getElementById('theme-popup');
-    popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+    // Flex: the themes scroll on their own and the effects stay pinned below.
+    popup.style.display = popup.style.display === 'none' ? 'flex' : 'none';
   });
   document.getElementById('theme-popup-close')?.addEventListener('click', () => {
     document.getElementById('theme-popup').style.display = 'none';

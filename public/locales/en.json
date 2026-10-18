@@ -272,6 +272,8 @@
         "card_by": "{{name}} by {{author}}",
         "publish_label": "Publish {{name}} for everyone",
         "publish": "Publish",
+        "publish_mode": "Publish",
+        "publish_mode_hint": "Show the themes you can publish, with their switches",
         "published": "Published",
         "published_hint": "Published: everyone can pick it",
         "unpublished_hint": "Not published: only people who manage the server see it",

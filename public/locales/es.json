@@ -272,6 +272,8 @@
         "card_by": "{{name}} por {{author}}",
         "publish_label": "Publicar {{name}} para todos",
         "publish": "Publicar",
+        "publish_mode": "Publicar",
+        "publish_mode_hint": "Mostrar los temas que puedes publicar, con sus interruptores",
         "published": "Publicado",
         "published_hint": "Publicado: todos pueden elegirlo",
         "unpublished_hint": "No publicado: solo lo ven quienes administran el servidor",
