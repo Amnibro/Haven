@@ -152,9 +152,14 @@
   // normalised hostname a browser would actually connect to, which is the only
   // thing worth making a policy decision about. opts.markdown: the text is a
   // chat message, so bare addresses inside code are not counted (see above).
+  var FILE_ATTACHMENT_RE = /\[file:[^\]\n]*\]\(\/uploads\/[^)\s|]*(?:\|[^)\n]*)?\)/g;
   function extractUrls(rawText, opts) {
     if (typeof rawText !== 'string' || !rawText) return [];
     if (opts && opts.markdown) rawText = codeLinksOnly(rawText);
+    // An uploaded file's own message, [file:name](/uploads/...|size), points
+    // at this server. Its name is whatever the file was called, and a name
+    // like ssstwitter.com_123.mp4 is not a link someone posted.
+    rawText = rawText.replace(FILE_ATTACHMENT_RE, ' ');
 
     var stripped = rawText.replace(INVISIBLE_RE, '');
     var d = deobfuscate(stripped);

@@ -81,3 +81,13 @@ test('haven-app.com is allowed once, and an admin entry for it is respected', (t
   run(dir, INIT + "const db=require('./src/database').getDb();db.prepare(\"DELETE FROM automod_domains WHERE domain='haven-app.com'\").run();");
   assert.equal(run(dir, INIT + ROW), 'none');
 });
+
+test('an uploaded file whose name looks like a site is not a link', () => {
+  // A file saved from a downloader site keeps that site in its name.
+  assert.equal(blocked('[file:ssstwitter.com_1760724512502.mp4](/uploads/1760724512502-ab12cd34.mp4|4.2 MB)', chat), null);
+  assert.equal(blocked('look [file:evil.com notes.txt](/uploads/x.txt|1 KB)'), null, 'outside chat too');
+  // A real link next to it is still checked, and the same markup pointing
+  // anywhere but this server's uploads still counts.
+  assert.ok(blocked('[file:clip.mp4](/uploads/a.mp4|1 MB) https://evil.com/x', chat));
+  assert.ok(blocked('[file:clip.mp4](https://evil.com/a.mp4)', chat));
+});
