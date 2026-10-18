@@ -198,6 +198,7 @@ export default {
     set('new-channel-temporary', f.temporary);
     set('new-channel-forum', f.isForum);
     set('new-channel-add-all', f.addAllMembers && !f.isPrivate);
+    this._fillChannelMoreOptions(f);
     const dur = document.getElementById('new-channel-duration');
     if (dur && f.duration) dur.value = f.duration;
     const durRow = document.getElementById('temp-channel-duration-row');
@@ -208,18 +209,39 @@ export default {
   },
 
   // Everything the checkboxes do not carry, sent along with create-channel.
+  // The More options section shows what they are, so a template fills it in
+  // and what is sent is what the section says.
   _channelTemplateExtras() {
     const f = this._pendingChannelTemplate || {};
+    const el = (id) => document.getElementById(id);
     return {
-      topic: typeof f.topic === 'string' ? f.topic.slice(0, 256) : '',
-      readOnly: !!f.readOnly, announcement: !!f.announcement,
-      slowMode: parseInt(f.slowMode, 10) || 0,
-      mediaEnabled: f.mediaEnabled !== false, voiceEnabled: f.voiceEnabled !== false
+      topic: (el('new-channel-topic')?.value || '').trim().slice(0, 256),
+      readOnly: !!el('new-channel-readonly')?.checked, announcement: !!f.announcement,
+      slowMode: parseInt(el('new-channel-slowmode')?.value, 10) || 0,
+      mediaEnabled: el('new-channel-media') ? el('new-channel-media').checked : true,
+      voiceEnabled: el('new-channel-voice') ? el('new-channel-voice').checked : true
     };
+  },
+
+  _fillChannelMoreOptions(f = {}) {
+    const el = (id) => document.getElementById(id);
+    if (el('new-channel-topic')) el('new-channel-topic').value = typeof f.topic === 'string' ? f.topic : '';
+    if (el('new-channel-readonly')) el('new-channel-readonly').checked = !!f.readOnly;
+    const slow = el('new-channel-slowmode');
+    if (slow) {
+      const want = String(parseInt(f.slowMode, 10) || 0);
+      slow.value = [...slow.options].some(o => o.value === want) ? want : '0';
+    }
+    if (el('new-channel-media')) el('new-channel-media').checked = f.mediaEnabled !== false;
+    if (el('new-channel-voice')) el('new-channel-voice').checked = f.voiceEnabled !== false;
+    // Opened when a template sets anything there, so it is not hidden.
+    const more = el('new-channel-more');
+    if (more && (f.topic || f.readOnly || f.slowMode || f.mediaEnabled === false || f.voiceEnabled === false)) more.open = true;
   },
 
   _resetChannelTemplate() {
     this._pendingChannelTemplate = null;
+    this._fillChannelMoreOptions({});
     const sel = document.getElementById('new-channel-template');
     if (sel) { sel.value = 'b:chat'; const del = document.getElementById('new-channel-template-del'); if (del) del.style.display = 'none'; }
   },

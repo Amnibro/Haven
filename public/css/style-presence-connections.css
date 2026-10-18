@@ -1431,3 +1431,10 @@ html.reduce-motion .pa-marquee-track { animation: none; }
   transform: rotate(-90deg);
 }
 
+
+/* Create channel: More options (topic, read only, slow mode, uploads, voice). */
+.new-channel-more { margin: 6px 0 2px; font-size: 0.8rem; }
+.new-channel-more > summary { cursor: pointer; opacity: 0.8; user-select: none; padding: 2px 0; }
+.new-channel-more[open] > summary { margin-bottom: 4px; }
+.new-channel-more #new-channel-topic { width: 100%; box-sizing: border-box; margin: 2px 0 4px; font-size: 0.8rem; }
+.new-channel-more-hint { display: block; margin-top: 4px; opacity: 0.55; font-size: 0.72rem; line-height: 1.35; }

@@ -4,13 +4,13 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.25.25';
+import SocketMethods   from './modules/app-socket.js?v=4.26.5';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.25.8';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.25.24';
 import UIBindMethods   from './modules/app-ui.js?v=4.25.30';
 import ComposerMethods from './modules/app-composer.js?v=4.25.26';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
-import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.25.22';
+import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.26.5';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.25.22';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.25.29';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.25.10';
@@ -72,7 +72,7 @@ import ForumMethods    from './modules/app-forum.js?v=4.25.9';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
-import RoleToolMethods from './modules/app-role-tools.js?v=4.25.23';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.26.5';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.26.1';
 import CallMethods from './modules/app-calls.js?v=4.22.24';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';

@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.26.1">
+  <link rel="stylesheet" href="/css/style.css?v=4.26.5">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.24.18"></script>
 </head>
@@ -122,6 +122,37 @@
                 <input type="checkbox" id="new-channel-add-all">
                 <span>👥 <span data-i18n="app.sidebar.add_all_members">Add all members</span></span>
               </label>
+              <!-- Set before anyone can post (app-role-tools.js reads these) -->
+              <details class="new-channel-more" id="new-channel-more">
+                <summary data-i18n="app.sidebar.more_options">More options</summary>
+                <input type="text" id="new-channel-topic" maxlength="256" data-i18n-placeholder="app.sidebar.topic_placeholder" placeholder="Topic (optional)">
+                <label class="checkbox-row" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8" data-i18n-title="app.sidebar.read_only_hint" title="Only moderators can post">
+                  <input type="checkbox" id="new-channel-readonly">
+                  <span>📢 <span data-i18n="app.sidebar.read_only">Read only</span></span>
+                </label>
+                <label class="checkbox-row" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+                  <span>🐢 <span data-i18n="app.sidebar.slow_mode">Slow mode</span></span>
+                  <select id="new-channel-slowmode" style="margin-left:auto;font-size:0.8rem">
+                    <option value="0" data-i18n="app.sidebar.slow_off">Off</option>
+                    <option value="5">5 s</option>
+                    <option value="10">10 s</option>
+                    <option value="30">30 s</option>
+                    <option value="60">1 min</option>
+                    <option value="300">5 min</option>
+                    <option value="900">15 min</option>
+                    <option value="3600">1 h</option>
+                  </select>
+                </label>
+                <label class="checkbox-row" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+                  <input type="checkbox" id="new-channel-media" checked>
+                  <span>📎 <span data-i18n="app.sidebar.allow_uploads">Uploads</span></span>
+                </label>
+                <label class="checkbox-row" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+                  <input type="checkbox" id="new-channel-voice" checked>
+                  <span>🎙️ <span data-i18n="app.sidebar.allow_voice">Voice</span></span>
+                </label>
+                <small class="new-channel-more-hint" data-i18n="app.sidebar.more_options_hint">Set these before anyone can post. You can change them later in Channel Functions.</small>
+              </details>
               <div id="temp-channel-duration-row" style="display:none;margin:4px 0 2px;padding-left:22px">
                 <div class="input-row" style="gap:6px;align-items:center">
                   <input type="number" id="new-channel-duration" min="1" max="720" value="24" style="width:60px;font-size:0.8rem" data-i18n-placeholder="app.sidebar.hours" placeholder="Hours">
@@ -5366,7 +5397,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.26.4"></script>
+  <script type="module" src="/js/app.js?v=4.26.5"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
