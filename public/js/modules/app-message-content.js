@@ -441,16 +441,32 @@ _formatContent(str) {
       // first, then fall back to a space-substituted lookup so spaced
       // channel names resolve too.
       const lookup = (map, lower) => map.get(lower) || map.get(lower.replace(/_/g, ' '));
-      html = html.replace(/(?<![\w#&])#([\p{L}\p{N}\p{Emoji_Presentation}_-][\p{L}\p{N}\p{Emoji_Presentation}_-]{0,49})/gu, (match, name) => {
-        const lower = name.toLowerCase();
-        let code = lookup(chanByName, lower);
-        let label = name;
-        if (!code) {
-          code = lookup(formerByName, lower);
-          if (!code) return match;
-          label = (nameByCode.get(code) || name).replace(/\s+/g, '_');
+      // Names can hold punctuation (#Art_&_Music), so take the run up to the
+      // next space and use the longest start of it that is a channel: the
+      // rest (a comma, a full stop) stays plain text. The text is already
+      // escaped here, so & arrives as &amp; and is read back before lookup.
+      const unescape = (s) => s.replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" })[e]);
+      html = html.replace(/(?<![\w#&])#([^\s<>#]{1,80})/gu, (match, run) => {
+        // Cut points that never split an escaped character like &amp;.
+        const cuts = [];
+        for (let i = 1; i <= run.length; i++) {
+          const amp = run.lastIndexOf('&', i - 1);
+          if (amp !== -1 && run.indexOf(';', amp) >= i) continue;
+          cuts.push(i);
         }
-        return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(label)}</span>`;
+        for (let k = cuts.length - 1; k >= 0; k--) {
+          const name = unescape(run.slice(0, cuts[k]));
+          const lower = name.toLowerCase();
+          let code = lookup(chanByName, lower);
+          let label = name;
+          if (!code) {
+            code = lookup(formerByName, lower);
+            if (!code) continue;
+            label = (nameByCode.get(code) || name).replace(/\s+/g, '_');
+          }
+          return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(label)}</span>${run.slice(cuts[k])}`;
+        }
+        return match;
       });
     }
   }
