@@ -1,0 +1,44 @@
+# Builds the Docker image without publishing it, to check a Dockerfile change
+# before a release: the image builds on both architectures, ffmpeg and
+# exiftool run in it, the location-cleaning tests pass inside it, and it
+# reports its download size. Run it from the Actions tab or with
+#   gh workflow run docker-check.yml
+
+name: Docker build check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Build
+        run: docker build -t haven-check .
+
+      - name: Tools run inside the image
+        run: |
+          docker run --rm --entrypoint sh haven-check -c 'ffmpeg -hide_banner -version | head -n 1 && echo "exiftool $(exiftool -ver)"'
+
+      - name: Location-cleaning tests inside the image
+        run: |
+          docker run --rm --entrypoint sh -v "$PWD/test:/app/test:ro" haven-check -c 'cd /app && node --test test/privacyPass.test.js'
+
+      - name: Download size
+        run: |
+          docker save haven-check | gzip -1 | wc -c | awk '{ printf "Compressed image: about %d MB\n", $1 / 1048576 }'
