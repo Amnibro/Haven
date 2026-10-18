@@ -33,7 +33,10 @@
 //    from a channel they may not be able to open
 //  - not in DMs (no threads there, and Move is off in DMs) and not to or from
 //    a blog forum, where who wrote a reply decides whether it is part of the
-//    post or a comment, so moving messages would rewrite someone's post
+//    post or a comment, so moving messages would rewrite someone's post. The
+//    one exception: inside one blog forum, an author's own posts can be
+//    combined into another of their posts. Each becomes a piece of it, with
+//    its likes; comments on them become comments on it
 //  - polls, role menus and messages sent as a persona stay where they are:
 //    a thread shows a reply as plain text under its account, so a poll could
 //    not be voted on, a menu would not work and a persona would lose its name
@@ -92,7 +95,8 @@ function dropStrayBanners(db, tops, channelId) {
 function plan(db, { from, to, rootId, ids }) {
   if (!from || !to) return { error: 'Channel not found' };
   if (from.is_dm || to.is_dm) return { error: 'Cannot move messages to or from DMs' };
-  if (forumBlog.blogOn(db, from.id) || forumBlog.blogOn(db, to.id)) return { error: 'Messages cannot be moved into or out of a blog forum' };
+  const blog = forumBlog.blogOn(db, from.id) || forumBlog.blogOn(db, to.id);
+  if (blog && from.id !== to.id) return { error: 'Messages cannot be moved into or out of a blog forum' };
   if (ids.length === 0 || ids.length > MAX_SELECTED) return { error: `Select between 1 and ${MAX_SELECTED} messages` };
   if (ids.includes(rootId)) return { error: 'Pick a message that is not one of the selected ones' };
 
@@ -106,7 +110,7 @@ function plan(db, { from, to, rootId, ids }) {
   }
 
   const ph = placeholders(ids.length);
-  const rows = db.prepare(`SELECT id, thread_id, poll_data, persona_id, persona_username FROM messages WHERE id IN (${ph}) AND channel_id = ?`).all(...ids, from.id);
+  const rows = db.prepare(`SELECT id, thread_id, user_id, poll_data, persona_id, persona_username FROM messages WHERE id IN (${ph}) AND channel_id = ?`).all(...ids, from.id);
   if (rows.length !== ids.length) return { error: 'Some messages were not found in that channel' };
   const selected = new Set(ids);
   const tops = [];
@@ -116,6 +120,9 @@ function plan(db, { from, to, rootId, ids }) {
     return { error: 'Some selected messages are already replies in a thread' };
   }
   if (tops.length === 0) return { error: 'Those messages are already in that thread' };
+  if (blog && (root.user_id == null || tops.some(r => r.user_id !== root.user_id))) {
+    return { error: 'In a blog forum, only posts by the same author can be combined into one of their posts' };
+  }
   if (tops.some(r => r.poll_data)) return { error: 'Polls cannot go into a thread' };
   if (tops.some(r => r.persona_id || r.persona_username)) return { error: 'Messages sent as a persona cannot go into a thread' };
   const topIds = tops.map(r => r.id);

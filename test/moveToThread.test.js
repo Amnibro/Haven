@@ -238,9 +238,18 @@ test('moving messages into a thread', async (t) => {
     const blog = await makeChannel('journal', ['forum', 'forum_blog']);
     const post1 = post(blog.id, admin.id, 'a post');
     const post2 = post(blog.id, bob.id, 'another post');
-    assert.match((await move(A, blog.code, post1, [post2])).error || '', /blog/);
+    assert.match((await move(A, blog.code, post1, [post2])).error || '', /same author/, 'someone else\'s post would rewrite theirs');
     const chat = post(talk.id, bob.id, 'chat line');
     assert.match((await move(A, talk.code, post1, [chat])).error || '', /blog/, 'nor into one from another channel');
+    // An author's own posts combine into one of theirs: each becomes a piece,
+    // and a comment on one comes along as a comment.
+    const pic1 = post(blog.id, admin.id, 'picture one');
+    const pic2 = post(blog.id, admin.id, 'picture two');
+    const remark = post(blog.id, bob.id, 'nice one', pic2);
+    const merged = await move(A, blog.code, post1, [pic1, pic2]);
+    assert.ok(merged.success, JSON.stringify(merged));
+    assert.deepStrictEqual(threadOf(post1).map((m) => m.content), ['picture one', 'picture two', 'nice one']);
+    assert.equal(db.prepare('SELECT user_id FROM messages WHERE id = ?').get(remark).user_id, bob.id);
   });
 
   await t.test('polls, role menus and persona messages stay put', async () => {
@@ -283,7 +292,7 @@ test('moving messages into a thread', async (t) => {
   await t.test('each move is in the audit log', async () => {
     await wait(100);
     const rows = db.prepare("SELECT actor_id, target_type, target_id, details FROM audit_log WHERE action = 'messages_move_to_thread' ORDER BY id").all();
-    assert.equal(rows.length, 5);
+    assert.equal(rows.length, 6);
     assert.equal(rows[0].actor_id, mod.id);
     assert.equal(rows[0].target_type, 'channel');
     assert.equal(rows[0].target_id, talk.id);
