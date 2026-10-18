@@ -7,7 +7,7 @@
 // is remembered for every card on this device.
 //
 // "Pause videos and audio scrolled out of view" (Settings > Link Previews,
-// off by default): a video, an audio file or a YouTube card in the channel,
+// on by default): a video, an audio file or a YouTube card in the channel,
 // a thread or the DM pop-out stops when it leaves the screen. A video popped
 // out into the browser's own picture-in-picture keeps playing.
 
@@ -66,7 +66,8 @@ _wireYtVolume(card) {
 },
 
 _pauseOffscreenOn() {
-  try { return localStorage.getItem(PAUSE_KEY) === 'true'; } catch { return false; }
+  // On unless turned off.
+  try { return localStorage.getItem(PAUSE_KEY) !== 'false'; } catch { return true; }
 },
 
 _setupMediaPlayback() {
