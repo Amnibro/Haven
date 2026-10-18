@@ -4,6 +4,16 @@
 
 export default {
 
+// "Add all members" shows for whoever the server lets use it: inviting
+// people, or managing the server (socketHandlers/channels.js).
+_syncAddAllMembersRow() {
+  const row = document.getElementById('new-channel-add-all-row');
+  if (!row) return;
+  const can = !!this.user?.isAdmin || this._hasGlobalPerm?.('invite_users') || this._hasGlobalPerm?.('manage_server');
+  row.style.display = can ? 'flex' : 'none';
+  if (!can) { const box = document.getElementById('new-channel-add-all'); if (box) box.checked = false; }
+},
+
 _bindChannelMenu() {
   // Join channel
   const joinBtn = document.getElementById('join-channel-btn');
@@ -15,6 +25,7 @@ _bindChannelMenu() {
   codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
 
   // Create channel (admin)
+  this._syncAddAllMembersRow();
   const createBtn = document.getElementById('create-channel-btn');
   const nameInput = document.getElementById('new-channel-name');
   if (createBtn) {

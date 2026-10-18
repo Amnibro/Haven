@@ -267,6 +267,7 @@ _listenSession() {
     const canModerate = this.user.isAdmin || this.user.effectiveLevel >= 25;
     const canCreateChannel = this.user.isAdmin || this._hasGlobalPerm('create_channel');
     document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
+    this._syncAddAllMembersRow();
     document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasAnyAdminSettingsAccess()) ? 'block' : 'none';
     document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
   });
@@ -299,6 +300,7 @@ _listenSession() {
     document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasAnyAdminSettingsAccess()) ? 'block' : 'none';
     document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
     document.getElementById('sidebar-invite-panel').style.display = canCreateInvites ? 'block' : 'none';
+    this._syncAddAllMembersRow();
     this._showToast(t('toasts.roles_updated'), 'info');
   });
 

@@ -245,6 +245,10 @@ module.exports = function register(socket, ctx) {
 
     const code = generateUniqueSharedCode();
     const isPrivate = data.isPrivate ? 1 : 0;
+    // Putting everyone in the channel is inviting them all, so it takes what
+    // inviting people takes (the switch only shows for them).
+    const addAll = !!data.addAllMembers && !isPrivate && (socket.user.isAdmin
+      || userHasPermission(socket.user.id, 'invite_users') || userHasPermission(socket.user.id, 'manage_server'));
 
     let expiresAt = null;
     if (data.temporary && data.duration) {
@@ -293,7 +297,7 @@ module.exports = function register(socket, ctx) {
       // Optional: bulk-add every existing user to the new channel.
       // Lets admins approximate Discord-style "everyone is in every channel"
       // when a server uses the server-wide invite code. (#5271)
-      if (data.addAllMembers && !isPrivate && socket.user.isAdmin) {
+      if (addAll) {
         try {
           const allUsers = db.prepare('SELECT id FROM users').all();
           const insertMember = db.prepare(
@@ -341,7 +345,7 @@ module.exports = function register(socket, ctx) {
 
       // If we mass-added every user, push the new channel to all currently
       // connected sockets so it appears for them without a refresh. (#5271)
-      if (data.addAllMembers && !isPrivate && socket.user.isAdmin) {
+      if (addAll) {
         for (const [, s] of io.sockets.sockets) {
           if (!s.user || s.user.isBot || s.user.id === socket.user.id) continue;
           s.join(`channel:${code}`);
