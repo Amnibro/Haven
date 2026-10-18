@@ -242,6 +242,59 @@ _forumBlogClose() {
   this._forumBlogComposerHint();
 },
 
+// ── Pictures from the message box ──
+// In a blog forum every message in the channel is a post, and pictures are
+// not grouped (each is a piece of a post). So pictures sent together from the
+// message box used to start a post each: eight pictures, eight posts. Now
+// they make one post, the way New Post does: the text sent with them starts
+// it (or else the first picture does) and every other picture becomes one of
+// its pieces.
+
+// Your next post in a blog forum: its id, or null after 15 seconds.
+_forumNextOwnPost(code) {
+  return new Promise((resolve) => {
+    const mine = this.user && this.user.id;
+    const onNew = (data) => {
+      const m = data && data.message;
+      if (!m || data.channelCode !== code || m.user_id !== mine || m.thread_id) return;
+      clearTimeout(timer);
+      this.socket.off('new-message', onNew);
+      resolve(m.id);
+    };
+    const timer = setTimeout(() => { this.socket.off('new-message', onNew); resolve(null); }, 15000);
+    this.socket.on('new-message', onNew);
+  });
+},
+
+// A post's pieces, as replies. Replies are capped at 10 every 10 seconds, so
+// past 8 they are spaced out.
+_forumSendBlogParts(parentId, parts) {
+  parts.forEach((content, i) => setTimeout(() => this.socket.emit('send-thread-message', { parentId, content }), i < 8 ? 0 : (i - 7) * 1100));
+},
+
+// `bundled`: the text typed with the pictures was just sent and starts the post.
+async _forumFlushBlogImages(code, files, { bundled, personaPrefix, replyTo, ferryDiscordUserId }) {
+  // Listening starts before anything is sent, so the post is never missed.
+  const postId = this._forumNextOwnPost(code);
+  let rest = files;
+  if (!bundled) {
+    await this._uploadImage(files[0], code, false, personaPrefix, false, { replyTo, ferryDiscordUserId });
+    rest = files.slice(1);
+  }
+  const lines = [];
+  for (const file of rest) {
+    if (this._uploadsCancelled) break;
+    const line = await this._uploadImage(file, code, false, '', false, { returnContent: true });
+    if (line) lines.push(line);
+  }
+  if (!lines.length) return;
+  const parentId = await postId;
+  if (parentId) { this._forumSendBlogParts(parentId, lines); return; }
+  // The post never showed up (sending it failed): rather than lose the
+  // pictures, each goes out on its own as before.
+  for (const content of lines) this.socket.emit('send-message', { code, content, isImage: true });
+},
+
 _listenForumBlog() {
   // Turned on or off in Channel Functions: redraw the forum and any topic
   // open in it, so everyone viewing sees the change at once.

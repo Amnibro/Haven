@@ -534,6 +534,12 @@ async _flushImageQueue(bundled = false, personaPrefix = '', replyTo = null, ferr
   const files = [...this._imageQueue];
   this._clearImageQueue();
   this._uploadsCancelled = false;
+  // In a blog forum, pictures sent together make one post (app-forum-blog.js).
+  const code = this.currentChannel;
+  if (this._forumBlogOn?.(code) && (bundled || files.length > 1)) {
+    await this._forumFlushBlogImages(code, files, { bundled, personaPrefix, replyTo, ferryDiscordUserId });
+    return;
+  }
   // When text and images are sent together, the text message carries the
   // reply relation. The bundled image is a separate message and must not
   // repeat the same reply banner. Several images on their own: the first
