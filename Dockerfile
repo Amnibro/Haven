@@ -17,13 +17,32 @@ FROM node:22-bookworm-slim
 # gosu     → drop root to 'node' user after entrypoint setup
 # wget     → the container health check
 # make, g++, python3 → compile native modules (better-sqlite3) if no prebuilt fits
-# ffmpeg, exiftool → remove location data from uploaded videos and every
-#                    photo format (src/privacyPass.js)
+# exiftool → with ffmpeg below, removes location data from uploaded videos
+#            and every photo format (src/privacyPass.js)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl tini gosu wget ca-certificates \
-    ffmpeg libimage-exiftool-perl \
+    libimage-exiftool-perl \
     make g++ python3 \
     && rm -rf /var/lib/apt/lists/*
+
+# ffmpeg as one self-contained program (the ffmpeg-static project's build of
+# ffmpeg 6.1.1) instead of Debian's package, which brings about 180 MB of
+# video libraries with it. Both the download and the program inside it must
+# match their checksums, or the build stops.
+ARG TARGETARCH
+RUN set -e; \
+    case "$TARGETARCH" in \
+      amd64) A=linux-x64;   GZ=bfe8a8fc511530457b528c48d77b5737527b504a3797a9bc4866aeca69c2dffa; BIN=e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99 ;; \
+      arm64) A=linux-arm64; GZ=754a678672298bc68156adff58aa7385a592c2b30b1d0ae8750c45c915c4bac0; BIN=6bb182d0d75d23028db82e9e4f723ca69b853d055698486e6984ddb2c06fb8ce ;; \
+      *) echo "No ffmpeg build for $TARGETARCH"; exit 1 ;; \
+    esac; \
+    wget -q -O /tmp/ffmpeg.gz "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-$A.gz"; \
+    echo "$GZ  /tmp/ffmpeg.gz" | sha256sum -c -; \
+    gunzip -c /tmp/ffmpeg.gz > /usr/local/bin/ffmpeg; \
+    echo "$BIN  /usr/local/bin/ffmpeg" | sha256sum -c -; \
+    chmod 755 /usr/local/bin/ffmpeg; \
+    rm /tmp/ffmpeg.gz; \
+    ffmpeg -hide_banner -version | head -n 1
 
 WORKDIR /app
 
