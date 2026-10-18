@@ -142,7 +142,11 @@ function stripImageMetadata(filePath) {
     if (!out) return false;
     const tmp = filePath + '.strip';
     fs.writeFileSync(tmp, out);
-    fs.renameSync(tmp, filePath);
+    try { fs.renameSync(tmp, filePath); } catch (err) {
+      // A copy left under uploads/ would be served; take it away.
+      fs.rmSync(tmp, { force: true });
+      throw err;
+    }
     return true;
   } catch (err) {
     console.warn('[uploads] metadata strip skipped:', err.message);

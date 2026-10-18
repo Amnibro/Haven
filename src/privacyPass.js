@@ -72,6 +72,7 @@ class PrivacyError extends Error {
 const LOCATION_TAG = /^(gps|location)|iso6709/i;
 
 function kindOfMime(mime) {
+  if (/^image\/svg/i.test(mime)) return null;
   if (/^image\//i.test(mime)) return 'photo';
   if (/^video\//i.test(mime)) return 'video';
   return null;
@@ -115,7 +116,7 @@ async function inspect(file, { embedded = false, signal } = {}) {
 // correct-but-different spelling is not "corrected".
 const EXT_ALIASES = {
   jpg: ['jpeg', 'jpe', 'jfif'], tif: ['tiff'], heic: ['heif', 'hif'], heif: ['heic', 'hif'],
-  mov: ['qt'], mp4: ['m4v'], m4v: ['mp4'], mpg: ['mpeg'], m2ts: ['mts', 'ts'], mkv: ['mk3d'],
+  mov: ['qt'], mp4: ['m4v', 'm4a'], m4v: ['mp4'], webm: ['weba'], mpg: ['mpeg'], m2ts: ['mts', 'ts'], mkv: ['mk3d'],
 };
 function correctExt(currentExt, detectedExt) {
   const cur = String(currentExt || '').replace(/^\./, '').toLowerCase();
@@ -192,12 +193,32 @@ async function cleanVideo(file, info, { signal, onProgress } = {}) {
  * the file's real extension when its name says something else, or throws a
  * PrivacyError. Files that are not photos or videos resolve { kind: null }.
  */
+// The built-in cleaner reads the whole file, so it only takes photos.
+const BUILTIN_MAX_BYTES = 64 * 1024 * 1024;
+function looksLikeStrippable(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const b = Buffer.alloc(12);
+    const n = fs.readSync(fd, b, 0, 12, 0);
+    if (n < 12) return false;
+    if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return true;
+    if (b[0] === 0x89 && b.toString('latin1', 1, 4) === 'PNG') return true;
+    return b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP';
+  } catch (err) {
+    console.warn('[privacy] Could not read the start of a file:', err.message);
+    return false;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
 async function cleanFile(file, { signal, onProgress } = {}) {
   if (!tools.toolsReady()) {
     // Haven's own cleaner: JPEG, PNG and WebP photos; anything else is left
     // as it is. The file keeps its date, as it does below.
     const stat = fs.statSync(file);
-    if (stripImageMetadata(file)) keepTimes(file, stat);
+    if (stat.size <= BUILTIN_MAX_BYTES && looksLikeStrippable(file) && stripImageMetadata(file)) keepTimes(file, stat);
     return { kind: null, ext: null };
   }
   const first = await inspect(file);
@@ -260,8 +281,9 @@ function diskStorage({ destination, filename }) {
             ? withVideoSlot(() => run({ signal: ctrl.signal, onProgress: (pct) => progressEmitter?.(req, pct) }))
             : run({ signal: ctrl.signal }));
           let name = info.filename;
-          const out = result.mime ? { mimetype: result.mime } : {};
+          const out = {};
           if (result.ext) {
+            if (result.mime) out.mimetype = result.mime === 'image/apng' ? 'image/png' : result.mime;
             name = name.replace(/\.[^./]*$/, '') + '.' + result.ext;
             const shown = utf8(file.originalname || 'file');
             out.originalname = latin1(shown.replace(/(\.[^./]*)?$/, '.' + result.ext));
@@ -344,7 +366,7 @@ function listFiles(root, rel = '') {
 // upload that never finished arriving.
 function removeLeftovers() {
   for (const rel of listFiles(UPLOADS_DIR)) {
-    if (rel.includes(TMP_MARK) || rel.endsWith('_exiftool_tmp')) {
+    if (rel.includes(TMP_MARK) || rel.endsWith('_exiftool_tmp') || rel.endsWith('.strip')) {
       try { fs.unlinkSync(path.join(UPLOADS_DIR, rel)); } catch { /* gone already */ }
     }
   }
@@ -410,11 +432,16 @@ async function sweepUploads() {
   let held = 0, lastSave = Date.now();
   for (const rel of todo) {
     await waitForUploads();
+    await new Promise(r => setImmediate(r));
     const abs = path.join(UPLOADS_DIR, rel);
     try {
       await cleanFile(abs);
     } catch (e) {
       if (e.code === 'ENOENT') continue;                  // deleted while we were busy
+      if (e.code !== 'PRIVACY_GPS_REMAINS') {
+        console.warn(`[privacy] Could not check ${rel}, left as it is: ${reasonOf(e)}`);
+        continue;
+      }
       console.error(`[privacy] Could not clean ${rel}, holding it back: ${reasonOf(e)}`);
       try { hold(rel, reasonOf(e)); held++; } catch (err) {
         console.error(`[privacy] Could not move ${rel} to unprocessed/held:`, err.message);
@@ -432,6 +459,7 @@ async function retryHeld() {
     if (!rows.length) return;
     for (const row of rows) {
       await waitForUploads();
+      await new Promise(r => setImmediate(r));
       const abs = path.join(HELD_DIR, row.rel_path);
       if (!fs.existsSync(abs)) { db.prepare('DELETE FROM privacy_held WHERE rel_path = ?').run(row.rel_path); continue; }
       try {
