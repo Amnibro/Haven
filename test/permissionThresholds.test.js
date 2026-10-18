@@ -56,6 +56,20 @@ test('someone who had it through their own rank keeps it as an exception', () =>
   assert.deepEqual(own(db, 12), [], 'an ordinary member gets nothing');
 });
 
+test('nobody gains it: ranked below the role, or holding it only inside a channel', () => {
+  const db = makeDb({ create_channel: 50 });
+  // Erin holds Channel Mod (51) ranked down to 20; Finn holds it only inside
+  // one channel; Gus holds it ranked down too but Member carries a tick of
+  // its own for him, so he had it before and keeps it.
+  db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id, custom_level) VALUES (20, 2, NULL, 20), (21, 2, 7, NULL), (22, 2, NULL, 20), (22, 5, NULL, NULL)').run();
+  db.prepare("INSERT INTO role_permissions VALUES (5, 'create_channel', 1)").run();
+  convertPermissionThresholds(db);
+  assert.deepEqual(own(db, 20), [{ permission: 'create_channel', allowed: 0 }], 'erin did not have it and still does not');
+  assert.deepEqual(own(db, 21), [{ permission: 'create_channel', allowed: 0 }], 'finn did not have it and still does not');
+  assert.deepEqual(own(db, 22), [], 'gus had it through a tick and keeps it');
+  assert.deepEqual(own(db, 10), [{ permission: 'create_channel', allowed: 1 }], 'carol still keeps hers');
+});
+
 test('a second start changes nothing', () => {
   const db = makeDb({ create_channel: 50 });
   convertPermissionThresholds(db);

@@ -1628,7 +1628,7 @@ function initDatabase() {
     const { converted } = convertPermissionThresholds(db);
     if (converted) console.log(`[perms] Level-based permissions are now ticked on their roles (${converted} added)`);
   } catch (e) {
-    console.warn('[perms] converting level-based permissions failed, left as they were:', e.message);
+    console.error('[perms] Converting level-based permissions failed; roles keep only what is ticked on them:', e.message);
   }
 
   // ── Migration: let SERVER_NAME through on existing installs (#5489) ──
