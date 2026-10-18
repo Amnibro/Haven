@@ -4178,6 +4178,7 @@
     "empty": "Noch keine Threads in diesem Kanal",
     "no_matches": "Keine Threads entsprechen dieser Suche",
     "no_unread": "Keine ungelesenen Threads",
+    "mark_read": "Als gelesen markieren",
     "sort_label": "Threads sortieren",
     "sort_latest": "Neueste Aktivität",
     "sort_unread": "Ungelesene zuerst",

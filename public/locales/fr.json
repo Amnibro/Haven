@@ -4533,6 +4533,7 @@
     "empty": "Aucun fil dans ce salon pour le moment",
     "no_matches": "Aucun fil ne correspond à cette recherche",
     "no_unread": "Aucun fil non lu",
+    "mark_read": "Marquer comme lu",
     "sort_label": "Trier les fils",
     "sort_latest": "Activité la plus récente",
     "sort_unread": "Non lus d'abord",

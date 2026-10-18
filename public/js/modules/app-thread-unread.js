@@ -192,11 +192,31 @@ _paintThreadDots() {
   this._updateThreadsButtonBadge();
 },
 
-// The marker on a row of the Threads list.
+// The marker on a row of the Threads list. Pointed at, it turns into a
+// "Mark read" button (both labels share one spot so the row does not shift).
 _threadListNewHtml(th) {
   const n = this._threadNewCount(th.id, typeof th.new_count === 'number' ? { newCount: th.new_count } : null);
   this._queueThreadsBadge();
-  return n ? `<span class="thread-list-new">${this._threadChipNewHtml(n)}</span>` : '';
+  if (!n) return '';
+  const mark = this._escapeHtml(t('thread_list.mark_read'));
+  return `<button type="button" class="thread-list-new" data-mark-read="${Number(th.id)}" title="${mark}" aria-label="${mark}">`
+    + `<span class="thread-list-new-count">${this._threadChipNewHtml(n)}</span>`
+    + `<span class="thread-list-new-mark thread-preview-new" aria-hidden="true">${mark}</span></button>`;
+},
+
+// "Mark read" on a row of the Threads list: the thread's news is cleared
+// here, on the server, and on your other devices, without opening it.
+_markThreadListRead(parentId) {
+  const id = Number(parentId);
+  if (!id) return;
+  const th = (this._threadListData || []).find(x => Number(x.id) === id);
+  const code = this._threadUnread?.get(id)?.code || this.currentChannel;
+  if (th && typeof th.new_count === 'number') th.new_count = 0;
+  this.socket.emit('mark-thread-read', { parentId: id });
+  this._clearThreadUnread(id);
+  if (this._isForumCode(code)) this._requestForumUnread?.(code);
+  const search = document.getElementById('threads-list-search');
+  this._renderThreadList?.(search ? search.value : '');
 },
 
 };

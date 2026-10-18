@@ -4489,6 +4489,7 @@
     "empty": "此频道暂无话题",
     "no_matches": "没有匹配的话题",
     "no_unread": "没有未读的帖子",
+    "mark_read": "标为已读",
     "sort_label": "帖子排序",
     "sort_latest": "最新动态",
     "sort_unread": "未读优先",

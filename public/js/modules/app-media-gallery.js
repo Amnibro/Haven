@@ -73,9 +73,7 @@ _bindMediaGallery() {
   threadsSort?.addEventListener('change', rememberThreadView);
   threadsUnread?.addEventListener('change', rememberThreadView);
   const threadsBody = document.getElementById('threads-list-body');
-  if (threadsBody) threadsBody.addEventListener('click', (e) => {
-    const row = e.target.closest('.thread-list-row');
-    if (!row) return;
+  const openThreadRow = (row) => {
     const parentId = parseInt(row.dataset.parentId, 10);
     if (!parentId) return;
     document.getElementById('threads-list-modal').style.display = 'none';
@@ -84,6 +82,20 @@ _bindMediaGallery() {
     // would otherwise show an empty header.
     this._jumpToMessage?.(parentId);
     setTimeout(() => this._openThread?.(parentId), 150);
+  };
+  if (threadsBody) threadsBody.addEventListener('click', (e) => {
+    // The "N new" marker marks the thread read instead of opening it.
+    const mark = e.target.closest('[data-mark-read]');
+    if (mark) { this._markThreadListRead?.(mark.dataset.markRead); return; }
+    const row = e.target.closest('.thread-list-row');
+    if (row) openThreadRow(row);
+  });
+  // Rows hold a button of their own, so they are not buttons themselves.
+  if (threadsBody) threadsBody.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (!e.target.classList?.contains('thread-list-row')) return;
+    e.preventDefault();
+    openThreadRow(e.target);
   });
 
   const galleryClose = document.getElementById('media-gallery-close');
@@ -289,7 +301,7 @@ _renderThreadList(filter = '') {
     // markup or the address they are stored under.
     const preview = this._threadRootPreview(th.content, 300);
     return `
-      <button class="thread-list-row" data-parent-id="${th.id}">
+      <div class="thread-list-row" role="button" tabindex="0" data-parent-id="${th.id}">
         <span class="thread-list-row-top">
           <span class="thread-list-author">${this._escapeHtml(th.username || '')}</span>
           <span class="thread-list-replies">${this._escapeHtml(label)}</span>
@@ -297,7 +309,7 @@ _renderThreadList(filter = '') {
           ${this._threadListNewHtml?.(th) || ''}
         </span>
         <span class="thread-list-preview">${this._escapeHtml(preview)}</span>
-      </button>`;
+      </div>`;
   }).join('');
 },
 

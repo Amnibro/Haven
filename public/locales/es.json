@@ -4520,6 +4520,7 @@
     "empty": "Aún no hay hilos en este canal",
     "no_matches": "Ningún hilo coincide con esa búsqueda",
     "no_unread": "No hay hilos sin leer",
+    "mark_read": "Marcar como leído",
     "sort_label": "Ordenar hilos",
     "sort_latest": "Actividad reciente",
     "sort_unread": "No leídos primero",

@@ -2815,6 +2815,7 @@
     "empty": "이 채널에 아직 스레드가 없습니다",
     "no_matches": "검색과 일치하는 스레드가 없습니다",
     "no_unread": "읽지 않은 스레드가 없습니다",
+    "mark_read": "읽음으로 표시",
     "sort_label": "스레드 정렬",
     "sort_latest": "최근 활동",
     "sort_unread": "읽지 않은 항목 먼저",

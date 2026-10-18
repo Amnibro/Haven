@@ -4533,6 +4533,7 @@
     "empty": "No threads in this channel yet",
     "no_matches": "No threads match that search",
     "no_unread": "No unread threads",
+    "mark_read": "Mark read",
     "sort_label": "Sort threads",
     "sort_latest": "Latest activity",
     "sort_unread": "Unread first",

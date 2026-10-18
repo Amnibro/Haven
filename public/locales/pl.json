@@ -4520,6 +4520,7 @@
     "empty": "Brak wątków w tym kanale",
     "no_matches": "Żaden wątek nie pasuje do wyszukiwania",
     "no_unread": "Brak nieprzeczytanych wątków",
+    "mark_read": "Oznacz jako przeczytane",
     "sort_label": "Sortuj wątki",
     "sort_latest": "Najnowsza aktywność",
     "sort_unread": "Najpierw nieprzeczytane",
