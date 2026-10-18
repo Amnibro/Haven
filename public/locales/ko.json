@@ -2814,6 +2814,11 @@
     "loading": "불러오는 중…",
     "empty": "이 채널에 아직 스레드가 없습니다",
     "no_matches": "검색과 일치하는 스레드가 없습니다",
+    "no_unread": "읽지 않은 스레드가 없습니다",
+    "sort_label": "스레드 정렬",
+    "sort_latest": "최근 활동",
+    "sort_unread": "읽지 않은 항목 먼저",
+    "unread_only": "읽지 않은 항목만",
     "reply_one": "답글 1개",
     "reply_other": "답글 {{count}}개",
     "unavailable_in_dm": "DM에서는 스레드를 사용할 수 없습니다"

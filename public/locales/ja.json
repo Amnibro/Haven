@@ -2814,6 +2814,11 @@
     "loading": "読み込み中…",
     "empty": "このチャンネルにはまだスレッドがありません",
     "no_matches": "その検索に一致するスレッドはありません",
+    "no_unread": "未読のスレッドはありません",
+    "sort_label": "スレッドの並べ替え",
+    "sort_latest": "最近のアクティビティ",
+    "sort_unread": "未読を先に",
+    "unread_only": "未読のみ",
     "reply_one": "1件の返信",
     "reply_other": "{{count}}件の返信",
     "unavailable_in_dm": "DMではスレッドを利用できません"

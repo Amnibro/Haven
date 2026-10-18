@@ -56,6 +56,22 @@ _bindMediaGallery() {
     // round trip per keystroke would be worse than filtering 500 rows.
     this._renderThreadList(threadsSearch.value);
   });
+  // Sort and "only unread" are remembered between visits.
+  const threadsSort = document.getElementById('threads-list-sort');
+  const threadsUnread = document.getElementById('threads-list-unread-only');
+  try {
+    if (threadsSort && localStorage.getItem('haven_thread_list_sort') === 'unread') threadsSort.value = 'unread';
+    if (threadsUnread) threadsUnread.checked = localStorage.getItem('haven_thread_list_unread_only') === '1';
+  } catch { /* private mode: storage is unavailable, keep the defaults */ }
+  const rememberThreadView = () => {
+    try {
+      localStorage.setItem('haven_thread_list_sort', threadsSort?.value || 'latest');
+      localStorage.setItem('haven_thread_list_unread_only', threadsUnread?.checked ? '1' : '0');
+    } catch { /* private mode: the choice lasts until the page closes */ }
+    this._renderThreadList(threadsSearch ? threadsSearch.value : '');
+  };
+  threadsSort?.addEventListener('change', rememberThreadView);
+  threadsUnread?.addEventListener('change', rememberThreadView);
   const threadsBody = document.getElementById('threads-list-body');
   if (threadsBody) threadsBody.addEventListener('click', (e) => {
     const row = e.target.closest('.thread-list-row');
@@ -239,20 +255,27 @@ _renderThreadList(filter = '') {
 
   const all = this._threadListData || [];
   const needle = String(filter || '').trim().toLowerCase();
-  const rows = needle
+  // Unread here means replies not yet seen, the same count as the "N new" chip.
+  const unseen = (th) => this._threadNewCount?.(th.id, typeof th.new_count === 'number' ? { newCount: th.new_count } : null) || 0;
+  const unreadOnly = !!document.getElementById('threads-list-unread-only')?.checked;
+  const unreadFirst = document.getElementById('threads-list-sort')?.value === 'unread';
+  let rows = needle
     ? all.filter(th =>
         String(th.content || '').toLowerCase().includes(needle) ||
         String(th.username || '').toLowerCase().includes(needle))
     : all;
+  if (unreadOnly) rows = rows.filter(th => unseen(th) > 0);
+  // Unread first keeps each group in latest-activity order.
+  if (unreadFirst) rows = [...rows.filter(th => unseen(th) > 0), ...rows.filter(th => !unseen(th))];
 
   if (countEl) {
-    countEl.textContent = needle
+    countEl.textContent = (needle || unreadOnly)
       ? `${rows.length} / ${all.length}`
       : (all.length ? String(all.length) : '');
   }
 
   if (!rows.length) {
-    const key = all.length ? 'thread_list.no_matches' : 'thread_list.empty';
+    const key = !all.length ? 'thread_list.empty' : (unreadOnly && !needle ? 'thread_list.no_unread' : 'thread_list.no_matches');
     body.innerHTML = `<div class="media-gallery-empty muted-text">${t(key)}</div>`;
     return;
   }

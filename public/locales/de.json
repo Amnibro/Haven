@@ -4177,6 +4177,11 @@
     "loading": "Wird geladen …",
     "empty": "Noch keine Threads in diesem Kanal",
     "no_matches": "Keine Threads entsprechen dieser Suche",
+    "no_unread": "Keine ungelesenen Threads",
+    "sort_label": "Threads sortieren",
+    "sort_latest": "Neueste Aktivität",
+    "sort_unread": "Ungelesene zuerst",
+    "unread_only": "Nur ungelesene",
     "reply_one": "1 Antwort",
     "reply_other": "{{count}} Antworten",
     "unavailable_in_dm": "Threads sind in Direktnachrichten nicht verfügbar"

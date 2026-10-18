@@ -4517,6 +4517,11 @@
     "loading": "Ładowanie…",
     "empty": "Brak wątków w tym kanale",
     "no_matches": "Żaden wątek nie pasuje do wyszukiwania",
+    "no_unread": "Brak nieprzeczytanych wątków",
+    "sort_label": "Sortuj wątki",
+    "sort_latest": "Najnowsza aktywność",
+    "sort_unread": "Najpierw nieprzeczytane",
+    "unread_only": "Tylko nieprzeczytane",
     "reply_one": "1 odpowiedź",
     "reply_other": "Odpowiedzi: {{count}}",
     "unavailable_in_dm": "Wątki nie są dostępne w wiadomościach prywatnych"

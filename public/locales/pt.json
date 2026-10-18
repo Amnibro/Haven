@@ -4096,6 +4096,11 @@
     "loading": "Carregando…",
     "empty": "Ainda não há tópicos neste canal",
     "no_matches": "Nenhum tópico corresponde à pesquisa",
+    "no_unread": "Nenhum tópico não lido",
+    "sort_label": "Ordenar tópicos",
+    "sort_latest": "Atividade recente",
+    "sort_unread": "Não lidos primeiro",
+    "unread_only": "Só não lidos",
     "reply_one": "1 resposta",
     "reply_other": "{{count}} respostas",
     "unavailable_in_dm": "Tópicos não estão disponíveis em DMs"

@@ -4517,6 +4517,11 @@
     "loading": "Cargando…",
     "empty": "Aún no hay hilos en este canal",
     "no_matches": "Ningún hilo coincide con esa búsqueda",
+    "no_unread": "No hay hilos sin leer",
+    "sort_label": "Ordenar hilos",
+    "sort_latest": "Actividad reciente",
+    "sort_unread": "No leídos primero",
+    "unread_only": "Solo no leídos",
     "reply_one": "1 respuesta",
     "reply_other": "{{count}} respuestas",
     "unavailable_in_dm": "Los hilos no están disponibles en los DMs"

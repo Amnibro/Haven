@@ -4486,6 +4486,11 @@
     "loading": "加载中…",
     "empty": "此频道暂无话题",
     "no_matches": "没有匹配的话题",
+    "no_unread": "没有未读的帖子",
+    "sort_label": "帖子排序",
+    "sort_latest": "最新动态",
+    "sort_unread": "未读优先",
+    "unread_only": "仅显示未读",
     "reply_one": "1 条回复",
     "reply_other": "{{count}} 条回复",
     "unavailable_in_dm": "私信中不可用话题"
