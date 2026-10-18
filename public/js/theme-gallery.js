@@ -85,9 +85,10 @@
       .map(fileEntry)
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     for (const entry of files) {
+      const inUse = entry.id === activeTheme || (entry.overlay && entry.enabled);
       if (entry.published) add(entry.section, entry);
-      else if (isAdmin) add('available', entry);
-      else if (entry.id === activeTheme || (entry.overlay && entry.enabled)) add(entry.section, entry);
+      else if (isAdmin && !inUse) add('available', entry);
+      else if (inUse) add(entry.section, entry);
     }
     for (const theme of builtins) {
       add('builtin', { kind: 'builtin', id: theme.id, name: theme.name, icon: theme.icon || '', keywords: theme.keywords || '' });

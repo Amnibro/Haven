@@ -11,7 +11,7 @@
 }
 /* A little more room than the old row of dots needed. The themes scroll on
    their own; the effects and sliders under them stay put (.theme-popup-pinned). */
-.theme-popup { max-height: 70vh; flex-direction: column; overflow: hidden; }
+.theme-popup { max-height: 70vh; flex-direction: column; overflow-y: auto; }
 .theme-popup > .theme-popup-header { flex: none; }
 .theme-popup > .theme-gallery {
   flex: 1 1 auto;
