@@ -1130,7 +1130,7 @@ function _startMatrixRain() {
   canvas.style.width = '100%';
   canvas.style.height = '100%';
   canvas.style.pointerEvents = 'none';
-  canvas.style.zIndex = '0';
+  canvas.style.zIndex = '-1'; // behind the chat, like the other effects
   canvas.style.opacity = '0.18';
   mainEl.insertBefore(canvas, mainEl.firstChild);
 
