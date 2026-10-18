@@ -45,6 +45,7 @@ const seed = () => {
   const afk = ch('afk', { parent_channel_id: lounge, position: 6 });
   run('UPDATE channels SET afk_sub_code = (SELECT code FROM channels WHERE id = ?), afk_timeout_minutes = 10 WHERE id = ?', afk, lounge);
   const staff = ch('testers', { category: 'Staff', position: 7, is_private: 1, role_gate: JSON.stringify({ mode: 'any', roles: [tester] }) });
+  run("UPDATE channels SET afk_sub_code = '__leave__' WHERE id = ?", staff); // disconnect idle people (#5801)
   ch('secret-plans', { category: 'Staff', position: 8 });
   const dm = ch('dm-bob', { is_dm: 1 });
   run('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)', dm, bob, `${SECRET} private dm`);
@@ -84,6 +85,7 @@ test('export keeps the layout and leaves out people, messages and secrets', () =
   assert.deepEqual(Object.keys(template.server.settings).filter((k) => /turn|giphy|turnstile|registration|vanity|server_code/.test(k)), []);
   const lounge = template.channels.find((c) => c.name === 'lounge');
   assert.equal(lounge.afkChannel, 'afk');
+  assert.equal(template.channels.find((c) => c.name === 'testers').afkDisconnect, true, 'disconnecting idle people travels too');
   assert.deepEqual(template.channels.find((c) => c.name === 'testers').roleGate, { mode: 'any', roles: ['tester'] });
   assert.equal(template.posts.length, 2, 'only webhook-authored pinned posts');
   assert.match(template.posts[0].content, /\{\{asset:hero\.png\}\}/);

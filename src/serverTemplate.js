@@ -188,6 +188,8 @@ function exportTemplate(db, opts = {}) {
     if (r.default_role_id && roleRef.has(r.default_role_id)) o.defaultRole = roleRef.get(r.default_role_id);
     const afk = r.afk_sub_code && byCode.get(r.afk_sub_code);
     if (afk && afk.parent_channel_id === r.id) o.afkChannel = chRef.get(afk.id);
+    // "Disconnect from voice" instead of moving idle people (#5801).
+    if (r.afk_sub_code === '__leave__') o.afkDisconnect = true;
     const tags = parse(r.forum_tags);
     const tagEmoji = (e) => typeof e === 'string' && e.length <= 16 && LABEL_RE.test(e);
     if (Array.isArray(tags) && tags.length) o.forumTags = tags.filter((t) => t && label(t.name, 30)).slice(0, 40).map((t) => (tagEmoji(t.emoji) ? { name: t.name.trim(), emoji: t.emoji } : { name: t.name.trim() }));
@@ -330,7 +332,7 @@ function validateTemplate(input) {
     if (!name || name.length > 50 || !CHANNEL_NAME_RE.test(name)) c.fail(`${at}.name`, 'expected a channel name of 1-50 letters, numbers, spaces, emoji or - ! ? . , \' & +');
     const o = {
       ref: c.ref(ch.ref, `${at}.ref`), name, category: c.opt(ch.category, (v) => c.name(v, 30, `${at}.category`)), parent: c.opt(ch.parent, (v) => c.ref(v, `${at}.parent`)),
-      topic: c.text(ch.topic, 256, `${at}.topic`), afkChannel: c.opt(ch.afkChannel, (v) => c.ref(v, `${at}.afkChannel`)), defaultRole: c.opt(ch.defaultRole, (v) => c.ref(v, `${at}.defaultRole`)),
+      topic: c.text(ch.topic, 256, `${at}.topic`), afkChannel: c.opt(ch.afkChannel, (v) => c.ref(v, `${at}.afkChannel`)), afkDisconnect: ch.afkDisconnect === true, defaultRole: c.opt(ch.defaultRole, (v) => c.ref(v, `${at}.defaultRole`)),
       autoDeleteHours: c.int(ch.autoDeleteHours, 1, 720, `${at}.autoDeleteHours`, null),
       roleGate: c.opt(ch.roleGate, (g) => (isObj(g) ? { mode: c.pick(g.mode, ['any', 'all'], `${at}.roleGate.mode`, 'any'), roles: c.list(g.roles, 50, `${at}.roleGate.roles`).map((x) => c.ref(x, `${at}.roleGate.roles`)) } : c.fail(`${at}.roleGate`, 'expected an object'))),
       forumTags: c.opt(ch.forumTags, (tags) => {
@@ -585,6 +587,7 @@ function applyTemplate(db, tpl, opts = {}) {
     const welcome = tpl.channels.find((ch) => ch.welcome && touched.has(ch.ref));
     if (welcome && replace) db.prepare('UPDATE channels SET show_welcome = 0 WHERE is_dm = 0 AND id != ?').run(chId.get(welcome.ref));
     for (const ch of tpl.channels) if (ch.afkChannel && touched.has(ch.ref)) db.prepare('UPDATE channels SET afk_sub_code = (SELECT code FROM channels WHERE id = ?) WHERE id = ?').run(chId.get(ch.afkChannel), chId.get(ch.ref));
+    for (const ch of tpl.channels) if (!ch.afkChannel && ch.afkDisconnect && touched.has(ch.ref)) db.prepare("UPDATE channels SET afk_sub_code = '__leave__' WHERE id = ?").run(chId.get(ch.ref));
     const access = db.prepare(`INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO role_channel_access (role_id, channel_id, grant_on_promote, revoke_on_demote) VALUES (?, ?, ?, ?)`);
     for (const a of tpl.roleChannelAccess) r.counts.access += access.run(roleId.get(a.role), chId.get(a.channel), a.grantOnPromote ? 1 : 0, a.revokeOnDemote ? 1 : 0).changes;
     const cur = new Map(db.prepare('SELECT key, value FROM server_settings').all().map((x) => [x.key, x.value]));
