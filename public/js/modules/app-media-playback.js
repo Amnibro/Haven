@@ -9,7 +9,8 @@
 // "Pause videos and audio scrolled out of view" (Settings > Link Previews,
 // on by default): a video, an audio file or a YouTube card in the channel,
 // a thread or the DM pop-out stops when it leaves the screen. A video popped
-// out into the browser's own picture-in-picture keeps playing.
+// out into the browser's own picture-in-picture keeps playing, and so does one
+// pinned with its 📌 Keep playing button (until the page reloads).
 
 const VOLUME_KEY = 'haven_embed_volume';
 const PAUSE_KEY = 'haven_pause_offscreen_media';
@@ -32,10 +33,22 @@ _ytCommand(iframe, func, args = []) {
   }
 },
 
-// The slider for a YouTube card's top bar.
+// The slider for a YouTube card's top bar, and its Keep playing pin.
 _ytVolumeHtml() {
   const v = this._embedVolume();
-  return `<label class="lp-volume" title="${t('app.messages.embed_volume')}"><span aria-hidden="true">${v === 0 ? '🔇' : '🔊'}</span><input type="range" min="0" max="100" step="5" value="${v}" aria-label="${t('app.messages.embed_volume')}"></label>`;
+  return `<label class="lp-volume" title="${t('app.messages.embed_volume')}"><span aria-hidden="true">${v === 0 ? '🔇' : '🔊'}</span><input type="range" min="0" max="100" step="5" value="${v}" aria-label="${t('app.messages.embed_volume')}"></label>${this._keepPlayingHtml()}`;
+},
+
+// A pin that lets one video, sound or YouTube card keep playing when it is
+// scrolled out of view. It shows only while that pausing is switched on.
+_keepPlayingHtml() {
+  return `<button type="button" class="media-keep" aria-pressed="false" title="${t('app.messages.keep_playing')}" aria-label="${t('app.messages.keep_playing')}">📌</button>`;
+},
+
+// The player a pin belongs to: the one in its own file card or YouTube card.
+_keepPlayingTarget(btn) {
+  const box = btn.closest('.link-preview, .file-attachment');
+  return box ? box.querySelector('video, audio, .link-preview-yt iframe') : null;
 },
 
 _wireYtVolume(card) {
@@ -71,13 +84,32 @@ _pauseOffscreenOn() {
 },
 
 _setupMediaPlayback() {
+  // The pins show only while pausing is on (style-streams-markdown.css).
+  const showPins = () => document.body.classList.toggle('pause-offscreen-off', !this._pauseOffscreenOn());
+  showPins();
   const toggle = document.getElementById('pause-offscreen-media');
   if (toggle) {
     toggle.checked = this._pauseOffscreenOn();
     toggle.addEventListener('change', () => {
       try { localStorage.setItem(PAUSE_KEY, toggle.checked ? 'true' : 'false'); } catch { /* private mode: the choice lasts this visit only */ }
+      showPins();
     });
   }
+  this._keepPlaying = new WeakSet();
+  // Card headers are click targets of their own (size, collapse), so the
+  // pin keeps its clicks to itself.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest?.('.media-keep');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const media = this._keepPlayingTarget(btn);
+    if (!media) return;
+    const on = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', String(on));
+    btn.title = t(on ? 'app.messages.keep_playing_on' : 'app.messages.keep_playing');
+    if (on) this._keepPlaying.add(media); else this._keepPlaying.delete(media);
+  }, true);
   if (typeof IntersectionObserver !== 'function') return;
   const seen = new WeakSet();
   const io = new IntersectionObserver((entries) => {
@@ -85,6 +117,7 @@ _setupMediaPlayback() {
     for (const entry of entries) {
       if (entry.isIntersecting) continue;
       const el = entry.target;
+      if (this._keepPlaying.has(el)) continue;
       if (el.tagName === 'IFRAME') this._ytCommand(el, 'pauseVideo');
       else if (!el.paused && document.pictureInPictureElement !== el) el.pause();
     }

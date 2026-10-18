@@ -362,6 +362,8 @@
       "embed_small": "Small",
       "embed_size_hint": "Embed size (use Settings ▸ Link Previews to turn off)",
       "embed_volume": "Volume",
+      "keep_playing": "Keep playing when scrolled away",
+      "keep_playing_on": "Keeps playing when scrolled away (click to stop that)",
       "collapse": "Collapse",
       "silent_hint": "Sent silently: nobody got a sound, pop-up or push for it"
     },
