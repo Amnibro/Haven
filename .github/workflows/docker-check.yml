@@ -39,6 +39,8 @@ jobs:
         run: |
           docker run --rm --entrypoint sh -v "$PWD/test:/app/test:ro" haven-check -c 'cd /app && node --test test/privacyPass.test.js'
 
-      - name: Download size
+      - name: Download size, next to the published image
         run: |
-          docker save haven-check | gzip -1 | wc -c | awk '{ printf "Compressed image: about %d MB\n", $1 / 1048576 }'
+          size() { docker save "$1" | gzip -6 | wc -c | awk -v n="$2" '{ printf "%s: about %d MB compressed\n", n, $1 / 1048576 }'; }
+          size haven-check "This build"
+          docker pull -q ghcr.io/ancsemi/haven:latest > /dev/null && size ghcr.io/ancsemi/haven:latest "Published latest"
