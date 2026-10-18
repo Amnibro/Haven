@@ -33,6 +33,23 @@ _setupVideos(containerEl) {
     // rather than leaving a broken player sitting in the message.
     video.addEventListener('error', () => this._fallbackToDownload(video), { once: true });
 
+    // A click on the picture plays or pauses it, as people expect from a
+    // player. Clicks on the controls along the bottom are left alone, and if
+    // the browser already toggled it on its own, nothing more happens.
+    let pausedAtPress = null;
+    video.addEventListener('pointerdown', () => { pausedAtPress = video.paused; });
+    video.addEventListener('click', (e) => {
+      const r = video.getBoundingClientRect();
+      if (e.button !== 0 || pausedAtPress === null || e.clientY > r.bottom - 48) return;
+      const was = pausedAtPress;
+      pausedAtPress = null;
+      setTimeout(() => {
+        if (video.paused !== was) return;
+        if (was) video.play().catch(err => console.warn('[Video] could not start', err.name));
+        else video.pause();
+      }, 0);
+    });
+
     // PiP: wire up MediaSession so the PiP window shows a seek bar
     const updatePos = () => {
       try {

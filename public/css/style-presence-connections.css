@@ -906,6 +906,9 @@ html.reduce-motion .pa-marquee-track { animation: none; }
 
 .file-video {
   max-width: 100%;
+  /* A tall, narrow clip would be too thin for the player's buttons, which
+     the browser then hides; it gets black bars at the sides instead. */
+  min-width: min(15rem, 60vw);
   max-height: 18.75rem;
   border-radius: 0.25rem;
   margin-top: 0.25rem;
