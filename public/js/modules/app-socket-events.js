@@ -588,6 +588,7 @@ _listenMessageChanges() {
           }
           msgEl.remove();
         }
+        this._forumTopics?.delete(Number(id));
       }
     }
     // Move to... took the open thread's message to another channel and its

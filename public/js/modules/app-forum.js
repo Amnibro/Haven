@@ -424,6 +424,7 @@ _showForumTopicContextMenu(e, msg) {
   if (canPin) items.push(msg.pinned ? item('unpin', '📌', t('msg_toolbar.unpin')) : item('pin', '📌', t('msg_toolbar.pin')));
   if (canEdit) items.push(msg.closed ? item('reopen', '🔓', t('forum.reopen_topic')) : item('close', '✔', t('forum.close_topic')));
   if (canEdit) items.push(msg.nsfw ? item('unnsfw', '🔞', t('forum.unmark_nsfw')) : item('nsfw', '🔞', t('forum.mark_nsfw_menu')));
+  if (this._forumMoveTargets().length && (this.user?.isAdmin || this._hasPerm('delete_message'))) items.push(item('move', '📦', t('forum.move_topic')));
   const more = [];
   if (canShareLink) more.push(item('copy-link', '🔗', t('msg_toolbar.copy_link')));
   if (canArchive) more.push(msg.is_archived ? item('unarchive', '🛡️', t('app.messages.unprotect_btn')) : item('archive', '🛡️', t('app.messages.protect_btn')));
@@ -460,6 +461,8 @@ _showForumTopicContextMenu(e, msg) {
       this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], closed: action === 'close' });
     } else if (action === 'nsfw' || action === 'unnsfw') {
       this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], nsfw: action === 'nsfw' });
+    } else if (action === 'move') {
+      this._forumShowMovePicker(msg);
     } else if (action === 'copy-link') {
       this._copyChannelLink(this.currentChannel, msgId);
     } else if (action === 'archive') {
@@ -484,6 +487,43 @@ _showForumTopicContextMenu(e, msg) {
     document.addEventListener('contextmenu', closer, true);
     document.getElementById('messages')?.addEventListener('scroll', closer, true);
   }, 0);
+},
+
+// The other forums a topic can move to (#5809). Topics move between forums
+// only: in a chat channel a topic would lose its title and tags. Blog forums
+// take no moves (src/moveMessages.js).
+_forumMoveTargets() {
+  const here = this.channels?.find(c => c.code === this.currentChannel);
+  if (!here || Number(here.forum_blog) === 1) return [];
+  return (this.channels || []).filter(c => c.is_forum && !c.is_dm && c.code !== this.currentChannel && Number(c.forum_blog) !== 1);
+},
+
+// Picks the forum to move a topic to, in the Move Messages window. The topic
+// brings its replies and keeps the tags the new forum also has.
+_forumShowMovePicker(msg) {
+  const modal = document.getElementById('move-msg-modal');
+  const list = document.getElementById('move-msg-channel-list');
+  if (!modal || !list) return;
+  const heading = modal.querySelector('h3');
+  if (heading) heading.textContent = t('forum.move_topic_title');
+  const desc = document.getElementById('move-msg-desc');
+  if (desc) desc.textContent = t('forum.move_topic_desc', { title: this._forumTitleOf(msg) });
+  list.innerHTML = '';
+  const fromCode = this.currentChannel;
+  for (const ch of this._forumMoveTargets()) {
+    const btn = document.createElement('button');
+    btn.className = 'move-msg-channel-item';
+    btn.textContent = `🗂️ ${ch.name}`;
+    btn.addEventListener('click', () => {
+      modal.style.display = 'none';
+      this.socket.emit('move-messages', { messageIds: [msg.id], fromChannel: fromCode, toChannel: ch.code }, (resp) => {
+        if (resp && resp.error) this._showToast(resp.error, 'error');
+        else if (resp && resp.success) this._showToast(t('forum.move_topic_done', { name: ch.name }), 'success');
+      });
+    });
+    list.appendChild(btn);
+  }
+  modal.style.display = 'flex';
 },
 
 // The body of a topic changed, from the composer or the ordinary edit path:

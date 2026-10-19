@@ -234,10 +234,31 @@ test('moving messages to another channel', async (t) => {
     assert.equal(row(chat).channel_id, talk.id);
   });
 
+  await t.test('a topic moved to another forum keeps only the tags that forum has (#5809)', async () => {
+    const bugs = await makeChannel('bugs');
+    const ideas = await makeChannel('ideas');
+    for (const ch of [bugs, ideas]) {
+      A.emit('toggle-channel-permission', { code: ch.code, permission: 'forum' });
+      await wait(150);
+    }
+    db.prepare('UPDATE channels SET forum_tags = ? WHERE id = ?').run(JSON.stringify([{ name: 'crash' }, { name: 'ui' }]), bugs.id);
+    db.prepare('UPDATE channels SET forum_tags = ? WHERE id = ?').run(JSON.stringify([{ name: 'ui' }, { name: 'later' }]), ideas.id);
+    const topic = post(bugs.id, bob.id, 'make the button blue');
+    db.prepare('UPDATE messages SET title = ?, tags = ? WHERE id = ?').run('Blue button', JSON.stringify(['crash', 'ui']), topic);
+    const reply = post(bugs.id, admin.id, 'not a bug', topic);
+    const res = await move(A, bugs.code, ideas.code, [topic]);
+    assert.ok(res.success, res.error);
+    const moved = db.prepare('SELECT channel_id, title, tags FROM messages WHERE id = ?').get(topic);
+    assert.equal(moved.channel_id, ideas.id);
+    assert.equal(moved.title, 'Blue button', 'the title comes along');
+    assert.deepEqual(JSON.parse(moved.tags), ['ui'], 'the old forum\'s other tag goes');
+    assert.equal(row(reply).channel_id, ideas.id, 'the replies come along');
+  });
+
   await t.test('each move is in the audit log, naming where it went', async () => {
     await wait(100);
     const rows = db.prepare("SELECT actor_id, target_type, target_id, target_name, details FROM audit_log WHERE action = 'messages_move' ORDER BY id").all();
-    assert.equal(rows.length, 5, 'one per move that went through, none for refused ones');
+    assert.equal(rows.length, 6, 'one per move that went through, none for refused ones');
     assert.equal(rows[0].actor_id, mod.id);
     assert.equal(rows[0].target_type, 'channel');
     assert.equal(rows[0].target_id, other.id);

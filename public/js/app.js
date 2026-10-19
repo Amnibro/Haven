@@ -6,7 +6,7 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.26.5';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.25.24';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14';
 import UIBindMethods   from './modules/app-ui.js?v=4.26.13';
 import ComposerMethods from './modules/app-composer.js?v=4.25.26';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
@@ -40,7 +40,7 @@ import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.25.11'
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.32';
 import MessageMethods  from './modules/app-messages.js?v=4.25.10';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.26.9';
-import MessageToolMethods from './modules/app-message-tools.js?v=4.25.10';
+import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
 import UserMethods     from './modules/app-users.js?v=4.25.8';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
@@ -68,7 +68,7 @@ import ModerationMethods from './modules/app-moderation.js?v=4.24.32';
 import PlatformMethods from './modules/app-platform.js?v=4.26.6';
 import SearchMethods   from './modules/app-search.js?v=4.24.32';
 import FerryMethods    from './modules/app-ferry.js?v=4.24.10';
-import ForumMethods    from './modules/app-forum.js?v=4.26.13';
+import ForumMethods    from './modules/app-forum.js?v=4.26.14';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';

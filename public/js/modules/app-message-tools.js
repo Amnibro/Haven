@@ -273,6 +273,9 @@ _showMoveChannelPicker() {
   if (!list || !modal) return;
 
   const _n = this._moveSelectedIds.size;
+  // The forum's Move to forum shares this window and renames it.
+  const heading = modal.querySelector('h3');
+  if (heading) heading.textContent = t('modals.move_messages.title');
   desc.textContent = t(_n === 1 ? 'modals.move_messages.move_one' : 'modals.move_messages.move_many', { n: _n });
   list.innerHTML = '';
 

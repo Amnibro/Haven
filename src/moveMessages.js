@@ -91,10 +91,35 @@ function moveToChannel(db, { from, to, messageIds }) {
     db.prepare(`UPDATE pinned_messages SET channel_id = ? WHERE channel_id != ?
       AND message_id IN (${moving})`)
       .run(to.id, to.id, ...tops, ...tops);
+    keepForumTags(db, to.id, tops);
 
     return { moved: tops, brought, kept };
   });
   return run();
+}
+
+// A topic moved into a forum takes on that forum's setup (#5809): it keeps
+// the tags the new forum also has, and the old forum's other tags go, since
+// nobody there could filter by them or pick them again.
+function keepForumTags(db, channelId, topIds) {
+  const dest = db.prepare('SELECT is_forum, forum_tags FROM channels WHERE id = ?').get(channelId);
+  if (!dest || !dest.is_forum) return;
+  let names = new Set();
+  try {
+    const list = JSON.parse(dest.forum_tags || '[]');
+    if (Array.isArray(list)) names = new Set(list.map(t => t && t.name).filter(Boolean));
+  } catch (err) {
+    // A damaged tag list counts as no tags: the topics move without theirs.
+    console.warn('[Move] unreadable forum tags on channel', channelId, err.message);
+  }
+  const rows = db.prepare(`SELECT id, tags FROM messages WHERE id IN (${placeholders(topIds.length)}) AND tags IS NOT NULL`).all(...topIds);
+  const update = db.prepare('UPDATE messages SET tags = ? WHERE id = ?');
+  for (const r of rows) {
+    let tags = [];
+    try { tags = JSON.parse(r.tags); } catch (err) { console.warn('[Move] unreadable tags on message', r.id, err.message); }
+    const kept = Array.isArray(tags) ? tags.filter(name => names.has(name)) : [];
+    update.run(kept.length ? JSON.stringify(kept) : null, r.id);
+  }
 }
 
 module.exports = { moveToChannel };
