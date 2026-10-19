@@ -678,6 +678,7 @@ _openForumComposer(existing = null, draft = null) {
     overlay.querySelector('#forum-post-attach')?.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => { this._forumUploadIntoBody(fileInput.files, bodyInput, code); fileInput.value = ''; });
     bodyInput.addEventListener('paste', (e) => {
+      if (this._pasteIsLinkWithPreview(e)) return;
       const files = Array.from(e.clipboardData?.items || []).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
       if (!files.length) return;
       e.preventDefault();

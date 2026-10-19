@@ -60,7 +60,7 @@ _bindThreadAndDmPanels() {
   // (same as main channel paste behavior). (#5324)
   if (dmPipInput) dmPipInput.addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
-    if (!items) return;
+    if (!items || this._pasteIsLinkWithPreview(e)) return;
     const targetCode = this._activeDMPip;
     if (!targetCode) return;
     let handled = false;
@@ -292,7 +292,7 @@ _bindThreadAndDmPanels() {
       if (!items) return;
       if (!this._activeThreadParent) return;
       // Hold them, don't post them. Flushed on send. (#thread-paste-instant)
-      const files = Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+      const files = this._pasteIsLinkWithPreview(e) ? [] : Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
       if (files.length) {
         e.preventDefault();
         this._queueThreadFiles(files);

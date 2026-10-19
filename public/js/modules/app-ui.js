@@ -503,7 +503,7 @@ _setupImageUpload() {
   // files now also queue (#5417) rather than uploading on paste.
   document.getElementById('message-input').addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
-    if (!items) return;
+    if (!items || this._pasteIsLinkWithPreview(e)) return;
     const files = Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
     if (!files.length) return;
     e.preventDefault();
@@ -525,6 +525,16 @@ _setupImageUpload() {
     messageArea.classList.remove('drag-over');
     this._queueComposerFiles(e.dataTransfer?.files);
   });
+},
+
+// Chrome and Edge's "Copy link" (and some share menus) put a preview picture
+// on the clipboard next to the link, usually the site's logo, so pasting a
+// YouTube link posted YouTube's logo ahead of it. When the copied text is a
+// single link, the link is what was copied: it pastes as text and the picture
+// is left out. Every composer that takes pasted files asks this first.
+_pasteIsLinkWithPreview(e) {
+  const text = (e.clipboardData?.getData('text/plain') || '').trim();
+  return /^https?:\/\/\S+$/i.test(text);
 },
 
 // ═══════════════════════════════════════════════════════
