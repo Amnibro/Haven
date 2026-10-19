@@ -683,7 +683,7 @@ async _importExecute(importId, selectedChannels) {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + this.token
       },
-      body: JSON.stringify({ importId, selectedChannels })
+      body: JSON.stringify({ importId, selectedChannels, copyFiles: document.getElementById('import-copy-files')?.checked !== false })
     });
     const started = await this._importReadJson(res);
     if (!res.ok) throw new Error(started.error || t('settings.admin.import_failed'));
@@ -701,7 +701,8 @@ async _importExecute(importId, selectedChannels) {
       if (status.state === 'running') {
         executeBtn.textContent = '⏳ ' + (status.messagesTotal > 0
           ? t('settings.admin.import_write_progress', { done: status.messagesDone.toLocaleString(), total: status.messagesTotal.toLocaleString() })
-          : t('settings.admin.import_importing'));
+          : t('settings.admin.import_importing'))
+          + (status.filesCopied > 0 ? ' · ' + t('settings.admin.import_files_progress', { count: status.filesCopied.toLocaleString() }) : '');
         continue;
       }
       data = status;
@@ -718,6 +719,10 @@ async _importExecute(importId, selectedChannels) {
     if (data.messagesSkipped > 0) {
       doneMsg.textContent += ' ' + t('settings.admin.import_skipped', { count: data.messagesSkipped.toLocaleString() });
     }
+    // Pictures and files copied into Haven (#5811), and the ones that stayed links.
+    if (data.filesCopied > 0) doneMsg.textContent += ' ' + t('settings.admin.import_files_copied', { count: data.filesCopied.toLocaleString() });
+    if (data.filesLeftAsLinks > 0) doneMsg.textContent += ' ' + t('settings.admin.import_files_links', { count: data.filesLeftAsLinks.toLocaleString() });
+    if (data.diskFull) doneMsg.textContent += ' ' + t('settings.admin.import_files_disk');
 
     // Refresh channel list
     if (this.socket) this.socket.emit('get-channels');

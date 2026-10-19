@@ -11,6 +11,7 @@ const { parseDiscordExport, isReactionEmoji, importedReactionEmoji } = require('
 const { accessContext, canReadHistory } = require('../discordPermissions');
 const { sanitizeText } = require('../socketHandlers/helpers');
 const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('../discordText');
+const { copyAttachments } = require('../importFiles');
 
 module.exports = function registerImport(deps) {
   const { uploadDiskGuard, app, verifyAdminFromDb, uploadLimiter, importUpload } = deps;
@@ -386,22 +387,22 @@ module.exports = function registerImport(deps) {
             // A forward keeps what was forwarded in a snapshot, not in its own content.
             const fwd = forwardedMessage(msg);
             const src = fwd && !msg.content && !msg.attachments?.length ? fwd : msg;
-            let content = unescapeDiscord(src.content || '');
-            if (Array.isArray(src.attachments)) {
-              for (const a of src.attachments) {
-                content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
-              }
-            }
+            let text = unescapeDiscord(src.content || '');
             if (Array.isArray(src.embeds)) {
               for (const e of src.embeds) {
-                if (e.title) content += `\n🔗 **${unescapeDiscord(e.title)}**`;
-                if (e.description) content += `\n${unescapeDiscord(e.description)}`;
-                if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
+                if (e.title) text += `\n🔗 **${unescapeDiscord(e.title)}**`;
+                if (e.description) text += `\n${unescapeDiscord(e.description)}`;
+                if (e.url && !text.includes(e.url)) text += `\n${e.url}`;
               }
             }
-            content = content.trim();
-            if (!content) continue;
-            if (src !== msg) content = quoteForwarded(content);
+            text = text.trim();
+            // Attachments go on lines of their own, under a forward's quote
+            // rather than in it, so a copied picture still shows (importFiles.js).
+            const files = (Array.isArray(src.attachments) ? src.attachments : [])
+              .map(a => `📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`);
+            if (!text && !files.length) continue;
+            const head = src !== msg ? quoteForwarded(text) : text;
+            const content = [head, ...files].filter(Boolean).join('\n');
 
             messages.push({
               discordId: msg.id,
@@ -492,6 +493,8 @@ module.exports = function registerImport(deps) {
     if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
     const { importId, selectedChannels } = req.body;
+    // Copying pictures and files into Haven is on unless the page says not to.
+    const copyFiles = req.body.copyFiles !== false;
     if (!importId || !Array.isArray(selectedChannels) || selectedChannels.length === 0) {
       return res.status(400).json({ error: 'Missing importId or selectedChannels' });
     }
@@ -512,10 +515,10 @@ module.exports = function registerImport(deps) {
     }
 
     const jobId = crypto.randomBytes(16).toString('hex');
-    const job = { userId: user.id, state: 'running', channelsDone: 0, channelsTotal: 0, messagesDone: 0, messagesTotal: 0, updatedAt: Date.now() };
+    const job = { userId: user.id, state: 'running', channelsDone: 0, channelsTotal: 0, messagesDone: 0, messagesTotal: 0, filesCopied: 0, updatedAt: Date.now() };
     executeJobs.set(jobId, job);
     res.status(202).json({ jobId });
-    writeImport(job, user, tempPath, selectedChannels);
+    writeImport(job, user, tempPath, selectedChannels, { copyFiles });
   });
 
   app.get('/api/import/discord/execute/:jobId', (req, res) => {
@@ -527,7 +530,7 @@ module.exports = function registerImport(deps) {
       return res.status(404).json({ error: 'That import is no longer running. Check the imported channels, and run the import again if messages are missing; messages already in Haven are skipped.' });
     }
     if (job.state === 'running') {
-      return res.json({ state: 'running', channelsDone: job.channelsDone, channelsTotal: job.channelsTotal, messagesDone: job.messagesDone, messagesTotal: job.messagesTotal });
+      return res.json({ state: 'running', channelsDone: job.channelsDone, channelsTotal: job.channelsTotal, messagesDone: job.messagesDone, messagesTotal: job.messagesTotal, filesCopied: job.filesCopied });
     }
     executeJobs.delete(String(req.params.jobId));
     res.status(job.status).json({ state: 'done', ...job.body });
@@ -538,8 +541,8 @@ module.exports = function registerImport(deps) {
   // message already written is skipped. That is what makes batches safe: if
   // the import stops halfway, what was written stays, the job reports a
   // failure with how much got in, and running the import again finishes it.
-  async function writeImport(job, user, tempPath, selectedChannels) {
-    const stats = { channelsCreated: 0, channelsReused: 0, messagesImported: 0, messagesSkipped: 0, threadsImported: 0 };
+  async function writeImport(job, user, tempPath, selectedChannels, { copyFiles = false } = {}) {
+    const stats = { channelsCreated: 0, channelsReused: 0, messagesImported: 0, messagesSkipped: 0, threadsImported: 0, filesCopied: 0, filesLeftAsLinks: 0, diskFull: false };
     const finish = (status, body) => Object.assign(job, { state: 'done', status, body, updatedAt: Date.now() });
     const nextBatch = () => {
       job.updatedAt = Date.now();
@@ -567,6 +570,23 @@ module.exports = function registerImport(deps) {
         try { return new Date(raw).toISOString().replace('T', ' ').replace('Z', ''); }
         catch { return raw; }
       };
+      // Pictures and files come into Haven before their message is written
+      // (src/importFiles.js), each held to the server's upload size limit.
+      // A message already in Haven is not fetched again.
+      const capBytes = (parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get()?.value, 10) || 25) * 1024 * 1024;
+      const fileState = {};
+      const copyFilesOf = async (channelId, msgs) => {
+        if (!copyFiles) return;
+        for (const msg of msgs) {
+          if (fileState.stopped) break;
+          if (!msg.content || !msg.content.includes('📎')) continue;
+          if (msg.discordId && lookupByDiscordId.get(channelId, msg.discordId)) continue;
+          msg.content = await copyAttachments(msg.content, { capBytes, state: fileState });
+          job.filesCopied = fileState.copied || 0;
+          job.updatedAt = Date.now();
+        }
+      };
+
       // Oldest first. Each time is worked out once, not on every comparison,
       // which on a channel of half a million messages saves seconds.
       const byTime = (list) => list
@@ -621,6 +641,7 @@ module.exports = function registerImport(deps) {
         const idMap = new Map(); // Discord message id -> Haven id, for replies
         for (let i = 0; i < sorted.length; i += EXECUTE_BATCH) {
           const batch = sorted.slice(i, i + EXECUTE_BATCH);
+          await copyFilesOf(channelId, batch);
           const counted = { ...stats };
           try {
             db.transaction(() => {
@@ -650,6 +671,7 @@ module.exports = function registerImport(deps) {
           const starter = messages.find(m => m.discordId === threadDiscordId) || byTime(messages)[0];
           if (!root) {
             if (!starter) return;
+            await copyFilesOf(parent.id, [starter]);
             const title = sanitizeText(String(channelData.name || '').trim().replace(/\s+/g, ' ').slice(0, 120)) || 'Untitled';
             const tags = Array.isArray(channelData.tags) && channelData.tags.length ? JSON.stringify(channelData.tags.slice(0, 5)) : null;
             const r = insertMsg.run(
@@ -734,6 +756,7 @@ module.exports = function registerImport(deps) {
       // Clean up temp file
       try { fs.unlinkSync(tempPath); } catch { /* cleanupTempImports() sweeps any haven-import leftover */ }
 
+      Object.assign(stats, { filesCopied: fileState.copied || 0, filesLeftAsLinks: fileState.skipped || 0, diskFull: !!fileState.stopped });
       finish(200, { success: true, ...stats });
     } catch (err) {
       console.error('Import execute error:', err);

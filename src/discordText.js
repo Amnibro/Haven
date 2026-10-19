@@ -28,7 +28,7 @@ function forwardedMessage(msg) {
 
 // Puts "Forwarded" over the forwarded text as a quote, the way Discord marks it.
 function quoteForwarded(text) {
-  const lines = String(text || '').split('\n');
+  const lines = String(text || '').split('\n').filter((l, i, all) => l || all.length > 1);
   return ['> *Forwarded*', ...lines.map(l => (l ? `> ${l}` : '>'))].join('\n');
 }
 

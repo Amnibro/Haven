@@ -56,7 +56,7 @@ test('forwards come in quoted, and escaped punctuation reads as on Discord', asy
   const messages = JSON.parse(fs.readFileSync(file, 'utf8')).channels[0].messages;
   fs.rmSync(file, { force: true });
   const byId = Object.fromEntries(messages.map(m => [m.discordId, m.content]));
-  assert.equal(byId['3'], '> *Forwarded*\n> look at this\n> \u{1F4CE} [cat.png](https://cdn.discordapp.com/attachments/1/2/cat.png)');
+  assert.equal(byId['3'], '> *Forwarded*\n> look at this\n\u{1F4CE} [cat.png](https://cdn.discordapp.com/attachments/1/2/cat.png)');
   assert.equal(byId['2'], '❤️ 3.1K \u{1F441}️ 45.5K');
   assert.equal(byId['1'], 'plain');
 });

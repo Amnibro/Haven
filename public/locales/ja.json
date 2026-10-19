@@ -1817,7 +1817,11 @@
         "reapply_access_tooltip": "このロールをすでに持っているすべてのユーザーに対して、上記のチャンネルアクセスのルールを再実行します。付与/取り消しのチェックボックスを編集した後に便利です。ロールを割り当て直さなくても、既存のメンバーを現在の設定に合わせられます。",
         "permissions": "権限",
         "delete": "削除"
-      }
+      },
+      "import_files_progress": "{{count}} 件のファイルをコピー済み",
+      "import_files_copied": "{{count}} 件の画像とファイルを Haven にコピーしました。",
+      "import_files_links": "{{count}} 件はリンクのままです（期限切れ、大きすぎる、または取得できませんでした）。",
+      "import_files_disk": "サーバーのディスク容量が少ないためコピーを停止しました。残りはリンクのままです。"
     }
   },
   "modals": {
@@ -2272,6 +2276,8 @@
       "back_to_servers": "← サーバー一覧に戻る",
       "preview_select_hint": "インポートするチャンネルを選択してください。インポート前に名前を変更できます。",
       "import_selected_btn": "選択項目をインポート",
+      "copy_files": "画像とファイルを Haven にコピー",
+      "copy_files_hint": "Discord のリンクは約1日で使えなくなります。このサーバーのディスク容量を使い、アップロード上限を超えるものはリンクのまま残ります。",
       "import_complete": "インポートが完了しました！",
       "upload_hint": "Discordのエクスポートファイルをアップロードすると、チャンネルとメッセージをHavenにインポートできます。",
       "format_dce": "（JSONまたはZIP。推奨、全ユーザーを含む）",

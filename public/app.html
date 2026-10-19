@@ -3989,6 +3989,8 @@
           <a href="#" id="import-toggle-all" data-i18n="modals.discord_import.deselect_all" style="font-size:0.6875rem;white-space:nowrap">Deselect All</a>
         </div>
         <div class="import-channel-list" id="import-channel-list"></div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:10px;cursor:pointer"><input type="checkbox" id="import-copy-files" checked> <span data-i18n="modals.discord_import.copy_files">Copy pictures and files into Haven</span></label>
+        <p class="settings-hint" style="margin:2px 0 0" data-i18n="modals.discord_import.copy_files_hint">Discord's links to them stop working after about a day. This uses disk space on this server, and anything over the upload size limit stays a link.</p>
         <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
           <button class="btn-sm" id="import-back-btn" data-i18n="modals.common.back">← Back</button>
           <button class="btn-sm btn-accent" id="import-execute-btn">📦 <span data-i18n="modals.discord_import.import_selected_btn">Import Selected</span></button>
@@ -5402,7 +5404,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.26.14"></script>
+  <script type="module" src="/js/app.js?v=4.26.15"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
