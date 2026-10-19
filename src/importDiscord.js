@@ -8,6 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { unescapeDiscord } = require('./discordText');
 
 // ── Public entry point ──────────────────────────────────────
 function parseDiscordExport(filePath) {
@@ -173,7 +174,7 @@ function buildDCEResult(data) {
     const type = msg.type || 'Default';
     if (type !== 'Default' && type !== 'Reply') continue;
 
-    let content = msg.content || '';
+    let content = unescapeDiscord(msg.content || '');
     // Append attachment links
     if (Array.isArray(msg.attachments)) {
       for (const a of msg.attachments) {

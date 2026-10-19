@@ -42,6 +42,7 @@ const { agentFor } = require('./outboundProxy');
 const automod = require('./automod');
 const { stripRoleMentions } = require('./socketHandlers/helpers');
 const { accessContext, channelAccess, bits } = require('./discordPermissions');
+const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('./discordText');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -1177,6 +1178,14 @@ function relayThreadDeleteToHaven(d) {
  * admin, not something a bridge should do silently.
  */
 function buildHavenContent(msg) {
+  // A forward has no content of its own: what was forwarded comes through,
+  // quoted under "Forwarded", held to the same rules as anything else.
+  const fwd = forwardedMessage(msg);
+  if (fwd && !msg.content && !(msg.attachments || []).length) {
+    const inner = buildHavenContent({ ...fwd, guild_id: msg.guild_id, mention_everyone: false, message_snapshots: null });
+    return inner ? quoteForwarded(inner).slice(0, 4000) : '';
+  }
+
   // What the Discord author actually typed, and what Discord itself attached,
   // are kept apart on purpose. Only the typed half is content somebody chose to
   // write, so only that half is worth filtering. See the automod note below.
@@ -1187,7 +1196,7 @@ function buildHavenContent(msg) {
   // Haven client renders that token as the emote itself, through the server's
   // emote cache, so nothing is lost by keeping the id. Folding it to :name:
   // used to leave a bare shortcode on any server without a same-named emoji.
-  const text = translateDiscordMentions(msg.content || '', msg).trim();
+  const text = unescapeDiscord(translateDiscordMentions(msg.content || '', msg)).trim();
   if (text) authored.push(text);
 
   for (const att of msg.attachments || []) {
@@ -1276,7 +1285,7 @@ function buildHavenContent(msg) {
     }
     // A bot that already typed the title or the link gets it once, not twice.
     const typed = authored.join('\n');
-    const parts = [e.title, link, ...extra, e.description]
+    const parts = [unescapeDiscord(e.title), link, ...extra, unescapeDiscord(e.description)]
       .filter(p => typeof p === 'string' && p.trim() && !typed.includes(p.trim()));
     const summary = parts.join(' ');
     if (summary) authored.push(summary.slice(0, 500));

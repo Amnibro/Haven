@@ -10,6 +10,7 @@ const { verifyToken } = require('../auth');
 const { parseDiscordExport, isReactionEmoji, importedReactionEmoji } = require('../importDiscord');
 const { accessContext, canReadHistory } = require('../discordPermissions');
 const { sanitizeText } = require('../socketHandlers/helpers');
+const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('../discordText');
 
 module.exports = function registerImport(deps) {
   const { uploadDiskGuard, app, verifyAdminFromDb, uploadLimiter, importUpload } = deps;
@@ -380,23 +381,27 @@ module.exports = function registerImport(deps) {
             if (msg.type !== 0 && msg.type !== 19) continue; // Default + Reply only
             if (!msg.author?.bot) {
               peopleMessages++;
-              if (!msg.content && !msg.attachments?.length && !msg.embeds?.length) emptyPeopleMessages++;
+              if (!msg.content && !msg.attachments?.length && !msg.embeds?.length && !msg.message_snapshots?.length) emptyPeopleMessages++;
             }
-            let content = msg.content || '';
-            if (Array.isArray(msg.attachments)) {
-              for (const a of msg.attachments) {
+            // A forward keeps what was forwarded in a snapshot, not in its own content.
+            const fwd = forwardedMessage(msg);
+            const src = fwd && !msg.content && !msg.attachments?.length ? fwd : msg;
+            let content = unescapeDiscord(src.content || '');
+            if (Array.isArray(src.attachments)) {
+              for (const a of src.attachments) {
                 content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
               }
             }
-            if (Array.isArray(msg.embeds)) {
-              for (const e of msg.embeds) {
-                if (e.title) content += `\n🔗 **${e.title}**`;
-                if (e.description) content += `\n${e.description}`;
+            if (Array.isArray(src.embeds)) {
+              for (const e of src.embeds) {
+                if (e.title) content += `\n🔗 **${unescapeDiscord(e.title)}**`;
+                if (e.description) content += `\n${unescapeDiscord(e.description)}`;
                 if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
               }
             }
             content = content.trim();
             if (!content) continue;
+            if (src !== msg) content = quoteForwarded(content);
 
             messages.push({
               discordId: msg.id,

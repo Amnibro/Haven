@@ -439,3 +439,22 @@ test('a Discord post name is 1 to 100 characters and never empty', () => {
   const long = forumThreadName('x'.repeat(300), '');
   assert.equal(long.length, 100);
 });
+
+test('a forwarded Discord message relays what was forwarded (#5811)', () => {
+  const out = buildHavenContent({
+    content: '',
+    attachments: [],
+    message_snapshots: [{ message: { content: 'look at this', attachments: [{ url: 'https://cdn.discordapp.com/attachments/1/2/cat.png' }] } }],
+  });
+  assert.equal(out, '> *Forwarded*\n> look at this\n> https://cdn.discordapp.com/attachments/1/2/cat.png');
+  // A forward of nothing readable stays nothing.
+  assert.equal(buildHavenContent({ content: '', message_snapshots: [{ message: { content: '' } }] }), '');
+});
+
+test('escaped punctuation from Discord embeds reads as Discord shows it (#5811)', () => {
+  const out = buildHavenContent({
+    content: '',
+    embeds: [{ type: 'rich', description: 'cable curls ❤️ 3\\.1K' }],
+  });
+  assert.equal(out, 'cable curls ❤️ 3.1K');
+});
