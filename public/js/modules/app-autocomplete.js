@@ -430,12 +430,22 @@ _showEmojiDropdown(query) {
       if (keywords.toLowerCase().includes(query)) {
         results.push({ type: 'standard', name: keywords.split(' ')[0], char });
       }
-      if (results.length >= 20) break;
     }
   }
 
-  results = results.slice(0, 10);
-  if (!results.length) { this._hideEmojiDropdown(); return; }
+  // Names that start with what was typed come first (":st" finds :star:
+  // before the flags whose keywords mention "stripes"); the sort keeps the
+  // order above within each group.
+  const rank = (r) => {
+    const n = r.name.toLowerCase();
+    return n === query ? 0 : n.startsWith(query) ? 1 : n.includes(query) ? 2 : 3;
+  };
+  results = results.map((r, i) => ({ r, i, k: rank(r) }))
+    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .map(x => x.r)
+    .slice(0, 10);
+  const stickers = this._stickerAcMatches(query);
+  if (!results.length && !stickers.length) { this._hideEmojiDropdown(); return; }
 
   results.forEach((r, i) => {
     const item = document.createElement('div');
@@ -467,7 +477,51 @@ _showEmojiDropdown(query) {
     dd.appendChild(item);
   });
 
+  if (stickers.length) {
+    const head = document.createElement('div');
+    head.className = 'emoji-ac-section';
+    head.textContent = t('emoji.section_sticker');
+    dd.appendChild(head);
+    stickers.forEach((s, i) => {
+      const item = document.createElement('div');
+      item.className = 'emoji-ac-item emoji-ac-sticker' + (!results.length && i === 0 ? ' active' : '');
+      const img = document.createElement('img');
+      img.className = 'emoji-ac-sticker-img';
+      img.src = s.url;
+      img.alt = '';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'emoji-ac-name';
+      nameSpan.textContent = s.name;
+      item.append(img, nameSpan);
+      item.addEventListener('click', () => this._sendStickerAc(s));
+      dd.appendChild(item);
+    });
+  }
+
   dd.style.display = 'block';
+},
+
+// Stickers whose name matches what is typed after ":", offered only when that
+// is the whole message, since a sticker goes out on its own (#5812). Not in
+// the edit box: a sent message cannot turn into a sticker.
+_stickerAcMatches(query) {
+  const input = this._emojiAcInput;
+  const ctx = { 'message-input': 'main', 'thread-input': 'thread', 'dm-pip-input': 'dmpip' }[input?.id];
+  if (!ctx || !Array.isArray(this.stickers) || !this.stickers.length) return [];
+  if (input.value.trim() !== input.value.slice(this._emojiColonStart, input.selectionStart).trim()) return [];
+  return this.stickers.filter(s => s.url && (s.name || '').toLowerCase().includes(query)).slice(0, 4);
+},
+
+// Picking a suggested sticker sends it straight away, like the picker does.
+_sendStickerAc(sticker) {
+  const input = this._emojiAcInput;
+  const ctx = { 'message-input': 'main', 'thread-input': 'thread', 'dm-pip-input': 'dmpip' }[input?.id];
+  if (!ctx) return;
+  input.value = '';
+  input.style.height = 'auto';
+  this._hideEmojiDropdown();
+  this._emojiPickerContext = ctx;
+  this._sendStickerMessage(sticker.url);
 },
 
 _hideEmojiDropdown() {
