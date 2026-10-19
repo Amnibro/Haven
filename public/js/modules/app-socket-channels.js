@@ -47,6 +47,8 @@ _listenChannelsAndMessages() {
       }
     }
     this._persistChannelCodeMap(channels);
+    // Streams or Listen Together switched on or off in the voice room you are in.
+    this._applyVoiceRoomLimits?.();
     const deferredCode = this.voice?._deferredChannelGone?.code;
     const deferredRotation = rotations.find(rotation => rotation.oldCode === deferredCode);
     const deferredChannel = channels.find(channel =>

@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.26.5';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.25.8';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.25.24';
 import UIBindMethods   from './modules/app-ui.js?v=4.25.30';
 import ComposerMethods from './modules/app-composer.js?v=4.25.26';
@@ -44,7 +44,7 @@ import MessageToolMethods from './modules/app-message-tools.js?v=4.25.10';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
 import UserMethods     from './modules/app-users.js?v=4.25.8';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
-import VoiceMethods    from './modules/app-voice.js?v=4.24.5';
+import VoiceMethods    from './modules/app-voice.js?v=4.26.11';
 import ThemePickerMethods from './modules/app-theme-picker.js?v=4.25.30';
 import PushToMuteMethods from './modules/app-push-to-mute.js?v=4.24.5';
 import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.24.20';

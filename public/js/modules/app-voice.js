@@ -80,23 +80,6 @@ async _joinVoice() {
     // Don't emit get-voice-counts here; it can race the broadcast and
     // re-seed the sidebar with stale counts on older builds.
     this.socket.emit('request-voice-users', { code: joinedCode });
-    // Disable stream/music buttons if the channel has them off
-    const _jvCh = this.channels.find(c => c.code === this.currentChannel);
-    const _ssBtn = document.getElementById('screen-share-btn');
-    if (_ssBtn && _jvCh && _jvCh.streams_enabled === 0) {
-      _ssBtn.disabled = true;
-      _ssBtn.title = t('voice.streams_disabled');
-    }
-    const _camBtn = document.getElementById('voice-cam-btn');
-    if (_camBtn && _jvCh && _jvCh.streams_enabled === 0) {
-      _camBtn.disabled = true;
-      _camBtn.title = t('voice.streams_disabled');
-    }
-    const _musicBtn = document.getElementById('voice-listen-together-btn');
-    if (_musicBtn && _jvCh && _jvCh.music_enabled === 0) {
-      _musicBtn.disabled = true;
-      _musicBtn.title = t('voice.music_disabled');
-    }
     this._showToast(t('voice.joined'), 'success');
   } else {
     this._showToast(t('voice.mic_error'), 'error');
@@ -330,6 +313,26 @@ _voiceJoinAvailable() {
   return !!(this.user?.isAdmin || this._hasPerm('use_voice'));
 },
 
+// The stream, camera and Listen Together buttons follow the voice room you
+// are in: off where the room has them off, and back on in the next room that
+// allows them (D#66). Called on every join and when channel settings change.
+_applyVoiceRoomLimits() {
+  if (!this.voice?.inVoice) return;
+  const ch = this.channels?.find(c => c.code === this.voice.currentChannel);
+  const streamsOff = !!ch && ch.streams_enabled === 0;
+  const musicOff = !!ch && ch.music_enabled === 0;
+  const set = (id, off, offKey, onKey) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = off;
+    if (off) btn.title = t(offKey);
+    else if (!btn.classList.contains('sharing')) btn.title = t(onKey);
+  };
+  set('screen-share-btn', streamsOff, 'voice.streams_disabled', 'voice.screen_share');
+  set('voice-cam-btn', streamsOff, 'voice.streams_disabled', 'voice.panel.camera');
+  set('voice-listen-together-btn', musicOff, 'voice.music_disabled', 'voice.panel.listen_together');
+},
+
 _updateVoiceButtons(inVoice) {
   const showJoin = !inVoice && this._voiceJoinAvailable();
   document.getElementById('voice-join-btn').style.display = showJoin ? 'inline-flex' : 'none';
@@ -364,6 +367,8 @@ _updateVoiceButtons(inVoice) {
     if (showJoin) mobileJoin.style.removeProperty('display');
     else mobileJoin.style.setProperty('display', 'none', 'important');
   }
+
+  if (inVoice) this._applyVoiceRoomLimits();
 
   if (!inVoice) {
     // Reset all mute/deafen buttons (sidebar + header)
