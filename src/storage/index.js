@@ -159,11 +159,42 @@ async function prepare(db) {
       if (stranded) console.warn(`[storage] ${stranded} file(s) in ${UPLOADS_DIR} are not being served; run scripts/migrate-uploads-to-s3.js, or set HAVEN_S3_LOCAL_FALLBACK=true while you do`);
     }
   }
+  // A bucket is set up on purpose and its index comes first. On the uploads
+  // folder, the server starts at once and keepIndexed builds it afterwards,
+  // so a big or slow disk never holds up the start.
+  if (s.kind === 's3') await buildIndex(db, s);
+}
+
+async function buildIndex(db, s = getStorage()) {
   if (db.prepare("SELECT 1 FROM server_settings WHERE key = 'media_index_built'").get()) return;
+  console.log('[storage] Listing existing uploads (one time)…');
   const { reconcile } = require('./reconcile');
   const r = await reconcile(db, s);
   db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('media_index_built', '1')").run();
-  if (r.objects) console.log(`[storage] Indexed ${r.objects} existing upload(s)`);
+  console.log(`[storage] Indexed ${r.objects} existing upload(s)`);
+}
+
+/**
+ * After the server is listening: the one-time index build, then a fresh
+ * reconcile once a day on the uploads folder, so a file put there or removed
+ * behind Haven's back is counted, trimmed and purged like the rest. A bucket
+ * is reconciled by hand (scripts/reconcile-media.js), since listing one costs
+ * requests. Never throws.
+ */
+function keepIndexed(db) {
+  const run = async (first) => {
+    try {
+      if (first) await buildIndex(db);
+      else {
+        const r = await require('./reconcile').reconcile(db, getStorage());
+        if (r.added || r.fixed || r.dropped) console.log(`[storage] Daily check of uploads: ${r.added} added, ${r.fixed} corrected, ${r.dropped} gone`);
+      }
+    } catch (err) {
+      console.warn('[storage] Could not index uploads:', err.message);
+    }
+  };
+  setImmediate(() => run(true));
+  if (getStorage().kind === 'local') setInterval(() => run(false), 24 * 60 * 60 * 1000).unref();
 }
 
 // The privacy sweep rewrites and holds back files where they lie; these keep
@@ -182,7 +213,7 @@ function noteBack(rel, bytes, state = 'live') {
 }
 
 module.exports = {
-  getStorage, setStorage, fromEnv, prepare, admit, admitUpload, softDelete, remove, purge, restore,
+  getStorage, setStorage, fromEnv, prepare, buildIndex, keepIndexed, admit, admitUpload, softDelete, remove, purge, restore,
   noteSize, noteHeld, noteBack,
   head: (rel) => getStorage().head(rel),
   getStream: (rel, opts) => getStorage().getStream(rel, opts),

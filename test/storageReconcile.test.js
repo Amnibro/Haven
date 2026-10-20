@@ -55,6 +55,8 @@ test('it repairs an index that drifted', async () => {
   db.prepare("INSERT INTO media_objects (rel_path, bytes, state) VALUES ('ghost.png', 5, 'live')").run();
   fs.renameSync(path.join(UPLOADS_DIR, 'stickers/s.png'), path.join(UPLOADS_DIR, 'deleted-attachments/s-moved.png'));
   put('new.webm', 'nnnn');
+  // Written well before this reconcile (a row from its own run is left alone).
+  db.prepare("UPDATE media_objects SET created_at = '2020-01-01 00:00:00'").run();
   const s = await reconcile(db, storage.getStorage());
   assert.deepEqual(s, { added: 2, fixed: 1, dropped: 2, objects: 4 });
   assert.deepEqual(rows(), [
@@ -65,15 +67,26 @@ test('it repairs an index that drifted', async () => {
   ]);
 });
 
-test('the first start indexes what is already there, once', async () => {
+test('the first start indexes what is already there, once, after the server is up', async () => {
   db.prepare('DELETE FROM media_objects').run();
   db.prepare("DELETE FROM server_settings WHERE key = 'media_index_built'").run();
   await storage.prepare(db);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media_objects').get().n, 0, 'the uploads folder does not hold up the start');
+  await storage.buildIndex(db);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media_objects').get().n, 4);
   db.prepare('DELETE FROM media_objects').run();
-  await storage.prepare(db);
+  await storage.buildIndex(db);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media_objects').get().n, 0, 'later starts leave the index to its writers');
   await reconcile(db, storage.getStorage());
+});
+
+test('a file uploaded while a reconcile runs keeps its row', async () => {
+  // Its row is newer than the listing, which may have walked past the file.
+  db.prepare("INSERT INTO media_objects (rel_path, bytes, state, created_at) VALUES ('mid-upload.png', 7, 'live', '2999-01-01 00:00:00')").run();
+  const s = await reconcile(db, storage.getStorage());
+  assert.equal(s.dropped, 0);
+  assert.ok(db.prepare("SELECT 1 FROM media_objects WHERE rel_path = 'mid-upload.png'").get());
+  db.prepare("DELETE FROM media_objects WHERE rel_path = 'mid-upload.png'").run();
 });
 
 test('a live file and a deleted copy under the same name count once, as live', async () => {

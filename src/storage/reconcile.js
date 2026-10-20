@@ -12,6 +12,10 @@ const SKIP_PREFIX = 'bot-audio/';   // temporary, never part of media storage
 const toSqlTime = (d) => new Date(d).toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
 
 async function reconcile(db, storage) {
+  // Haven keeps running while this lists storage, so a row written after the
+  // listing began describes a file it may have walked past. Those rows are
+  // the newest truth and are left as they are.
+  const startedAt = toSqlTime(Date.now());
   // rel → { bytes, state, at } as storage has it. A live object wins over a
   // deleted copy under the same name.
   const found = new Map();
@@ -24,7 +28,8 @@ async function reconcile(db, storage) {
     found.set(rel, { bytes: obj.size, state: deleted ? 'deleted' : 'live', at: obj.lastModified });
   }
 
-  const rows = new Map(db.prepare('SELECT rel_path, bytes, state FROM media_objects').all().map(r => [r.rel_path, r]));
+  const rows = new Map(db.prepare('SELECT rel_path, bytes, state, created_at, deleted_at FROM media_objects').all().map(r => [r.rel_path, r]));
+  const touchedSince = (row) => (row.created_at && row.created_at >= startedAt) || (row.deleted_at && row.deleted_at >= startedAt);
   const insert = db.prepare(`INSERT INTO media_objects (rel_path, bytes, state, created_at, deleted_at)
                              VALUES (?, ?, ?, ?, ?)`);
   const fix = db.prepare(`UPDATE media_objects SET bytes = ?, state = ?,
@@ -40,13 +45,15 @@ async function reconcile(db, storage) {
       if (!row) {
         insert.run(rel, obj.bytes, obj.state, at, obj.state === 'deleted' ? at : null);
         summary.added++;
+      } else if (touchedSince(row)) {
+        continue;
       } else if (row.bytes !== obj.bytes || row.state !== obj.state) {
         fix.run(obj.bytes, obj.state, obj.state, at, rel);
         summary.fixed++;
       }
     }
-    for (const rel of rows.keys()) {
-      if (!found.has(rel)) { drop.run(rel); summary.dropped++; }
+    for (const [rel, row] of rows) {
+      if (!found.has(rel) && !touchedSince(row)) { drop.run(rel); summary.dropped++; }
     }
   })();
   return summary;

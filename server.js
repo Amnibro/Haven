@@ -3623,6 +3623,7 @@ ${row('Admin:', process.env.ADMIN_USERNAME || 'admin')}
 storage.prepare(db).then(() => {
   seedStarterStickers();   // catches and logs its own errors
   server.listen(PORT, HOST, onListening);
+  storage.keepIndexed(db);
 }, (err) => {
   console.error(`\n❌ Haven could not start: ${err.message}`);
   logCrash('Storage unavailable (exiting)', err);
