@@ -59,11 +59,12 @@ test('only the sender\'s own pictures go', async () => {
   assert.equal(files.length, 1);
 });
 
-test('a video sent as a spoiler goes to Discord as a spoiler', () => {
+test('a video sent as a spoiler goes to Discord as a spoiler', async () => {
   const clip = '1760000000000-clip0001.mp4';
   fs.writeFileSync(path.join(UPLOADS_DIR, clip), Buffer.from('mp4'));
   db.prepare('INSERT INTO upload_ownership (rel_path, user_id, scope) VALUES (?, ?, ?)').run(clip, 7, 'channel');
-  const { text, files } = ferry.takeUploads(`ending spoilers
+  db.prepare('INSERT INTO media_objects (rel_path, bytes) VALUES (?, 3)').run(clip);
+  const { text, files } = await ferry.takeUploads(`ending spoilers
 spoiler-img:[file:finale.mp4](/uploads/${clip}|3 B)`, sender);
   assert.equal(text, 'ending spoilers', 'no stray mark left in the text');
   assert.equal(files.length, 1);

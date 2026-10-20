@@ -339,7 +339,7 @@ async function admitFile(tmp, rel) {
   activeUploads++;
   try {
     await cleanFile(tmp);
-    await require('./storage').admit(rel, tmp);
+    return await require('./storage').admit(rel, tmp);
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch { /* already gone */ }
     throw e;
