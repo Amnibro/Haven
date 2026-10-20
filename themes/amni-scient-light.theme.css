@@ -211,3 +211,7 @@ html[data-braid-density="spacious"][data-braid-layout="1"] {
 }
 html[data-braid-layout="1"] .main.has-banner { background: var(--bg-primary) !important; }
 html[data-braid-layout="1"] .channel-item { padding: .32rem .5rem !important; margin: 0 .35rem !important; }
+.sidebar-split .dm-section-pane { flex: 0 0 auto; max-height: 28%; }
+.sidebar-split .dm-section-pane[style*="flex"],
+html[data-braid-layout="1"] .dm-section-pane[style*="flex"] { max-height: none !important; }
+.sidebar-split:has(.sidebar-split-handle.dragging) .dm-section-pane { transition: none !important; }
