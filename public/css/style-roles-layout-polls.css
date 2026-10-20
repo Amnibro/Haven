@@ -1,4 +1,4 @@
-﻿/* Haven core styles, part 14 of 16: role management, density and zoom, panel layout, burn-after-read, polls and the DM pane. Loaded in order by style.css; the order matters. */
+/* Haven core styles, part 14 of 16: role management, density and zoom, panel layout, burn-after-read, polls and the DM pane. Loaded in order by style.css; the order matters. */
 /* ── Role management modal ───────────────────────────── */
 /* Make the role-modal flex its body so the sidebar/detail panes grow with the
    modal and the Close button pins to the bottom-right at any resize size. */
@@ -1275,7 +1275,8 @@ html.reduce-motion .role-gradient.role-shimmer { animation: none; }
 
 /* DM pane (bottom) */
 .sidebar-split .dm-section-pane {
-  flex: 0 1 40%;
+  flex: 0 0 auto;
+  max-height: 40%;
   min-height: 3.75rem;
   overflow: hidden;
   display: flex;
@@ -1283,6 +1284,16 @@ html.reduce-motion .role-gradient.role-shimmer { animation: none; }
   padding: 0 1rem;
   border-bottom: none;
   transition: flex 0.25s ease, min-height 0.25s ease, opacity 0.2s ease;
+}
+.sidebar-split .dm-section-pane[style*="flex"] {
+  max-height: none;
+}
+.sidebar-split .dm-section-pane[style*="flex: 0 0 auto"],
+.sidebar-split .dm-section-pane[style*="flex:0 0 auto"] {
+  min-height: 0;
+}
+.sidebar-split:has(.sidebar-split-handle.dragging) .dm-section-pane {
+  transition: none;
 }
 .dm-list-scroll {
   flex: 1;
