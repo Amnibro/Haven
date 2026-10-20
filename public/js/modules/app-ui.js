@@ -1048,10 +1048,20 @@ _setupResizableSidebars() {
   const channelsPane = document.getElementById('channels-pane');
   const dmPane = document.getElementById('dm-pane');
   if (splitHandle && splitContainer && channelsPane && dmPane) {
-    const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
-    if (savedRatio) {
-      channelsPane.style.flex = `${savedRatio} 1 0`;
-      dmPane.style.flex = `${1 - parseFloat(savedRatio)} 1 0`;
+    const parseSplitRatio = (raw) => {
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      const r = n > 1 ? n / 100 : n;
+      return Math.max(0.05, Math.min(0.95, r));
+    };
+    const applySplitRatio = (r) => {
+      channelsPane.style.flex = `${+(r * 100).toFixed(4)} 1 0`;
+      dmPane.style.flex = `${+((1 - r) * 100).toFixed(4)} 1 0`;
+    };
+    const savedRatio = parseSplitRatio(localStorage.getItem('haven_sidebar_split_ratio'));
+    let currentRatio = savedRatio ?? 0.6;
+    if (savedRatio !== null) {
+      applySplitRatio(savedRatio);
     }
 
     let dragging = false;
@@ -1062,15 +1072,21 @@ _setupResizableSidebars() {
       document.body.style.cursor = 'row-resize';
       document.body.style.userSelect = 'none';
     });
+    splitHandle.addEventListener('dblclick', () => {
+      localStorage.removeItem('haven_sidebar_split_ratio');
+      channelsPane.style.removeProperty('flex');
+      dmPane.style.removeProperty('flex');
+    });
     document.addEventListener('mousemove', (e) => {
       if (!dragging) return;
       const rect = splitContainer.getBoundingClientRect();
       const y = e.clientY - rect.top;
       const total = rect.height;
+      if (total <= 0) return;
       let ratio = y / total;
       ratio = Math.max(0.05, Math.min(0.95, ratio));
-      channelsPane.style.flex = `${ratio} 1 0`;
-      dmPane.style.flex = `${1 - ratio} 1 0`;
+      currentRatio = ratio;
+      applySplitRatio(ratio);
     });
     document.addEventListener('mouseup', () => {
       if (!dragging) return;
@@ -1078,8 +1094,7 @@ _setupResizableSidebars() {
       splitHandle.classList.remove('dragging');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      const chFlex = parseFloat(channelsPane.style.flex) || 0.6;
-      localStorage.setItem('haven_sidebar_split_ratio', chFlex);
+      localStorage.setItem('haven_sidebar_split_ratio', currentRatio);
     });
   }
 },

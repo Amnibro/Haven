@@ -729,10 +729,15 @@ _renderChannels() {
         channelsPane.style.flex = '0 0 auto';
         dmPane.style.flex = '1 1 0';
       } else {
-        const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
-        const ratio = savedRatio ? parseFloat(savedRatio) : 0.6;
-        channelsPane.style.flex = `${ratio} 1 0`;
-        dmPane.style.flex = `${1 - ratio} 1 0`;
+        const raw = parseFloat(localStorage.getItem('haven_sidebar_split_ratio'));
+        if (Number.isFinite(raw) && raw > 0) {
+          const ratio = Math.max(0.05, Math.min(0.95, raw > 1 ? raw / 100 : raw));
+          channelsPane.style.flex = `${+(ratio * 100).toFixed(4)} 1 0`;
+          dmPane.style.flex = `${+((1 - ratio) * 100).toFixed(4)} 1 0`;
+        } else {
+          channelsPane.style.removeProperty('flex');
+          dmPane.style.removeProperty('flex');
+        }
       }
     });
     // Organize Channels button (admin only)
@@ -973,9 +978,15 @@ _renderChannels() {
           if (dp) dp.style.flex = '0 0 auto';
           if (cp) cp.style.flex = '1 1 0';
         } else {
-          const r = parseFloat(localStorage.getItem('haven_sidebar_split_ratio')) || 0.6;
-          if (dp) dp.style.flex = `${1 - r} 1 0`;
-          if (cp) cp.style.flex = `${r} 1 0`;
+          const raw = parseFloat(localStorage.getItem('haven_sidebar_split_ratio'));
+          if (Number.isFinite(raw) && raw > 0) {
+            const r = Math.max(0.05, Math.min(0.95, raw > 1 ? raw / 100 : raw));
+            if (dp) dp.style.flex = `${+((1 - r) * 100).toFixed(4)} 1 0`;
+            if (cp) cp.style.flex = `${+(r * 100).toFixed(4)} 1 0`;
+          } else {
+            if (dp) dp.style.removeProperty('flex');
+            if (cp) cp.style.removeProperty('flex');
+          }
         }
       });
     }
@@ -984,6 +995,10 @@ _renderChannels() {
     if (dmArrow) dmArrow.classList.toggle('collapsed', dmCollapsed && !dockOpen);
     if (dmCollapsed && !dockOpen) {
       dmList.style.display = 'none';
+      const dp = document.getElementById('dm-pane');
+      const cp = document.getElementById('channels-pane');
+      if (dp) dp.style.flex = '0 0 auto';
+      if (cp && !channelsCollapsed) cp.style.flex = '1 1 0';
     } else {
       dmList.style.removeProperty('display');
     }
