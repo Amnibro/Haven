@@ -213,6 +213,37 @@ async function relocateUnreferencedUploads(db, relPaths, { ownerId = null } = {}
   const candidates = new Set(Array.from(relPaths).filter(relPath => isLive.get(relPath)));
   if (candidates.size === 0) return;
 
+  // Whose file it is comes first: it is one lookup per file, and most
+  // pictures fail it (someone else's upload, an old file with no owner on
+  // record). Only what is left is looked for in every message.
+  const findOwnership = db.prepare(
+    'SELECT user_id, scope, created_at FROM upload_ownership WHERE rel_path = ?'
+  );
+  const latestDmMessage = db.prepare(`
+    SELECT MAX(COALESCE(m.edited_at, m.created_at)) AS referenced_at
+    FROM messages m
+    JOIN channels c ON c.id = m.channel_id
+    WHERE c.is_dm = 1 AND m.user_id = ?
+  `);
+  const findProtectedFilenameReference = db.prepare(`
+    SELECT 1
+    WHERE EXISTS(SELECT 1 FROM custom_sounds WHERE filename = ?)
+       OR EXISTS(SELECT 1 FROM custom_emojis WHERE filename = ?)
+       OR EXISTS(SELECT 1 FROM stickers WHERE filename = ?)
+  `);
+  for (const relPath of candidates) {
+    const ownership = findOwnership.get(relPath);
+    // Legacy/unattributed files and private/profile uploads cannot be proven
+    // orphaned, so leave them in place. A channel upload is also retained if
+    // its owner later sent an encrypted DM that could contain a reference.
+    const keep = !ownership
+      || (ownerId !== null ? ownership.user_id !== ownerId : ownership.scope !== 'channel')
+      || (() => { const dm = latestDmMessage.get(ownership.user_id)?.referenced_at; return !!dm && dm >= ownership.created_at; })()
+      || !!findProtectedFilenameReference.get(relPath, relPath, relPath);
+    if (keep) candidates.delete(relPath);
+  }
+  if (candidates.size === 0) return;
+
   const survivingMessages = db.prepare(`
     SELECT content, persona_avatar, webhook_avatar
     FROM messages
@@ -244,36 +275,7 @@ async function relocateUnreferencedUploads(db, relPaths, { ownerId = null } = {}
     if (candidates.size === 0) return;
   }
 
-  const findOwnership = db.prepare(
-    'SELECT user_id, scope, created_at FROM upload_ownership WHERE rel_path = ?'
-  );
-  const latestDmMessageByUser = new Map(db.prepare(`
-    SELECT m.user_id, MAX(COALESCE(m.edited_at, m.created_at)) AS referenced_at
-    FROM messages m
-    JOIN channels c ON c.id = m.channel_id
-    WHERE c.is_dm = 1 AND m.user_id IS NOT NULL
-    GROUP BY m.user_id
-  `).all().map(row => [row.user_id, row.referenced_at]));
-  const findProtectedFilenameReference = db.prepare(`
-    SELECT 1
-    WHERE EXISTS(SELECT 1 FROM custom_sounds WHERE filename = ?)
-       OR EXISTS(SELECT 1 FROM custom_emojis WHERE filename = ?)
-       OR EXISTS(SELECT 1 FROM stickers WHERE filename = ?)
-  `);
-
-  for (const relPath of candidates) {
-    const ownership = findOwnership.get(relPath);
-    // Legacy/unattributed files and private/profile uploads cannot be proven
-    // orphaned, so leave them in place. A channel upload is also retained if
-    // its owner later sent an encrypted DM that could contain a reference.
-    if (!ownership) continue;
-    if (ownerId !== null ? ownership.user_id !== ownerId : ownership.scope !== 'channel') continue;
-    const latestDmMessage = latestDmMessageByUser.get(ownership.user_id);
-    if (latestDmMessage && latestDmMessage >= ownership.created_at) continue;
-
-    if (findProtectedFilenameReference.get(relPath, relPath, relPath)) continue;
-    await storage.softDelete(relPath);
-  }
+  for (const relPath of candidates) await storage.softDelete(relPath);
 }
 
 // ── Per-member upload accounting (#5521) ─────────────────
