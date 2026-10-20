@@ -1105,6 +1105,10 @@ module.exports = function register(socket, ctx) {
       const callerId = socket.user.id;
       const callerIsAdmin = socket.user.isAdmin;
       const callerServerLevel = getUserEffectiveLevel(callerId);
+      // assign-role takes a server-wide role from anyone holding Promote
+      // Users server-wide, so the window offers it to them too, not only to
+      // the owner (the Users tab already did).
+      const callerCanServerWide = callerIsAdmin || userHasPermission(callerId, 'promote_user');
 
       const callerChannels = db.prepare(`
         SELECT c.id, c.name, c.code, c.parent_channel_id, c.position
@@ -1120,7 +1124,7 @@ module.exports = function register(socket, ctx) {
         const permMap = {};
         permissions.forEach(p => { if (!permMap[p.role_id]) permMap[p.role_id] = []; permMap[p.role_id].push(p.permission); });
         roles.forEach(r => { r.permissions = permMap[r.id] || []; });
-        return cb({ users: [], userChannelMap: {}, channels: [], roles, callerPerms: getUserPermissions(callerId), callerLevel: callerServerLevel, callerIsAdmin });
+        return cb({ users: [], userChannelMap: {}, channels: [], roles, callerPerms: getUserPermissions(callerId), callerLevel: callerServerLevel, callerIsAdmin, callerCanServerWide });
       }
 
       const allMembers = db.prepare(`
@@ -1214,7 +1218,7 @@ module.exports = function register(socket, ctx) {
 
       cb({
         users, userChannelMap, channels: channelsWithHierarchy,
-        roles, callerPerms, callerLevel: callerServerLevel, callerIsAdmin
+        roles, callerPerms, callerLevel: callerServerLevel, callerIsAdmin, callerCanServerWide
       });
     } catch (err) {
       console.error('get-role-assignment-data error:', err);

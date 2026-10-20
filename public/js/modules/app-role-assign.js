@@ -126,8 +126,8 @@ _renderRacChannels() {
 
   let html = '';
 
-  // Admin: server-wide option
-  if (this._racData.callerIsAdmin) {
+  // Server-wide: the owner, and anyone who holds Promote Users server-wide.
+  if (this._racData.callerIsAdmin || this._racData.callerCanServerWide) {
     const serverActive = this._racSelectedChannel === 'server' ? ' active' : '';
     const serverRole = getRoleSummary(null);
     html += `<div class="rac-channel-item rac-server-wide${serverActive}" data-channel="server">
