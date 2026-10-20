@@ -817,7 +817,7 @@ function _syncOriginalLayout(key) {
   const on = !key, was = _isOriginalLayout();
   try { localStorage.setItem('haven_original_layout', on ? '1' : '0'); } catch {}
   document.documentElement.toggleAttribute('data-haven-original-layout', on);
-  on !== was && document.dispatchEvent(new CustomEvent('haven:original-layout', { detail: { original: on } }));
+  on !== was && document.dispatchEvent?.(new CustomEvent('haven:original-layout', { detail: { original: on } }));
 }
 
 // Settings > Accessibility > Reduce motion (or the OS asking for it) puts
@@ -1940,7 +1940,7 @@ function dispatchHavenThemeChange(theme, meta) {
   const value = theme || '';
   const file = value.startsWith('file:') ? value.slice(5) : '';
   const layout = layoutIdFromTheme(value, meta);
-  document.dispatchEvent(new CustomEvent('haven:theme-change', {
+  document.dispatchEvent?.(new CustomEvent('haven:theme-change', {
     detail: { theme: value, file, layout },
   }));
   _syncColorScheme();
