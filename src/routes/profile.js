@@ -522,6 +522,7 @@ module.exports = function registerProfile(deps) {
           ).get(personaId, user.id);
           if (!persona) {
             await storage.remove(finalName);
+            getDb().prepare('DELETE FROM upload_ownership WHERE rel_path = ?').run(finalName);
             return res.status(403).json({ error: 'Not your persona' });
           }
           getDb().prepare('UPDATE user_personas SET avatar = ? WHERE id = ?').run(avatarUrl, personaId);

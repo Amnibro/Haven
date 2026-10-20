@@ -485,8 +485,9 @@ async function sweepUploads() {
 // The bucket's own sweep. There is no folder to walk, so it goes by the media
 // index, and each photo or video is cleaned in unprocessed/ and written back
 // only when cleaning changed it.
-// ponytail: picks files by extension; a photo saved under some other name is
-// missed here (the disk sweep reads every file). Clean by content if that matters.
+// It picks files by extension, so a photo stored under some other name is
+// missed here (the disk sweep reads every file). New uploads are cleaned by
+// content either way; this only covers files already in the bucket.
 const SWEEP_EXT = /\.(jpe?g|jfif|png|webp|gif|heic|heif|hif|avif|tiff?|bmp|dng|mp4|m4v|mov|qt|3gp|3g2|mkv|webm|avi|mpe?g|ts|m2ts|mts|ogv|wmv|flv|asf)$/i;
 async function sweepBucket(state, full) {
   const driver = require('./storage').getStorage();

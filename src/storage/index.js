@@ -44,7 +44,11 @@ function getStorage() {
 function setStorage(d) { driver = d; }
 
 function indexDb() {
-  try { return require('../database').getDb(); } catch { return null; }
+  try {
+    return require('../database').getDb();
+  } catch {
+    return null; // no database yet (scripts, early start): the index is rebuilt by reconcile
+  }
 }
 
 function index(fn) {
