@@ -1,4 +1,4 @@
-﻿// ── Resolve data directory BEFORE loading .env ────────────
+// ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, GAMES_ROMS_DIR } = require('./src/paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
 const { trimUploadsToLimit } = require('./src/uploadsTrim');
@@ -172,48 +172,8 @@ const late = {
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 const UPLOAD_URL_PATH_RE = /\/uploads\/+([-A-Za-z0-9_.~%/\\]+)/gi;
 
-function isSafeUploadRelPath(relPath) {
-  if (typeof relPath !== 'string' || !relPath) return false;
-  if (!/^((?!\.\.)(?!\.\/)(?!\/)[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/.test(relPath)) return false;
-  const parts = relPath.split('/');
-  if (parts.some(p => !p || p === '.' || p === '..')) return false;
-  return true;
-}
-
-function moveUploadToDeleted(relPath, srcRoot = UPLOADS_DIR) {
-  if (!isSafeUploadRelPath(relPath)) return;
-  const src = path.join(srcRoot, relPath);
-  if (!fs.existsSync(src)) return;
-  let stat;
-  try {
-    stat = fs.statSync(src);
-  } catch {
-    return;
-  }
-  if (!stat.isFile()) return;
-  const dst = path.join(DELETED_ATTACHMENTS_DIR, relPath);
-  try {
-    fs.mkdirSync(path.dirname(dst), { recursive: true });
-    fs.renameSync(src, dst);
-    // A rename keeps the upload's own timestamp. The retention window counts
-    // from the deletion, so stamp the file now.
-    try { const now = new Date(); fs.utimesSync(dst, now, now); } catch { /* purge falls back to the upload time */ }
-  } catch (err) {
-    // Already moved by another path is fine; anything else leaves the file
-    // live in uploads/ after its message was deleted, so say so.
-    if (err.code !== 'ENOENT') console.warn(`[uploads] Could not move ${relPath} to deleted-attachments:`, err.message);
-  }
-}
-
-// For files an admin chose not to keep: gone for good, never held for recovery.
-function removeUpload(relPath) {
-  if (!isSafeUploadRelPath(relPath)) return;
-  try {
-    fs.unlinkSync(path.join(UPLOADS_DIR, relPath));
-  } catch (err) {
-    if (err.code !== 'ENOENT') console.warn(`[uploads] Could not remove ${relPath}:`, err.message);
-  }
-}
+const storage = require('./src/storage');
+const { isSafeUploadRelPath } = storage;
 
 function collectUploadRelPaths(contents) {
   const paths = new Set();
@@ -245,10 +205,12 @@ function collectUploadRelPaths(contents) {
   return paths;
 }
 
-function relocateUnreferencedUploads(db, relPaths) {
-  const candidates = new Set(
-    Array.from(relPaths).filter(relPath => fs.existsSync(path.join(UPLOADS_DIR, relPath)))
-  );
+// With ownerId, the files are that person's own (a picture they replaced or
+// removed), of any scope; without it, only channel uploads can be proven
+// orphaned.
+async function relocateUnreferencedUploads(db, relPaths, { ownerId = null } = {}) {
+  const isLive = db.prepare("SELECT 1 FROM media_objects WHERE rel_path = ? AND state = 'live'");
+  const candidates = new Set(Array.from(relPaths).filter(relPath => isLive.get(relPath)));
   if (candidates.size === 0) return;
 
   const survivingMessages = db.prepare(`
@@ -304,12 +266,13 @@ function relocateUnreferencedUploads(db, relPaths) {
     // Legacy/unattributed files and private/profile uploads cannot be proven
     // orphaned, so leave them in place. A channel upload is also retained if
     // its owner later sent an encrypted DM that could contain a reference.
-    if (!ownership || ownership.scope !== 'channel') continue;
+    if (!ownership) continue;
+    if (ownerId !== null ? ownership.user_id !== ownerId : ownership.scope !== 'channel') continue;
     const latestDmMessage = latestDmMessageByUser.get(ownership.user_id);
     if (latestDmMessage && latestDmMessage >= ownership.created_at) continue;
 
     if (findProtectedFilenameReference.get(relPath, relPath, relPath)) continue;
-    moveUploadToDeleted(relPath);
+    await storage.softDelete(relPath);
   }
 }
 
@@ -344,28 +307,24 @@ function uploadScopeFromRequest(req, fallback = 'channel') {
   return ['channel', 'dm', 'profile'].includes(raw) ? raw : fallback;
 }
 
-// Walk the live uploads tree once and total it per owner. Reading sizes from
-// disk rather than trusting the stored byte count means a deleted, purged, or
-// moved-to-deleted-attachments file drops out on its own, with no delete hook to
-// keep in sync, and no drift between the report and reality.
+// Total the live uploads per owner. Sizes come from the media index that
+// src/storage keeps with every move, not from upload_ownership's stored byte
+// count, so a deleted, purged, or moved-to-deleted-attachments file drops out
+// on its own. Deleted attachments and temporary bot audio are not live member
+// storage, and neither is in the index as live.
 let _uploadUsageCache = null;
 function getUploadUsage() {
   if (_uploadUsageCache && Date.now() - _uploadUsageCache.at < 60_000) return _uploadUsageCache.data;
 
   const sizes = new Map();   // relPath → bytes
-  const walk = (dir, rel) => {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const entry of entries) {
-      // Deleted attachments and temporary bot audio are not live member storage.
-      if (!rel && ['bot-audio', 'deleted-attachments'].includes(entry.name)) continue;
-      const sub = rel ? `${rel}/${entry.name}` : entry.name;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) { walk(full, sub); continue; }
-      try { sizes.set(sub, fs.statSync(full).size); } catch { /* vanished mid-walk */ }
+  try {
+    const { getDb } = require('./src/database');
+    for (const row of getDb().prepare("SELECT rel_path, bytes FROM media_objects WHERE state = 'live'").iterate()) {
+      sizes.set(row.rel_path, row.bytes);
     }
-  };
-  walk(UPLOADS_DIR, '');
+  } catch (err) {
+    console.warn('[uploads] Could not read the media index for the usage report:', err.message);
+  }
 
   const byUser = new Map();  // userId → { total, channel, dm, profile, files }
   let attributedBytes = 0;
@@ -727,90 +686,11 @@ app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: 0,              // always revalidate (prevents stale JS/CSS after deploys)
 }));
 
-// ── Block access to internal upload folders ─────────────
-// Files moved into deleted-attachments are no longer part of any message and
-// must stop being reachable, which is the entire point of moving them.
-//
-// A 404 mounted at the prefix does not achieve that. Express matches the mount
-// against the raw path while express.static decodes before it resolves, so
-// three shapes walked straight past the guard and served the file:
-// /uploads/deleted%2Dattachments/x, /uploads//deleted-attachments/x, and
-// /uploads/deleted-attachments%2Fx. Anyone who saw an attachment before it was
-// deleted knows its filename, so deletion was not actually revoking access.
-//
-// Decode the path, resolve it against the uploads root, and check containment,
-// so it is the real target on disk being judged rather than the spelling of
-// the URL. Compared case-insensitively because NTFS is.
-const UPLOAD_MEDIA_EXTS = new Set([
-  '.mp3', '.ogg', '.oga', '.wav', '.m4a', '.aac', '.flac', '.opus', '.weba',
-  '.mp4', '.webm', '.mov', '.m4v', '.ogv',
-]);
-const BLOCKED_UPLOAD_DIRS = ['deleted-attachments', 'bot-audio'].map(
-  dir => path.resolve(UPLOADS_DIR, dir).toLowerCase()
-);
-app.use('/uploads', (req, res, next) => {
-  let decoded;
-  try { decoded = decodeURIComponent(req.path); } catch { return res.status(400).end(); }
-  // Windows also answers to a folder's 8.3 short name (DELETE~1 for
-  // deleted-attachments), and ignores a trailing dot or space and anything
-  // after a colon (alternate streams). None of those appear in a real upload
-  // name, so a path with any of them is refused before it can slip past.
-  if (decoded.split(/[\\/]/).some(seg => seg.includes('~') || seg.includes(':') || /[. ]$/.test(seg))) {
-    return res.status(404).end();
-  }
-  // path.resolve treats a backslash as a separator on Windows and as an
-  // ordinary filename character on Linux, which is exactly right in both
-  // cases, so the raw decoded path goes in as-is.
-  const target = path.resolve(UPLOADS_DIR, '.' + decoded).toLowerCase();
-  for (const blocked of BLOCKED_UPLOAD_DIRS) {
-    if (target === blocked || target.startsWith(blocked + path.sep)) return res.status(404).end();
-  }
-  return next();
-});
-// ── Serve uploads from external data directory ──────────
-app.use('/uploads', express.static(UPLOADS_DIR, {
-  dotfiles: 'deny',
-  maxAge: '7d',       // 7 days: avatars & images rarely change; filenames include timestamps for uniqueness
-  immutable: true,    // tells browser the file at this URL will never change (cache-busting via new filename)
-  etag: true,
-  lastModified: true,
-  setHeaders: (res, filePath) => {
-    // Force download for non-image files (prevents HTML/SVG execution in browser)
-    const ext = path.extname(filePath).toLowerCase();
-    if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
-      // Allow cross-origin access for images (needed for server icon pulling).
-      // CORP override is required because helmet defaults to 'same-origin', which
-      // would otherwise block cross-origin <img> loads even with ACAO set.
-      // Vary: Origin prevents a non-CORS cached response from being reused for a
-      // CORS request (which is what causes the "No 'Access-Control-Allow-Origin'
-      // header is present" error on a cached image).
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      res.setHeader('Vary', 'Origin');
-    } else if (ext === '.svg') {
-      // SVG (issue #5309): renderable inline via <img> tag (browsers run SVG in
-      // "secure static mode": no scripts, no XHR), but direct navigation still
-      // gets attachment-disposition so opening the raw URL in a new tab can't
-      // execute the file. CSP doubles up on that: even if a future browser
-      // change allowed any external loads inside <img>-rendered SVG, this
-      // header forbids everything except inline styles (needed for fill/stroke).
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      res.setHeader('Vary', 'Origin');
-      res.setHeader('Content-Disposition', 'attachment');
-      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
-    } else {
-      res.setHeader('Content-Disposition', 'attachment');
-      // Anyone can upload a file, and one served as JavaScript (or HTML, CSS,
-      // XML) from Haven's own origin counts as 'self' in the CSP: a <script
-      // src="/uploads/x.js"> anywhere would run it, whatever the disposition
-      // says. Only audio and video keep their real type, for the inline
-      // players; everything else is opaque bytes, which nosniff refuses to
-      // run as script.
-      if (!UPLOAD_MEDIA_EXTS.has(ext)) res.setHeader('Content-Type', 'application/octet-stream');
-    }
-  }
-}));
+// ── Serve uploads from storage ──────────────────────────
+// The internal folders are refused first; see src/storage/serve.js.
+const { blockInternalUploads, serveUploads } = require('./src/storage/serve');
+app.use('/uploads', blockInternalUploads);
+app.use('/uploads', serveUploads(storage));
 
 // ── Plugin & Theme file serving ─────────────────────────
 const PLUGINS_DIR = path.join(__dirname, 'plugins');
@@ -1257,7 +1137,11 @@ app.get('/api/ice-servers', (req, res) => {
 });
 
 // ── Profile pictures, borders and personas: src/routes/profile.js ──
-require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, uploadDir, upload, uploadLimiter });
+// A profile picture someone replaced or removed goes to deleted-attachments,
+// if it was their own upload and nothing else still shows it.
+const releaseOwnUploads = (urls, ownerId) => relocateUnreferencedUploads(
+  require('./src/database').getDb(), collectUploadRelPaths(urls), { ownerId });
+require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, releaseOwnUploads, verifyAdminFromDb, userHasPermission, upload, uploadLimiter });
 
 // ── Serve pages ──────────────────────────────────────────
 
@@ -1553,7 +1437,7 @@ function uploadLimiter(req, res, next) {
 setInterval(() => { const now = Date.now(); for (const [ip, t] of uploadLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) uploadLimitStore.delete(ip); else uploadLimitStore.set(ip, f); } }, 5 * 60 * 1000);
 
 // ── Image and file uploads, and Flash ROMs: src/routes/uploads.js ──
-require('./src/routes/uploads')({ uploadDiskGuard, app, recordUploadOwnership, uploadScopeFromRequest, uploadCapMb, verifyAdminFromDb, userHasPermission, uploadDir, upload, fileUpload, uploadLimiter });
+require('./src/routes/uploads')({ uploadDiskGuard, app, recordUploadOwnership, uploadScopeFromRequest, uploadCapMb, verifyAdminFromDb, userHasPermission, upload, fileUpload, uploadLimiter });
 
 // (duplicate avatar handler removed; handled above at /api/upload-avatar)
 
@@ -1644,7 +1528,7 @@ app.post('/api/upload-server-icon', uploadLimiter, uploadDiskGuard, (req, res) =
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
-  upload.single('image')(req, res, (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message, code: err.code });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (req.file.size > 2 * 1024 * 1024) {
@@ -1665,6 +1549,7 @@ app.post('/api/upload-server-icon', uploadLimiter, uploadDiskGuard, (req, res) =
       if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
+    try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
     const iconUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
     getDb().prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('server_icon', ?)").run(iconUrl);
@@ -1681,7 +1566,7 @@ app.post('/api/upload-role-icon', uploadLimiter, uploadDiskGuard, (req, res) => 
     return res.status(403).json({ error: 'Admin or manage_roles permission required' });
   }
 
-  upload.single('icon')(req, res, (err) => {
+  upload.single('icon')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message, code: err.code });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (req.file.size > 512 * 1024) {
@@ -1701,6 +1586,7 @@ app.post('/api/upload-role-icon', uploadLimiter, uploadDiskGuard, (req, res) => 
       if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
+    try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
     const iconUrl = `/uploads/${req.file.filename}`;
     res.json({ path: iconUrl });
   });
@@ -1716,7 +1602,7 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
-  upload.single('image')(req, res, (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message, code: err.code });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (req.file.size > 4 * 1024 * 1024) {
@@ -1735,6 +1621,7 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
       if (!isJpeg && !isPng && !isGif && !isWebp) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image: only JPG, PNG, GIF, or WebP' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
+    try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
     const bannerUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
     getDb().prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('server_banner', ?)").run(bannerUrl);
@@ -2307,7 +2194,7 @@ app.delete(
 );
 
 // ── Bot: Delete a message in the webhook's channel ──────
-app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res) => {
+app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, async (req, res) => {
   const { getDb } = require('./src/database');
   const db = getDb();
   const { token, messageId } = req.params;
@@ -2350,7 +2237,7 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   // named let a message that quoted someone's avatar or an emoji take that
   // file away from everyone.
   try {
-    relocateUnreferencedUploads(db, collectUploadRelPaths([msg.content, ...replies.map(r => r.content)]));
+    await relocateUnreferencedUploads(db, collectUploadRelPaths([msg.content, ...replies.map(r => r.content)]));
   } catch (err) {
     console.error('Bot delete attachment cleanup error:', err);
   }
@@ -2369,7 +2256,7 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
 
 // ── Bot: Delete recent messages and their replies ─────────
 // Protected messages, and thread heads holding one, are left out.
-app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
+app.delete('/api/webhooks/:token/messages', webhookLimiter, async (req, res) => {
   const webhook = requireModBot(req, res);
   if (!webhook) return;
 
@@ -2445,7 +2332,7 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
   }
 
   try {
-    relocateUnreferencedUploads(
+    await relocateUnreferencedUploads(
       db,
       collectUploadRelPaths(deletedMessages.map(message => message.content))
     );
@@ -3225,7 +3112,6 @@ const io = new Server(server, {
 const db = initDatabase();
 
 // (#5335) Seed starter stickers now that the DB is ready.
-seedStarterStickers();   // catches and logs its own errors
 
 // Download / refresh the Unicode emoji list (non-blocking, best-effort).
 // Opt-in: off unless the admin enables it or UNICODE_EMOJI_AUTO_UPDATE forces it.
@@ -3311,7 +3197,7 @@ socketRuntime = setupSocketHandlers(io, db, {
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
 });
 activityRef.engine = socketRuntime.activity;
-require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload });
+require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted: storage.softDelete, removeUpload: storage.remove });
 
 // ── Ferry: Haven <-> Discord bridge ─────────────────────
 // Started after the socket layer so an inbound Discord message always has a
@@ -3499,7 +3385,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 }
 
 // ── Auto-cleanup, auto-backup, dynamic DNS and updates: src/routes/maintenance.js ──
-require('./src/routes/maintenance')({ app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted, verifyAdminFromDb, buildBackupFile, db, late });
+require('./src/routes/maintenance')({ app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted: storage.softDelete, verifyAdminFromDb, buildBackupFile, db, late });
 
 // ── Catch-all: 404 ──────────────────────────────────────
 // Must be registered AFTER every app.get/post/etc. handler. Express
@@ -3699,7 +3585,7 @@ server.on('error', (err) => {
   logCrash('HTTP server error (server kept alive)', err);
 });
 
-server.listen(PORT, HOST, () => {
+function onListening() {
   // Print the machine's LAN address rather than a YOUR_IP placeholder, which
   // more than one self-hoster has read as a broken config. (#5572)
   const lanIps = [];
@@ -3729,6 +3615,18 @@ ${row('Admin:', process.env.ADMIN_USERNAME || 'admin')}
   // Tunnel is now started manually via the admin panel button (no auto-start)
   // Dynamic DNS auto-updater (kicks in only if DDNS_PROVIDER is set in .env)
   try { startDdns(); } catch (err) { console.warn('[ddns] failed to start:', err && err.message); }
+}
+
+// Storage has to answer before anything is served. One that cannot be used
+// stops the server here instead of leaving it up with no media; the explicit
+// exit matters, because the rejection handler above keeps the process alive.
+storage.prepare(db).then(() => {
+  seedStarterStickers();   // catches and logs its own errors
+  server.listen(PORT, HOST, onListening);
+}, (err) => {
+  console.error(`\n❌ Haven could not start: ${err.message}`);
+  logCrash('Storage unavailable (exiting)', err);
+  process.exit(1);
 });
 
 function gracefulShutdown(signal) {

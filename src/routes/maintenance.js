@@ -6,8 +6,9 @@
 const releaseChannel = require('../releaseChannel');
 const fs = require('fs');
 const path = require('path');
-const { DATA_DIR, DB_PATH, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
+const { DATA_DIR, DB_PATH, UPLOADS_DIR } = require('../paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('../deletedAttachments');
+const storage = require('../storage');
 const { trimUploadsToLimit } = require('../uploadsTrim');
 const { findOrphanDms } = require('../orphanDms');
 const protectedMessages = require('../protectedMessages');
@@ -23,7 +24,7 @@ const { getDdnsStatus, triggerDdnsNow } = require('../ddns');
 module.exports = function registerMaintenance(deps) {
   const { app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted, verifyAdminFromDb, buildBackupFile, db, late } = deps;
   // ── Auto-cleanup interval (runs every 15 minutes) ───────
-  function runAutoCleanup() {
+  async function runAutoCleanup() {
     try {
       const getSetting = (key) => {
         const row = db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key);
@@ -35,8 +36,8 @@ module.exports = function registerMaintenance(deps) {
       // they have been there longer than the retention window (a week unless
       // the admin changes it), whether or not auto-cleanup is switched on.
       try {
-        const removed = purgeDeletedAttachments(
-          DELETED_ATTACHMENTS_DIR, resolveDeletedRetentionDays(getSetting('deleted_retention_days')));
+        const removed = await purgeDeletedAttachments(
+          db, storage, resolveDeletedRetentionDays(getSetting('deleted_retention_days')));
         if (removed > 0) console.log(`Auto-cleanup: removed ${removed} expired file(s) from deleted-attachments`);
       } catch (e) { console.error('deleted-attachments purge error:', e.message); }
 
@@ -66,14 +67,14 @@ module.exports = function registerMaintenance(deps) {
       // removes files: it follows the messages it deletes. It never scans the
       // uploads/ directory directly, so avatars, persona avatars, custom emojis,
       // soundboard sounds, stickers, and the server icon are never at risk (#5423).
-      const relocateOrphanAttachments = (relPaths) => {
+      const relocateOrphanAttachments = async (relPaths) => {
         for (const rel of relPaths) {
           try {
             const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
             const still = db.prepare(
               "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
             ).get(like);
-            if (!still) moveUploadToDeleted(rel, UPLOADS_DIR);
+            if (!still) await moveUploadToDeleted(rel);
           } catch (err) {
             console.warn(`[cleanup] Could not check whether ${rel} is still referenced:`, err.message);
           }
@@ -97,7 +98,7 @@ module.exports = function registerMaintenance(deps) {
         const result = db.prepare(`DELETE FROM messages WHERE id IN (${oldSql})`).run(`-${maxAgeDays} days`);
         totalDeleted += result.changes;
 
-        relocateOrphanAttachments(doomedAttachments);
+        await relocateOrphanAttachments(doomedAttachments);
       }
 
       // 2. If total DB size exceeds maxSizeMb, trim oldest messages (skip
@@ -127,7 +128,7 @@ module.exports = function registerMaintenance(deps) {
               db.prepare(`DELETE FROM messages WHERE id IN (${placeholders})`).run(...chunk);
             }
             totalDeleted += oldestIds.length;
-            relocateOrphanAttachments(trimmedAttachments);
+            await relocateOrphanAttachments(trimmedAttachments);
           }
         }
       }
@@ -138,8 +139,8 @@ module.exports = function registerMaintenance(deps) {
       const maxUploadsMb = parseInt(getSetting('cleanup_max_uploads_mb') || '0');
       if (maxUploadsMb > 0) {
         trimUploadsToLimit({
-          db, uploadsDir: UPLOADS_DIR, maxBytes: maxUploadsMb * 1024 * 1024,
-          extractPaths: extractUploadRelPaths, move: (rel) => moveUploadToDeleted(rel, UPLOADS_DIR),
+          db, localDirs: [path.join(UPLOADS_DIR, 'bot-audio')], maxBytes: maxUploadsMb * 1024 * 1024,
+          extractPaths: extractUploadRelPaths, move: (rel) => moveUploadToDeleted(rel),
         }).then((r) => {
           if (r.deleted > 0) console.log(`Auto-cleanup: uploads were over ${maxUploadsMb} MB, removed ${r.deleted} old message(s) with files`);
         }).catch((e) => console.error('Uploads limit error:', e.message));
@@ -186,13 +187,7 @@ module.exports = function registerMaintenance(deps) {
                 if (isSafeUploadRelPath(mm[1])) seen.add(mm[1]);
               }
             }
-            if (seen.size) {
-              const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
-              require('fs').mkdirSync(deletedDir, { recursive: true });
-              for (const fn of seen) {
-                moveUploadToDeleted(fn, UPLOADS_DIR);
-              }
-            }
+            for (const fn of seen) await moveUploadToDeleted(fn);
             // Delete the channel: cascades to messages + read_positions +
             // channel_members + reactions etc. via the existing FKs.
             db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
@@ -225,7 +220,7 @@ module.exports = function registerMaintenance(deps) {
   // Encrypted DM files whose message was deleted (#5699; the trigger that notes
   // them is in src/database.js). Each goes to deleted-attachments like any other
   // deleted file, unless a message still points at it.
-  function releaseDeletedE2eFiles() {
+  async function releaseDeletedE2eFiles() {
     try {
       const { getDb } = require('../database');
       const db = getDb();
@@ -240,7 +235,7 @@ module.exports = function registerMaintenance(deps) {
       for (const { rel_path: rel } of rows) {
         const like = '%/uploads/' + rel.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
         if (isSafeUploadRelPath(rel) && !inEncrypted.get(rel) && !inContent.get(like)) {
-          moveUploadToDeleted(rel);
+          await moveUploadToDeleted(rel);
           moved++;
         }
         done.run(rel);
@@ -288,6 +283,9 @@ module.exports = function registerMaintenance(deps) {
       const retain = Math.max(1, Math.min(50, parseInt(getSetting('auto_backup_retention') || '7')));
       const sectionsRaw = getSetting('auto_backup_sections') || 'channels,users,settings,messages';
       const include = sectionsRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      if (include.includes('files') && storage.getStorage().kind === 's3') {
+        console.warn('[AutoBackup] Files are included, so every run copies the whole bucket into the backup; the bucket is usually the better backup of the files themselves');
+      }
 
       const lastRunRaw = getSetting('auto_backup_last_run');
       const lastRun = lastRunRaw ? parseInt(lastRunRaw) : 0;
@@ -376,6 +374,24 @@ module.exports = function registerMaintenance(deps) {
     }
     setImmediate(runAutoBackup);
     res.json({ ok: true });
+  });
+
+  // ── Admin: rebuild the media index from storage ───────────
+  // For after files were added or removed outside Haven (a restore by hand,
+  // a bucket tool); scripts/reconcile-media.js does the same from a shell.
+  app.post('/api/admin/media/reconcile', async (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
+    try {
+      const summary = await require('../storage/reconcile').reconcile(db, storage.getStorage());
+      console.log(`[storage] Media index reconciled: ${summary.added} added, ${summary.fixed} corrected, ${summary.dropped} dropped`);
+      res.json(summary);
+    } catch (err) {
+      console.error('[storage] Reconcile failed:', err.message);
+      res.status(500).json({ error: 'Could not read storage' });
+    }
   });
 
   // ── Admin: dynamic DNS status + force-refresh ─────────────

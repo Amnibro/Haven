@@ -1,7 +1,5 @@
 'use strict';
 
-const path = require('path');
-const fs   = require('fs');
 const bcrypt = require('bcryptjs');
 const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
@@ -18,6 +16,8 @@ const mediaGroup = require('../mediaGroup');
 const { takeSilent } = require('../silentMessages');
 const { tagAccess } = require('../uploadTagRoles');
 const { moveToChannel } = require('../moveMessages');
+const storage = require('../storage');
+const { isSafeUploadRelPath } = storage;
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -57,7 +57,7 @@ module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
-          logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
+          logAudit } = ctx;
   const { slowModeTracker } = state;
   const { youngAccountWait, refuseYoungAccount } = require('./postingWait')(socket, ctx);
   // The upload tags this person may use in a channel: those not limited to a
@@ -121,31 +121,6 @@ module.exports = function register(socket, ctx) {
   const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
   const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
-  function isSafeUploadRelPath(relPath) {
-    if (typeof relPath !== 'string' || !relPath) return false;
-    if (!/^((?!\.\.)(?!\.\/)(?!\/)[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/.test(relPath)) return false;
-    const parts = relPath.split('/');
-    if (parts.some(p => !p || p === '.' || p === '..')) return false;
-    return true;
-  }
-
-  function moveUploadToDeleted(relPath) {
-    if (!isSafeUploadRelPath(relPath)) return;
-    const src = path.join(UPLOADS_DIR, relPath);
-    if (!fs.existsSync(src)) return;
-    let stat;
-    try {
-      stat = fs.statSync(src);
-    } catch {
-      return;
-    }
-    if (!stat.isFile()) return;
-    const dst = path.join(DELETED_ATTACHMENTS_DIR, relPath);
-    try {
-      fs.mkdirSync(path.dirname(dst), { recursive: true });
-      fs.renameSync(src, dst);
-    } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
-  }
 
   // Thread replies go with the message they hang from (ON DELETE CASCADE), so
   // a forum topic takes its replies, and a blog gallery every picture, with
@@ -157,14 +132,14 @@ module.exports = function register(socket, ctx) {
     for (const id of ids) out.push(...q.all(id));
     return out;
   }
-  function releaseReplyUploads(replies) {
+  async function releaseReplyUploads(replies) {
     for (const r of replies) {
       if (!Number.isInteger(r.user_id)) continue;
       const rels = [];
       UPLOAD_PATH_RE.lastIndex = 0;
       let m;
       while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) rels.push(m[1]);
-      for (const rel of releasableUploads(db, rels, [r.user_id])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, rels, [r.user_id])) await storage.softDelete(rel);
     }
   }
 
@@ -852,23 +827,19 @@ module.exports = function register(socket, ctx) {
     // http(s):// URLs (anywhere in content)
     const httpRe     = /(https?:\/\/[^\s<>"']+)/gi;
 
-    // Resolve a /uploads/<name> path to a byte size by stat'ing the file on
-    // disk. Memoized per request so a popular file isn't stat'd hundreds of
-    // times. Returns 0 when the file is missing or path-traversal would
-    // escape UPLOADS_DIR.
+    // Resolve a /uploads/<name> path to a byte size from the media index.
+    // Memoized per request so a popular file is looked up once. Returns 0
+    // when the file is missing or the name is not a plain upload name.
     const sizeCache = new Map();
     const safeName = /^[\w\-.]+$/;
+    const liveBytes = db.prepare("SELECT bytes FROM media_objects WHERE rel_path = ? AND state = 'live'");
     const sizeOf = (url) => {
       if (!url || !url.startsWith('/uploads/')) return 0;
       if (sizeCache.has(url)) return sizeCache.get(url);
       const name = url.slice('/uploads/'.length);
       if (!safeName.test(name)) { sizeCache.set(url, 0); return 0; }
       let s = 0;
-      try {
-        const full = path.join(UPLOADS_DIR, name);
-        const st = fs.statSync(full);
-        if (st && st.isFile()) s = st.size;
-      } catch { /* missing or permission denied: counts as 0 bytes */ }
+      try { s = liveBytes.get(name)?.bytes || 0; } catch { /* index unreadable: counts as 0 bytes */ }
       sizeCache.set(url, s);
       return s;
     };
@@ -1032,7 +1003,7 @@ module.exports = function register(socket, ctx) {
   // for each so other clients update. Shared by the Files & Media gallery
   // (delete-channel-media, #5375) and the multi-select toolbar Delete
   // (delete-messages, #5460) so both stay behaviourally identical.
-  const bulkDeleteMessagesByIds = (data, cb) => {
+  const bulkDeleteMessagesByIds = async (data, cb) => {
     if (!data || typeof data !== 'object') return cb({ error: 'Bad request' });
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Bad channel' });
@@ -1142,9 +1113,9 @@ module.exports = function register(socket, ctx) {
           }
         }
       }
-      for (const rel of releasableUploads(db, toRelease, [r.user_id])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, toRelease, [r.user_id])) await storage.softDelete(rel);
     }
-    releaseReplyUploads(bulkReplies);
+    await releaseReplyUploads(bulkReplies);
 
     // Broadcast individual deletes so all clients' message lists, pin lists,
     // and open Files & Media views stay consistent.
@@ -1203,7 +1174,7 @@ module.exports = function register(socket, ctx) {
       db.transaction(() => {
         for (const r of rows) { delPin.run(r.id); delMsg.run(r.id); }
       })();
-      releaseReplyUploads(othersReplies);
+      await releaseReplyUploads(othersReplies);
 
       const toRelease = [];
       for (const r of rows) {
@@ -1211,7 +1182,7 @@ module.exports = function register(socket, ctx) {
         let m;
         while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) toRelease.push(m[1]);
       }
-      for (const rel of releasableUploads(db, toRelease, [uid])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, toRelease, [uid])) await storage.softDelete(rel);
 
       // One event per channel rather than one per message: a person with
       // years of history would otherwise send thousands of events to every
@@ -2220,7 +2191,7 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Delete message ──────────────────────────────────────
-  socket.on('delete-message', (data) => {
+  socket.on('delete-message', async (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
@@ -2291,7 +2262,7 @@ module.exports = function register(socket, ctx) {
       console.error('Delete message error:', err);
       return socket.emit('error-msg', 'Failed to delete message');
     }
-    releaseReplyUploads(replies);
+    await releaseReplyUploads(replies);
     // Deleted before its timer ran out: the self-destruct timer may have been
     // waiting for this one, so let it move on to the next, or sleep.
     if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);
@@ -2314,7 +2285,7 @@ module.exports = function register(socket, ctx) {
         toRelease.push(match[1]);
       }
     }
-    for (const rel of releasableUploads(db, toRelease, [msg.user_id])) moveUploadToDeleted(rel);
+    for (const rel of releasableUploads(db, toRelease, [msg.user_id])) await storage.softDelete(rel);
 
     io.to(`channel:${code}`).emit('message-deleted', {
       channelCode: code,
