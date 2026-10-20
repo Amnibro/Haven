@@ -1604,10 +1604,8 @@ _startPerfDiagnostics() {
   let burstStart = 0;
   const countFrame = (now) => {
     if (document.hidden) {
-      // Reset so the first sample after becoming visible starts clean
       frameCount = 0;
-      lastSampleTime = now;
-      rafId = requestAnimationFrame(countFrame);
+      rafId = null;
       return;
     }
     frameCount++;
@@ -1626,7 +1624,7 @@ _startPerfDiagnostics() {
     rafId = requestAnimationFrame(countFrame);
   };
   const startBurst = () => {
-    if (rafId) return;
+    if (rafId || document.hidden) return;
     frameCount = 0;
     burstStart = performance.now();
     lastSampleTime = burstStart;
@@ -1636,7 +1634,7 @@ _startPerfDiagnostics() {
 
   // Periodic evaluation
   reportTimer = setInterval(() => {
-    if (samples.length < 5) return; // not enough data yet
+    if (document.hidden || samples.length < 5) return; // not enough data yet
 
     const recent = samples.slice(-15); // last ~15 seconds
     const avgFps = Math.round(recent.reduce((s, r) => s + r.fps, 0) / recent.length);

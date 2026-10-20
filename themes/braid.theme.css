@@ -192,3 +192,8 @@ body { background: var(--bg-primary) !important; color: var(--text-primary) !imp
   .message-input-area, .message-input-container { padding: .625rem .75rem .875rem !important; }
   .auth-card { padding: 1.75rem 1.25rem !important; }
 }
+
+.sidebar-split .dm-section-pane { flex: 0 0 auto; max-height: 28%; }
+.sidebar-split .dm-section-pane[style*="flex"],
+html[data-braid-layout="1"] .dm-section-pane[style*="flex"] { max-height: none !important; }
+.sidebar-split:has(.sidebar-split-handle.dragging) .dm-section-pane { transition: none !important; }
