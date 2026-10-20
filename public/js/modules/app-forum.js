@@ -238,8 +238,11 @@ _renderForum(messages) {
   // the bottom the way a chat does.
   this._coupledToBottom = false;
   container.scrollTop = 0;
+  // No jump button in a forum. Only the class is taken off: hiding the
+  // button outright stuck, and it never came back in chat channels after
+  // a forum had been opened.
   const jumpBtn = document.getElementById('jump-to-bottom');
-  if (jumpBtn) jumpBtn.style.display = 'none';
+  if (jumpBtn) jumpBtn.classList.remove('visible');
   this._lazyMedia && this._lazyPump && this._lazyPump();
 },
 
