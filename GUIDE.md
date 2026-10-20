@@ -412,6 +412,7 @@ Haven also ships optional extras that are **installed but switched off by defaul
 | `themes/amni-scient.theme.css` | Amni-Scient, gold on ink with the Archivo typeface |
 | `themes/amni-scient-light.theme.css` | Amni-Scient Light |
 | `themes/glassy-neon.theme.css` | Glassy Neon, Haven on the Grid: holo-glass panels with lit edge rails, light-cycle trails, circuit traces, a racing perspective light floor and a spinning identity disc |
+| `themes/glassy-neon-light.theme.css` | Glassy Neon Light, the same grid in daylight: white frosted glass over a pale cyan sky |
 | `themes/christmas.theme.css` | Christmas, a cozy cabin with a crackling fireplace, a twinkling tree and presents, string lights, frosted window edges and three layers of falling snow |
 | `themes/halloween.theme.css` | Halloween, a cartoony haunted night with bats over the moon, a floating ghost, flickering jack-o'-lanterns, a black cat, a bubbling cauldron, fog and dripping goo |
 | `themes/thanksgiving.theme.css` | Thanksgiving, a harvest evening with tumbling leaves, swaying trees, wobbling turkeys, hay bales, corn and pumpkins |
