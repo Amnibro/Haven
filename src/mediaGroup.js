@@ -20,7 +20,7 @@ const MEDIA_LINE_ROOM = 400;     // what one upload line may add past the typed 
 const MEDIA_GROUP_LAYOUTS = ['grid', 'stacked'];
 
 const PICTURE_LINE = /^(?:spoiler-img:)?\/uploads\/(?:[\w-]+\/)?[\w.-]+$/i;
-const FILE_LINE = /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/;
+const FILE_LINE = /^(?:spoiler-img:)?\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/;
 
 function isMediaLine(line) {
   const l = String(line || '').trim();

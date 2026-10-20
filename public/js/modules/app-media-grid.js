@@ -144,7 +144,7 @@ _mediaGroupMax() {
 // edits as it always has.
 _mediaGroupSplit(content) {
   const lines = String(content || '').split('\n');
-  const isUpload = (l) => !!this._mediaGridKind(l) || /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l.trim()) || /^e2e-file:\{.*\}$/.test(l.trim());
+  const isUpload = (l) => !!this._mediaGridKind(l) || /^(?:spoiler-img:)?\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l.trim()) || /^e2e-file:\{.*\}$/.test(l.trim());
   const start = lines.findIndex(isUpload);
   if (start < 0) return null;
   const media = lines.slice(start).filter(l => l.trim());
@@ -333,7 +333,7 @@ async _mediaUploadLine(file, { partner = null, isDm = false } = {}) {
     if (!data || data.error || !data.url) throw new Error((data && data.error) || t('toasts.upload_failed'));
     const line = (raster || data.isImage)
       ? `${spoiler}${data.url}`
-      : `[file:${data.originalName}](${data.url}|${this._formatFileSize(data.fileSize)})`;
+      : `${this._spoilerMarkFor(file)}[file:${data.originalName}](${data.url}|${this._formatFileSize(data.fileSize)})`;
     return { line, url: data.url };
   } catch (err) {
     if (err?.aborted) return null;

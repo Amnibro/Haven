@@ -137,6 +137,11 @@ _renderImageQueue() {
       chip.appendChild(icon);
       chip.appendChild(name);
       chip.appendChild(size);
+      // A video can be marked as a spoiler, like a picture.
+      if (this._isVideoFile(file)) {
+        chip.classList.toggle('is-spoiler', !!file._spoiler);
+        chip.appendChild(this._makeSpoilerToggle(file));
+      }
       chip.appendChild(removeBtn);
       bar.appendChild(chip);
     });
@@ -501,6 +506,18 @@ _clearImageQueue() {
   this._renderImageQueue();
 },
 
+// Videos the chat shows with a player (app-message-content.js), which are
+// the files that can be marked as a spoiler.
+_isVideoFile(file) {
+  return !!file && (/^video\//.test(file.type || '') || /\.(mp4|webm|mov|m4v|ogv)$/i.test(file.name || ''));
+},
+
+// What goes in front of a file's line when it was marked as a spoiler: the
+// same mark a picture gets, which the chat reads for a video too.
+_spoilerMarkFor(file) {
+  return file && file._spoiler && this._isVideoFile(file) ? 'spoiler-img:' : '';
+},
+
 // Build the little eye toggle that lets the sender mark a queued image as a
 // spoiler. The choice rides along on the File object (`_spoiler`) so the flush
 // loop can read it without threading extra state through the queue arrays.
@@ -520,7 +537,7 @@ _makeSpoilerToggle(file, isPip = false) {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     file._spoiler = !file._spoiler;
-    const thumb = btn.closest('.image-queue-thumb');
+    const thumb = btn.closest('.image-queue-thumb, .file-queue-chip');
     if (thumb) thumb.classList.toggle('is-spoiler', !!file._spoiler);
     sync();
   });

@@ -849,7 +849,7 @@ _uploadGeneralFile(file, targetCode, { prefix = '', ferryDiscordUserId = null } 
         content = data.url; // images render inline already
       } else {
         // Use a special file attachment format: [file:name](url|size)
-        content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
+        content = `${this._spoilerMarkFor(file)}[file:${data.originalName}](${data.url}|${sizeStr})`;
       }
       this.socket.emit('send-message', {
         code,

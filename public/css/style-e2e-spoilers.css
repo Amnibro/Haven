@@ -348,7 +348,8 @@
 }
 .spoiler-media .chat-image,
 .spoiler-media .e2e-img-pending,
-.spoiler-media .e2e-img-loading {
+.spoiler-media .e2e-img-loading,
+.spoiler-media .file-attachment {
   margin-top: 0;
   filter: blur(22px);
   transform: scale(1.05);
@@ -376,7 +377,8 @@
 }
 .spoiler-media.revealed .chat-image,
 .spoiler-media.revealed .e2e-img-pending,
-.spoiler-media.revealed .e2e-img-loading {
+.spoiler-media.revealed .e2e-img-loading,
+.spoiler-media.revealed .file-attachment {
   filter: none;
   transform: none;
   pointer-events: auto;
@@ -534,6 +536,15 @@
 }
 .image-queue-thumb.is-spoiler img {
   filter: blur(4px);
+}
+/* On a queued video's chip the toggle sits in the row, always shown. */
+.file-queue-chip .image-queue-spoiler {
+  position: static;
+  flex: none;
+  opacity: 1;
+}
+.file-queue-chip.is-spoiler {
+  border-color: var(--accent);
 }
 
 

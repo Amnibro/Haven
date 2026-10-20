@@ -20,7 +20,9 @@ _formatContent(str) {
   // (#5799) can start with a spoiler and are laid out further down.
   if (typeof str === 'string' && str.startsWith('spoiler-img:') && !str.includes('\n')) {
     const rest = str.slice('spoiler-img:'.length);
-    if (this._isImageUrl(rest) || /^\/uploads\//i.test(rest) || rest.startsWith('e2e-img:')) {
+    // A video sent as a spoiler carries the same mark on its file line.
+    const video = /^\[file:[^\]\n]*\.(mp4|webm|mov|m4v|ogv)\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/i.test(rest);
+    if (video || this._isImageUrl(rest) || /^\/uploads\//i.test(rest) || rest.startsWith('e2e-img:')) {
       const inner = this._formatContent(rest);
       const label = this._escapeHtml(t('app.messages.spoiler'));
       return `<div class="spoiler-media" role="button" tabindex="0" title="${label}"><span class="spoiler-media-tag">\u{1F441}️ ${label}</span>${inner}</div>`;
@@ -75,7 +77,7 @@ _formatContent(str) {
   // turns the grid off while its post is drawn.
   if (typeof str === 'string' && str.includes('\n') && !str.includes('```')) {
     const mediaLine = (l) => /^(?:spoiler-img:)?\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(l) ||
-      /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l) ||
+      /^(?:spoiler-img:)?\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l) ||
       this._mediaGridKind?.(l) === 'image' || /^e2e-file:\{.*\}$/.test(l);
     const lines = str.split('\n');
     if (lines.some(l => mediaLine(l.trim()))) {
@@ -850,7 +852,7 @@ _replyPreviewText(content) {
       while (i + n < lines.length && isPicture(lines[i + n])) n++;
       return n > 1 ? `🖼️ ${t('messages.preview_pictures', { count: n })}` : `🖼️ ${t('messages.preview_picture')}`;
     }
-    const file = /^\[file:([^\]]*)\]\(/.exec(l);
+    const file = /^(?:spoiler-img:)?\[file:([^\]]*)\]\(/.exec(l);
     if (file) return `📎 ${file[1] || t('messages.preview_file')}`;
     if (l.startsWith('e2e-file:')) {
       let name = '';

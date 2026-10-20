@@ -1564,7 +1564,7 @@ function attachmentName(name) {
 
 // How Haven writes a file in a message: "[file:Name](/uploads/<name>|size)",
 // and a picture as "/uploads/<name>" or "spoiler-img:/uploads/<name>".
-const UPLOAD_FILE_RE = /\[file:([^\]]*)\]\(\/uploads\/([^)|\s]+)(?:\|[^)]*)?\)/g;
+const UPLOAD_FILE_RE = /(spoiler-img:)?\[file:([^\]]*)\]\(\/uploads\/([^)|\s]+)(?:\|[^)]*)?\)/g;
 const UPLOAD_PIC_RE = /(^|\s)(spoiler-img:)?\/uploads\/([^\s]+)/g;
 const UPLOAD_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -1606,7 +1606,7 @@ function keepOwnUploads(content, sender) {
     return false;
   };
   const text = String(content || '')
-    .replace(UPLOAD_FILE_RE, (m, name, stored) => (mine(stored) ? m : ''))
+    .replace(UPLOAD_FILE_RE, (m, spoiler, name, stored) => (mine(stored) ? m : ''))
     .replace(UPLOAD_PIC_RE, (m, pre, spoiler, stored) => (mine(stored) ? m : pre));
   return { content: refused ? text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim() : text, refused };
 }
@@ -1643,8 +1643,8 @@ function takeUploads(content, sender) {
   };
   const base = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
   let text = own.content
-    .replace(UPLOAD_FILE_RE, (m, name, stored) => {
-      const why = take(stored, name);
+    .replace(UPLOAD_FILE_RE, (m, spoiler, name, stored) => {
+      const why = take(stored, name, !!spoiler);
       if (!why) return '';
       return `📎 ${name || stored} ${base ? `${base}/uploads/${stored}` : why}`;
     })

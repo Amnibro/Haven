@@ -132,13 +132,13 @@ _forumTitleOf(msg) {
   const lead = this._forumLeadLinkOf(msg);
   const lp = lead ? this._forumLinkPreviewOf(lead) : null;
   if (lp && typeof lp.title === 'string' && lp.title.trim()) return lp.title.trim().slice(0, 120);
-  const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^\[file:/.test(l));
+  const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
   const first = lines[0] || (this._isImageUrl(String(msg.content || '').trim()) ? t('forum.image_topic') : String(msg.content || ''));
   return first.replace(/^#+\s*/, '').replace(/^\*\*(.+)\*\*$/, '$1').slice(0, 120);
 },
 
 _forumSnippetOf(msg) {
-  const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^\[file:/.test(l));
+  const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
   const body = msg.title ? lines.join(' ') : lines.slice(1).join(' ');
   return body.replace(/[*_`>#]/g, '').slice(0, 220);
 },
@@ -160,7 +160,7 @@ _forumThumbOf(msg) {
 // The link a post opens with, when its first line is nothing but a link.
 _forumLeadLinkOf(msg) {
   const first = String(msg.content || '').split('\n').map(l => l.trim())
-    .find(l => l && !this._isImageUrl(l) && !/^\[file:/.test(l));
+    .find(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
   return first && /^https?:\/\/\S+$/i.test(first) ? first : null;
 },
 

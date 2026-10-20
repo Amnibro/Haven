@@ -17,6 +17,7 @@ test('upload lines are pictures, spoiler pictures and file lines, nothing else',
   assert.ok(mg.isMediaLine(`spoiler-img:${pic(1)}`));
   assert.ok(mg.isMediaLine('/uploads/images/cat.webp'));
   assert.ok(mg.isMediaLine(`  ${file(1)}  `));
+  assert.ok(mg.isMediaLine(`spoiler-img:${file(2)}`), 'a video sent as a spoiler');
   assert.ok(!mg.isMediaLine('look at /uploads/x.png'));
   assert.ok(!mg.isMediaLine('/uploads/x.png and more'));
   assert.ok(!mg.isMediaLine('https://example.com/x.png'));
