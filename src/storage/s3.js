@@ -10,11 +10,16 @@
 // local copy too, or the fallback would bring the file back.
 
 const fs = require('fs');
-const {
-  S3Client, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand, CopyObjectCommand,
-  ListObjectsV2Command, HeadBucketCommand,
-} = require('@aws-sdk/client-s3');
-const { Upload } = require('@aws-sdk/lib-storage');
+// Amazon's library is an add-on, installed only on servers that turn S3 on
+// (s3Addon.js), so it is loaded when the first bucket is set up, not here.
+let S3 = null;
+let Upload = null;
+function loadSdk() {
+  if (S3) return;
+  const sdk = require('./s3Addon').loadS3Sdk();
+  S3 = sdk.s3;
+  Upload = sdk.storage.Upload;
+}
 const { DELETED_PREFIX } = require('./paths');
 
 const notFound = (err) => err && (err.name === 'NotFound' || err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404);
@@ -26,7 +31,8 @@ class S3Storage {
     this.bucket = bucket;
     this.prefix = prefix && !prefix.endsWith('/') ? prefix + '/' : prefix;
     this.local = local;   // a LocalStorage to fall back on, or null
-    this.client = new S3Client({
+    loadSdk();
+    this.client = new S3.S3Client({
       endpoint, region, forcePathStyle,
       credentials: { accessKeyId, secretAccessKey },
       // The SDK checks a CRC32 on every object by default, and stores other
@@ -62,7 +68,7 @@ class S3Storage {
   /** What the bucket itself holds under ``rel``, never the local fallback. */
   async headObject(rel) {
     try {
-      const r = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this._key(rel) }));
+      const r = await this.client.send(new S3.HeadObjectCommand({ Bucket: this.bucket, Key: this._key(rel) }));
       return { size: r.ContentLength, lastModified: r.LastModified, etag: r.ETag };
     } catch (err) {
       if (!notFound(err)) throw err;
@@ -78,7 +84,7 @@ class S3Storage {
 
   async getStream(rel, { range } = {}) {
     try {
-      const r = await this.client.send(new GetObjectCommand({
+      const r = await this.client.send(new S3.GetObjectCommand({
         Bucket: this.bucket, Key: this._key(rel),
         Range: range ? `bytes=${range.start}-${range.end}` : undefined,
       }));
@@ -92,7 +98,7 @@ class S3Storage {
 
   async readBuffer(rel) {
     try {
-      const r = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this._key(rel) }));
+      const r = await this.client.send(new S3.GetObjectCommand({ Bucket: this.bucket, Key: this._key(rel) }));
       return Buffer.from(await r.Body.transformToByteArray());
     } catch (err) {
       if (!notFound(err)) throw err;
@@ -101,13 +107,13 @@ class S3Storage {
   }
 
   async remove(rel) {
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this._key(rel) }));
+    await this.client.send(new S3.DeleteObjectCommand({ Bucket: this.bucket, Key: this._key(rel) }));
     if (this.local) await this.local.remove(rel);
   }
 
   async _exists(rel) {
     try {
-      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this._key(rel) }));
+      await this.client.send(new S3.HeadObjectCommand({ Bucket: this.bucket, Key: this._key(rel) }));
       return true;
     } catch (err) {
       if (notFound(err)) return false;
@@ -119,8 +125,8 @@ class S3Storage {
   // retention window starts. A crash between the two leaves both, and the
   // next delete or reconcile settles it.
   async _move(fromRel, toRel) {
-    await this.client.send(new CopyObjectCommand({ Bucket: this.bucket, Key: this._key(toRel), CopySource: this._source(fromRel) }));
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this._key(fromRel) }));
+    await this.client.send(new S3.CopyObjectCommand({ Bucket: this.bucket, Key: this._key(toRel), CopySource: this._source(fromRel) }));
+    await this.client.send(new S3.DeleteObjectCommand({ Bucket: this.bucket, Key: this._key(fromRel) }));
   }
 
   async softDelete(rel) {
@@ -144,7 +150,7 @@ class S3Storage {
   async *list(prefix = '') {
     let token;
     do {
-      const r = await this.client.send(new ListObjectsV2Command({
+      const r = await this.client.send(new S3.ListObjectsV2Command({
         Bucket: this.bucket, Prefix: this._key(prefix), ContinuationToken: token,
       }));
       for (const o of r.Contents || []) {
@@ -158,12 +164,12 @@ class S3Storage {
   async ping() {
     try {
       try {
-        await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+        await this.client.send(new S3.HeadBucketCommand({ Bucket: this.bucket }));
       } catch (err) {
         // Garage answers 403 to HeadBucket for a key scoped to the bucket; a
         // one-item listing tells whether the key can really use it.
         if (err.$metadata?.httpStatusCode !== 403) throw err;
-        await this.client.send(new ListObjectsV2Command({ Bucket: this.bucket, MaxKeys: 1 }));
+        await this.client.send(new S3.ListObjectsV2Command({ Bucket: this.bucket, MaxKeys: 1 }));
       }
     } catch (err) {
       // A failed HeadBucket often has no message of its own; say what came back.
