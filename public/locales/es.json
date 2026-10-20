@@ -354,7 +354,9 @@
       "embed_size_hint": "Tamaño de la vista previa (usa Configuración ▸ Vistas previas de enlaces para desactivarla)",
       "embed_volume": "Volumen",
       "collapse": "Contraer",
-      "silent_hint": "Enviado en silencio: nadie recibió sonido, ventana emergente ni notificación push"
+      "silent_hint": "Enviado en silencio: nadie recibió sonido, ventana emergente ni notificación push",
+      "loop": "Repetir",
+      "loop_on": "Repitiendo (haz clic para parar)"
     },
     "input_bar": {
       "emoji_btn": "Emoji",

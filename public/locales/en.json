@@ -364,6 +364,8 @@
       "embed_volume": "Volume",
       "keep_playing": "Keep playing when scrolled away",
       "keep_playing_on": "Keeps playing when scrolled away (click to stop that)",
+      "loop": "Loop",
+      "loop_on": "Looping (click to stop)",
       "collapse": "Collapse",
       "silent_hint": "Sent silently: nobody got a sound, pop-up or push for it"
     },

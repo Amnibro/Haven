@@ -313,7 +313,9 @@
       "embed_medium": "Médio",
       "embed_small": "Pequeno",
       "embed_size_hint": "Tamanho da incorporação (use Configurações ▸ Pré-visualizações de links para desativar)",
-      "collapse": "Recolher"
+      "collapse": "Recolher",
+      "loop": "Repetir",
+      "loop_on": "Repetindo (clique para parar)"
     },
     "input_bar": {
       "emoji_btn": "Emoji",

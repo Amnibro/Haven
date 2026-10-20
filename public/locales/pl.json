@@ -354,7 +354,9 @@
       "embed_size_hint": "Rozmiar osadzenia (wyłącz w Ustawienia ▸ Podglądy linków)",
       "embed_volume": "Głośność",
       "collapse": "Zwiń",
-      "silent_hint": "Wysłano po cichu: nikt nie dostał dźwięku, wyskakującego okienka ani powiadomienia push"
+      "silent_hint": "Wysłano po cichu: nikt nie dostał dźwięku, wyskakującego okienka ani powiadomienia push",
+      "loop": "Zapętl",
+      "loop_on": "Zapętlone (kliknij, aby wyłączyć)"
     },
     "input_bar": {
       "emoji_btn": "Emoji",

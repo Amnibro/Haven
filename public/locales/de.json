@@ -308,7 +308,9 @@
       "embed_medium": "Mittel",
       "embed_small": "Klein",
       "embed_size_hint": "Größe der Einbettung (unter Einstellungen ▸ Linkvorschauen deaktivieren)",
-      "collapse": "Einklappen"
+      "collapse": "Einklappen",
+      "loop": "Wiederholen",
+      "loop_on": "Wird wiederholt (klicken zum Beenden)"
     },
     "input_bar": {
       "emoji_btn": "Emoji",

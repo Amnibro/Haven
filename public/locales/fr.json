@@ -364,6 +364,8 @@
       "embed_volume": "Volume",
       "keep_playing": "Continuer la lecture une fois hors de vue",
       "keep_playing_on": "Continue la lecture une fois hors de vue (cliquez pour l'arrêter)",
+      "loop": "Lire en boucle",
+      "loop_on": "En boucle (cliquez pour arrêter)",
       "collapse": "Réduire",
       "silent_hint": "Envoyé en silence : personne n'a reçu de son, de notification ni de push"
     },

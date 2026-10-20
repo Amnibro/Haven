@@ -45,6 +45,12 @@ _keepPlayingHtml() {
   return `<button type="button" class="media-keep" aria-pressed="false" title="${t('app.messages.keep_playing')}" aria-label="${t('app.messages.keep_playing')}">📌</button>`;
 },
 
+// Loop for an uploaded video or sound (#5817). The browser's own controls
+// keep Loop in the right-click menu only, which a phone never shows.
+_loopHtml() {
+  return `<button type="button" class="media-loop" aria-pressed="false" title="${t('app.messages.loop')}" aria-label="${t('app.messages.loop')}">🔁</button>`;
+},
+
 // The player a pin belongs to: the one in its own file card or YouTube card.
 _keepPlayingTarget(btn) {
   const box = btn.closest('.link-preview, .file-attachment');
@@ -109,6 +115,17 @@ _setupMediaPlayback() {
     btn.setAttribute('aria-pressed', String(on));
     btn.title = t(on ? 'app.messages.keep_playing_on' : 'app.messages.keep_playing');
     if (on) this._keepPlaying.add(media); else this._keepPlaying.delete(media);
+  }, true);
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest?.('.media-loop');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const media = btn.closest('.file-attachment')?.querySelector('video, audio');
+    if (!media) return;
+    media.loop = !media.loop;
+    btn.setAttribute('aria-pressed', String(media.loop));
+    btn.title = t(media.loop ? 'app.messages.loop_on' : 'app.messages.loop');
   }, true);
   if (typeof IntersectionObserver !== 'function') return;
   const seen = new WeakSet();

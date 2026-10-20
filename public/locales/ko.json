@@ -318,7 +318,9 @@
       "embed_medium": "보통",
       "embed_small": "작게",
       "embed_size_hint": "임베드 크기 (끄려면 설정 ▸ 링크 미리보기 사용)",
-      "collapse": "접기"
+      "collapse": "접기",
+      "loop": "반복 재생",
+      "loop_on": "반복 중 (클릭하면 멈춤)"
     },
     "input_bar": {
       "emoji_btn": "이모지",

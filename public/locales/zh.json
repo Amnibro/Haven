@@ -345,7 +345,9 @@
       "embed_volume": "音量",
       "protected_no_delete": "该消息受保护。请先取消保护。",
       "protected_no_edit": "该消息受保护，无法编辑。请先取消保护。",
-      "silent_hint": "已静默发送：没有人收到声音、弹窗或推送"
+      "silent_hint": "已静默发送：没有人收到声音、弹窗或推送",
+      "loop": "循环播放",
+      "loop_on": "正在循环（点击停止）"
     },
     "input_bar": {
       "emoji_btn": "表情",

@@ -318,7 +318,9 @@
       "embed_medium": "中",
       "embed_small": "小",
       "embed_size_hint": "埋め込みサイズ（オフにするには 設定 ▸ リンクプレビュー）",
-      "collapse": "折りたたむ"
+      "collapse": "折りたたむ",
+      "loop": "ループ再生",
+      "loop_on": "ループ中（クリックで停止）"
     },
     "input_bar": {
       "emoji_btn": "絵文字",
