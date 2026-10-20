@@ -995,7 +995,7 @@ html[data-braid-layout="1"] #create-section-body.collapsed{display:none!importan
 html[data-braid-layout="1"] .sidebar-split{flex:1;min-height:0;display:flex;flex-direction:column;border:0!important}
 html[data-braid-layout="1"] .channel-section{flex:1;min-height:0;padding:2px .375rem .375rem!important;border:0!important}
 html[data-braid-layout="1"] .dm-section-pane{flex:0 0 auto;max-height:28%;padding:2px .375rem .375rem!important;border-top:1px solid var(--border)!important}
-html[data-braid-layout="1"] .dm-section-pane[style*="flex"]{max-height:none}
+html[data-braid-layout="1"] .dm-section-pane[style*="flex"]{max-height:none!important}
 html[data-braid-layout="1"] .sidebar.dms-open .dm-section-pane{max-height:min(58%,22rem)!important;height:min(58%,22rem)!important;padding:.35rem .5rem .5rem!important}
 html[data-braid-layout="1"] .channel-action-sheet.sheet-open{padding:.5rem .65rem!important;margin:.35rem .5rem 0!important;border:1px solid var(--border)!important;border-radius:.75rem!important;background:var(--bg-card)!important}
 html[data-braid-layout="1"] .section-label.channels-toggle,
@@ -1371,11 +1371,8 @@ html[data-braid-layout="1"] .settings-section input[type="number"]{border-radius
 50%{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 70%,transparent)) drop-shadow(0 0 14px color-mix(in srgb,var(--accent) 38%,transparent))}
 }
 html[data-braid-layout="1"] .brand .logo-sm,
-html[data-braid-layout="1"] .sidebar-header .logo-sm{color:var(--accent)!important;animation:braid-logo-breathe 3.6s ease-in-out infinite;transition:transform .45s cubic-bezier(.16,1,.3,1);display:inline-block}
+html[data-braid-layout="1"] .sidebar-header .logo-sm{color:var(--accent)!important;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 45%,transparent)) drop-shadow(0 0 8px color-mix(in srgb,var(--accent) 22%,transparent));transition:transform .45s cubic-bezier(.16,1,.3,1);display:inline-block}
 html[data-braid-layout="1"] .brand:hover .logo-sm{transform:rotate(120deg) scale(1.12)}
-@media (prefers-reduced-motion: reduce){
-html[data-braid-layout="1"] .brand .logo-sm,html[data-braid-layout="1"] .sidebar-header .logo-sm{animation:none!important;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 40%,transparent))}
-}
 
 /* ── Hexagonal loading indicator ── a mint hex ring that spins while a
    solid core hexagon pulses inside it; also reskins the setup wizard's
