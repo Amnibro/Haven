@@ -829,6 +829,7 @@ HAVEN_S3_SECRET_KEY=...
 # HAVEN_S3_FORCE_PATH_STYLE=true  # the default; Garage, MinIO and RustFS need it
 ```
 
+- **It's an add-on, downloaded only if you turn it on.** Haven talks to the bucket through Amazon's S3 library, which isn't part of a normal install or the Docker image. The first start with `HAVEN_EXTERNAL_STORAGE=true` installs it into the data folder (`addons/s3`, about 16 MB, at versions pinned by Haven), so that start needs to reach registry.npmjs.org once. A bucket on your own NAS still needs no outside service after that.
 - **The bucket stays private.** Haven reads each file and serves it itself, with the same safety headers as files on disk, so don't make the bucket public.
 - **Haven won't start without it.** If the bucket can't be reached or the key is wrong, Haven stops at startup and names the endpoint, the bucket and the reason. It doesn't fall back to the disk.
 - **Location data is still removed first.** Uploads are cleaned on the server before they reach the bucket, and photos already in the bucket are checked once.
