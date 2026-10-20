@@ -6,6 +6,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.27.0] - Unreleased
+
+### Added
+- Optional external storage for uploads (thanks KamdenB, #5813): pictures, files, avatars, emoji, stickers and sounds can live in an S3-compatible bucket, such as MinIO or Garage on your own NAS, or a hosted one. It's off unless you turn it on, and the S3 library it needs is downloaded only on servers that do. See "External Media Storage" in GUIDE.md.
+- Early access updates: under Settings > Admin, a server can opt in to pre-releases and try new versions before everyone else. Docker users can use the `:beta` image instead.
+- Importing from Discord now copies pictures and files into Haven, so they don't turn into dead links when Discord's links expire. It's a checkbox on the import screen, on by default (#5811).
+- Right-click a forum topic and choose "Move to forum…" to move it, replies and all, to another forum. It keeps the tags the new forum also has (#5809).
+- The "N new" badge in the Threads window turns into a Mark read button when you point at it.
+- Typing `:` and a couple of letters now suggests matching stickers too, and picking one sends it (#5812).
+- Videos can be marked as spoilers when you upload them, like pictures.
+- A 🔁 Loop button on uploaded videos and sounds (#5817).
+- A 📌 Keep playing pin lets one video or sound keep playing when you scroll away from it.
+- Create Channel has a More options section: topic, read only, slow mode, uploads and voice.
+- French is now fully translated.
+- Server templates keep a channel's setting for disconnecting idle people from voice.
+
+### Changed
+- Clicking a video plays or pauses it, right-clicking gives the browser's own video menu (with Loop), and tall, narrow videos get enough room for their controls (#5808).
+- Forwarded Discord messages now come through, quoted under "Forwarded", and escaped text like `3\.1K` reads the way Discord shows it. This covers the importer and the live Ferry bridge (#5811).
+- Emoji suggestions list names that start with what you typed first.
+- The role assignment window offers Server-wide to anyone who holds Promote Users server-wide, not only the owner.
+- Add all members is available to anyone who can invite people, and hidden from those who can't.
+- Pictures sent together in a blog forum become one post, and authors can combine their own blog posts.
+- A smaller Docker image.
+
+### Fixed
+- Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
+- More options in Create Channel was cut off at the bottom (thanks KamdenB, #5814).
+- The screen share and camera buttons stayed off after you moved from a voice room that doesn't allow streams to one that does (Desktop #66).
+- Pasting a link copied with Chrome or Edge's "Copy link" also posted the site's logo above it (#5816).
+- The jump to bottom button disappeared after you opened a forum, until you reloaded.
+- Links to channels with punctuation in their names, like #Art_&_Music, didn't work.
+- When exiftool stopped on one file, other uploads waiting behind it failed too.
+- Deleted attachments could be purged up to 7 days early (thanks KamdenB).
+- Replaced or removed profile pictures and borders stayed in uploads forever (thanks KamdenB).
+
+### Security
+- Updated follow-redirects, used by the tunnel feature, for two advisories published today.
+
 ## [4.26.2] - 2026-10-17
 
 Two fixes on top of 4.26.1.
