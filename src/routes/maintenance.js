@@ -214,8 +214,17 @@ module.exports = function registerMaintenance(deps) {
     }
   }
 
+  // One run at a time. Moving files waits on storage now, and on a slow
+  // bucket a run can outlast its interval; a second one starting meanwhile
+  // would go over the same files. A call while one runs gets that run.
+  const oneAtATime = (fn) => {
+    let running = null;
+    return () => running || (running = Promise.resolve().then(fn).finally(() => { running = null; }));
+  };
+  const cleanupOnce = oneAtATime(runAutoCleanup);
+
   // Run cleanup every 15 minutes
-  setInterval(runAutoCleanup, 15 * 60 * 1000);
+  setInterval(cleanupOnce, 15 * 60 * 1000);
 
   // Encrypted DM files whose message was deleted (#5699; the trigger that notes
   // them is in src/database.js). Each goes to deleted-attachments like any other
@@ -245,12 +254,13 @@ module.exports = function registerMaintenance(deps) {
       console.error('Releasing deleted encrypted files failed:', err.message);
     }
   }
-  releaseDeletedE2eFiles();
-  setInterval(releaseDeletedE2eFiles, 5 * 60 * 1000);
+  const releaseOnce = oneAtATime(releaseDeletedE2eFiles);
+  releaseOnce();
+  setInterval(releaseOnce, 5 * 60 * 1000);
   // Also run once at startup (delayed 30s to let DB settle)
-  setTimeout(runAutoCleanup, 30000);
+  setTimeout(cleanupOnce, 30000);
   // Expose globally so socketHandlers can trigger it
-  global.runAutoCleanup = runAutoCleanup;
+  global.runAutoCleanup = cleanupOnce;
 
   // ── Auto-backup (runs hourly, decides per server settings) ───────
   // Stored under DATA_DIR/auto-backups. Pruned to keep N most recent.
