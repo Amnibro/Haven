@@ -1830,7 +1830,12 @@
       "import_files_progress": "{{count}} 件のファイルをコピー済み",
       "import_files_copied": "{{count}} 件の画像とファイルを Haven にコピーしました。",
       "import_files_links": "{{count}} 件はリンクのままです（期限切れ、大きすぎる、または取得できませんでした）。",
-      "import_files_disk": "サーバーのディスク容量が少ないためコピーを停止しました。残りはリンクのままです。"
+      "import_files_disk": "サーバーのディスク容量が少ないためコピーを停止しました。残りはリンクのままです。",
+      "transfer_title": "サーバーを他の人に引き継ぐ",
+      "transfer_hint": "別のメンバーを管理者にし、あなたは管理者でなくなります。パスワードで確認します。",
+      "transfer_placeholder": "メンバー名…",
+      "transfer_btn": "管理者を移譲…",
+      "transfer_pick": "先にリストからメンバーを選んでください"
     }
   },
   "modals": {

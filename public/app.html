@@ -3150,6 +3150,15 @@
             <input type="checkbox" id="admin-password-reset-enabled">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.admin_pw_reset_hint">⚠️ When enabled, admins can reset any user's password to a one-time temp value. The user must change it on next login. Resetting a password also wipes that user's E2E DM history (their wrap key derives from the password). The fact that this is enabled is exposed via /api/public-config so users can see whether admins on this server have this power.</small>
+          <div id="transfer-admin-row" style="display:none;margin-top:14px;padding-top:10px;border-top:1px dashed var(--border)">
+            <span style="font-weight:600">🔑 <span data-i18n="settings.admin.transfer_title">Hand the server to someone else</span></span>
+            <small class="settings-hint" style="display:block;margin:4px 0 6px" data-i18n="settings.admin.transfer_hint">Makes another member the admin, and you stop being one. You'll confirm with your password.</small>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="text" id="transfer-admin-member" class="settings-text-input" list="transfer-admin-members" autocomplete="off" data-i18n-placeholder="settings.admin.transfer_placeholder" placeholder="Member's name…" style="flex:1">
+              <datalist id="transfer-admin-members"></datalist>
+              <button type="button" class="btn-sm btn-danger" id="transfer-admin-btn" data-i18n="settings.admin.transfer_btn">Transfer admin…</button>
+            </div>
+          </div>
         </div>
 
         <!-- Role Management (Admin only) -->
@@ -5404,7 +5413,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.27.2"></script>
+  <script type="module" src="/js/app.js?v=4.27.3"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

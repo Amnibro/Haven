@@ -212,10 +212,6 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
       this._hideUserContextMenu();
       this._confirmAdminResetPassword(targetUserId, targetName);
     }, true);
-    if (isAdmin) addBtn(`🔑 ${t('users.gear_menu.transfer_admin')}`, () => {
-      this._hideUserContextMenu();
-      this._confirmTransferAdmin(targetUserId, targetName);
-    }, true);
   }
   this._addGroupMemberActions(targetUserId, targetName, addBtn, addDivider);
 

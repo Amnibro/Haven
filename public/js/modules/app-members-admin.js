@@ -977,6 +977,42 @@ _showAdminResetPwReveal(username, tempPassword) {
   });
 },
 
+// Handing the server over lives in Settings > Members, admin only. It used to
+// sit in every member's right-click menu next to Kick and Ban, one slip of a
+// finger away on a phone. The member is picked by name here, and the same
+// password-confirmed window follows.
+_setupTransferAdminRow() {
+  const row = document.getElementById('transfer-admin-row');
+  const input = document.getElementById('transfer-admin-member');
+  const btn = document.getElementById('transfer-admin-btn');
+  const list = document.getElementById('transfer-admin-members');
+  if (!row || !input || !btn || !list) return;
+  row.style.display = this.user?.isAdmin ? '' : 'none';
+  let members = [];
+  const load = () => {
+    if (members.length || !this.user?.isAdmin) return;
+    this.socket.emit('get-all-members', {}, (res) => {
+      if (!res || res.error) return;
+      members = (res.members || []).filter(m => m.id !== this.user.id && !m.banned);
+      list.textContent = '';
+      for (const m of members) {
+        const opt = document.createElement('option');
+        opt.value = m.username;
+        if (m.displayName && m.displayName !== m.username) opt.label = m.displayName;
+        list.appendChild(opt);
+      }
+    });
+  };
+  input.addEventListener('focus', load);
+  btn.addEventListener('click', () => {
+    load();
+    const name = input.value.trim().toLowerCase();
+    const m = members.find(x => x.username.toLowerCase() === name || (x.displayName || '').toLowerCase() === name);
+    if (!m) return this._showToast(t('settings.admin.transfer_pick'), 'error');
+    this._confirmTransferAdmin(m.id, m.displayName || m.username);
+  });
+},
+
 _confirmTransferAdmin(userId, username) {
   // Build a custom modal for transfer admin with a confirmation step.
   // An SSO admin has no Haven password, so they confirm with an authenticator

@@ -1830,7 +1830,12 @@
       "import_files_progress": "파일 {{count}}개 복사됨",
       "import_files_copied": "사진과 파일 {{count}}개를 Haven으로 복사했습니다.",
       "import_files_links": "{{count}}개는 링크로 남았습니다 (만료됨, 너무 큼, 또는 접근 불가).",
-      "import_files_disk": "서버의 디스크 공간이 부족해 복사를 멈췄습니다. 나머지는 링크로 남았습니다."
+      "import_files_disk": "서버의 디스크 공간이 부족해 복사를 멈췄습니다. 나머지는 링크로 남았습니다.",
+      "transfer_title": "서버를 다른 사람에게 넘기기",
+      "transfer_hint": "다른 멤버를 관리자로 만들고 당신은 관리자가 아니게 됩니다. 비밀번호로 확인합니다.",
+      "transfer_placeholder": "멤버 이름…",
+      "transfer_btn": "관리자 넘기기…",
+      "transfer_pick": "먼저 목록에서 멤버를 고르세요"
     }
   },
   "modals": {

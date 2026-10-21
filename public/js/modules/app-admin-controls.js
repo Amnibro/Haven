@@ -121,6 +121,7 @@ _bindAdminControls() {
   document.getElementById('view-all-members-btn').addEventListener('click', () => {
     this._openAllMembersModal();
   });
+  this._setupTransferAdminRow();
   document.getElementById('close-all-members-btn').addEventListener('click', () => {
     document.getElementById('all-members-modal').style.display = 'none';
   });
