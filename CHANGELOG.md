@@ -21,6 +21,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Create Channel has a More options section: topic, read only, slow mode, uploads and voice.
 - French is now fully translated.
 - Server templates keep a channel's setting for disconnecting idle people from voice.
+- A 🧹 Remove messages button on the banned users list deletes everything a banned member wrote in the server's channels, for a ban made without "Scrub messages". Protected messages and DMs stay.
 
 ### Changed
 - Clicking a video plays or pauses it, right-clicking gives the browser's own video menu (with Loop), and tall, narrow videos get enough room for their controls (#5808).
@@ -30,6 +31,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Add all members is available to anyone who can invite people, and hidden from those who can't.
 - Pictures sent together in a blog forum become one post, and authors can combine their own blog posts.
 - A smaller Docker image.
+- Transfer Admin moved out of the member right-click menu, where it sat next to Kick and Ban, to Settings > Members.
+- The kick window only offers to scrub messages server-wide to admins, since only an admin's kick does that.
 
 ### Fixed
 - Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
@@ -39,11 +42,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - The jump to bottom button disappeared after you opened a forum, until you reloaded.
 - Links to channels with punctuation in their names, like #Art_&_Music, didn't work.
 - When exiftool stopped on one file, other uploads waiting behind it failed too.
+- "Scrub messages" on a kick or ban deleted the messages but left them on everyone's screen until a reload, and deleting them by hand then failed with a permission error or did nothing. Scrubbed messages now leave every screen right away, and deleting messages that are already gone just clears them.
+- The audit log could show a moderator's kick scrubbing messages server-wide when only that channel had been scrubbed.
 - Deleted attachments could be purged up to 7 days early (thanks KamdenB).
 - Replaced or removed profile pictures and borders stayed in uploads forever (thanks KamdenB).
 
 ### Security
-- Updated follow-redirects, used by the tunnel feature, for two advisories published today.
+- Updated follow-redirects, used by the tunnel feature, for two security advisories.
 
 ## [4.26.2] - 2026-10-17
 
