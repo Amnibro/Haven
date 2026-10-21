@@ -134,19 +134,22 @@ test('forum topics carry titles and tags, sort and filter, and channels can be N
     assert.strictEqual(h.messages.length, 3);
   });
 
-  await t.test('set-topic-meta retitles and retags, and everyone in the channel hears it', async () => {
+  await t.test('set-topic-meta retitles and retags, keeps custom tags, and everyone in the channel hears it', async () => {
     const upd = next(A, 'topic-updated', (d) => d && d.messageId === posted[1].id);
     A.emit('set-topic-meta', { messageId: posted[1].id, title: '  Renamed   topic ', tags: ['Tip', 'Bogus'] });
     const d = await upd;
     assert.ok(d, 'topic-updated arrived');
     assert.strictEqual(d.title, 'Renamed topic');
-    assert.deepStrictEqual(d.tags, ['Tip']);
+    assert.deepStrictEqual(d.tags, ['Tip', 'Bogus']);
     const h = await history(A, code, { sort: 'created' });
     assert.strictEqual(h.messages.find((m) => m.id === posted[1].id).title, 'Renamed topic');
   });
 
   await t.test('a topic keeps a request status and can be moved planned → in progress → complete', async () => {
-    assert.strictEqual(posted[0].request_status, 'planned');
+    assert.strictEqual(posted[0].request_status, undefined, 'a discussion topic starts without a status');
+    const planned0 = next(A, 'topic-updated', (d) => d && d.messageId === posted[0].id && d.request_status === 'planned');
+    A.emit('set-topic-meta', { messageId: posted[0].id, title: posted[0].title, tags: posted[0].tags || [], requestStatus: 'planned' });
+    assert.strictEqual((await planned0).request_status, 'planned');
     const upd = next(A, 'topic-updated', (d) => d && d.messageId === posted[0].id && d.request_status === 'in_progress');
     A.emit('set-topic-meta', { messageId: posted[0].id, title: posted[0].title, tags: posted[0].tags || [], requestStatus: 'in_progress' });
     const d = await upd;

@@ -123,16 +123,16 @@ test('a forum topic with no replies still gets its reply button', () => {
   assert.match(html, /thread_runtime\.reply_to_topic/);
 });
 
-test('opening a forum topic covers the feed column and keeps the sidebar', () => {
-  const source = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-utilities.js'), 'utf8');
-  const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8');
-  const ui = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-ui.js'), 'utf8');
-  assert.match(source, /classList\.toggle\('forum-thread'/);
-  assert.match(source, /forum-thread-open/);
-  assert.match(source, /main\.appendChild\(panel\)/);
-  assert.match(source, /thread-panel-back/);
-  assert.match(css, /\.main > \.thread-panel\.forum-thread:not\(\.pip\)/);
-  assert.match(ui, /thread-panel-back/);
+test('a forum topic opens with its checklist and a way back to the topics', () => {
+  const threads = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-threads.js'), 'utf8');
+  const pip = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-pip-panels.js'), 'utf8');
+  const css = require('./coreCss').readCoreCss();
+  assert.match(threads, /_forumApplyThreadChrome\?\.\(parentId\);\n\s*this\._paintForumSubtasks\?\.\(/);
+  assert.match(threads, /_paintForumSubtasks\?\.\(null\)/);
+  assert.match(pip, /getElementById\('thread-panel-back'\)\?\.addEventListener\('click', \(\) => this\._closeThread\(\)\)/);
+  assert.match(css, /\.forum-thread-back \{ display: none;/);
+  assert.match(css, /\.thread-panel\.thread-panel-forum:not\(\.pip\) \.forum-thread-back \{ display: inline-flex; \}/);
+  assert.match(css, /\.forum-subtask-list \{/);
 });
 
 test('braid keeps server chips reachable when the sidebar is narrow', () => {
@@ -150,18 +150,23 @@ test('braid forum view drops the tall chat padding under the channel topic', () 
 test('forum topics turn image URLs into pictures instead of leftover links', () => {
   const forum = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-forum.js'), 'utf8');
   const utilities = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-utilities.js'), 'utf8');
-  const socket = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-socket.js'), 'utf8');
-  const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8');
+  const content = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-message-content.js'), 'utf8');
+  const css = require('./coreCss').readCoreCss();
   assert.match(utilities, /_pullImageUrls\(str\)/);
-  assert.match(utilities, /A caption with an image URL/);
-  assert.match(forum, /_paintForumParentPreview/);
+  assert.match(content, /this\._pullImageUrls\(str\)/);
   assert.match(forum, /_paintForumSubtasks/);
   assert.match(forum, /_forumTypeCatalog\(\)/);
   assert.match(forum, /_forumAttachGif/);
   assert.match(forum, /_forumDraftMeta/);
   assert.match(forum, /_imgSrcAttr\(thumb\)/);
-  assert.match(socket, /_paintForumParentPreview\(data\.parentContent\)/);
-  assert.match(css, /\.thread-panel\.forum-thread \.thread-parent-preview/);
+  assert.match(css, /\.forum-tag-kind-bug \{/);
+  assert.match(css, /\.forum-tag-status-in_progress \{/);
+  const app = loadApp();
+  app._lazySrcAttr = (a) => a;
+  app._imgSrcAttr = (u) => `src="${u}"`;
+  assert.match(app._formatContent('Look at this\nhttps://example.com/a.png'), /^Look at this<img src="https:\/\/example\.com\/a\.png" class="chat-image"/);
+  assert.doesNotMatch(app._formatContent('`https://example.com/a.png`'), /<img/);
+  assert.match(app._formatContent('<b>x</b> https://example.com/a.png'), /^&lt;b&gt;/);
 });
 
 test('outside a forum an empty thread renders nothing', () => {

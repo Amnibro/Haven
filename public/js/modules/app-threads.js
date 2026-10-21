@@ -290,6 +290,7 @@ _openThread(parentId) {
   // A forum topic opens across the chat column with a title bar; this runs
   // after the header above so the bar's title is what shows (#5659).
   this._forumApplyThreadChrome?.(parentId);
+  this._paintForumSubtasks?.(this._forumActive && this._forumTopics ? this._forumTopics.get(parentId) : null);
 
   // Focus input
   const input = document.getElementById('thread-input');
@@ -354,6 +355,7 @@ _closeThread() {
   const threadMsgs = document.getElementById('thread-messages');
   if (threadMsgs) threadMsgs.innerHTML = '';
   this._forumApplyThreadChrome?.(null);
+  this._paintForumSubtasks?.(null);
   this._forumBlogClose?.();
 },
 

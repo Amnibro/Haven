@@ -199,16 +199,6 @@ _forumLoadLinkPreview(msg) {
   }).catch((err) => { console.warn('[Forum] could not show the link preview on a topic', err); });
 },
 
-// Thread replies arrive after the list card is gone, and get-thread-messages
-// used to write parentContent as textContent — so a photo topic became a URL.
-_paintForumParentPreview(content) {
-  const previewEl = document.getElementById('thread-parent-preview');
-  if (!previewEl) return;
-  previewEl.innerHTML = this._formatContent ? this._formatContent(String(content || '')) : this._escapeHtml(String(content || ''));
-  this._flushPendingMedia && this._flushPendingMedia();
-  this._lazyMedia && this._lazyPump && this._lazyPump();
-},
-
 _forumTypeCatalog() {
   return [
     { id: 'request', group: 'board', status: true, subtasks: true, tags: ['priority', 'mobile', 'desktop', 'api', 'ui'] },
