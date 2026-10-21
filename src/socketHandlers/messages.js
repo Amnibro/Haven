@@ -1051,6 +1051,13 @@ module.exports = function register(socket, ctx) {
        FROM messages m WHERE m.channel_id = ? AND m.id IN (${placeholders})`
     ).all(channel.id, ...ids);
 
+    // Selected messages that are no longer there (another delete or a scrub
+    // got to them first, and this screen was never told) are done already:
+    // they come off this screen, and count as deleted rather than refused.
+    const found = new Set(rows.map(r => r.id));
+    const gone = ids.filter(id => !found.has(id));
+    for (const id of gone) socket.emit('message-deleted', { channelCode: code, messageId: id });
+
     const deletable = [];
     const skipped = [];
     let kept = 0;
@@ -1071,6 +1078,7 @@ module.exports = function register(socket, ctx) {
     }
 
     if (deletable.length === 0) {
+      if (gone.length && !skipped.length) return cb({ success: true, deleted: gone.length, skipped: 0, kept: 0 });
       if (kept && kept === rows.length) return cb({ error: protectedMessages.REFUSAL, deleted: 0, skipped: skipped.length, kept });
       return cb({ error: 'You don\'t have permission to delete the selected items', deleted: 0, skipped: skipped.length, kept });
     }
@@ -1126,7 +1134,7 @@ module.exports = function register(socket, ctx) {
       });
     }
 
-    cb({ success: true, deleted: deletable.length, skipped: skipped.length, kept });
+    cb({ success: true, deleted: deletable.length + gone.length, skipped: skipped.length, kept });
   };
 
   // ── Delete every message you wrote (#5686) ────────────────
@@ -2215,7 +2223,9 @@ module.exports = function register(socket, ctx) {
     const msg = db.prepare(
       'SELECT id, user_id, content, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
     ).get(data.messageId, channel.id);
-    if (!msg) return;
+    // Already gone (a scrub or another delete got there first, and this
+    // screen was never told): take it off this screen instead of doing nothing.
+    if (!msg) return socket.emit('message-deleted', { channelCode: code, messageId: data.messageId });
     // Protected means kept, whoever asks, the admin included.
     const kept = protectedMessages.refusal(db, msg.id);
     if (kept) return socket.emit('error-msg', kept);

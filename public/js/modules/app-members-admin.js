@@ -25,6 +25,7 @@ _renderBanList(bans) {
       </div>
       <div class="ban-actions">
         <button class="btn-sm btn-unban" data-uid="${b.user_id}">${t('settings.admin.unban_btn')}</button>
+        <button class="btn-sm btn-scrub-user" data-uid="${b.user_id}" data-uname="${this._escapeHtml(b.username)}" title="${t('settings.admin.scrub_title')}">🧹 ${t('settings.admin.scrub_btn')}</button>
         ${b.appeal ? `<button class="btn-sm btn-dismiss-appeal" data-uid="${b.user_id}" title="${t('settings.admin.dismiss_appeal_title')}">${t('settings.admin.dismiss_appeal_btn')}</button>` : ''}
         <button class="btn-sm btn-delete-user" data-uid="${b.user_id}" data-uname="${this._escapeHtml(b.username)}" title="${t('settings.admin.delete_user_title')}">🗑️</button>
       </div>
@@ -34,6 +35,23 @@ _renderBanList(bans) {
   list.querySelectorAll('.btn-unban').forEach(btn => {
     btn.addEventListener('click', () => {
       this.socket.emit('unban-user', { userId: parseInt(btn.dataset.uid) });
+    });
+  });
+
+  // For a ban made without "Scrub messages": everything they wrote in the
+  // server's channels goes, protected messages and DMs aside.
+  list.querySelectorAll('.btn-scrub-user').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.uname;
+      const ok = await this._showConfirmModal(t('settings.admin.scrub_confirm', { name }), t('settings.admin.scrub_confirm_hint'),
+        { danger: true, confirmLabel: t('settings.admin.scrub_btn') });
+      if (!ok) return;
+      btn.disabled = true;
+      this.socket.emit('scrub-user-messages', { userId: parseInt(btn.dataset.uid) }, (res) => {
+        btn.disabled = false;
+        if (!res || res.error) return this._showToast(res?.error || t('settings.admin.scrub_failed'), 'error');
+        this._showToast(res.deleted ? t('settings.admin.scrub_done', { n: res.deleted }) : t('settings.admin.scrub_none'), 'success');
+      });
     });
   });
 
