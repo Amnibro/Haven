@@ -12,6 +12,7 @@ _bindThreadAndDmPanels() {
   // Thread panel: close, send
   const threadCloseBtn = document.getElementById('thread-panel-close');
   if (threadCloseBtn) threadCloseBtn.addEventListener('click', () => this._closeThread());
+  document.getElementById('thread-panel-back')?.addEventListener('click', () => this._closeThread());
 
   const threadPipBtn = document.getElementById('thread-panel-pip');
   if (threadPipBtn) threadPipBtn.addEventListener('click', () => this._toggleThreadPiP());
