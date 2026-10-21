@@ -245,6 +245,23 @@ _formatContent(str) {
       return `<img ${this._lazySrcAttr(this._imgSrcAttr(u))} class="chat-image" alt="image">`;
     }
   }
+  {
+    const embedded = this._pullImageUrls(str);
+    if (embedded.length && embedded.some((u) => str.trim() !== u) && !/\]\(|`|\|\|/.test(str)) {
+      let rest = str;
+      const chunks = [];
+      for (const u of embedded) {
+        const i = rest.indexOf(u);
+        if (i < 0) continue;
+        const before = rest.slice(0, i).trim();
+        before && chunks.push(this._formatContent(before));
+        chunks.push(this._formatContent(u));
+        rest = rest.slice(i + u.length);
+      }
+      rest.trim() && chunks.push(this._formatContent(rest.trim()));
+      return chunks.join('');
+    }
+  }
 
   // ── Extract fenced code blocks before escaping ──
   // A word right after the opening fence is a language name only when the
