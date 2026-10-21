@@ -8,7 +8,7 @@ const multer = require('multer');
 const privacyPass = require('../privacyPass');
 const storage = require('../storage');
 const { auditHttp } = require('../httpAudit');
-const { DATA_DIR, STAGING_DIR } = require('../paths');
+const { DATA_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const { sanitizeSoundName } = require('../socketHandlers');
 
