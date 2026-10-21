@@ -1138,7 +1138,7 @@ _startEditMessage(msgEl, msgId) {
     }
     if (this._composerListKey(e, textarea)) return;
 
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && this._enterSends(e)) {
       e.preventDefault();
       btnRow.querySelector('.edit-save-btn').click();
     }

@@ -47,6 +47,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
+- On a phone or tablet browser, Enter now starts a new line in the message box, thread replies, DM pop-outs and message edits, and the Send button sends, as in the mobile apps. Shift+Enter and Ctrl+Enter still work, and with a keyboard on a desktop or laptop Enter still sends. Turn on Hide the Send button and Enter sends everywhere.
 - Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
 - More options in Create Channel was cut off at the bottom (thanks KamdenB, #5814).
 - The screen share and camera buttons stayed off after you moved from a voice room that doesn't allow streams to one that does (Desktop #66).
