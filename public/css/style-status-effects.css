@@ -1200,6 +1200,11 @@
 }
 
 .auth-header .tagline { color: var(--text-secondary); font-size: 0.75rem; margin: 0.0625rem 0 0; }
+/* The login page's own look (#5819, public/js/auth.js). */
+.auth-server-logo { display: block; width: 4rem; height: 4rem; object-fit: contain; margin: 0.75rem auto 0; border-radius: 0.75rem; }
+.auth-server-logo[hidden], .auth-login-message[hidden] { display: none; }
+.auth-login-message { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4; margin: 0.5rem 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+body.auth-page.auth-has-background { background-image: var(--auth-background); background-size: cover; background-position: center; background-attachment: fixed; }
 
 .auth-header .server-title {
   color: var(--text-primary);

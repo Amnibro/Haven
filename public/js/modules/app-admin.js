@@ -397,6 +397,7 @@ _applyServerSettings() {
     if (welcomeInput) {
       welcomeInput.value = this.serverSettings.welcome_message || '';
     }
+    this._fillLoginBranding?.();
     const cleanupEnabled = document.getElementById('cleanup-enabled');
     if (cleanupEnabled) {
       cleanupEnabled.checked = this.serverSettings.cleanup_enabled === 'true';

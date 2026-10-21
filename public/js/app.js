@@ -56,7 +56,7 @@ import MessageContentMethods from './modules/app-message-content.js?v=4.26.18';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
 import ThreadMethods from './modules/app-threads.js?v=4.25.10';
-import AdminMethods    from './modules/app-admin.js?v=4.26.6';
+import AdminMethods    from './modules/app-admin.js?v=4.27.4';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.3';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.26.12';
@@ -79,6 +79,7 @@ import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 import GroupMethods from './modules/app-groups.js?v=4.25.5';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.22.9';
+import LoginBrandingMethods from './modules/app-login-branding.js?v=4.27.4';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
 import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
@@ -431,6 +432,7 @@ class HavenApp {
     this._setupToolbarIconPicker();
     // After the pickers above: the defaults apply through them (#5739).
     this._setupMemberDefaults();
+    this._setupLoginBranding();
     this._setupMessageHighlights();
     this._setupModCases();
     this._setupBadges();
@@ -619,6 +621,7 @@ Object.assign(HavenApp.prototype,
   GroupMethods,
   TemplateMethods,
   MemberDefaultsMethods,
+  LoginBrandingMethods,
   MessageHighlightMethods,
   MessageGroupingMethods,
   ModCaseMethods,

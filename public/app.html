@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.26.18">
+  <link rel="stylesheet" href="/css/style.css?v=4.27.4">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.24.18"></script>
 </head>
@@ -2796,6 +2796,26 @@
             <input type="text" id="server-title-input" maxlength="40" class="settings-text-input" style="max-width:200px" data-i18n-placeholder="settings.admin.login_title_placeholder" placeholder="(shown on login page)">
           </label>
           <small class="settings-hint" style="margin-top:2px;display:block" data-i18n="settings.admin.login_title_hint">Custom title displayed on the login screen below the HAVEN logo.</small>
+          <div id="login-branding" style="margin-top:10px">
+            <label class="toggle-row">
+              <span data-i18n="settings.admin.login_show_icon">Show the server icon on the login page</span>
+              <input type="checkbox" id="login-show-icon">
+            </label>
+            <label class="toggle-row" style="margin-top:6px">
+              <span data-i18n="settings.admin.login_show_banner">Use the server banner as the login page background</span>
+              <input type="checkbox" id="login-show-banner">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span data-i18n="settings.admin.login_message">Login page message</span>
+              <input type="text" id="login-message-input" maxlength="500" class="settings-text-input" style="max-width:280px">
+            </label>
+            <small class="settings-hint" data-i18n="settings.admin.login_message_hint">A short note under the title, like a welcome or how to get an invite.</small>
+            <div id="login-css-row" style="display:none;margin-top:8px">
+              <label for="login-css-input" data-i18n="settings.admin.login_css">Login page CSS</label>
+              <textarea id="login-css-input" rows="5" maxlength="20000" spellcheck="false" class="settings-text-input" style="width:100%;font-family:monospace;font-size:0.8rem;margin-top:4px"></textarea>
+              <small class="settings-hint" data-i18n="settings.admin.login_css_hint">Styles the login and registration page only. If a style hides the form, add ?nocss to the end of the login page's address to skip it. A picture or font linked from another site lets that site see who visits.</small>
+            </div>
+          </div>
 
           <!-- Server Icon -->
           <div class="settings-group" style="margin-top:12px">
@@ -5413,7 +5433,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.27.3"></script>
+  <script type="module" src="/js/app.js?v=4.27.4"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

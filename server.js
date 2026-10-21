@@ -1305,6 +1305,7 @@ app.get('/api/public-config', (req, res) => {
     const nameRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
     const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
     const adminPwResetRow = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
+    const loginSetting = (k) => db.prepare('SELECT value FROM server_settings WHERE key = ?').get(k)?.value || '';
     const oidcConfig = require('./src/oidc').getOidcConfig();
     let storedPublishedThemes = [];
     try { storedPublishedThemes = JSON.parse(publishedThemesRow?.value || '[]'); } catch { /* malformed setting: treat as no published themes */ }
@@ -1318,6 +1319,11 @@ app.get('/api/public-config', (req, res) => {
       // favicon (issue #5284). These are already public via /api/health.
       server_name: nameRow?.value || process.env.SERVER_NAME || '',
       server_icon: iconRow?.value || '',
+      // The login page's look (#5819), all of it shown to anyone who visits.
+      login_logo: loginSetting('login_show_icon') === 'true' ? (iconRow?.value || '') : '',
+      login_background: loginSetting('login_show_banner') === 'true' ? loginSetting('server_banner') : '',
+      login_message: loginSetting('login_message'),
+      login_css: loginSetting('login_css'),
       // Surface security-relevant settings users may want to know about
       // before signing up (issue #5300). Allowing a user to *see* whether
       // an admin can reset their password is the trust-and-warning half
