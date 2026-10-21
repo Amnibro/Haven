@@ -33,10 +33,37 @@ _ytCommand(iframe, func, args = []) {
   }
 },
 
-// The slider for a YouTube card's top bar, and its Keep playing pin.
+// The slider for a YouTube card's top bar, its Loop button and its Keep
+// playing pin.
 _ytVolumeHtml() {
   const v = this._embedVolume();
-  return `<label class="lp-volume" title="${t('app.messages.embed_volume')}"><span aria-hidden="true">${v === 0 ? '🔇' : '🔊'}</span><input type="range" min="0" max="100" step="5" value="${v}" aria-label="${t('app.messages.embed_volume')}"></label>${this._keepPlayingHtml()}`;
+  return `<label class="lp-volume" title="${t('app.messages.embed_volume')}"><span aria-hidden="true">${v === 0 ? '🔇' : '🔊'}</span><input type="range" min="0" max="100" step="5" value="${v}" aria-label="${t('app.messages.embed_volume')}"></label>${this._loopHtml()}${this._keepPlayingHtml()}`;
+},
+
+// YouTube's player cannot be set to loop from outside once it is loaded, so
+// a looping card asks the player to report its state and starts the video
+// over when it says it ended. A player only reports to a page that said it
+// is listening; that is asked again on every toggle, which is harmless.
+_ytListen(iframe) {
+  try {
+    iframe?.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), 'https://www.youtube.com');
+  } catch (err) {
+    console.warn('[media] could not reach the YouTube player', err.message);
+  }
+  this._ytCommand(iframe, 'addEventListener', ['onStateChange']);
+},
+
+_ytLoopOnEnd(e) {
+  if (e.origin !== 'https://www.youtube.com' || typeof e.data !== 'string') return;
+  let msg;
+  try { msg = JSON.parse(e.data); } catch { return; /* not one of the player's messages */ }
+  const ended = (msg.event === 'onStateChange' && msg.info === 0)
+    || (msg.event === 'infoDelivery' && msg.info && msg.info.playerState === 0);
+  if (!ended) return;
+  const iframe = [...document.querySelectorAll('.link-preview-yt iframe[data-loop="1"]')].find(f => f.contentWindow === e.source);
+  if (!iframe) return;
+  this._ytCommand(iframe, 'seekTo', [0, true]);
+  this._ytCommand(iframe, 'playVideo');
 },
 
 // A pin that lets one video, sound or YouTube card keep playing when it is
@@ -121,12 +148,22 @@ _setupMediaPlayback() {
     if (!btn) return;
     e.preventDefault();
     e.stopPropagation();
-    const media = btn.closest('.file-attachment')?.querySelector('video, audio');
-    if (!media) return;
-    media.loop = !media.loop;
-    btn.setAttribute('aria-pressed', String(media.loop));
-    btn.title = t(media.loop ? 'app.messages.loop_on' : 'app.messages.loop');
+    const box = btn.closest('.file-attachment, .link-preview');
+    const media = box?.querySelector('video, audio');
+    const iframe = media ? null : box?.querySelector('.link-preview-yt iframe');
+    if (!media && !iframe) return;
+    let on;
+    if (media) {
+      media.loop = !media.loop;
+      on = media.loop;
+    } else {
+      on = iframe.dataset.loop !== '1';
+      if (on) { iframe.dataset.loop = '1'; this._ytListen(iframe); } else delete iframe.dataset.loop;
+    }
+    btn.setAttribute('aria-pressed', String(on));
+    btn.title = t(on ? 'app.messages.loop_on' : 'app.messages.loop');
   }, true);
+  window.addEventListener('message', (e) => this._ytLoopOnEnd(e));
   if (typeof IntersectionObserver !== 'function') return;
   const seen = new WeakSet();
   const io = new IntersectionObserver((entries) => {
