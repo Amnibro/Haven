@@ -10,7 +10,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Added
 - Optional external storage for uploads (thanks KamdenB, #5813): pictures, files, avatars, emoji, stickers and sounds can live in an S3-compatible bucket, such as MinIO or Garage on your own NAS, or a hosted one. It's off unless you turn it on, and the S3 library it needs is downloaded only on servers that do. See "External Media Storage" in GUIDE.md.
-- Early access updates: under Settings > Admin, a server can opt in to pre-releases and try new versions before everyone else. Docker users can use the `:beta` image instead.
 - Importing from Discord now copies pictures and files into Haven, so they don't turn into dead links when Discord's links expire. It's a checkbox on the import screen, on by default (#5811).
 - Right-click a forum topic and choose "Move to forum…" to move it, replies and all, to another forum. It keeps the tags the new forum also has (#5809).
 - The "N new" badge in the Threads window turns into a Mark read button when you point at it.
@@ -49,6 +48,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Security
 - Updated follow-redirects, used by the tunnel feature, for two security advisories.
+
+## [4.26.3] - 2026-10-21
+
+### Added
+- Early access updates: under Settings > Admin, a server can opt in to pre-releases and try new versions before everyone else. Docker users can use the `:beta` image instead. Stable releases keep coming about once a week for everyone else.
 
 ## [4.26.2] - 2026-10-17
 
