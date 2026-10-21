@@ -323,6 +323,9 @@ _bindThreadAndDmPanels() {
     });
   }
 
+  const threadFileInput = document.getElementById('thread-file-input');
+  document.getElementById('thread-upload-btn')?.addEventListener('click', (e) => { e.stopPropagation(); threadFileInput?.click(); });
+  threadFileInput?.addEventListener('change', () => { threadFileInput.files?.length && this._activeThreadParent && this._queueThreadFiles(threadFileInput.files); threadFileInput.value = ''; });
   const threadReplyCloseBtn = document.getElementById('thread-reply-close-btn');
   if (threadReplyCloseBtn) threadReplyCloseBtn.addEventListener('click', () => this._clearThreadReply());
 
