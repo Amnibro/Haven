@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const multer = require('multer');
 const privacyPass = require('../privacyPass');
 const storage = require('../storage');
-const { DATA_DIR, STAGING_DIR } = require('../paths');
+const { DATA_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const { sanitizeSoundName } = require('../socketHandlers');
 
