@@ -205,8 +205,10 @@ module.exports = function register(socket, ctx) {
       }
     });
 
+    // Only an admin can scrub server-wide; anyone else's request covers this
+    // channel. The audit log records the scope that was used, not the one asked for.
+    const scrubScope = data.scrubMessages ? ((socket.user.isAdmin && data.scrubScope === 'server') ? 'server' : 'channel') : null;
     if (data.scrubMessages) {
-      const scrubScope = (socket.user.isAdmin && data.scrubScope === 'server') ? 'server' : 'channel';
       if (scrubScope === 'channel' && kickCh) {
         db.prepare(`DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT m.id FROM messages m WHERE m.channel_id = ? AND ${SCRUBBABLE})`).run(data.userId, kickCh.id);
         db.prepare(`DELETE FROM messages WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND m.channel_id = ? AND ${SCRUBBABLE})`).run(data.userId, kickCh.id);
@@ -220,7 +222,7 @@ module.exports = function register(socket, ctx) {
     _audit({ actor: socket.user, action: 'user_kick',
       target_type: 'user', target_id: data.userId, target_name: targetName,
       details: { channelCode: code, reason: data.reason || null,
-        scrubMessages: !!data.scrubMessages, scrubScope: data.scrubScope || null } });
+        scrubMessages: !!data.scrubMessages, scrubScope } });
     // Last, since everything above still addresses the channel by its old
     // code: a kicked person must not be able to walk back into a private
     // channel with the code they already know.

@@ -742,9 +742,11 @@ _showAdminActionModal(action, userId, username) {
   const hasScrub = ['kick', 'ban', 'delete-user'].includes(action);
   scrubGroup.style.display = hasScrub ? 'block' : 'none';
   scrubCheckbox.checked = false;
-  // Kick gets scope dropdown (channel vs server), ban/delete are server-wide only
+  // Kick gets scope dropdown (channel vs server), ban/delete are server-wide only.
+  // Only an admin can scrub server-wide (the server holds everyone else to the
+  // channel), so only an admin is offered the choice.
   scrubScopeRow.style.display = 'none';
-  if (action === 'kick') {
+  if (action === 'kick' && this.user?.isAdmin) {
     scrubCheckbox.onchange = () => { scrubScopeRow.style.display = scrubCheckbox.checked ? 'block' : 'none'; };
   } else {
     scrubCheckbox.onchange = null;
