@@ -58,7 +58,7 @@ test('olderThanDays must be a whole number of days from 1 to 3650; missing or 0 
   for (const v of [-1, 3651, 1.5, '30', NaN, true]) assert.equal(selfPurge.parseOlderThanDays(v), null);
 });
 
-test('deleting messages older than N days leaves newer ones and protected ones, and says where it cut', () => {
+test('deleting messages older than N days leaves newer ones and protected ones, and says where it cut', async () => {
   fs.writeFileSync(path.join(UPLOADS_DIR, 'dc-old.png'), 'x');
   db.prepare("INSERT INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES ('dc-old.png', ?, 1, 'channel')").run(ann);
   const old = add(ann, 'old /uploads/dc-old.png', daysAgo(40));
@@ -70,7 +70,7 @@ test('deleting messages older than N days leaves newer ones and protected ones, 
   db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)').run(old, channel, ann);
 
   const { emitted, io } = recorder();
-  const r = selfPurge.purgeOwnMessages({ db, io, userId: ann, olderThanDays: 30, uploadPathRe: UPLOAD_PATH_RE, moveUploadToDeleted });
+  const r = await selfPurge.purgeOwnMessages({ db, io, userId: ann, olderThanDays: 30, uploadPathRe: UPLOAD_PATH_RE, moveUploadToDeleted });
   assert.equal(r.deleted, 3);
   assert.equal(r.kept, 1);
   assert.equal(r.channels, 2);
@@ -90,17 +90,17 @@ test('deleting messages older than N days leaves newer ones and protected ones, 
   for (const e of events) assert.deepEqual(e.data, { channelCode: e.room.slice(8), userId: ann, before: r.before });
 });
 
-test('deleting everything sends no before', () => {
+test('deleting everything sends no before', async () => {
   const id = add(cat, 'mine', daysAgo(1));
   const { emitted, io } = recorder();
-  const r = selfPurge.purgeOwnMessages({ db, io, userId: cat, uploadPathRe: UPLOAD_PATH_RE, moveUploadToDeleted });
+  const r = await selfPurge.purgeOwnMessages({ db, io, userId: cat, uploadPathRe: UPLOAD_PATH_RE, moveUploadToDeleted });
   assert.equal(r.deleted, 1);
   assert.equal(r.before, null);
   assert.ok(!exists(id));
   assert.deepEqual(emitted.map(e => e.data), [{ channelCode: 'dc000001', userId: cat }]);
 });
 
-test('auto-delete runs only while self-purge is allowed, keeps the setting, and audits each member once', () => {
+test('auto-delete runs only while self-purge is allowed, keeps the setting, and audits each member once', async () => {
   db.prepare('UPDATE users SET auto_delete_days = 7 WHERE id = ?').run(ben);
   const benOld = add(ben, 'week old', daysAgo(8));
   const benOld2 = add(ben, 'week old dm', daysAgo(9), { ch: dm });
@@ -110,12 +110,12 @@ test('auto-delete runs only while self-purge is allowed, keeps the setting, and 
   const purge = (userId, days) => selfPurge.purgeOwnMessages({ db, io, userId, olderThanDays: days, uploadPathRe: UPLOAD_PATH_RE, moveUploadToDeleted });
 
   setAllow('false');
-  assert.equal(selfPurge.runAutoDelete({ db, purge, logAudit: (e) => audits.push(e) }), 0);
+  assert.equal(await selfPurge.runAutoDelete({ db, purge, logAudit: (e) => audits.push(e) }), 0);
   assert.ok(exists(benOld), 'nothing goes while the admin has self-purge off');
   assert.equal(db.prepare('SELECT auto_delete_days FROM users WHERE id = ?').get(ben).auto_delete_days, 7, 'the setting is kept');
 
   setAllow('true');
-  const removed = selfPurge.runAutoDelete({ db, purge, logAudit: (e) => audits.push(e) });
+  const removed = await selfPurge.runAutoDelete({ db, purge, logAudit: (e) => audits.push(e) });
   assert.equal(removed, 3, 'the 40-day-old message from the first test goes too');
   assert.ok(!exists(benOld) && !exists(benOld2) && exists(benNew));
   assert.equal(audits.length, 1);
@@ -124,7 +124,7 @@ test('auto-delete runs only while self-purge is allowed, keeps the setting, and 
   assert.deepEqual(audits[0].details, { deleted: 3, kept: 0, channels: 2, days: 7 });
   assert.ok(emitted.every(e => e.data.before && e.data.userId === ben));
 
-  assert.equal(selfPurge.runAutoDelete({ db, purge, logAudit: (e) => audits.push(e) }), 0);
+  assert.equal(await selfPurge.runAutoDelete({ db, purge, logAudit: (e) => audits.push(e) }), 0);
   assert.equal(audits.length, 1, 'a run that deletes nothing writes no audit row');
   db.prepare('UPDATE users SET auto_delete_days = 0 WHERE id = ?').run(ben);
 });
