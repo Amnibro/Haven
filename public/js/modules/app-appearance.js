@@ -200,15 +200,19 @@ _frozenFrame(url) {
   const p = new Promise((resolve) => {
     const im = new Image();
     im.decoding = 'async';
-    im.onload = () => {
+    const paint = () => {
       try {
+        if (!im.naturalWidth || !im.naturalHeight) return resolve(null);
         const c = document.createElement('canvas');
-        c.width = im.naturalWidth || 1;
-        c.height = im.naturalHeight || 1;
-        c.getContext('2d').drawImage(im, 0, 0);
-        resolve(c.toDataURL('image/png'));
+        c.width = im.naturalWidth;
+        c.height = im.naturalHeight;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(im, 0, 0);
+        const px = ctx.getImageData(0, 0, Math.min(c.width, 8), Math.min(c.height, 8)).data;
+        resolve(px.some((v, i) => i % 4 === 3 && v) ? c.toDataURL('image/png') : null);
       } catch { resolve(null); }
     };
+    im.onload = () => typeof im.decode === 'function' ? im.decode().then(paint, () => resolve(null)) : paint();
     im.onerror = () => resolve(null);
     im.src = url;
   });
