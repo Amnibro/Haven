@@ -2082,7 +2082,8 @@ _e2eImageBlob(img, partner = null) {
   return fetch(url)
     .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
     .then(buf => this._e2eDecryptBytes(partner, new Uint8Array(buf)))
-    .then(plain => new Blob([plain], { type: mime }));
+    .then(plain => new Blob([plain], { type: mime }))
+    .then(blob => this._inertImageBlob ? this._inertImageBlob(blob) : blob);
 },
 
 };
