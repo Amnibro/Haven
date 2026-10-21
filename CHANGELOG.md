@@ -15,7 +15,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - The "N new" badge in the Threads window turns into a Mark read button when you point at it.
 - Typing `:` and a couple of letters now suggests matching stickers too, and picking one sends it (#5812).
 - Videos can be marked as spoilers when you upload them, like pictures.
-- A 🔁 Loop button on uploaded videos and sounds (#5817).
+- A 🔁 Loop button on uploaded videos and sounds (#5817), and on YouTube cards.
+- Login page branding under Settings > Branding (#5819): show the server icon and banner on the login page, a short message under the title, and custom CSS for the login and registration page (admin only; add `?nocss` to the address to skip it).
+- Stereo stream audio, an experiment under Settings > Debug: plays the sound of screen shares in stereo at a music bitrate. Each listener turns it on; on servers using the voice relay, the person sharing does too.
 - A 📌 Keep playing pin lets one video or sound keep playing when you scroll away from it.
 - Create Channel has a More options section: topic, read only, slow mode, uploads and voice.
 - French is now fully translated.
