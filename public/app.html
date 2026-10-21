@@ -2671,6 +2671,14 @@
 
         <div class="desktop-pref-row">
           <label class="toggle-row">
+            <input type="checkbox" id="pref-debug-stereo-stream-audio">
+            <span class="toggle-label" data-i18n="settings.debug_section.stereo_stream_audio">Stereo stream audio (experimental)</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.debug_section.stereo_stream_audio_hint">Plays the sound of screen shares in stereo, at a higher bitrate meant for music and games. Turn it on to hear streams in stereo; on servers that use the voice relay, the person sharing needs it on too. Uses more bandwidth. Rejoin voice after changing it. Experimental: if voice acts up, turn it off.</p>
+        </div>
+
+        <div class="desktop-pref-row">
+          <label class="toggle-row">
             <input type="checkbox" id="pref-debug-screen-audio-direct">
             <span class="toggle-label" data-i18n="settings.debug_section.screen_audio_webaudio">Web Audio mixing for screen-share audio</span>
           </label>
@@ -5425,15 +5433,15 @@
   <script src="/js/theme-gallery.js?v=4.26.1"></script>
   <script src="/js/notifications.js?v=4.23.6"></script>
   <script src="/js/servers.js?v=4.23.9"></script>
-  <script src="/js/voice-relay.js?v=4.14.2"></script>
-  <script src="/js/voice.js?v=4.25.22"></script>
+  <script src="/js/voice-relay.js?v=4.27.5"></script>
+  <script src="/js/voice.js?v=4.27.5"></script>
   <script src="/js/modmode.js?v=4.21.0"></script>
   <script src="/js/e2e-group.js?v=4.21.0"></script>
   <script src="/js/e2e.js?v=4.21.0"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.27.4"></script>
+  <script type="module" src="/js/app.js?v=4.27.5"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

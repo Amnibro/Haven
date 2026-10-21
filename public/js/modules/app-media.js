@@ -34,6 +34,19 @@ _setupDebugSection() {
     });
   }
 
+  // Stereo stream audio, an experiment for Gnomp's request: the voice code
+  // reads this when a connection is set up (voice.js _stereoSdp).
+  const stereoCb = document.getElementById('pref-debug-stereo-stream-audio');
+  if (stereoCb) {
+    try { stereoCb.checked = localStorage.getItem('haven_stereo_stream_audio') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
+    stereoCb.addEventListener('change', () => {
+      try {
+        if (stereoCb.checked) localStorage.setItem('haven_stereo_stream_audio', '1');
+        else localStorage.removeItem('haven_stereo_stream_audio');
+      } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
+    });
+  }
+
   // #5426: screen-share audio now plays straight through the <audio> element
   // by default (NetEq stays in charge, so it stays in sync over a TURN relay).
   // This opt-in toggle instead routes it through the Web Audio mixer, which

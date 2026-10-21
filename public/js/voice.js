@@ -875,9 +875,9 @@ class VoiceManager {
             peer._queuedIceRestart = true;
           }
         }
-        await conn.setRemoteDescription(new RTCSessionDescription(offer));
+        await conn.setRemoteDescription(new RTCSessionDescription(this._stereoSdp(offer)));
         if (typeof data.offerId === 'string') peer._supportsOfferIds = true;
-        const answer = await conn.createAnswer();
+        const answer = this._stereoSdp(await conn.createAnswer());
         await conn.setLocalDescription(answer);
 
         this.socket.emit('voice-answer', {
@@ -931,7 +931,7 @@ class VoiceManager {
           // Only accept answer if we're actually waiting for one
           // (we may have rolled back our offer due to glare)
           if (peer.connection.signalingState === 'have-local-offer') {
-            await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            await peer.connection.setRemoteDescription(new RTCSessionDescription(this._stereoSdp(data.answer)));
             this._clearOfferAnswerTimer(peer);
             peer._awaitingAnswer = false;
             peer._activeOfferId = null;
@@ -3134,7 +3134,7 @@ class VoiceManager {
           return false;
         }
       }
-      const offer = await connection.createOffer(iceRestart ? { iceRestart: true } : undefined);
+      let offer = await connection.createOffer(iceRestart ? { iceRestart: true } : undefined);
       if (connection.signalingState !== 'stable') {
         // Another incoming offer won the race while createOffer() was in flight.
         // Leave one queued retry instead of forcing a stale local offer on top.
@@ -3142,6 +3142,7 @@ class VoiceManager {
         peer._queuedIceRestart = peer._queuedIceRestart || iceRestart;
         return false;
       }
+      offer = this._stereoSdp(offer);
       await connection.setLocalDescription(offer);
       this._offerSequence = (this._offerSequence || 0) + 1;
       const offerId = `${this.localUserId ?? 'unknown'}-${Date.now().toString(36)}-${this._offerSequence.toString(36)}`;
@@ -3172,6 +3173,31 @@ class VoiceManager {
   }
 
   // ── Private: Peer connection management ─────────────────
+
+  // Stereo stream audio, an experiment (Settings > Debug, Gnomp's request).
+  // WebRTC's Opus sends mono unless the connection asks for stereo, so music
+  // and game audio on a stream arrived mono. With it on, every Opus line in
+  // our offers and answers, and in the other side's, asks for stereo at a
+  // music bitrate. A browser plays stereo only when its own side asked for
+  // it, and sends stereo whenever the other side asks, so on direct voice it
+  // is the listener who needs it on; through the relay the sharer does too.
+  _stereoAudioOn() {
+    try { return localStorage.getItem('haven_stereo_stream_audio') === '1'; } catch { return false; }
+  }
+
+  _stereoSdp(desc) {
+    if (!desc || typeof desc.sdp !== 'string' || !this._stereoAudioOn()) return desc;
+    const pts = [...desc.sdp.matchAll(/a=rtpmap:(\d+) opus\/48000\/2/gi)].map(m => m[1]);
+    if (!pts.length) return desc;
+    let sdp = desc.sdp;
+    for (const pt of new Set(pts)) {
+      sdp = sdp.replace(new RegExp(`(a=fmtp:${pt} )([^\\r\\n]*)`, 'g'), (all, head, params) => {
+        const kept = params.split(';').map(p => p.trim()).filter(p => p && !/^(stereo|sprop-stereo|maxaveragebitrate)=/i.test(p));
+        return head + [...kept, 'stereo=1', 'sprop-stereo=1', 'maxaveragebitrate=128000'].join(';');
+      });
+    }
+    return { type: desc.type, sdp };
+  }
 
   async _createPeer(userId, username, createOffer) {
     // If a peer already exists for this user (e.g. a stale entry from a
