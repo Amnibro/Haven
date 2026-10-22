@@ -17,6 +17,7 @@ const { takeSilent } = require('../silentMessages');
 const { tagAccess } = require('../uploadTagRoles');
 const { moveToChannel } = require('../moveMessages');
 const storage = require('../storage');
+const { groupHistoryFloor } = require('../groupHistory');
 const { isSafeUploadRelPath } = storage;
 
 // The length limit is on what people type. An encrypted DM reaches the
@@ -274,7 +275,7 @@ module.exports = function register(socket, ctx) {
     const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 10) : [];
     const tagMode = data.tagMode === 'all' ? 'all' : 'some';
 
-    const channel = db.prepare('SELECT id, is_forum, role_gate, forum_blog, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_forum, role_gate, forum_blog, is_dm, is_group FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = db.prepare(
@@ -284,6 +285,7 @@ module.exports = function register(socket, ctx) {
     if (!member && (!socket.user.isAdmin || channel.is_dm)) return socket.emit('error-msg', 'Not a member of this channel');
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
 
+    const floor = groupHistoryFloor(db, channel, socket.user.id);
     let messages;
     if (channel.is_forum) {
       messages = forumHistory(channel.id, { before, after, around, limit, sort, tags, tagMode });
@@ -293,9 +295,9 @@ module.exports = function register(socket, ctx) {
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
+        WHERE m.channel_id = ? AND m.id < ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
-      `).all(channel.id, before, limit);
+      `).all(channel.id, before, floor, limit);
     } else if (after) {
       messages = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
@@ -304,7 +306,7 @@ module.exports = function register(socket, ctx) {
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at ASC, m.id ASC LIMIT ?
-      `).all(channel.id, after, limit);
+      `).all(channel.id, Math.max(after, floor), limit);
     } else if (around) {
       const half = Math.floor(limit / 2);
       const beforeMsgs = db.prepare(`
@@ -312,16 +314,16 @@ module.exports = function register(socket, ctx) {
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
+        WHERE m.channel_id = ? AND m.id < ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
-      `).all(channel.id, around, half);
+      `).all(channel.id, around, floor, half);
       const targetMsg = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id = ?
-      `).all(channel.id, around);
+        WHERE m.channel_id = ? AND m.id = ? AND m.id > ?
+      `).all(channel.id, around, floor);
       const afterMsgs = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
@@ -329,7 +331,7 @@ module.exports = function register(socket, ctx) {
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at ASC, m.id ASC LIMIT ?
-      `).all(channel.id, around, half);
+      `).all(channel.id, Math.max(around, floor), half);
       // Combine: beforeMsgs is DESC so reverse it, target, then afterMsgs ASC
       messages = [...beforeMsgs.reverse(), ...targetMsg, ...afterMsgs];
     } else {
@@ -338,9 +340,9 @@ module.exports = function register(socket, ctx) {
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.thread_id IS NULL
+        WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
-      `).all(channel.id, limit);
+      `).all(channel.id, floor, limit);
     }
 
     // Batch-enrich messages (reply context, reactions, pin status) in 3 queries
@@ -566,7 +568,7 @@ module.exports = function register(socket, ctx) {
       channelCode: code,
       messages: (after || around) ? enriched : enriched.reverse(),
       lastReadMessageId,
-      pinnedCount: db.prepare('SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ?').get(channel.id).cnt,
+      pinnedCount: db.prepare('SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ? AND message_id > ?').get(channel.id, floor).cnt,
       ...(around ? { around } : {})
     });
   });
@@ -786,7 +788,7 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm, is_group FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = hasChannelAccess(channel.id);
@@ -802,12 +804,12 @@ module.exports = function register(socket, ctx) {
              COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username,
              u.id as user_id
       FROM messages m LEFT JOIN users u ON m.user_id = u.id
-      WHERE m.channel_id = ?
+      WHERE m.channel_id = ? AND m.id > ?
         AND m.thread_id IS NULL
         AND (m.content LIKE '%/uploads/%' ESCAPE '\\' OR m.content LIKE '%http://%' ESCAPE '\\' OR m.content LIKE '%https://%' ESCAPE '\\')
       ORDER BY m.created_at DESC, m.id DESC
       LIMIT 5000
-    `).all(channel.id);
+    `).all(channel.id, groupHistoryFloor(db, channel, socket.user.id));
 
     const photos = [];
     const videos = [];
@@ -2554,7 +2556,7 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_group FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = hasChannelAccess(channel.id);
@@ -2568,9 +2570,9 @@ module.exports = function register(socket, ctx) {
       JOIN messages m ON pm.message_id = m.id
       LEFT JOIN users u ON m.user_id = u.id
       LEFT JOIN users pb ON pm.pinned_by = pb.id
-      WHERE pm.channel_id = ?
+      WHERE pm.channel_id = ? AND m.id > ?
       ORDER BY pm.pinned_at DESC
-    `).all(channel.id);
+    `).all(channel.id, groupHistoryFloor(db, channel, socket.user.id));
 
     pins.forEach(p => {
       p.created_at = utcStamp(p.created_at);

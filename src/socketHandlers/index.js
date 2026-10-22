@@ -74,6 +74,7 @@ const modCases = require('../modCases');
 const { quietRecipients, pingedRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const forumUnread = require('../forumUnread');
+const { groupHistoryFloor } = require('../groupHistory');
 const registerForumVotes = require('./forumVotes');
 const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
@@ -608,7 +609,8 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (shared) channelIds.forEach(id => { latestMap[id] = shared.latest.get(id) || 0; });
 
       channels.forEach(ch => {
-        const lastRead = readMap[ch.id] || 0;
+        // A group DM member's count starts where their history does.
+        const lastRead = Math.max(readMap[ch.id] || 0, groupHistoryFloor(db, ch, userId));
         const latestId = latestMap[ch.id] || 0;
         ch.latestMessageId = latestId;
         if (latestId > lastRead) {
