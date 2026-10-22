@@ -677,6 +677,8 @@ module.exports = function register(socket, ctx) {
 
     const role = db.prepare('SELECT * FROM roles WHERE id = ?').get(roleId);
     if (!role) return cb({ error: 'Role not found' });
+    const permsBefore = db.prepare('SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1').all(roleId).map(r => r.permission);
+    const autoBefore = db.prepare('SELECT name FROM roles WHERE auto_assign = 1 AND id != ?').get(roleId);
 
     // Role hierarchy: a non-admin may only edit roles strictly below their own
     // level, and may never raise a role to or above their level. This is the
@@ -810,20 +812,34 @@ module.exports = function register(socket, ctx) {
 
     refreshRoleHolders([roleId]);
 
-    const nameChanged = data.name !== undefined && isString(data.name, 1, 30) && data.name.trim() !== role.name;
-    const levelChanged = data.level !== undefined && newLevel !== role.level;
-    const newPermissions = permissionsChanged ? (newLevel === 0 ? [] : data.permissions): undefined;
 
     socket.broadcast.except('bot-sockets').emit('roles-updated');
     cb({ success: true, roles: freshRoles });
-    _audit({ actor: socket.user, action: 'role_update',
-      target_type: 'role', target_id: roleId, target_name: role.name,
-      details: {
-        nameChanged,
-        levelChanged,
-        permissionsChanged,
-        permissions: newPermissions
-      } });
+    // The log records what changed, not the whole role.
+    const after = db.prepare('SELECT * FROM roles WHERE id = ?').get(roleId);
+    const permsAfter = new Set(db.prepare('SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1').all(roleId).map(r => r.permission));
+    const details = {};
+    if (after.name !== role.name) details.name = { from: role.name, to: after.name };
+    if (after.level !== role.level) details.level = { from: role.level, to: after.level };
+    const added = [...permsAfter].filter(p => !permsBefore.includes(p));
+    const removed = permsBefore.filter(p => !permsAfter.has(p));
+    if (added.length) details.added = added;
+    if (removed.length) details.removed = removed;
+    if (!!after.auto_assign !== !!role.auto_assign) {
+      // Only one role is handed to new members, so turning it on here took
+      // it from the role that had it.
+      details.autoAssign = !!after.auto_assign;
+      if (after.auto_assign && autoBefore) details.autoAssignTakenFrom = autoBefore.name;
+    }
+    if (after.color !== role.color || after.color2 !== role.color2) details.color = after.color2 ? `${after.color} → ${after.color2}` : after.color;
+    if (!!after.transparent !== !!role.transparent) details.transparent = !!after.transparent;
+    if (after.icon !== role.icon) details.icon = after.icon ? 'changed' : 'removed';
+    if (after.link_channel_access !== role.link_channel_access) details.linkChannelAccess = !!after.link_channel_access;
+    if (after.max_upload_mb !== role.max_upload_mb) details.maxUploadMb = after.max_upload_mb;
+    if (Object.keys(details).length) {
+      _audit({ actor: socket.user, action: 'role_update',
+        target_type: 'role', target_id: roleId, target_name: role.name, details });
+    }
   });
 
   // ── Delete role ─────────────────────────────────────────
