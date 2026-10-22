@@ -42,6 +42,7 @@ const automod = require('./automod');
 const { stripRoleMentions } = require('./socketHandlers/helpers');
 const { accessContext, channelAccess, bits } = require('./discordPermissions');
 const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('./discordText');
+const ferryReplies = require('./ferryReplies');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -770,6 +771,9 @@ function relayToHaven(msg) {
     const author = msg.member?.nick || msg.author?.global_name || msg.author?.username || 'Discord user';
     const avatar = discordAvatarUrl(msg.author);
 
+    // A Discord reply becomes a Haven reply when the message it answers is
+    // one Ferry carried (src/ferryReplies.js).
+    const answers = msg.type === 19 && msg.message_reference ? msg.message_reference.message_id : null;
     const targets = [];
     for (const link of links) {
       const havenId = deps.insertHavenMessage({
@@ -781,8 +785,12 @@ function relayToHaven(msg) {
         // Kept on the Haven copy (#5773): a later history import skips it,
         // and a Discord thread started from it hangs from it.
         discordMessageId: msg.id,
+        replyTo: answers ? ferryReplies.havenIdFor(deps.db, link.channel_id, answers) : null,
       });
-      if (havenId) targets.push({ havenMessageId: havenId, channelCode: link.channel_code });
+      if (havenId) {
+        targets.push({ havenMessageId: havenId, channelCode: link.channel_code });
+        ferryReplies.recordPair(deps.db, { havenMessageId: havenId, discordMessageId: msg.id, discordChannelId: msg.channel_id, discordAuthorId: msg.author && msg.author.id });
+      }
       touchLink(link.id, null);
     }
     if (targets.length) rememberRelay(msg.id, content, targets);
@@ -1785,17 +1793,20 @@ async function ensureLinkWebhook(link) {
 /**
  * Relays one Haven message to one paired Discord channel, as the Haven author.
  */
-async function sendToDiscord(link, { username, avatar, content, sender }) {
+async function sendToDiscord(link, { username, avatar, content, sender, havenMessageId = null, replyTo = null }) {
   const guild = guilds.get(String(link.guild_id || ''));
   const { text, files } = await takeUploads(content, sender);
-  const body = outboundBody(text, guild);
+  const body = outboundBody(ferryReplies.replyLine(deps.db, { replyToHavenId: replyTo, link, guildId: link.guild_id }) + text, guild);
   if (!body.trim() && !files.length) return;
   if (isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
 
   return enqueue(`ch:${link.discord_channel_id}`, async () => {
     try {
       const hook = await ensureLinkWebhook(link);
-      await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { files });
+      const sent = await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { files });
+      if (havenMessageId && sent && sent.id) {
+        ferryReplies.recordPair(deps.db, { havenMessageId, discordMessageId: sent.id, discordChannelId: link.discord_channel_id });
+      }
       touchLink(link.id, null);
     } catch (err) {
       throw sendFailure(link, err);

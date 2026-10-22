@@ -1705,6 +1705,8 @@ module.exports = function register(socket, ctx) {
           channelId: channel.id,
           user: socket.user,
           body: finalContent,
+          havenMessageId: Number(result.lastInsertRowid),
+          replyTo,
           target: ferryTarget,
           personaUsername, personaAvatar,
           notify: (msg) => socket.emit('error-msg', msg),

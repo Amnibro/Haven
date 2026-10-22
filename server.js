@@ -3234,7 +3234,7 @@ initFerry({
   sanitizeText,
   // A Discord forum post arrives through here too, with a title and tags, and
   // becomes a forum topic.
-  insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content, title = null, tags = null, discordMessageId = null }) => {
+  insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content, title = null, tags = null, discordMessageId = null, replyTo = null }) => {
     // Topic titles get the same clean-up as titles typed in Haven.
     title = typeof title === 'string' && title ? (sanitizeText(title) || null) : null;
     // The Discord id is kept (#5773), so importing the same history later
@@ -3246,9 +3246,17 @@ initFerry({
     }
     try {
       const tagList = Array.isArray(tags) && tags.length ? tags : null;
+      // A Discord reply to a message Ferry carried answers that message here
+      // too (src/ferryReplies.js), in the same channel only.
+      const replyRow = Number.isInteger(replyTo) ? db.prepare(`
+        SELECT m.id, m.content, m.user_id, m.is_webhook, m.webhook_username, m.imported_from, m.persona_username,
+               COALESCE(u.display_name, u.username, '[Deleted User]') AS username
+        FROM messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ? AND m.channel_id = ?
+      `).get(replyTo, channelId) : null;
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, title, tags, discord_message_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)'
-      ).run(channelId, null, content, username, avatarUrl || null, title || null, tagList ? JSON.stringify(tagList) : null, discordId);
+        'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, title, tags, discord_message_id, reply_to) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)'
+      ).run(channelId, null, content, username, avatarUrl || null, title || null, tagList ? JSON.stringify(tagList) : null, discordId, replyRow ? replyRow.id : null);
+      const replyContext = replyRow ? toReplyContext(replyRow) : null;
 
       io.to(`channel:${channelCode}`).emit('new-message', {
         channelCode,
@@ -3262,14 +3270,21 @@ initFerry({
           user_id: null,
           avatar: avatarUrl || null,
           avatar_shape: 'square',
-          reply_to: null,
-          replyContext: null,
+          reply_to: replyRow ? replyRow.id : null,
+          replyContext,
           reactions: [],
           is_webhook: true,
           webhook_name: username,
           from_discord: true
         }
       });
+      // The Haven member it answers is told, on their phone too, the same as
+      // for a reply from someone in Haven.
+      if (replyRow && replyRow.user_id && socketRuntime?.sendPushNotifications) {
+        const ch = db.prepare('SELECT name FROM channels WHERE id = ?').get(channelId);
+        socketRuntime.sendPushNotifications(channelId, channelCode, ch ? ch.name : '', 0, username, content,
+          { onlyUserIds: [replyRow.user_id], replyToUserId: replyRow.user_id });
+      }
       return result.lastInsertRowid;
     } catch (err) {
       console.error('Ferry could not store an inbound Discord message:', err.message);

@@ -1058,6 +1058,9 @@ function initDatabase() {
   // know which kind it is talking to without asking Discord. Older rows are
   // NULL, which means text: forums could not be paired before this column.
   addColumn('ferry_links', 'discord_channel_type', 'INTEGER DEFAULT NULL');
+  // Which Haven message is which Discord message, for replies across the
+  // bridge (src/ferryReplies.js).
+  require('./ferryReplies').ensureSchema(db);
 
   // ── Migration: Ferry forum posts ────────────────────────
   // Which Haven forum topic is which Discord forum post, so replies keep

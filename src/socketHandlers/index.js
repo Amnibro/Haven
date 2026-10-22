@@ -1789,7 +1789,7 @@ function setupSocketHandlers(io, db, opts = {}) {
    * so failures land on the pairing's health row and in a toast to the
    * author, never as a thrown error in the message path.
    */
-  function ferryRelay({ channelId, user, body, target, personaUsername, personaAvatar, notify, topic = null }) {
+  function ferryRelay({ channelId, user, body, target, personaUsername, personaAvatar, notify, topic = null, havenMessageId = null, replyTo = null }) {
     const cfg = ferry.getConfig();
     if (!cfg.enabled || !cfg.token) return;
 
@@ -1849,7 +1849,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // send functions refuse a pairing of mismatched kinds and say so on it.
       const send = topic
         ? ferry.sendTopicToDiscord(link, { ...identity, content: body, sender, title: topic.title, tags: topic.tags, topicId: topic.id })
-        : ferry.sendToDiscord(link, { ...identity, content: body, sender });
+        : ferry.sendToDiscord(link, { ...identity, content: body, sender, havenMessageId, replyTo });
       Promise.resolve(send).catch(err => notify(`Discord relay failed: ${err.message}`));
     }
   }
@@ -3078,7 +3078,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit, roleGateAllows, refreshRoleHolders: roleRefresh.refreshRoleHolders };
+  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit, roleGateAllows, refreshRoleHolders: roleRefresh.refreshRoleHolders, sendPushNotifications };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext };
