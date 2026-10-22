@@ -1454,6 +1454,20 @@ _startStatusBar() {
       sb.style.setProperty('display', 'flex', 'important');
     }
   }
+  // The docked thread panel stops at the top of the status bar. It used a
+  // fixed 35px, taller than the bar, so a strip of the member list and its
+  // resize edge showed under the panel. It follows the bar's real height now.
+  const sb = document.getElementById('status-bar');
+  if (sb && typeof ResizeObserver === 'function' && !this._statusBarObserver) {
+    const follow = () => {
+      // 0 while the bar is hidden.
+      const h = sb.getBoundingClientRect().height;
+      document.documentElement.style.setProperty('--thread-footer-offset', `${h}px`);
+    };
+    this._statusBarObserver = new ResizeObserver(follow);
+    this._statusBarObserver.observe(sb);
+    follow();
+  }
   this._updateClock();
   if (this._clockInterval) clearInterval(this._clockInterval);
   this._clockInterval = setInterval(() => this._updateClock(), 1000);
