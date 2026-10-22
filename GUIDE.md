@@ -95,6 +95,16 @@ docker compose up -d
 
 Your data is safe: it lives in the volume, not the container.
 
+### Early Access (Beta) Builds
+
+New features reach the `:beta` image a few days before `:latest`. To run them, change the image line in `docker-compose.yml` to:
+
+```yaml
+image: ghcr.io/ancsemi/haven:beta
+```
+
+then pull and recreate as above. With `docker run` or Podman, pull `ghcr.io/ancsemi/haven:beta` and start the container from that image instead. Your data stays as it is. To leave early access, set the line back to `:latest` once the next stable release is out, so you never move to an older version than the one you ran.
+
 ### Checking Your Version
 
 Open this URL in your browser (replace with your domain/IP if needed):
