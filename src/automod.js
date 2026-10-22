@@ -142,6 +142,9 @@ const extractUrls = rules.extractUrls;
 // Content check
 // ══════════════════════════════════════════════════════════════════════
 
+// The image hosts the GIF picker's services send from (server.js fetchGifs).
+const GIF_HOSTS = ['giphy.com', 'tenor.com', 'klipy.com'];
+
 // ctx: { userId, isAdmin, effectiveLevel, createdAt, surface, markdown }
 // markdown: the text is a chat message, so bare addresses inside code do not count.
 // surface is one of 'message' | 'edit' | 'dm' | 'profile' | 'channel'.
@@ -195,8 +198,13 @@ function checkText(text, ctx = {}) {
   // Independent of the allowlist and deliberately blunt. The register ->
   // post-link -> get-banned -> re-register loop is the pattern this exists
   // to break, and it does not care which domain was used.
+  // GIFs from the GIF picker are links too, to the GIF services' own image
+  // hosts. A new member trying the picker was struck, then muted (the wait is
+  // for links people paste, not for GIFs), so a message whose only links are
+  // those is let through. The domain rules below still apply to it.
+  const gifOnly = links.every(l => GIF_HOSTS.some(h => l.host === h || String(l.host).endsWith('.' + h)));
   const minHours = parseInt(s.automod_link_min_account_hours, 10);
-  if (Number.isFinite(minHours) && minHours > 0 && ctx.createdAt) {
+  if (!gifOnly && Number.isFinite(minHours) && minHours > 0 && ctx.createdAt) {
     const ageMs = Date.now() - new Date(String(ctx.createdAt).replace(' ', 'T') + 'Z').getTime();
     if (Number.isFinite(ageMs) && ageMs < minHours * 3600 * 1000) {
       const hoursLeft = Math.max(1, Math.ceil((minHours * 3600 * 1000 - ageMs) / 3600000));

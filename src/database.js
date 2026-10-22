@@ -589,7 +589,7 @@ function initDatabase() {
       const starter = [
         'youtube.com', 'youtu.be', 'twitch.tv', 'x.com', 'twitter.com', 'bsky.app',
         'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'wikipedia.org',
-        'imgur.com', 'giphy.com', 'tenor.com', 'spotify.com', 'soundcloud.com',
+        'imgur.com', 'giphy.com', 'tenor.com', 'klipy.com', 'spotify.com', 'soundcloud.com',
         'steamcommunity.com', 'steampowered.com', 'last.fm', 'archive.org',
         'haven-app.com'
       ];
@@ -616,6 +616,19 @@ function initDatabase() {
     }
   } catch (err) {
     console.error('automod: adding haven-app.com to the allowlist failed:', err.message);
+  }
+  // KLIPY became a GIF picker choice after the allowlist was seeded, so its
+  // GIFs were blocked on allowlist servers. Added once, the same way.
+  try {
+    const added = db.prepare("SELECT value FROM server_settings WHERE key = 'automod_klipy_v4270'").get();
+    if (!added || added.value !== 'true') {
+      db.prepare(
+        "INSERT OR IGNORE INTO automod_domains (domain, mode, include_subdomains, note) VALUES ('klipy.com', 'allow', 1, 'Seeded default')"
+      ).run();
+      db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('automod_klipy_v4270', 'true')").run();
+    }
+  } catch (err) {
+    console.error('automod: adding klipy.com to the allowlist failed:', err.message);
   }
 
   // ── Migration: turn the safe protections on, once (v3.43.0) ──
