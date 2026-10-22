@@ -4218,5 +4218,9 @@
     "reply_one": "1 Antwort",
     "reply_other": "{{count}} Antworten",
     "unavailable_in_dm": "Threads sind in Direktnachrichten nicht verfügbar"
+  },
+  "groups": {
+    "no_key": "🔒 Wartet darauf, dass ein anderes Gruppenmitglied Haven öffnet und den Schlüssel teilt",
+    "before_join": "🔒 Gesendet, bevor du beigetreten bist (oder bevor deine Schlüssel zurückgesetzt wurden), kann hier nicht geöffnet werden"
   }
 }

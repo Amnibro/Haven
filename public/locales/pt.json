@@ -4204,5 +4204,9 @@
     "days_ago": "há {{n}}d",
     "tags_editor_title": "Tags do fórum",
     "tags_editor_hint": "Uma tag por linha. Coloque um emoji na frente se quiser, como \"🎨 Arte\". Até 20."
+  },
+  "groups": {
+    "no_key": "🔒 Esperando outro membro do grupo abrir o Haven e compartilhar a chave",
+    "before_join": "🔒 Enviado antes de você entrar (ou antes de suas chaves serem redefinidas), então não pode ser aberto aqui"
   }
 }
