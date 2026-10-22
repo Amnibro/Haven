@@ -907,13 +907,14 @@ html.reduce-motion .pa-marquee-track { animation: none; }
 .file-video {
   max-width: 100%;
   /* A tall, narrow clip would be too thin for the player's buttons, which
-     the browser then hides; it gets black bars at the sides instead. */
+     the browser then hides; it gets black bars at the sides instead. Never
+     drawn bigger than it is, so small pixel art stays sharp (#5817). */
   min-width: min(15rem, 60vw);
   max-height: 18.75rem;
   border-radius: 0.25rem;
   margin-top: 0.25rem;
   background: #0a0a0a;
-  object-fit: contain;
+  object-fit: scale-down;
 }
 
 .file-video-wrap {
