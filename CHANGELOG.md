@@ -34,6 +34,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - A smaller Docker image.
 - Transfer Admin moved out of the member right-click menu, where it sat next to Kick and Ban, to Settings > Members.
 - The kick window only offers to scrub messages server-wide to admins, since only an admin's kick does that.
+- Someone who joins a group DM later is no longer shown locked messages from before they joined, which they could never open.
 
 ### Fixed
 - Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
@@ -47,6 +48,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - The audit log could show a moderator's kick scrubbing messages server-wide when only that channel had been scrubbed.
 - Deleted attachments could be purged up to 7 days early (thanks KamdenB).
 - Replaced or removed profile pictures and borders stayed in uploads forever (thanks KamdenB).
+- Link cards turned see-through when you pointed at them, so their buttons were hard to see over a background picture. They stay solid now, and their top bar buttons are evenly sized.
+- Copy link and Mark NSFW were missing from the toolbar slot order setting (#5821).
 
 ### Security
 - Updated follow-redirects, used by the tunnel feature, for two security advisories.
