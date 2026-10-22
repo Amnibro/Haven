@@ -149,7 +149,8 @@ module.exports = function register(socket, ctx) {
       })();
       if (current.icon !== b.icon) await dropIconFile(current.icon);
       audit({ actor: socket.user, action: 'badge_update', target_type: 'badge', target_id: current.id, target_name: b.name,
-        details: { kind: b.kind, threshold: b.threshold, roleId: b.role_id, enabled: !!b.enabled, renamedFrom: current.name !== b.name ? current.name : null } });
+        details: { kind: b.kind, threshold: b.threshold, roleId: b.role_id, enabled: !!b.enabled, renamedFrom: current.name !== b.name ? current.name : null,
+          descriptionChanged: current.description !== b.description, iconChanged: current.icon !== b.icon, holdersRemoved: !!dropHolders } });
       cb(fullList());
     } catch (err) {
       console.error('[badges] update failed:', err.message);

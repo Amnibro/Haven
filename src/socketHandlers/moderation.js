@@ -547,6 +547,9 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Failed to delete user');
     }
 
+    _audit({ actor: socket.user, action: 'user_delete',
+      target_type: 'user', target_id: targetUser.id, target_name: targetUser.displayName,
+      details: { reason: reason || null, scrubMessages: !!data.scrubMessages } });
     socket.emit('error-msg', `Deleted user "${targetUser.displayName}". Username is now available`);
 
     for (const [, s] of io.sockets.sockets) {

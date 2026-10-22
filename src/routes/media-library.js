@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const multer = require('multer');
 const privacyPass = require('../privacyPass');
 const storage = require('../storage');
+const { auditHttp } = require('../httpAudit');
 const { DATA_DIR, STAGING_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const { sanitizeSoundName } = require('../socketHandlers');
@@ -65,6 +66,7 @@ module.exports = function registerMediaLibrary(deps) {
         getDb().prepare(
           'INSERT OR REPLACE INTO custom_sounds (name, filename, uploaded_by) VALUES (?, ?, ?)'
         ).run(name, req.file.filename, user.id);
+        auditHttp(user, 'sound_add', { target_name: name });
         broadcastLibraryUpdate(req, 'sounds');
         res.json({ name, url: `/uploads/${req.file.filename}` });
       } catch { res.status(500).json({ error: 'Failed to save sound' }); }
@@ -100,6 +102,7 @@ module.exports = function registerMediaLibrary(deps) {
       // Built-in sounds are disabled by adding them to a blocklist (they can't be physically deleted)
       if (BUILTIN_SOUNDS.some(s => s.name === name)) {
         getDb().prepare('INSERT OR IGNORE INTO disabled_builtin_sounds (name) VALUES (?)').run(name);
+        auditHttp(user, 'sound_delete', { target_name: name });
         broadcastLibraryUpdate(req, 'sounds');
         return res.json({ ok: true });
       }
@@ -108,6 +111,7 @@ module.exports = function registerMediaLibrary(deps) {
         await storage.remove(row.filename);
         getDb().prepare('DELETE FROM custom_sounds WHERE name = ?').run(name);
         getDb().prepare('DELETE FROM sound_volumes WHERE sound_name = ?').run(name);
+        auditHttp(user, 'sound_delete', { target_name: name });
       }
       broadcastLibraryUpdate(req, 'sounds');
       res.json({ ok: true });
@@ -131,6 +135,7 @@ module.exports = function registerMediaLibrary(deps) {
       if (existing) return res.status(409).json({ error: 'Name already taken' });
       getDb().prepare('UPDATE custom_sounds SET name = ? WHERE name = ?').run(newName, oldName);
       getDb().prepare('UPDATE sound_volumes SET sound_name = ? WHERE sound_name = ?').run(newName, oldName);
+      auditHttp(user, 'sound_rename', { target_name: newName, details: { from: oldName } });
       broadcastLibraryUpdate(req, 'sounds');
       res.json({ ok: true, name: newName });
     } catch { res.status(500).json({ error: 'Failed to rename sound' }); }
@@ -153,6 +158,7 @@ module.exports = function registerMediaLibrary(deps) {
       if (!known) return res.status(404).json({ error: 'Sound not found' });
       if (volume === 100) getDb().prepare('DELETE FROM sound_volumes WHERE sound_name = ?').run(name);
       else getDb().prepare('INSERT INTO sound_volumes (sound_name, volume) VALUES (?, ?) ON CONFLICT(sound_name) DO UPDATE SET volume = excluded.volume').run(name, volume);
+      auditHttp(user, 'sound_volume', { target_name: name, details: { volume } });
       broadcastLibraryUpdate(req, 'sounds');
       res.json({ ok: true, name, volume });
     } catch (err) {
@@ -225,6 +231,7 @@ module.exports = function registerMediaLibrary(deps) {
         getDb().prepare(
           'INSERT OR REPLACE INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)'
         ).run(name, req.file.filename, user.id);
+        auditHttp(user, 'emoji_add', { target_name: name });
         broadcastLibraryUpdate(req, 'emojis');
         res.json({ name, url: `/uploads/${req.file.filename}` });
       } catch { res.status(500).json({ error: 'Failed to save emoji' }); }
@@ -261,7 +268,10 @@ module.exports = function registerMediaLibrary(deps) {
           errors.push({ name, error: e.message });
         }
       }
-      if (results.length) broadcastLibraryUpdate(req, 'emojis');
+      if (results.length) {
+        auditHttp(user, 'emoji_add', { target_name: results.map(r => r.name).join(', ').slice(0, 200), details: { count: results.length } });
+        broadcastLibraryUpdate(req, 'emojis');
+      }
       res.json({ uploaded: results, errors });
     });
   });
@@ -397,6 +407,7 @@ module.exports = function registerMediaLibrary(deps) {
       if (row) {
         await storage.remove(row.filename);
         getDb().prepare('DELETE FROM custom_emojis WHERE name = ?').run(name);
+        auditHttp(user, 'emoji_delete', { target_name: name });
       }
       broadcastLibraryUpdate(req, 'emojis');
       res.json({ ok: true });
@@ -498,6 +509,7 @@ module.exports = function registerMediaLibrary(deps) {
         getDb().prepare(
           'INSERT OR REPLACE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)'
         ).run(name, pack, req.file.filename, user.id);
+        auditHttp(user, 'sticker_add', { target_name: name, details: { pack } });
         broadcastLibraryUpdate(req, 'stickers');
         res.json({ name, pack_name: pack, url: `/uploads/stickers/${req.file.filename}` });
       } catch { res.status(500).json({ error: 'Failed to save sticker' }); }
@@ -537,7 +549,10 @@ module.exports = function registerMediaLibrary(deps) {
         }
       }
 
-      if (results.length) broadcastLibraryUpdate(req, 'stickers');
+      if (results.length) {
+        auditHttp(user, 'sticker_add', { target_name: results.map(r => r.name).join(', ').slice(0, 200), details: { count: results.length } });
+        broadcastLibraryUpdate(req, 'stickers');
+      }
       res.json({ uploaded: results, errors });
     });
   });
@@ -565,6 +580,7 @@ module.exports = function registerMediaLibrary(deps) {
       if (row) {
         await storage.remove(`stickers/${row.filename}`);
         getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
+        auditHttp(user, 'sticker_delete', { target_name: name });
       }
       broadcastLibraryUpdate(req, 'stickers');
       res.json({ ok: true });

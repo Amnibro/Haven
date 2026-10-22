@@ -68,7 +68,7 @@ function createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onRe
     if (key === 'referrer_policy') onReferrerPolicyChange(value);
   }
 
-  function auditSettingChange(actor, key, value) {
+  function auditSettingChange(actor, key, value, previous) {
     // Audit: log the setting change. Skip per-user UI prefs that the
     // organize modal syncs constantly to avoid log spam.
     const _quietKeys = new Set(['channel_cat_order', 'channel_cat_sort', 'channel_tag_sorts', 'channel_sort_mode']);
@@ -78,7 +78,11 @@ function createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onRe
       logAudit({
         actor, action: 'server_setting_update',
         target_type: 'setting', target_name: key,
-        details: { key, value: _secret ? (value ? '(hidden)' : '') : _short(value) }
+        details: {
+          key,
+          from: previous === undefined || _secret ? undefined : _short(previous),
+          value: _secret ? (value ? '(hidden)' : '') : _short(value),
+        }
       });
     }
   }

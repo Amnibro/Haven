@@ -13,6 +13,7 @@ const express = require('express');
 const { checkAdminReauth, issueTicket, takeTicket } = require('../adminReauth');
 const { extractFullBackup } = require('../backupExtract');
 const storage = require('../storage');
+const { auditHttp } = require('../httpAudit');
 
 module.exports = function registerBackup(deps) {
   const { app, verifyAdminFromDb, late } = deps;
@@ -226,6 +227,22 @@ module.exports = function registerBackup(deps) {
   // A restored database's media index describes the files of the server the
   // backup came from; the next start rebuilds it from the restored files, and
   // on a bucket sends those files on to it first (src/storage).
+  // The restore replaces the database, log included, so its own entry is
+  // written into the restored copy before the swap.
+  function auditRestoreInto(dbFile, user, manifest) {
+    const Database = require('better-sqlite3');
+    const restored = new Database(dbFile);
+    try {
+      const hasLog = restored.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'audit_log'").get();
+      if (!hasLog) return;
+      restored.prepare('INSERT INTO audit_log (actor_id, actor_username, action, details) VALUES (?, ?, ?, ?)')
+        .run(null, user.displayName || user.username || null, 'backup_restore',
+          JSON.stringify({ backupMadeAt: manifest && manifest.exportedAt ? manifest.exportedAt : null }));
+    } finally {
+      restored.close();
+    }
+  }
+
   function markRestoredMedia(dbFile) {
     const Database = require('better-sqlite3');
     const restored = new Database(dbFile);
@@ -262,6 +279,8 @@ module.exports = function registerBackup(deps) {
     const data = purpose === 'auto-backup'
       ? { name: typeof req.body.name === 'string' ? req.body.name : '' }
       : { include: typeof req.body.include === 'string' ? req.body.include : '' };
+    auditHttp(user, purpose === 'auto-backup' ? 'backup_download' : 'backup_create',
+      { details: purpose === 'auto-backup' ? { file: data.name } : { include: data.include || 'default' } });
     res.json({ ticket: issueTicket(user.id, purpose, data) });
   });
 
@@ -414,6 +433,9 @@ module.exports = function registerBackup(deps) {
             }
             try { fs.unlinkSync(DB_PATH + '-shm'); } catch (err2) {
               if (err2.code !== 'ENOENT') console.error('[Restore] Could not remove old haven.db-shm:', err2.message);
+            }
+            try { auditRestoreInto(stagedDb, user, manifest); } catch (err2) {
+              console.warn('[Restore] Could not record the restore in the audit log:', err2.message);
             }
             try { markRestoredMedia(stagedDb); } catch (err2) {
               console.warn('[Restore] Could not mark the media index for rebuilding; run scripts/reconcile-media.js after the restart:', err2.message);

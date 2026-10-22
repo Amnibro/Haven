@@ -482,6 +482,12 @@ module.exports = function register(socket, ctx) {
 
     broadcastVoiceUsers(data.code);
     broadcastStreamInfo(data.code);
+    if (typeof ctx.logAudit === 'function') {
+      const vch = channelId ? db.prepare('SELECT name FROM channels WHERE id = ?').get(channelId) : null;
+      ctx.logAudit({ actor: socket.user, action: 'voice_kick',
+        target_type: 'user', target_id: data.userId, target_name: target.username,
+        details: { channel: vch ? vch.name : null } });
+    }
     socket.emit('error-msg', `Kicked ${target.username} from voice`);
   });
 

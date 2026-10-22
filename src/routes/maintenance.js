@@ -9,6 +9,7 @@ const path = require('path');
 const { DATA_DIR, DB_PATH, UPLOADS_DIR } = require('../paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('../deletedAttachments');
 const storage = require('../storage');
+const { auditHttp } = require('../httpAudit');
 const { trimUploadsToLimit } = require('../uploadsTrim');
 const { findOrphanDms } = require('../orphanDms');
 const protectedMessages = require('../protectedMessages');
@@ -369,7 +370,7 @@ module.exports = function registerMaintenance(deps) {
     if (!/^[\w.-]+\.zip$/.test(name)) return res.status(400).json({ error: 'Invalid name' });
     const full = path.join(AUTO_BACKUP_DIR, name);
     if (!fs.existsSync(full) || !full.startsWith(AUTO_BACKUP_DIR)) return res.status(404).json({ error: 'Not found' });
-    try { fs.unlinkSync(full); res.json({ ok: true }); }
+    try { fs.unlinkSync(full); auditHttp(user, 'backup_delete', { details: { file: name } }); res.json({ ok: true }); }
     catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -383,6 +384,7 @@ module.exports = function registerMaintenance(deps) {
       console.warn('[AutoBackup] Could not reset last-run time, so this run may be skipped:', err.message);
     }
     setImmediate(runAutoBackup);
+    auditHttp(user, 'backup_run');
     res.json({ ok: true });
   });
 
@@ -397,6 +399,7 @@ module.exports = function registerMaintenance(deps) {
     try {
       const summary = await require('../storage/reconcile').reconcile(db, storage.getStorage());
       console.log(`[storage] Media index reconciled: ${summary.added} added, ${summary.fixed} corrected, ${summary.dropped} dropped`);
+      auditHttp(user, 'media_reconcile', { details: { added: summary.added, fixed: summary.fixed, dropped: summary.dropped } });
       res.json(summary);
     } catch (err) {
       console.error('[storage] Reconcile failed:', err.message);
@@ -522,6 +525,7 @@ module.exports = function registerMaintenance(deps) {
     }
     try { runAutoBackup(); } catch (err) { console.error('[Update] Pre-update backup failed:', err); }
 
+    auditHttp(user, 'server_update', { details: { from: require('../../package.json').version, method } });
     res.json({ ok: true, method, message: instructions.message });
 
     // scripts/update.js does the work and writes to update.log in the data

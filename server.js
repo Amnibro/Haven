@@ -173,6 +173,7 @@ const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers
 const UPLOAD_URL_PATH_RE = /\/uploads\/+([-A-Za-z0-9_.~%/\\]+)/gi;
 
 const storage = require('./src/storage');
+const { auditHttp } = require('./src/httpAudit');
 const { isSafeUploadRelPath } = storage;
 
 function collectUploadRelPaths(contents) {
@@ -1561,6 +1562,7 @@ app.post('/api/upload-server-icon', uploadLimiter, uploadDiskGuard, (req, res) =
     const iconUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
     getDb().prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('server_icon', ?)").run(iconUrl);
+    auditHttp(user, 'server_setting_update', { target_type: 'setting', target_name: 'server_icon', details: { key: 'server_icon', value: iconUrl } });
     res.json({ url: iconUrl });
   });
 });
@@ -1633,6 +1635,7 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
     const bannerUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
     getDb().prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('server_banner', ?)").run(bannerUrl);
+    auditHttp(user, 'server_setting_update', { target_type: 'setting', target_name: 'server_banner', details: { key: 'server_banner', value: bannerUrl } });
     res.json({ url: bannerUrl });
   });
 });
@@ -2231,6 +2234,7 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, async (re
   if (kept) return res.status(409).json({ error: kept });
 
   const replies = db.prepare('SELECT content FROM messages WHERE thread_id = ?').all(mid);
+  const botAuthor = ownMessage ? null : db.prepare('SELECT COALESCE(u.display_name, u.username, m.webhook_username) AS name FROM messages m LEFT JOIN users u ON u.id = m.user_id WHERE m.id = ?').get(mid);
   try {
     db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(mid);
     db.prepare('DELETE FROM reactions WHERE message_id = ?').run(mid);
@@ -2238,6 +2242,11 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, async (re
   } catch (err) {
     console.error('Bot delete message error:', err);
     return res.status(500).json({ error: 'Failed to delete message' });
+  }
+  if (!ownMessage) {
+    const auth = botModAuth(webhook, 'delete_message', webhook.channel_id);
+    const chName = db.prepare('SELECT name FROM channels WHERE id = ?').get(webhook.channel_id)?.name || null;
+    auditHttp(auth && auth.user, 'message_delete', { target_type: 'message', target_id: mid, target_name: botAuthor ? botAuthor.name : null, details: { channel: chName, via: `bot ${webhook.name}` } });
   }
 
   // Its files, and its replies' files, go only when nothing else uses them
@@ -2337,6 +2346,11 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, async (req, res) => 
     const status = err?.statusCode === 409 ? 409 : 500;
     const error = status === 409 ? err.message : 'Failed to delete messages';
     return res.status(status).json({ error });
+  }
+  if (deletedMessages.length) {
+    const auth = botModAuth(webhook, 'delete_message', channel.id);
+    const chName = db.prepare('SELECT name FROM channels WHERE id = ?').get(channel.id)?.name || null;
+    auditHttp(auth && auth.user, 'messages_bulk_delete', { target_type: 'channel', target_id: channel.id, target_name: chName, details: { count: deletedMessages.length, via: `bot ${webhook.name}` } });
   }
 
   try {
@@ -3205,6 +3219,7 @@ socketRuntime = setupSocketHandlers(io, db, {
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
 });
 activityRef.engine = socketRuntime.activity;
+require('./src/httpAudit').setAuditSink(socketRuntime.logAudit);
 require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted: storage.softDelete, removeUpload: storage.remove });
 
 // ── Ferry: Haven <-> Discord bridge ─────────────────────

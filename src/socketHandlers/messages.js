@@ -60,6 +60,18 @@ module.exports = function register(socket, ctx) {
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
           logAudit } = ctx;
   const { slowModeTracker } = state;
+  // A moderator acting on a message in a channel goes on the audit log, with
+  // the channel and whose message it was. DMs are left out: what happens in
+  // a conversation is its two people's business.
+  const auditMessage = (action, messageId, channelId, extra = {}) => {
+    if (typeof logAudit !== 'function') return;
+    const ch = db.prepare('SELECT name, is_dm FROM channels WHERE id = ?').get(channelId);
+    if (!ch || ch.is_dm) return;
+    const author = db.prepare('SELECT u.id, COALESCE(u.display_name, u.username) AS name FROM messages m JOIN users u ON u.id = m.user_id WHERE m.id = ?').get(messageId);
+    logAudit({ actor: socket.user, action,
+      target_type: 'message', target_id: messageId, target_name: author ? author.name : null,
+      details: { channel: ch.name, ...extra } });
+  };
   const { youngAccountWait, refuseYoungAccount } = require('./postingWait')(socket, ctx);
   // The upload tags this person may use in a channel: those not limited to a
   // role, and those limited to one they hold there (src/uploadTagRoles.js).
@@ -1100,6 +1112,16 @@ module.exports = function register(socket, ctx) {
       console.error('Bulk media delete error:', err);
       return cb({ error: 'Failed to delete items', detail: err && err.message });
     }
+    const othersDeleted = deletable.filter(r => r.user_id !== socket.user.id);
+    if (othersDeleted.length && !channel.is_dm && typeof logAudit === 'function') {
+      const authorIds = [...new Set(othersDeleted.map(r => r.user_id))];
+      const names = db.prepare(`SELECT COALESCE(display_name, username) AS name FROM users WHERE id IN (${authorIds.map(() => '?').join(',')})`)
+        .all(...authorIds).map(r => r.name);
+      const chName = db.prepare('SELECT name FROM channels WHERE id = ?').get(channel.id)?.name || null;
+      logAudit({ actor: socket.user, action: 'messages_bulk_delete',
+        target_type: 'channel', target_id: channel.id, target_name: chName,
+        details: { count: othersDeleted.length, authors: names } });
+    }
 
     // Move attachment files to deleted-attachments/ for each deleted message,
     // but only each author's own attachments (releasableUploads).
@@ -2109,6 +2131,7 @@ module.exports = function register(socket, ctx) {
       const closedNow = closed !== null ? closed : (row.closed || 0);
       const nsfwNow = nsfw !== null ? nsfw : (row.nsfw || 0);
       io.to(`channel:${msg.code}`).emit('topic-updated', { channelCode: msg.code, messageId: msg.id, title: title || null, tags, closed: !!closedNow, nsfw: !!nsfwNow });
+      if (!mine) auditMessage('topic_edit', msg.id, msg.channel_id, { title: title || null, tags, closed: !!closedNow });
     } catch (err) {
       console.error('set-topic-meta error:', err);
       socket.emit('error-msg', 'Failed to update the topic');
@@ -2266,6 +2289,11 @@ module.exports = function register(socket, ctx) {
     }
 
     const replies = repliesUnder([msg.id]);
+    // Looked up before the row goes, for the audit entry.
+    const othersMessage = msg.user_id !== socket.user.id && !channel.is_dm;
+    const authorName = othersMessage
+      ? db.prepare('SELECT COALESCE(display_name, username) AS name FROM users WHERE id = ?').get(msg.user_id)?.name || null
+      : null;
     try {
       db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
       db.prepare('DELETE FROM reactions WHERE message_id = ?').run(data.messageId);
@@ -2273,6 +2301,11 @@ module.exports = function register(socket, ctx) {
     } catch (err) {
       console.error('Delete message error:', err);
       return socket.emit('error-msg', 'Failed to delete message');
+    }
+    if (othersMessage && typeof logAudit === 'function') {
+      const chName = db.prepare('SELECT name FROM channels WHERE id = ?').get(channel.id)?.name || null;
+      logAudit({ actor: socket.user, action: 'message_delete',
+        target_type: 'message', target_id: msg.id, target_name: authorName, details: { channel: chName } });
     }
     await releaseReplyUploads(replies);
     // Deleted before its timer ran out: the self-destruct timer may have been
@@ -2418,6 +2451,7 @@ module.exports = function register(socket, ctx) {
       db.prepare(
         'INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)'
       ).run(data.messageId, channel.id, socket.user.id);
+      auditMessage('message_pin', data.messageId, channel.id);
       // Pinning keeps a self-destructing message, as it keeps one from
       // auto-cleanup: the timer is dropped.
       if (msg.destruct_at) {
@@ -2462,6 +2496,7 @@ module.exports = function register(socket, ctx) {
 
     try {
       db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
+      auditMessage('message_unpin', data.messageId, channel.id);
     } catch (err) {
       console.error('Unpin message error:', err);
       return socket.emit('error-msg', 'Failed to unpin message');
@@ -2501,6 +2536,7 @@ module.exports = function register(socket, ctx) {
       // A protected message is kept: its self-destruct and burn-after-read
       // timers stop, the same as auto-cleanup and self-purge leave it alone.
       db.prepare('UPDATE messages SET is_archived = 1, destruct_at = NULL, burn_seconds = 0, burning_started_at = NULL WHERE id = ?').run(data.messageId);
+      auditMessage('message_protect', data.messageId, channel.id);
       if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);
     } catch (err) {
       console.error('Archive message error:', err);
@@ -2539,6 +2575,7 @@ module.exports = function register(socket, ctx) {
 
     try {
       db.prepare('UPDATE messages SET is_archived = 0 WHERE id = ?').run(data.messageId);
+      auditMessage('message_unprotect', data.messageId, channel.id);
     } catch (err) {
       console.error('Unarchive message error:', err);
       return socket.emit('error-msg', 'Failed to unarchive message');

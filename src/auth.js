@@ -1741,6 +1741,8 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
     db.prepare('DELETE FROM mutes WHERE user_id = ?').run(user.id);
 
     const displayName = user.display_name || user.username;
+    require('./httpAudit').auditHttp({ id: user.id, username: user.username, displayName }, 'admin_recover',
+      { target_type: 'user', target_id: user.id, target_name: displayName });
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: true, displayName, pwv: user.password_version || 1 },
       JWT_SECRET,

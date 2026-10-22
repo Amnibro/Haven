@@ -655,9 +655,10 @@ module.exports = function register(socket, ctx) {
       });
 
       cb({ success: true, roleId: result.lastInsertRowid });
+      const granted = db.prepare('SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1').all(result.lastInsertRowid).map(r => r.permission);
       _audit({ actor: socket.user, action: 'role_create',
         target_type: 'role', target_id: result.lastInsertRowid, target_name: name,
-        details: { level, scope, color, color2, shimmer: !!shimmer, autoAssign: !!autoAssign, permissions: perms } });
+        details: { level, scope, color, color2, shimmer: !!shimmer, autoAssign: !!autoAssign, permissions: granted } });
     } catch (err) {
       console.error('Create role error:', err);
       cb({ error: 'Failed to create role' });
@@ -1104,6 +1105,7 @@ module.exports = function register(socket, ctx) {
       }
       io.except('bot-sockets').emit('roles-updated');
       cb({ success: true });
+      _audit({ actor: socket.user, action: 'roles_reset' });
     } catch (err) {
       cb({ error: 'Failed to reset roles: ' + err.message });
     }
@@ -1530,6 +1532,18 @@ module.exports = function register(socket, ctx) {
         throw err;
       }
       cb({ success: true });
+      const access = db.prepare(`
+        SELECT c.name, rca.grant_on_promote AS g, rca.revoke_on_demote AS r
+        FROM role_channel_access rca JOIN channels c ON c.id = rca.channel_id WHERE rca.role_id = ?
+      `).all(roleId);
+      const roleRow = db.prepare('SELECT name, link_channel_access FROM roles WHERE id = ?').get(roleId);
+      _audit({ actor: socket.user, action: 'role_channel_access',
+        target_type: 'role', target_id: roleId, target_name: roleRow ? roleRow.name : null,
+        details: {
+          grants: access.filter(a => a.g).map(a => a.name),
+          revokes: access.filter(a => a.r).map(a => a.name),
+          linked: roleRow ? !!roleRow.link_channel_access : undefined,
+        } });
     } catch (err) {
       console.error('Update role channel access error:', err);
       cb({ error: 'Failed to update channel access' });
@@ -1569,6 +1583,9 @@ module.exports = function register(socket, ctx) {
 
     broadcastChannelLists();
     cb({ success: true, affected: roleUsers.length });
+    _audit({ actor: socket.user, action: 'role_access_reapply',
+      target_type: 'role', target_id: roleId, target_name: role.name,
+      details: { members: roleUsers.length, channels: grantChannels.length } });
   });
 
   // ── Promote user ────────────────────────────────────────
@@ -1836,6 +1853,8 @@ module.exports = function register(socket, ctx) {
           grantAdminRole(db, userId);
         });
         transferTxn();
+        _audit({ actor: socket.user, action: 'admin_transfer',
+          target_type: 'user', target_id: userId, target_name: targetUser.username });
 
         for (const [, s] of io.sockets.sockets) {
           if (s.user && s.user.id === userId) {

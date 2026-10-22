@@ -478,6 +478,7 @@ module.exports = function register(socket, ctx) {
         } catch { return; }
       }
     }
+    const previousValue = db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key)?.value ?? null;
     try {
       const save = () => {
         db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(key, value);
@@ -509,7 +510,7 @@ module.exports = function register(socket, ctx) {
 
     afterSettingSaved(key, value);
 
-    auditSettingChange(socket.user, key, value);
+    if (previousValue !== value) auditSettingChange(socket.user, key, value, previousValue);
 
     // Relay settings take effect straight away: start, stop or restart it.
     // Calls already running keep going until they empty (see voiceRelay).
@@ -619,6 +620,11 @@ module.exports = function register(socket, ctx) {
     socket.emit('whitelist-list', rows);
   });
 
+  // Admin panel actions with no setting of their own to log under.
+  const auditAdmin = (action, targetName = null, details = undefined) => {
+    if (typeof logAudit === 'function') logAudit({ actor: socket.user, action, target_name: targetName, details });
+  };
+
   socket.on('whitelist-add', (data) => {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server')) return;
     if (!data || typeof data !== 'object') return;
@@ -632,6 +638,7 @@ module.exports = function register(socket, ctx) {
 
     try {
       db.prepare('INSERT OR IGNORE INTO whitelist (username, added_by) VALUES (?, ?)').run(username, socket.user.id);
+      auditAdmin('whitelist_add', username);
       socket.emit('error-msg', `Added "${username}" to whitelist`);
       const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
       rows.forEach(r => { r.created_at = utcStamp(r.created_at); });
@@ -648,6 +655,7 @@ module.exports = function register(socket, ctx) {
     if (!username) return;
 
     db.prepare('DELETE FROM whitelist WHERE username = ?').run(username);
+    auditAdmin('whitelist_remove', username);
     socket.emit('error-msg', `Removed "${username}" from whitelist`);
     const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
     rows.forEach(r => { r.created_at = utcStamp(r.created_at); });
@@ -659,6 +667,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const enabled = data.enabled === true ? 'true' : 'false';
     db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('whitelist_enabled', ?)").run(enabled);
+    auditAdmin('server_setting_update', 'whitelist_enabled', { key: 'whitelist_enabled', value: enabled });
     socket.emit('error-msg', `Whitelist ${enabled === 'true' ? 'enabled' : 'disabled'}`);
   });
 
@@ -669,6 +678,7 @@ module.exports = function register(socket, ctx) {
     }
     const code = generateUniqueSharedCode();
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', code);
+    auditAdmin('server_code_new');
     emitSettingChanged('server_code', code);
     socket.emit('error-msg', `Server invite code generated: ${code}`);
   });
@@ -678,6 +688,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage server codes');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', '');
+    auditAdmin('server_code_clear');
     emitSettingChanged('server_code', '');
     socket.emit('error-msg', 'Server invite code cleared');
   });
@@ -878,7 +889,8 @@ module.exports = function register(socket, ctx) {
       logAudit({
         actor: socket.user, action: 'invite_code_update',
         target_type: 'invite_code', target_name: row.code,
-        details: { fields: sets.map(s => s.split(' ')[0]) }
+        // The new value of each field that was set (vals lines up with sets).
+        details: Object.fromEntries(sets.map((s, i) => [s.split(' ')[0], vals[i]]))
       });
     }
     socket.emit('toast', { message: `Invite link updated`, type: 'success' });
@@ -913,6 +925,7 @@ module.exports = function register(socket, ctx) {
     }
     const token = crypto.randomBytes(8).toString('hex');
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', token);
+    auditAdmin('registration_token_new');
     emitSettingChanged('registration_token', token);
     socket.emit('error-msg', `Registration token generated: ${token}`);
   });
@@ -922,6 +935,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage the registration token');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', '');
+    auditAdmin('registration_token_clear');
     emitSettingChanged('registration_token', '');
     socket.emit('error-msg', 'Registration token cleared');
   });
@@ -932,6 +946,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can run cleanup');
     }
     if (typeof global.runAutoCleanup === 'function') {
+      auditAdmin('cleanup_run');
       await global.runAutoCleanup();
       socket.emit('error-msg', 'Cleanup ran. Check server console for details');
     } else {
@@ -976,7 +991,7 @@ module.exports = function register(socket, ctx) {
       const channelCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : '';
       if (!channelCode || !/^[a-f0-9]{8}$/i.test(channelCode)) return;
 
-      const channel = db.prepare('SELECT id, code FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
+      const channel = db.prepare('SELECT id, code, name FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
       if (!channel || !canBotChannel(channel.id)) return socket.emit('error-msg', 'Channel not found');
 
       const name = typeof data.name === 'string' ? cleanWebhookName(data.name) : 'Bot';
@@ -987,6 +1002,7 @@ module.exports = function register(socket, ctx) {
         const result = db.prepare(
           'INSERT INTO webhooks (channel_id, name, token, created_by) VALUES (?, ?, ?, ?)'
         ).run(channel.id, name, token, socket.user.id);
+        auditAdmin('webhook_create', name, { channel: channel.name });
 
         socket.emit('webhook-created', {
           id: result.lastInsertRowid, channel_id: channel.id,
@@ -1015,6 +1031,7 @@ module.exports = function register(socket, ctx) {
       db.prepare(
         'INSERT INTO webhooks (channel_id, name, token, avatar_url, created_by) VALUES (?, ?, ?, ?, ?)'
       ).run(channelId, name, token, avatarUrl, socket.user.id);
+      auditAdmin('webhook_create', name, { channel: channel.name });
 
       const webhooks = visibleWebhookRows(db.prepare(`
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at, w.created_by,
@@ -1074,7 +1091,9 @@ module.exports = function register(socket, ctx) {
     if (!ownsBot(_delWh)) return socket.emit('error-msg', 'Only the person who made this bot, or the admin, can delete it');
 
     revokeBotVoiceAccess?.(webhookId, 'Webhook was deleted');
+    const _delName = db.prepare('SELECT name FROM webhooks WHERE id = ?').get(webhookId)?.name || null;
     db.prepare('DELETE FROM webhooks WHERE id = ?').run(webhookId);
+    auditAdmin('webhook_delete', _delName);
 
     if (data.webhookId) {
       // Per-channel response
@@ -1108,6 +1127,7 @@ module.exports = function register(socket, ctx) {
     if (!ownsBot(wh)) return socket.emit('error-msg', 'Only the person who made this bot, or the admin, can turn it on or off');
     const newState = wh.is_active ? 0 : 1;
     db.prepare('UPDATE webhooks SET is_active = ? WHERE id = ?').run(newState, webhookId);
+    auditAdmin('webhook_update', db.prepare('SELECT name FROM webhooks WHERE id = ?').get(webhookId)?.name || null, { active: !!newState });
     if (!newState) revokeBotVoiceAccess?.(webhookId, 'Webhook was disabled');
 
     if (data.webhookId) {
@@ -1212,6 +1232,20 @@ module.exports = function register(socket, ctx) {
       const flag = data.can_use_voice ? 1 : 0;
       db.prepare('UPDATE webhooks SET can_use_voice = ? WHERE id = ?').run(flag, webhookId);
       if (!flag) revokeBotVoiceAccess?.(webhookId, 'Bot voice permission was revoked');
+    }
+    // What changed, with the callback secret named but never written down.
+    const whAfter = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(webhookId);
+    if (whAfter) {
+      const changed = {};
+      if (whAfter.name !== wh.name) changed.name = { from: wh.name, to: whAfter.name };
+      if (whAfter.channel_id !== wh.channel_id) changed.channel = db.prepare('SELECT name FROM channels WHERE id = ?').get(whAfter.channel_id)?.name || null;
+      if (whAfter.avatar_url !== wh.avatar_url) changed.avatar = whAfter.avatar_url ? 'changed' : 'removed';
+      if (whAfter.callback_url !== wh.callback_url) changed.callbackUrl = whAfter.callback_url || 'removed';
+      if (whAfter.callback_secret !== wh.callback_secret) changed.callbackSecret = whAfter.callback_secret ? 'changed' : 'removed';
+      if (whAfter.subscribed_events !== wh.subscribed_events) changed.events = whAfter.subscribed_events;
+      if (whAfter.can_moderate !== wh.can_moderate) changed.canModerate = !!whAfter.can_moderate;
+      if (whAfter.can_use_voice !== wh.can_use_voice) changed.canUseVoice = !!whAfter.can_use_voice;
+      if (Object.keys(changed).length) auditAdmin('webhook_update', whAfter.name, changed);
     }
 
     const webhooks = visibleWebhookRows(db.prepare(`
