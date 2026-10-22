@@ -35,6 +35,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Transfer Admin moved out of the member right-click menu, where it sat next to Kick and Ban, to Settings > Members.
 - The kick window only offers to scrub messages server-wide to admins, since only an admin's kick does that.
 - Someone who joins a group DM later is no longer shown locked messages from before they joined, which they could never open.
+- The audit log records every admin and moderator action: handing over admin, deleting accounts, deleting, pinning and protecting other people's messages, channel settings, removing someone from voice or a channel, bots, the whitelist, invite codes, emoji, stickers, sounds, tags, backups and restores, imports and updates. A role edit shows only what changed (including which role new members get), a setting shows its old and new value, every entry reads in plain words, and Export saves the whole log instead of the rows on screen.
+- Uploaded videos are never drawn bigger than their real size, so small pixel art stays sharp (#5817).
 
 ### Fixed
 - Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
@@ -52,6 +54,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Copy link and Mark NSFW were missing from the toolbar slot order setting (#5821).
 
 ### Security
+- Link previews no longer ask websites for Brotli compression or decode it, closing a way in through a Node.js bug (CVE-2026-111497). Servers not running Docker should also update Node.js to 22.23.4, 24.22.1 or 26.12.1.
 - Updated follow-redirects, used by the tunnel feature, for two security advisories.
 
 ## [4.26.3] - 2026-10-21
