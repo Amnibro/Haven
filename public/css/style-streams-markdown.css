@@ -1170,8 +1170,10 @@ ul.chat-list { list-style-type: disc; }
   transition: background var(--transition);
 }
 
+/* Stays solid on hover, a shade toward the text colour, so the header's
+   buttons stay readable over a background picture. */
 .link-preview:hover {
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--bg-tertiary) 94%, var(--text-primary));
 }
 
 .link-preview-image {
@@ -1275,7 +1277,7 @@ ul.chat-list { list-style-type: disc; }
 .lp-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 .lp-site {
   flex: 1 1 auto;
@@ -1325,6 +1327,26 @@ ul.chat-list { list-style-type: disc; }
 .media-keep:hover, .media-keep:focus-visible, .media-loop:hover, .media-loop:focus-visible { opacity: 0.85; }
 .media-keep[aria-pressed="true"], .media-loop[aria-pressed="true"] { opacity: 1; filter: none; border-color: var(--accent); }
 body.pause-offscreen-off .media-keep { display: none; }
+
+/* In a card's top bar every control is the same height and spaced by the
+   bar's gap alone, with the icons clear enough to find. */
+.lp-header > button,
+.lp-header > .lp-volume {
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.375rem;
+  border-radius: 0.25rem;
+}
+.lp-header > .media-keep,
+.lp-header > .media-loop { margin-left: 0; min-width: 1.5rem; font-size: 0.875rem; opacity: 0.6; }
+.lp-header > .media-keep:hover,
+.lp-header > .media-loop:hover,
+.lp-volume:hover { background: rgba(255, 255, 255, 0.07); }
+.lp-header > .media-keep:hover,
+.lp-header > .media-loop:hover { opacity: 1; }
+.lp-volume input { height: 1rem; }
 .lp-size:hover,
 .lp-collapse:hover {
   background: rgba(255, 255, 255, 0.07);
