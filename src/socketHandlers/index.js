@@ -1487,9 +1487,13 @@ function setupSocketHandlers(io, db, opts = {}) {
   function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent, pushOpts = {}) {
     if (pushOpts && pushOpts.silent) return;
     try {
+      // Someone counts as at a screen, and is not pushed, while one of their
+      // apps is showing and not away. A computer left on with Haven open goes
+      // away after a few idle minutes (auto-away), so their phone is pushed
+      // again instead of staying quiet for as long as that window is open.
       const activeUserIds = new Set();
       for (const [, s] of io.sockets.sockets) {
-        if (s.user && s.hasFocus !== false) activeUserIds.add(s.user.id);
+        if (s.user && s.hasFocus !== false && s.user.status !== 'away') activeUserIds.add(s.user.id);
       }
 
       // onlyUserIds narrows a push to some members, such as the author of a
