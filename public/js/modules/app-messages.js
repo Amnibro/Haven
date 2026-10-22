@@ -1120,6 +1120,7 @@ _createMessageEl(msg, prevMsg) {
     toolbarActions.push({ key: 'delete', html: `<button data-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>` });
   }
 
+  // Settings > Appearance lists the same keys for reordering (app-appearance.js).
   const defaultToolbarOrder = ['react', 'reply', 'quote', 'thread', 'copy-link', 'pin', 'archive', 'nsfw', 'edit', 'delete'];
   let savedToolbarOrder = [];
   try {

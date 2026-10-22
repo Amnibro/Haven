@@ -667,14 +667,17 @@ _setupToolbarIconPicker() {
   const resetBtn = document.getElementById('toolbar-order-reset-btn');
   if (!picker) return;
 
-  const defaultOrder = ['react', 'reply', 'quote', 'thread', 'pin', 'archive', 'edit', 'delete'];
+  // The same keys, in the same order, as the toolbar itself (app-messages.js).
+  const defaultOrder = ['react', 'reply', 'quote', 'thread', 'copy-link', 'pin', 'archive', 'nsfw', 'edit', 'delete'];
   const actionLabels = {
     react: t('msg_toolbar.react'),
     reply: t('msg_toolbar.reply'),
     quote: t('msg_toolbar.quote'),
     thread: t('msg_toolbar.thread'),
+    'copy-link': t('msg_toolbar.copy_link'),
     pin: t('media_runtime.toolbar.pin'),
     archive: t('media_runtime.toolbar.protect'),
+    nsfw: t('msg_toolbar.mark_nsfw'),
     edit: t('msg_toolbar.edit'),
     delete: t('msg_toolbar.delete')
   };
