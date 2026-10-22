@@ -52,6 +52,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Replaced or removed profile pictures and borders stayed in uploads forever (thanks KamdenB).
 - Link cards turned see-through when you pointed at them, so their buttons were hard to see over a background picture. They stay solid now, and their top bar buttons are evenly sized.
 - Copy link and Mark NSFW were missing from the toolbar slot order setting (#5821).
+- New members were struck and then muted by auto-mod for sending GIFs from the GIF picker, because the wait before new accounts can post links counted them. GIFs from GIPHY, Tenor and KLIPY now go through; pasted links still wait. KLIPY's GIFs are also on the starter link allowlist now.
 
 ### Security
 - Link previews no longer ask websites for Brotli compression or decode it, closing a way in through a Node.js bug (CVE-2026-111497). Servers not running Docker should also update Node.js to 22.23.4, 24.22.1 or 26.12.1.
