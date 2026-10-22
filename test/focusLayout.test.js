@@ -1,0 +1,63 @@
+'use strict';
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const FocusLayout = require('../plugins/FocusLayout.plugin.js');
+const setup = (over = {}) => {
+  const data = {}, store = { haven_muted_channels: JSON.stringify(over.muted || []) };
+  global.HavenApi = { Data: { save: (p, k, v) => { (data[p] ||= {})[k] = v; }, load: (p, k, f) => data[p]?.[k] ?? f } };
+  global.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); } };
+  global.location = { host: 'haven.test' };
+  global.document = { hasFocus: () => true, hidden: false };
+  global.window = { app: { user: { id: 1, username: 'tester' }, currentChannel: 'aaaa0001', unreadCounts: { aaaa0002: 3, aaaa0003: 1, dddd0001: 2 }, channels: [{ code: 'aaaa0001', name: 'general' }, { code: 'aaaa0002', name: 'ops' }, { code: 'aaaa0003', name: 'random' }, { code: 'dddd0001', name: 'dm', is_dm: true, dm_target: { username: 'bob' } }], ...over.app } };
+  const f = new FocusLayout();
+  f._soon = () => {};
+  return f;
+};
+const msg = (id, content, extra = {}) => ({ id, content, user_id: 2, username: 'bob', created_at: '2026-10-22T15:00:00Z', ...extra });
+test('mentions, @everyone and replies to me are classified; my own, DM and muted messages are not', () => {
+  const f = setup({ muted: ['aaaa0003'] });
+  assert.equal(f._classify('aaaa0002', msg(1, 'hey @tester look')), 'mention');
+  assert.equal(f._classify('aaaa0002', msg(2, '@everyone standup')), 'mention');
+  assert.equal(f._classify('aaaa0002', msg(3, '@testerbot ping')), null);
+  assert.equal(f._classify('aaaa0002', msg(4, 'ok', { replyContext: { user_id: 1 } })), 'reply');
+  assert.equal(f._classify('aaaa0002', msg(5, '@tester', { user_id: 1 })), null);
+  assert.equal(f._classify('dddd0001', msg(6, '@tester')), null);
+  assert.equal(f._classify('aaaa0003', msg(7, '@tester')), null);
+});
+test('live messages land once in the inbox, read when the open channel is on screen', () => {
+  const f = setup();
+  f._incoming({ channelCode: 'aaaa0002', message: msg(10, '@tester deploy?') });
+  f._incoming({ channelCode: 'aaaa0002', message: msg(10, '@tester deploy?') });
+  f._incoming({ channelCode: 'aaaa0001', message: msg(11, '@tester here') });
+  const items = f._store();
+  assert.equal(items.length, 2);
+  assert.equal(items.find(x => x.id === 10).read, false);
+  assert.equal(items.find(x => x.id === 11).read, true);
+  assert.equal(f._counts().activity, 1);
+});
+test('search backfill keeps only mentions for its own token and marks them read', () => {
+  const f = setup();
+  f._sock = { emit: (ev, d) => { f._sent = [ev, d]; } };
+  f._backfill();
+  assert.equal(f._sent[0], 'search-messages');
+  assert.equal(f._sent[1].query, 'tester');
+  f._backfilled({ token: 7, results: [{ id: 20, content: '@tester old', user_id: 2, username: 'bob', channel_code: 'aaaa0002' }] });
+  assert.equal(f._store().length, 0);
+  f._backfilled({ token: f._sent[1].token, results: [{ id: 20, content: '@tester old', user_id: 2, username: 'bob', channel_code: 'aaaa0002' }, { id: 21, content: 'tester without at', user_id: 2, channel_code: 'aaaa0002' }] });
+  assert.deepEqual(f._store().map(x => [x.id, x.read]), [[20, true]]);
+});
+test('opening a channel marks its items read; unread rows and badges follow Haven counts', () => {
+  const f = setup({ muted: ['aaaa0003'] });
+  f._incoming({ channelCode: 'aaaa0002', message: msg(30, '@tester one') });
+  f._seen('aaaa0002');
+  assert.equal(f._store()[0].read, true);
+  assert.deepEqual(f._unreadRows().map(r => [r.kind, r.who, r.count]), [['unread', '#ops', 3], ['dm', 'bob', 2]]);
+  assert.deepEqual(f._counts(), { server: -1, dms: 2, activity: 0, you: 0 });
+});
+test('inbox keeps the newest 150 items', () => {
+  const f = setup();
+  f._keep(Array.from({ length: 170 }, (_, i) => ({ k: 'mention:aaaa0002:' + i, kind: 'mention', code: 'aaaa0002', id: i, at: i, read: true })));
+  const items = f._store();
+  assert.equal(items.length, 150);
+  assert.equal(items[0].id, 169);
+});
