@@ -1012,9 +1012,13 @@
 .forum-topic-tags:empty { display: none; }
 .forum-tag { background: var(--bg-tertiary); color: var(--text-secondary); border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.68rem; }
 .forum-tag-pinned { color: var(--accent); }
-.forum-tag-closed { color: var(--text-muted); }
-.forum-topic-closed { opacity: 0.55; }
-.forum-topic-closed:hover { opacity: 0.85; }
+/* A closed topic reads as finished at a glance: no card fill, a dashed
+   edge, a grey picture and a muted title, with its Closed chip outlined. */
+.forum-tag-closed { color: var(--text-secondary); background: transparent; border: 1px solid var(--border-light, var(--border)); }
+.forum-topic-closed { opacity: 0.6; background: transparent; border-style: dashed; }
+.forum-topic-closed:hover { opacity: 0.9; }
+.forum-topic-closed .forum-topic-thumb { filter: grayscale(1); }
+.forum-topic-closed .forum-topic-title { color: var(--text-muted); }
 /* NSFW topics (#5633): the picture and preview sit blurred behind a label until
    clicked, like a spoiler, and the title stays readable. Anyone who hides NSFW
    channels does not get the card at all. */

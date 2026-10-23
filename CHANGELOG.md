@@ -38,6 +38,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Someone who joins a group DM later is no longer shown locked messages from before they joined, which they could never open.
 - The audit log records every admin and moderator action: handing over admin, deleting accounts, deleting, pinning and protecting other people's messages, channel settings, removing someone from voice or a channel, bots, the whitelist, invite codes, emoji, stickers, sounds, tags, backups and restores, imports and updates. A role edit shows only what changed (including which role new members get), a setting shows its old and new value, every entry reads in plain words, and Export saves the whole log instead of the rows on screen.
 - Uploaded videos are never drawn bigger than their real size, so small pixel art stays sharp (#5817).
+- Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
 - Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
