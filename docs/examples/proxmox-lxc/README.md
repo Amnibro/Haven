@@ -8,6 +8,7 @@ An automated, unprivileged Proxmox VE LXC installation script for [Haven](https:
 
 - **Automated Provisioning**: Downloads official Debian 12 standard template, configures 2 vCPU, 2 GB RAM, 16 GB rootfs, and unprivileged user mappings (`nesting=1`).
 - **Node.js 22 LTS**: Installs current LTS runtime required by Haven.
+- **Latest stable release**: Installs the newest Haven release, not the development branch.
 - **Three Access Topologies**:
   1. **Public Domain + Caddy Reverse Proxy**: Automatic Let's Encrypt TLS certificate generation, WebSocket upgrading, and reverse proxying to `127.0.0.1:3000` via router port forwarding (80/443).
   2. **Tailscale Mesh VPN**: Zero port forwarding, no public IP/domain needed; installs `tailscaled` directly inside the container for private mesh access.
@@ -56,18 +57,21 @@ bash create-haven-lxc.sh
 
 ## Post-Install Admin Setup
 
-To promote a user to administrator via the container CLI:
+The first account registered with the admin username you chose (`ADMIN_USER`, `admin` by default) becomes the admin.
+
+If you registered under a different name before any admin existed, set `ADMIN_USERNAME` in `/etc/systemd/system/haven.service` inside the container to that name, then restart and log in again:
 
 ```bash
-pct exec <CTID> -- sqlite3 /var/lib/haven/.haven/haven.db "UPDATE users SET is_admin = 1 WHERE username = '<USERNAME>';"
-pct exec <CTID> -- systemctl restart haven
+pct exec <CTID> -- bash -c 'systemctl daemon-reload && systemctl restart haven'
 ```
+
+Haven's data, including its database, is in `/var/lib/haven` inside the container.
 
 ---
 
 ## Updating Haven
 
-An in-container update shortcut (`update` / `update-haven`) is pre-installed. It safely stops the service, pulls the latest code from GitHub, refreshes production dependencies, fixes permissions, and restarts the service.
+An in-container update shortcut (`update` / `update-haven`) is pre-installed. It stops the service, moves to the latest stable Haven release from GitHub, refreshes production dependencies, fixes permissions, and restarts the service.
 
 From your Proxmox host shell:
 ```bash

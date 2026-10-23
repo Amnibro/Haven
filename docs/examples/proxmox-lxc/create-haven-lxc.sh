@@ -268,9 +268,16 @@ pct exec "$CTID" -- bash -c '
     # Configure git safe directory for root and haven users
     git config --system --add safe.directory /opt/haven
 
-    # Install npm production dependencies
+    # Run the latest stable release, not the development branch (main holds
+    # work that has not been through a release yet). Pre-release tags such
+    # as v4.27.0-beta.1 carry a dash and are skipped.
     cd /opt/haven
-    npm install --omit=dev
+    git fetch --tags --quiet
+    LATEST=$(git tag -l "v*" --sort=-v:refname | grep -v -- "-" | head -n1)
+    git checkout --quiet "$LATEST"
+
+    # Install npm production dependencies, exactly as locked
+    npm ci --omit=dev
 
     # Install in-container update helper script (/usr/local/bin/update-haven and symlink /usr/local/bin/update)
     cat << 'UPDATE_EOF' > /usr/local/bin/update-haven
@@ -279,13 +286,16 @@ set -euo pipefail
 echo "==> Stopping Haven service..."
 systemctl stop haven
 
-echo "==> Pulling latest version from GitHub..."
+echo "==> Fetching the latest Haven release from GitHub..."
 cd /opt/haven
-git config --system --add safe.directory /opt/haven 2>/dev/null || true
-git pull
+git config --system --get-all safe.directory | grep -qx /opt/haven || git config --system --add safe.directory /opt/haven
+git fetch --tags --quiet
+LATEST=\$(git tag -l "v*" --sort=-v:refname | grep -v -- "-" | head -n1)
+git checkout --quiet "\$LATEST"
+echo "==> Now on \$LATEST"
 
 echo "==> Updating dependencies..."
-npm install --omit=dev
+npm ci --omit=dev
 
 echo "==> Restoring file permissions..."
 chown -R haven:haven /opt/haven /var/lib/haven /var/log/haven
@@ -456,8 +466,10 @@ fi
 echo -e "\n${BL}Initial Administrator Setup:${CL}"
 echo -e "  Designated Admin Username: ${GN}${ADMIN_USER}${CL}"
 echo -e "  1. On first login, click Register and create an account named '${GN}${ADMIN_USER}${CL}'."
-echo -e "  2. If you already registered a different username, promote it anytime via:"
-echo -e "     ${BL}pct exec ${CTID} -- sqlite3 /var/lib/haven/.haven/haven.db \"UPDATE users SET is_admin = 1 WHERE username = '<YOUR_USERNAME>';\" && pct exec ${CTID} -- systemctl restart haven${CL}"
+echo -e "  2. Registered under another name before any admin existed? Set ADMIN_USERNAME in"
+echo -e "     /etc/systemd/system/haven.service to that name, then run:"
+echo -e "     ${BL}pct exec ${CTID} -- bash -c 'systemctl daemon-reload && systemctl restart haven'${CL}"
+echo -e "     and log in again. Haven makes that account the admin."
 
 echo -e "\n${BL}Updating Haven in the Future:${CL}"
 echo -e "  From Proxmox host shell: ${GN}pct exec ${CTID} -- update${CL}"
