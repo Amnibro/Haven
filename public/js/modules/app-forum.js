@@ -493,12 +493,12 @@ _showForumTopicContextMenu(e, msg) {
 },
 
 // The other forums a topic can move to (#5809). Topics move between forums
-// only: in a chat channel a topic would lose its title and tags. Blog forums
-// take no moves (src/moveMessages.js).
+// only: in a chat channel a topic would lose its title and tags. A whole
+// topic moves in or out of a blog forum too (src/moveMessages.js).
 _forumMoveTargets() {
   const here = this.channels?.find(c => c.code === this.currentChannel);
-  if (!here || Number(here.forum_blog) === 1) return [];
-  return (this.channels || []).filter(c => c.is_forum && !c.is_dm && c.code !== this.currentChannel && Number(c.forum_blog) !== 1);
+  if (!here) return [];
+  return (this.channels || []).filter(c => c.is_forum && !c.is_dm && c.code !== this.currentChannel);
 },
 
 // Picks the forum to move a topic to, in the Move Messages window. The topic

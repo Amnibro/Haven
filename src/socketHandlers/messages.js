@@ -2353,8 +2353,8 @@ module.exports = function register(socket, ctx) {
     if (!fromCode || !toCode || fromCode === toCode) return cb({ error: 'Invalid channels' });
     if (!/^[a-f0-9]{8}$/i.test(fromCode) || !/^[a-f0-9]{8}$/i.test(toCode)) return cb({ error: 'Invalid channel codes' });
 
-    const fromCh = db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(fromCode);
-    const toCh   = db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(toCode);
+    const fromCh = db.prepare('SELECT id, name, is_dm, is_forum FROM channels WHERE code = ?').get(fromCode);
+    const toCh   = db.prepare('SELECT id, name, is_dm, is_forum FROM channels WHERE code = ?').get(toCode);
     if (!fromCh || !toCh) return cb({ error: 'Channel not found' });
     if (fromCh.is_dm || toCh.is_dm) return cb({ error: 'Cannot move messages to or from DMs' });
 
