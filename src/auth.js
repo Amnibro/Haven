@@ -1958,6 +1958,7 @@ router.get('/SSO', (req, res) => {
         <button class="btn btn-cancel" id="cancel-btn">Cancel</button>
       </div>
       <p class="success" id="success-msg">✓ Approved! You can close this tab.</p>
+      <p style="font-size:13px;margin-top:14px"><a href="#" id="switch-btn" style="color:#8f95b2">Not you? Use a different account</a></p>
     </div>
   </div>
   <script nonce="${nonce}">
@@ -1967,6 +1968,15 @@ router.get('/SSO', (req, res) => {
       window.location.href = '/?next=' + encodeURIComponent(window.location.pathname + window.location.search);
     });
     document.getElementById('cancel-btn').addEventListener('click', () => window.close());
+    // Signs this browser out of Haven and comes back here after the new login.
+    function switchAccount() {
+      ['haven_token', 'haven_user', 'haven_sync_key'].forEach(k => { try { localStorage.removeItem(k); } catch {} });
+      const q = new URLSearchParams(window.location.search);
+      q.delete('switch');
+      window.location.replace('/?next=' + encodeURIComponent(window.location.pathname + '?' + q.toString()));
+    }
+    document.getElementById('switch-btn').addEventListener('click', e => { e.preventDefault(); switchAccount(); });
+    if (new URLSearchParams(window.location.search).get('switch') === '1') switchAccount();
     const authCode = '${safeAuthCode}';
     const origin = ${jsOrigin};
     const back = ${jsBack};
