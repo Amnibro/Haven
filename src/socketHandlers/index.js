@@ -1224,6 +1224,15 @@ function setupSocketHandlers(io, db, opts = {}) {
     }
     memberListLast.set(code, { mode, pubJson, own });
 
+    // Most sockets get exactly the same payload, so they are gathered and
+    // sent it in one broadcast, which encodes it once. Emitting to each
+    // socket in turn encoded the whole list once per member: with everyone
+    // reconnecting after a restart, that grew with the square of the
+    // channel's size (2,000 members took 8s of CPU and 1.8 GB). Only a
+    // member who is invisible themselves needs a list of their own.
+    const fullSlim = [];
+    const fullLegacy = [];
+    const sharedDelta = [];
     for (const sid of room) {
       const s = io.of('/').sockets.get(sid);
       if (!s || !s.user) continue;
@@ -1231,15 +1240,21 @@ function setupSocketHandlers(io, db, opts = {}) {
       const selfHidden = own.has(viewer);
 
       if (!s.presenceDeltas || fresh || !s.presenceSynced?.has(code)) {
-        const list = selfHidden
-          ? pub.filter(u => u.id !== viewer).concat(byId.get(viewer)).sort(byPresence)
-          : pub;
+        if (s.presenceDeltas) (s.presenceSynced || (s.presenceSynced = new Set())).add(code);
+        if (!selfHidden) {
+          (s.presenceDeltas ? fullSlim : fullLegacy).push(sid);
+          continue;
+        }
+        const list = pub.filter(u => u.id !== viewer).concat(byId.get(viewer)).sort(byPresence);
         if (s.presenceDeltas) {
           s.emit('online-users', { channelCode: code, users: list.map(slim), visibilityMode: mode, slim: 1 });
-          (s.presenceSynced || (s.presenceSynced = new Set())).add(code);
         } else {
           s.emit('online-users', { channelCode: code, users: list, visibilityMode: mode });
         }
+        continue;
+      }
+      if (!selfHidden) {
+        sharedDelta.push(sid);
         continue;
       }
 
@@ -1257,6 +1272,11 @@ function setupSocketHandlers(io, db, opts = {}) {
       const entries = upsert.map(id => pubById.get(id));
       if (extra) entries.push(extra);
       s.emit('online-users-delta', { channelCode: code, visibilityMode: mode, upsert: entries.map(slim), remove });
+    }
+    if (fullSlim.length) io.to(fullSlim).emit('online-users', { channelCode: code, users: pub.map(slim), visibilityMode: mode, slim: 1 });
+    if (fullLegacy.length) io.to(fullLegacy).emit('online-users', { channelCode: code, users: pub, visibilityMode: mode });
+    if (sharedDelta.length && (changed.length || removed.length)) {
+      io.to(sharedDelta).emit('online-users-delta', { channelCode: code, visibilityMode: mode, upsert: changed.map(id => pubById.get(id)).map(slim), remove: removed });
     }
   }
 

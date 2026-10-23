@@ -56,6 +56,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Link cards turned see-through when you pointed at them, so their buttons were hard to see over a background picture. They stay solid now, and their top bar buttons are evenly sized.
 - Copy link and Mark NSFW were missing from the toolbar slot order setting (#5821).
 - The theme picker could be scrolled far past its content, into empty space (#5823).
+- Big channels: member list updates go out in one broadcast instead of one per member. With 2,000 people connected to one channel, everyone reconnecting after a restart took 8 seconds of server time and 1.8 GB of memory and left messages arriving seconds late; it now takes 3 seconds and 270 MB, with messages arriving in about a tenth of a second.
 - On the desktop app, a thin strip of the member list, with its resize edge, showed under an open thread panel. The panel now ends exactly at the status bar.
 - A computer left on with Haven open kept your phone from getting notifications for as long as the window stayed open. Once that window goes away (after a few idle minutes), your phone gets them again.
 - New members were struck and then muted by auto-mod for sending GIFs from the GIF picker, because the wait before new accounts can post links counted them. GIFs from GIPHY, Tenor and KLIPY now go through; pasted links still wait. KLIPY's GIFs are also on the starter link allowlist now.
