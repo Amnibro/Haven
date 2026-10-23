@@ -585,8 +585,10 @@ _refreshMentionableRoles() {
   try {
     this.socket.emit('get-roles', null, (res) => {
       const roles = res && Array.isArray(res.roles) ? res.roles : [];
+      // A role switched off for @mentions (#5822) is neither offered in the
+      // @ list nor drawn or counted as a mention.
       this._mentionableRoles = roles
-        .filter(r => r && r.name)
+        .filter(r => r && r.name && r.mentionable !== 0)
         .map(r => ({ id: r.id, name: String(r.name), color: r.color || null, color2: r.color2 || null, color_shimmer: r.color_shimmer || 0, level: r.level }));
     });
   } catch { /* offline: keep whatever we had */ }
@@ -595,7 +597,9 @@ _refreshMentionableRoles() {
 /** True when `content` pings a role the viewer holds and role pings are on. */
 _mentionsMyRole(content) {
   if (!content || (this.notifications && this.notifications.roleMentionsEnabled === false)) return false;
-  const mine = (this.user && Array.isArray(this.user.roles)) ? this.user.roles : [];
+  const pingable = new Set((this._mentionableRoles || []).map(r => r.id));
+  const mine = ((this.user && Array.isArray(this.user.roles)) ? this.user.roles : [])
+    .filter(r => r && (!this._mentionableRoles || pingable.has(r.id)));
   if (!mine.length) return false;
   const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return mine.some(r => r && r.name && new RegExp(`(?<![\\w@])@${esc(r.name)}(?!\\w)`, 'i').test(content));

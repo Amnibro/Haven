@@ -307,7 +307,7 @@ module.exports = function register(socket, ctx) {
       if (!row) return;
 
       const roles = db.prepare(
-        `SELECT DISTINCT r.id, r.name, r.level, r.color, r.color2, r.color_shimmer
+        `SELECT DISTINCT r.id, r.name, r.level, r.color, r.color2, r.color_shimmer, COALESCE(r.show_on_profile, 1) AS show_on_profile
          FROM roles r
          JOIN user_roles ur ON r.id = ur.role_id
          WHERE ur.user_id = ? AND ur.channel_id IS NULL
@@ -323,7 +323,7 @@ module.exports = function register(socket, ctx) {
           if (chain.length > 0) {
             const placeholders = chain.map(() => '?').join(',');
             const channelRoles = db.prepare(
-              `SELECT DISTINCT r.id, r.name, COALESCE(ur.custom_level, r.level) as level, r.color, r.color2, r.color_shimmer
+              `SELECT DISTINCT r.id, r.name, COALESCE(ur.custom_level, r.level) as level, r.color, r.color2, r.color_shimmer, COALESCE(r.show_on_profile, 1) AS show_on_profile
                FROM roles r
                JOIN user_roles ur ON r.id = ur.role_id
                WHERE ur.user_id = ? AND ur.channel_id IN (${placeholders})
@@ -345,6 +345,16 @@ module.exports = function register(socket, ctx) {
       if (roles.length > 1) {
         const userRoleIdx = roles.findIndex(r => r.name === 'User' && r.level <= 1);
         if (userRoleIdx !== -1) roles.splice(userRoleIdx, 1);
+      }
+      // A role switched off for profile cards (#5822) is left off for
+      // everyone but the people who manage roles, who see it marked.
+      const seesHidden = socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_roles');
+      for (let i = roles.length - 1; i >= 0; i--) {
+        const shown = roles[i].show_on_profile !== 0;
+        delete roles[i].show_on_profile;
+        if (shown) continue;
+        if (seesHidden) roles[i].hiddenOnProfile = true;
+        else roles.splice(i, 1);
       }
 
       let isOnline = false;

@@ -1532,6 +1532,10 @@ function initDatabase() {
   // ── Migration: transparent roles ────────────────────────
   // A transparent role never colors its holder; the next role down does.
   addColumn('roles', 'transparent', 'INTEGER NOT NULL DEFAULT 0');
+  // Per-role switches (#5822): whether @Role pings and shows in the @ list,
+  // and whether the role shows on profile cards for everyone or for staff only.
+  addColumn('roles', 'mentionable', 'INTEGER NOT NULL DEFAULT 1');
+  addColumn('roles', 'show_on_profile', 'INTEGER NOT NULL DEFAULT 1');
 
   // ── Migration: gradient role colors ─────────────────────
   // A role can draw names as a gradient from `color` to `color2`, and

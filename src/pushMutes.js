@@ -60,6 +60,7 @@ function pingedRecipients(db, { channelId, messageContent, replyToUserId, userId
   const roles = db.prepare(`
     SELECT ur.user_id, r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id
     WHERE ur.user_id IN (${ph}) AND (ur.channel_id IS NULL OR ur.channel_id = ?)
+      AND COALESCE(r.mentionable, 1) = 1
   `).all(...ids, channelId);
   for (const r of roles) if (pingsName(text, r.name)) pinged.add(r.user_id);
   return pinged;

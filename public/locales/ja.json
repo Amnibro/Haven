@@ -1832,7 +1832,12 @@
         "reapply_access": "全ユーザーにアクセスを再適用",
         "reapply_access_tooltip": "このロールをすでに持っているすべてのユーザーに対して、上記のチャンネルアクセスのルールを再実行します。付与/取り消しのチェックボックスを編集した後に便利です。ロールを割り当て直さなくても、既存のメンバーを現在の設定に合わせられます。",
         "permissions": "権限",
-        "delete": "削除"
+        "delete": "削除",
+        "mentionable": "@メンションできる",
+        "mentionable_hint": "@リストに表示され、@名前 でこのロールの全員に通知します。飾りやゲーム用のロールはオフに。",
+        "show_on_profile": "プロフィールカードに表示",
+        "show_on_profile_hint": "オフ：プロフィールカードに表示しません。ロールを管理する人には薄く表示されます。",
+        "hidden_on_profile_title": "ロールを管理する人だけがプロフィールカードでこれを見られます"
       },
       "import_files_progress": "{{count}} 件のファイルをコピー済み",
       "import_files_copied": "{{count}} 件の画像とファイルを Haven にコピーしました。",

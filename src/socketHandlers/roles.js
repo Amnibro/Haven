@@ -738,6 +738,12 @@ module.exports = function register(socket, ctx) {
       if (data.transparent !== undefined) {
         updates.push('transparent = ?'); values.push(data.transparent ? 1 : 0);
       }
+      if (data.mentionable !== undefined) {
+        updates.push('mentionable = ?'); values.push(data.mentionable ? 1 : 0);
+      }
+      if (data.showOnProfile !== undefined) {
+        updates.push('show_on_profile = ?'); values.push(data.showOnProfile ? 1 : 0);
+      }
       if (data.icon !== undefined) {
         const safeIcon = (isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon)) ? data.icon : null;
         updates.push('icon = ?'); values.push(safeIcon);
@@ -834,6 +840,8 @@ module.exports = function register(socket, ctx) {
     }
     if (after.color !== role.color || after.color2 !== role.color2) details.color = after.color2 ? `${after.color} → ${after.color2}` : after.color;
     if (!!after.transparent !== !!role.transparent) details.transparent = !!after.transparent;
+    if (!!after.mentionable !== !!role.mentionable) details.mentionable = !!after.mentionable;
+    if (!!after.show_on_profile !== !!role.show_on_profile) details.showOnProfile = !!after.show_on_profile;
     if (after.icon !== role.icon) details.icon = after.icon ? 'changed' : 'removed';
     if (after.link_channel_access !== role.link_channel_access) details.linkChannelAccess = !!after.link_channel_access;
     if (after.max_upload_mb !== role.max_upload_mb) details.maxUploadMb = after.max_upload_mb;

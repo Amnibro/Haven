@@ -1832,7 +1832,12 @@
         "reapply_access": "모든 사용자에게 접근 권한 다시 적용",
         "reapply_access_tooltip": "이미 이 역할을 가진 모든 사용자에게 위의 채널 접근 규칙을 다시 실행합니다. 부여/해제 체크박스를 편집한 후 유용하며, 역할을 다시 지정하지 않아도 기존 멤버를 현재 설정에 맞춰 줍니다.",
         "permissions": "권한",
-        "delete": "삭제"
+        "delete": "삭제",
+        "mentionable": "@멘션 가능",
+        "mentionable_hint": "@ 목록에 표시되고, @이름 으로 역할을 가진 모두에게 알립니다. 꾸미기용이나 게임 역할은 끄세요.",
+        "show_on_profile": "프로필 카드에 표시",
+        "show_on_profile_hint": "끔: 프로필 카드에 역할이 나오지 않습니다. 역할을 관리하는 사람에게는 흐리게 보입니다.",
+        "hidden_on_profile_title": "역할을 관리하는 사람만 프로필 카드에서 이 역할을 봅니다"
       },
       "import_files_progress": "파일 {{count}}개 복사됨",
       "import_files_copied": "사진과 파일 {{count}}개를 Haven으로 복사했습니다.",

@@ -16,7 +16,7 @@ function freshDb() {
     CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT);
     CREATE TABLE channels (id INTEGER PRIMARY KEY, is_dm INTEGER DEFAULT 0);
     CREATE TABLE user_preferences (user_id INTEGER, key TEXT, value TEXT, PRIMARY KEY (user_id, key));
-    CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT);
+    CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT, mentionable INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, channel_id INTEGER);
   `);
   db.prepare('INSERT INTO users (id, username, display_name) VALUES (1, ?, ?), (2, ?, ?), (3, ?, ?), (4, ?, ?)')
@@ -59,7 +59,8 @@ test('a mention of a longer name is not a mention of you', () => {
 test('a mentions-only device is pushed DMs, replies and pings only', () => {
   const db = freshDb();
   db.prepare("INSERT INTO roles (id, name) VALUES (1, 'Mods'), (2, 'Elsewhere')").run();
-  db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id) VALUES (2, 1, NULL), (3, 2, 99)').run();
+  db.prepare("INSERT INTO roles (id, name, mentionable) VALUES (3, 'Gamers', 0)").run();
+  db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id) VALUES (2, 1, NULL), (3, 2, 99), (4, 3, NULL)').run();
   const all = [2, 3, 4];
   const pinged = (messageContent, extra = {}) =>
     [...pingedRecipients(db, { channelId: 10, messageContent, userIds: all, ...extra })].sort();
@@ -70,6 +71,7 @@ test('a mentions-only device is pushed DMs, replies and pings only', () => {
   assert.deepEqual(pinged('@here standup'), all);
   assert.deepEqual(pinged('ping @mods'), [2], 'a role you hold');
   assert.deepEqual(pinged('ping @Elsewhere'), [], 'a role held only in another channel');
+  assert.deepEqual(pinged('ping @Gamers'), [], 'a role switched off for mentions (#5822)');
   assert.deepEqual(pinged('ping @​mods'), [], 'a defused role ping');
   assert.deepEqual(pinged('sounds good', { replyToUserId: 4 }), [4], 'a reply to you');
   assert.deepEqual([...pingedRecipients(db, { channelId: 20, messageContent: 'psst', userIds: [4] })], [4], 'every DM');

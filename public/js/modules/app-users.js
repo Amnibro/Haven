@@ -816,7 +816,9 @@ _showProfilePopup(profile) {
   const rolesHtml = (profile.roles && profile.roles.length > 0)
     ? profile.roles.map(r => {
         const rIcon = r.icon ? `<img class="role-icon" src="${this._escapeHtml(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._roleFill(r, 'var(--text-muted)')}"></span>`;
-        return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${this._roleNameHtml(r, r.name)}</span>`;
+        // Shown only to role managers, dimmed, when the role is off for profiles (#5822).
+        const hidden = r.hiddenOnProfile ? ` profile-popup-role-hidden" title="${this._escapeHtml(t('settings.admin.role_form.hidden_on_profile_title'))}` : '';
+        return `<span class="profile-popup-role${hidden}" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${this._roleNameHtml(r, r.name)}</span>`;
       }).join('')
     : '';
 
