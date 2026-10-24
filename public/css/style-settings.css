@@ -1069,3 +1069,13 @@
 .blocked-user-name { font-weight: 600; color: var(--text-primary); }
 .blocked-user-handle { color: var(--text-muted); font-size: 0.75rem; }
 .blocked-user-unblock { margin-left: auto; }
+.settings-nav.sp-nav .settings-nav-item, .settings-nav.sp-nav .settings-nav-group-label { display: none !important; }
+.sp-list { display: flex; flex-direction: column; gap: 2px; }
+.sp-cat { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 0.8125rem; font-weight: 600; line-height: 1.25; cursor: pointer; transition: background .15s, color .15s; }
+.sp-cat:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.sp-cat.active { background: var(--accent); color: var(--accent-text); }
+.sp-cat:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sp-icon { flex: 0 0 18px; text-align: center; font-size: 0.9375rem; }
+.sp-body .settings-section.sp-off, .sp-body .admin-settings.sp-off { display: none !important; }
+#settings-modal.sp-search .sp-body .sp-off:not(.settings-search-hidden) { display: block !important; }
+#settings-modal.sp-search .sp-cat.active { background: none; color: var(--text-secondary); }
