@@ -10,9 +10,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.27.17">
+  <link rel="stylesheet" href="/css/style.css?v=4.27.19">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
-  <script src="/js/theme-init.js?v=4.24.18"></script>
+  <script src="/js/theme-init.js?v=4.27.19"></script>
 </head>
 <body data-haven-page="app">
 
@@ -1762,6 +1762,14 @@
             <option value="dyslexic" data-i18n="settings.accessibility.font.dyslexic">OpenDyslexic</option>
           </select>
           <small class="settings-hint" style="display:block" data-i18n="settings.accessibility.font.hint">Replaces the theme's font across the app. Atkinson Hyperlegible keeps similar letters apart; OpenDyslexic weights the bottom of each letter. Code keeps its monospace font.</small>
+        </div>
+        <div class="settings-subsection" id="a11y-emoji-subsection">
+          <small class="settings-group-label" id="emoji-style-label">😀 <span data-i18n="settings.accessibility.emoji.title">Emoji</span></small>
+          <select id="emoji-style-select" class="settings-select" aria-labelledby="emoji-style-label">
+            <option value="system" data-i18n="settings.accessibility.emoji.system">Your device's emoji</option>
+            <option value="twemoji" data-i18n="settings.accessibility.emoji.twemoji">Twemoji</option>
+          </select>
+          <small class="settings-hint" style="display:block" data-i18n="settings.accessibility.emoji.hint">Twemoji draws emoji the same on every device, from a font Haven serves itself.</small>
         </div>
         <div class="settings-subsection" id="a11y-motion-subsection">
           <small class="settings-group-label" id="reduce-motion-label">🌙 <span data-i18n="settings.accessibility.motion.title">Reduce Motion</span></small>
@@ -5445,7 +5453,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.27.18"></script>
+  <script type="module" src="/js/app.js?v=4.27.19"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

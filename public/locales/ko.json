@@ -1863,6 +1863,14 @@
     "debug_section": {
       "stereo_stream_audio": "스트림 오디오 스테레오 (실험)",
       "stereo_stream_audio_hint": "화면 공유 소리를 음악과 게임용 높은 비트레이트의 스테레오로 재생합니다. 켜면 스트림을 스테레오로 들을 수 있습니다. 음성 릴레이를 쓰는 서버에서는 공유하는 사람도 켜야 합니다. 데이터를 더 씁니다. 바꾼 뒤 음성에 다시 들어가세요. 실험 기능입니다. 음성이 이상하면 끄세요."
+    },
+    "accessibility": {
+      "emoji": {
+        "title": "이모지",
+        "system": "기기의 이모지",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji는 모든 기기에서 이모지를 똑같이 그립니다. 글꼴은 Haven이 직접 제공합니다."
+      }
     }
   },
   "modals": {

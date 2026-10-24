@@ -1732,6 +1732,12 @@
         "underline_links": "Souligner les liens",
         "large_targets": "Zones de clic plus grandes",
         "large_targets_hint": "Boutons plus grands et lignes plus hautes dans les barres latérales, la zone de message et les actions des messages."
+      },
+      "emoji": {
+        "title": "Emoji",
+        "system": "Emoji de votre appareil",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji dessine les emoji de la même façon sur chaque appareil, avec une police servie par Haven lui-même."
       }
     },
     "reaction_size": {

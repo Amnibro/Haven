@@ -1721,6 +1721,12 @@
         "underline_links": "Subrayar enlaces",
         "large_targets": "Áreas de clic más grandes",
         "large_targets_hint": "Botones más grandes y filas más altas en las barras laterales, el cuadro de mensaje y las acciones de mensajes."
+      },
+      "emoji": {
+        "title": "Emoji",
+        "system": "Emoji de tu dispositivo",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji dibuja los emoji igual en todos los dispositivos, con una fuente que sirve el propio Haven."
       }
     },
     "reaction_size": {

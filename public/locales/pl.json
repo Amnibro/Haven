@@ -1721,6 +1721,12 @@
         "underline_links": "Podkreślaj linki",
         "large_targets": "Większe cele kliknięcia",
         "large_targets_hint": "Większe przyciski i wyższe wiersze na paskach bocznych, w polu wiadomości i w akcjach wiadomości."
+      },
+      "emoji": {
+        "title": "Emoji",
+        "system": "Emoji twojego urządzenia",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji rysuje emoji tak samo na każdym urządzeniu, czcionką udostępnianą przez sam Haven."
       }
     },
     "reaction_size": {

@@ -1706,6 +1706,12 @@
         "underline_links": "链接下划线",
         "large_targets": "更大的点击区域",
         "large_targets_hint": "侧边栏、消息框和消息操作中的按钮更大、行更高。"
+      },
+      "emoji": {
+        "title": "表情符号",
+        "system": "设备自带的表情",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji 在所有设备上显示一样的表情，字体由 Haven 自己提供。"
       }
     },
     "reaction_size": {

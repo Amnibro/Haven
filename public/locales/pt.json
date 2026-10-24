@@ -2797,7 +2797,15 @@
       "blur": "Desfocar tópicos NSFW até clicar",
       "blur_hint": "A imagem e a prévia de um tópico marcado como 🔞 ficam atrás de um desfoque, como um spoiler. Desligue para ver direto."
     },
-    "search_placeholder": "Pesquisar configurações (Ctrl+F)"
+    "search_placeholder": "Pesquisar configurações (Ctrl+F)",
+    "accessibility": {
+      "emoji": {
+        "title": "Emoji",
+        "system": "Emoji do seu dispositivo",
+        "twemoji": "Twemoji",
+        "hint": "O Twemoji desenha os emoji iguais em todos os dispositivos, com uma fonte que o próprio Haven fornece."
+      }
+    }
   },
   "modals": {
     "timezone": {

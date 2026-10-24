@@ -2515,7 +2515,15 @@
       "blur": "NSFW-Themen bis zum Anklicken unscharf darstellen",
       "blur_hint": "Bild und Vorschau eines mit 🔞 markierten Themas werden wie ein Spoiler unscharf dargestellt. Deaktiviere diese Option, um sie direkt zu sehen."
     },
-    "search_placeholder": "Einstellungen durchsuchen (Strg+F)"
+    "search_placeholder": "Einstellungen durchsuchen (Strg+F)",
+    "accessibility": {
+      "emoji": {
+        "title": "Emoji",
+        "system": "Emoji deines Geräts",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji zeichnet Emoji auf jedem Gerät gleich, mit einer Schrift, die Haven selbst bereitstellt."
+      }
+    }
   },
   "modals": {
     "common": {

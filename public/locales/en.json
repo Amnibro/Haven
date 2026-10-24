@@ -1732,6 +1732,12 @@
         "underline_links": "Underline links",
         "large_targets": "Larger click targets",
         "large_targets_hint": "Bigger buttons and taller rows in the sidebars, the message box and the message actions."
+      },
+      "emoji": {
+        "title": "Emoji",
+        "system": "Your device's emoji",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji draws emoji the same on every device, from a font Haven serves itself."
       }
     },
     "reaction_size": {
