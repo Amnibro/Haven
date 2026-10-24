@@ -1346,9 +1346,18 @@ _enforceDmLinkPolicy(containerEl) {
     } catch { return false; }
   };
 
+  // Messages from an admin, or from someone at or above "Skip filtering at
+  // role level", are left alone, as the server leaves them alone everywhere
+  // else. The server says who in this DM that is.
+  const code = (containerEl.closest && containerEl.closest('[data-code]')?.dataset.code) || this.currentChannel;
+  const dm = (this.channels || []).find(c => c.code === code);
+  const exempt = new Set((dm && dm.link_exempt_ids) || []);
+  const fromExempt = (el) => exempt.has(Number(el.closest('[data-user-id]')?.dataset.userId));
+
   containerEl.querySelectorAll('.message-content a[href]').forEach(a => {
     if (a.dataset.policyChecked) return;
     a.dataset.policyChecked = '1';
+    if (fromExempt(a)) return;
     if (!hostBlocked(a.href)) return;
 
     let host = a.href;
@@ -1367,6 +1376,7 @@ _enforceDmLinkPolicy(containerEl) {
   containerEl.querySelectorAll('.message-content img[data-mp-origin], .message-content img.chat-image').forEach(img => {
     if (img.dataset.policyChecked) return;
     img.dataset.policyChecked = '1';
+    if (fromExempt(img)) return;
     const origin = img.dataset.mpOrigin || img.getAttribute('data-mp-src') || img.dataset.lazySrc || img.src;
     if (!hostBlocked(origin)) return;
     const ph = document.createElement('span');

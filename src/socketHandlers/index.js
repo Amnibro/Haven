@@ -704,6 +704,17 @@ function setupSocketHandlers(io, db, opts = {}) {
             ch.dm_target = self || null;
             ch.is_self_dm = 1;
           }
+          // Who in this DM skips the link filter: the browser checks links in
+          // encrypted messages itself, and marked an admin's links blocked.
+          try {
+            ch.link_exempt_ids = db.prepare(`
+              SELECT u.id, u.is_admin FROM users u JOIN channel_members cm ON u.id = cm.user_id WHERE cm.channel_id = ?
+            `).all(ch.id).filter(m => automod.linkExempt({ isAdmin: !!m.is_admin, effectiveLevel: getUserEffectiveLevel(m.id) })).map(m => m.id);
+          } catch (err) {
+            // Nobody counted as exempt: links are checked as before.
+            console.warn('[automod] DM exemption lookup failed:', err.message);
+            ch.link_exempt_ids = [];
+          }
         }
       });
     }

@@ -58,6 +58,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Link cards turned see-through when you pointed at them, so their buttons were hard to see over a background picture. They stay solid now, and their top bar buttons are evenly sized.
 - Copy link and Mark NSFW were missing from the toolbar slot order setting (#5821).
 - The theme picker could be scrolled far past its content, into empty space (#5823).
+- In DMs, links from admins and from people at or above "Skip filtering at role level" were still marked "blocked link" (they always sent fine). The check a DM's readers run now skips them, the same as everywhere else.
 - When YouTube refuses to play a shared track (embedding turned off, video removed, or blocked in that country), Listen Together now says so instead of sitting silent (#5826).
 - A # in an unquoted .env value cuts the value off there, which broke a TURN secret on a server run without Docker while the same file worked in Docker (#5824). Haven now names any setting this happens to when it starts, and .env.example says to use quotes.
 - Videos and sounds in encrypted DMs had no 🔁 Loop or 📌 Keep playing button, and clicking a video there didn't play it (#5825).
