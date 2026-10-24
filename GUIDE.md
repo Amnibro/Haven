@@ -105,6 +105,16 @@ image: ghcr.io/ancsemi/haven:beta
 
 then pull and recreate as above. With `docker run` or Podman, pull `ghcr.io/ancsemi/haven:beta` and start the container from that image instead. Your data stays as it is. To leave early access, set the line back to `:latest` once the next stable release is out, so you never move to an older version than the one you ran.
 
+### Updating Automatically
+
+The **Update Now** button in Settings can't update a Docker install: a container can't replace itself, and giving Haven control of Docker would give it control of the whole machine. To stay current without logging in, let the host do it on a schedule. On Linux (a Raspberry Pi included), run `crontab -e` and add a line like this one, with your own folder:
+
+```bash
+0 4 * * * cd /home/pi/haven && docker compose pull -q && docker compose up -d
+```
+
+That checks for a new image every night at 4:00 and restarts Haven only when there is one. It follows whichever image `docker-compose.yml` names, `:latest` or `:beta`.
+
 ### Checking Your Version
 
 Open this URL in your browser (replace with your domain/IP if needed):
