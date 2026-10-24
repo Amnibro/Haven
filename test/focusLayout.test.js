@@ -11,6 +11,7 @@ const setup = (over = {}) => {
   global.window = { app: { user: { id: 1, username: 'tester' }, currentChannel: 'aaaa0001', unreadCounts: { aaaa0002: 3, aaaa0003: 1, dddd0001: 2 }, channels: [{ code: 'aaaa0001', name: 'general' }, { code: 'aaaa0002', name: 'ops' }, { code: 'aaaa0003', name: 'random' }, { code: 'dddd0001', name: 'dm', is_dm: true, dm_target: { username: 'bob' } }], ...over.app } };
   const f = new FocusLayout();
   f._soon = () => {};
+  f._skip = [];
   return f;
 };
 const msg = (id, content, extra = {}) => ({ id, content, user_id: 2, username: 'bob', created_at: '2026-10-22T15:00:00Z', ...extra });
@@ -35,7 +36,7 @@ test('live messages land once in the inbox, read when the open channel is on scr
   assert.equal(items.find(x => x.id === 11).read, true);
   assert.equal(f._counts().activity, 1);
 });
-test('search backfill keeps only mentions for its own token and marks them read', () => {
+test('search backfill keeps only mentions for its own token, read and undecided', () => {
   const f = setup();
   f._sock = { emit: (ev, d) => { f._sent = [ev, d]; } };
   f._backfill();
@@ -44,7 +45,7 @@ test('search backfill keeps only mentions for its own token and marks them read'
   f._backfilled({ token: 7, results: [{ id: 20, content: '@tester old', user_id: 2, username: 'bob', channel_code: 'aaaa0002' }] });
   assert.equal(f._store().length, 0);
   f._backfilled({ token: f._sent[1].token, results: [{ id: 20, content: '@tester old', user_id: 2, username: 'bob', channel_code: 'aaaa0002' }, { id: 21, content: 'tester without at', user_id: 2, channel_code: 'aaaa0002' }] });
-  assert.deepEqual(f._store().map(x => [x.id, x.read]), [[20, true]]);
+  assert.deepEqual(f._store().map(x => [x.id, x.read, x.done]), [[20, true, null]]);
 });
 test('opening a channel marks its items read; unread rows and badges follow Haven counts', () => {
   const f = setup({ muted: ['aaaa0003'] });
@@ -52,7 +53,7 @@ test('opening a channel marks its items read; unread rows and badges follow Have
   f._seen('aaaa0002');
   assert.equal(f._store()[0].read, true);
   assert.deepEqual(f._unreadRows().map(r => [r.kind, r.who, r.count]), [['unread', '#ops', 3], ['dm', 'bob', 2]]);
-  assert.deepEqual(f._counts(), { server: -1, dms: 2, activity: 0, you: 0 });
+  assert.deepEqual(f._counts(), { channels: -1, dms: 2, activity: 0 });
 });
 test('inbox keeps the newest 150 items', () => {
   const f = setup();
@@ -60,4 +61,39 @@ test('inbox keeps the newest 150 items', () => {
   const items = f._store();
   assert.equal(items.length, 150);
   assert.equal(items[0].id, 169);
+});
+test('backfilled mentions wait only while their channel is unread, and opening it keeps them waiting', () => {
+  const f = setup();
+  f._keep([{ k: 'mention:aaaa0002:40', kind: 'mention', code: 'aaaa0002', id: 40, at: Date.now(), read: true, done: null }, { k: 'mention:aaaa0001:41', kind: 'mention', code: 'aaaa0001', id: 41, at: Date.now(), read: true, done: null }]);
+  assert.deepEqual(f._open().map(x => x.id), [40]);
+  f._promote('aaaa0002');
+  window.app.unreadCounts.aaaa0002 = 0;
+  assert.deepEqual(f._open('aaaa0002').map(x => x.id), [40]);
+});
+test('the queue puts people who need you first, then unread channels, and skipped ones last', () => {
+  const f = setup();
+  f._incoming({ channelCode: 'aaaa0003', message: msg(50, '@tester ping', { created_at: new Date().toISOString() }) });
+  assert.deepEqual(f._queue().map(e => [e.code, e.kind]), [['aaaa0003', 'mention'], ['dddd0001', 'dm'], ['aaaa0002', 'unread']]);
+  f._skip = ['aaaa0003'];
+  assert.deepEqual(f._queue().map(e => e.code), ['dddd0001', 'aaaa0002', 'aaaa0003']);
+  assert.equal(f._label(f._queue()[1]), '3 new messages');
+});
+test('answering one of two mentions keeps the conversation open, answering the last clears it', () => {
+  const f = setup(), timers = [], real = global.setTimeout;
+  global.setTimeout = (fn) => timers.push(fn);
+  global.document.querySelectorAll = () => [];
+  f._aimAt = (id) => { f._aimed = id; };
+  f._go = (code) => { f._went = code; };
+  f._unaim = () => {};
+  f._render = () => {};
+  ['@tester one', '@tester two'].forEach((c, i) => f._incoming({ channelCode: 'aaaa0002', message: msg(60 + i, c, { created_at: new Date().toISOString() }) }));
+  timers.splice(0).forEach(fn => fn());
+  f._done({ code: 'aaaa0002', id: 60, who: 'bob' }, 'replied');
+  timers.splice(0).forEach(fn => fn());
+  assert.equal(f._aimed, 61);
+  f._done({ code: 'aaaa0002', id: 61, who: 'bob' }, 'replied');
+  timers.splice(0).forEach(fn => fn());
+  assert.deepEqual(f._cleared().map(c => [c.code, c.who, c.how]), [['aaaa0002', 'bob', 'replied']]);
+  assert.equal(f._went, 'dddd0001');
+  global.setTimeout = real;
 });
