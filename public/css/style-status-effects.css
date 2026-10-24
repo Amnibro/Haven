@@ -1381,3 +1381,19 @@ body.auth-page.auth-has-background { background-image: var(--auth-background); b
   min-height: 0;
 }
 
+.lv-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.lv-card { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 12px; align-items: start; padding: 8px; border: 1px solid var(--border); border-radius: calc(var(--radius, 8px) * 1.5); background: var(--bg-secondary); }
+.lv-card.voted { border-color: var(--accent); }
+.lv-card.big { grid-template-columns: minmax(0, 1fr); }
+.lv-img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: var(--radius, 8px); background: var(--bg-tertiary); cursor: zoom-in; }
+.lv-card.big .lv-img { cursor: zoom-out; }
+.lv-body { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.lv-name { display: flex; align-items: center; gap: 7px; font-weight: 700; color: var(--text-primary); }
+.lv-top { padding: 1px 7px; border-radius: 9px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); font-size: 11px; font-weight: 700; }
+.lv-desc { font-size: 12.5px; line-height: 1.4; color: var(--text-secondary, var(--text-muted)); }
+.lv-row { display: flex; gap: 7px; margin-top: 2px; }
+.lv-vote, .lv-try { height: 28px; padding: 0 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-tertiary); color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.lv-vote:hover, .lv-try:hover { border-color: var(--accent); }
+.lv-vote[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text, #fff); }
+.lv-vote:disabled { opacity: .6; cursor: default; }
+.lv-vote:focus-visible, .lv-try:focus-visible, .lv-img:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
