@@ -53,7 +53,7 @@ test('opening a channel marks its items read; unread rows and badges follow Have
   f._seen('aaaa0002');
   assert.equal(f._store()[0].read, true);
   assert.deepEqual(f._unreadRows().map(r => [r.kind, r.who, r.count]), [['unread', '#ops', 3], ['dm', 'bob', 2]]);
-  assert.deepEqual(f._counts(), { channels: -1, dms: 2, activity: 0 });
+  assert.deepEqual(f._counts(), { server: -1, channels: -1, dms: 2, activity: 0 });
 });
 test('inbox keeps the newest 150 items', () => {
   const f = setup();
@@ -86,6 +86,7 @@ test('answering one of two mentions keeps the conversation open, answering the l
   f._go = (code) => { f._went = code; };
   f._unaim = () => {};
   f._render = () => {};
+  f._dock = {};
   ['@tester one', '@tester two'].forEach((c, i) => f._incoming({ channelCode: 'aaaa0002', message: msg(60 + i, c, { created_at: new Date().toISOString() }) }));
   timers.splice(0).forEach(fn => fn());
   f._done({ code: 'aaaa0002', id: 60, who: 'bob' }, 'replied');
@@ -96,4 +97,15 @@ test('answering one of two mentions keeps the conversation open, answering the l
   assert.deepEqual(f._cleared().map(c => [c.code, c.who, c.how]), [['aaaa0002', 'bob', 'replied']]);
   assert.equal(f._went, 'dddd0001');
   global.setTimeout = real;
+});
+test('classic style answers without auto-aiming or moving on', () => {
+  const f = setup();
+  f._aimAt = () => { throw new Error('aimed'); };
+  f._go = () => { throw new Error('moved'); };
+  f._incoming({ channelCode: 'aaaa0002', message: msg(70, '@tester hi', { created_at: new Date().toISOString() }) });
+  f._done({ code: 'aaaa0002', id: 70, who: 'bob' }, 'replied');
+  assert.equal(f._open('aaaa0002').length, 1);
+  assert.equal(f._owner(), 'FocusLayout');
+  f._style = 'classic';
+  assert.equal(f._owner(), 'FocusClassicLayout');
 });
