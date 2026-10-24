@@ -69,6 +69,7 @@ if (!fs.existsSync(ENV_PATH)) {
 }
 
 require('dotenv').config({ path: ENV_PATH });
+require('./src/envHash').warnCutValues(ENV_PATH);
 
 // Also load the project root .env as an override source.
 // Docker compose injects it via env_file, but when running directly on the
@@ -81,6 +82,7 @@ require('dotenv').config({ path: ENV_PATH });
 const rootEnv = path.join(__dirname, '.env');
 if (fs.existsSync(rootEnv)) {
   require('dotenv').config({ path: rootEnv, override: false });
+  require('./src/envHash').warnCutValues(rootEnv);
   console.log('📄 Loaded project root .env as supplementary source');
 }
 
