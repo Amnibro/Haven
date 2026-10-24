@@ -588,7 +588,14 @@
       "soundboard": "Painel de sons",
       "listen_together": "Ouvir juntos",
       "settings": "Configurações de voz"
-    }
+    },
+    "music_file_platform": "Arquivo de áudio",
+    "music_file_listen": "Tocar para todos na voz",
+    "music_file_join_voice": "Entre em um canal de voz para tocar para todos lá",
+    "music_file_failed": "Não foi possível tocar este arquivo de áudio",
+    "music_yt_gone": "O YouTube diz que este vídeo não existe mais",
+    "music_yt_blocked": "O YouTube não toca este vídeo aqui (incorporação desativada ou bloqueado neste país)",
+    "music_yt_failed": "O YouTube não conseguiu tocar este vídeo"
   },
   "calls": {
     "incoming": "Chamada recebida",

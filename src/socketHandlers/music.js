@@ -7,6 +7,17 @@ const { isString, isInt } = require('./helpers');
 // everyone in the call, so without a cap one person could grow it forever.
 const MAX_QUEUE = 200;
 
+// An /uploads/ path to an audio file on this server, or null (#5826).
+const AUDIO_EXT = /\.(mp3|ogg|oga|wav|m4a|aac|flac|opus|weba)$/i;
+function serverAudioPath(url) {
+  const m = /^\/uploads\/([^?#\s]+)$/.exec(String(url || ''));
+  if (!m || !AUDIO_EXT.test(m[1])) return null;
+  const rel = m[1];
+  if (rel.split('/').some(part => !part || part === '..' || part === '.')) return null;
+  if (/^(deleted-attachments|bot-audio)\//i.test(rel)) return null;
+  return `/uploads/${rel}`;
+}
+
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission,
           resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, resolveMusicMetadata,
@@ -21,7 +32,9 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8)) return;
     if (!isString(data.url, 1, 500)) return;
-    if (!/^https?:\/\//i.test(data.url)) return socket.emit('error-msg', 'Invalid URL');
+    // An audio file uploaded to this server plays straight from it (#5826).
+    const serverFile = serverAudioPath(data.url);
+    if (!serverFile && !/^https?:\/\//i.test(data.url)) return socket.emit('error-msg', 'Invalid URL');
     const voiceRoom = voiceUsers.get(data.code);
     if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
 
@@ -34,7 +47,16 @@ module.exports = function register(socket, ctx) {
     let resolvedFrom = null;
     let title = trimMusicText(data.title, 200);
 
-    const isSpotify = /open\.spotify\.com\/(track|album|playlist|episode|show)\/[a-zA-Z0-9]+/.test(data.url);
+    const isSpotify = !serverFile && /open\.spotify\.com\/(track|album|playlist|episode|show)\/[a-zA-Z0-9]+/.test(data.url);
+    if (serverFile) {
+      playUrl = serverFile;
+      if (!title) {
+        const base = serverFile.split('/').pop();
+        let shown = base;
+        try { shown = decodeURIComponent(base); } catch { /* not percent-encoded: the name as it is */ }
+        title = trimMusicText(shown.replace(/^\d{10,}-[0-9a-f]+[-_.]?/i, ''), 200);
+      }
+    }
     if (isSpotify) {
       const resolved = await resolveSpotifyToYouTube(data.url);
       if (resolved?.url) {
@@ -46,7 +68,7 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    if (!title) {
+    if (!title && !serverFile) {
       const resolvedMeta = await resolveMusicMetadata(playUrl);
       title = trimMusicText(resolvedMeta.title, 200);
     }

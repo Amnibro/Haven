@@ -665,7 +665,14 @@
       "soundboard": "Soundboard",
       "listen_together": "Escuchar juntos",
       "settings": "Configuración de voz"
-    }
+    },
+    "music_file_platform": "Archivo de audio",
+    "music_file_listen": "Reproducir para todos en voz",
+    "music_file_join_voice": "Únete a un canal de voz para reproducirlo para todos allí",
+    "music_file_failed": "No se pudo reproducir este archivo de audio",
+    "music_yt_gone": "YouTube dice que este video ya no existe",
+    "music_yt_blocked": "YouTube no reproduce este video aquí (se desactivó la inserción o está bloqueado en este país)",
+    "music_yt_failed": "YouTube no pudo reproducir este video"
   },
   "calls": {
     "incoming": "Llamada entrante",

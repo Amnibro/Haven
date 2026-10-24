@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Login page branding under Settings > Branding (#5819): show the server icon and banner on the login page, a short message under the title, and custom CSS for the login and registration page (admin only; add `?nocss` to the address to skip it).
 - Stereo stream audio, an experiment under Settings > Debug: plays the sound of screen shares in stereo at a music bitrate. Each listener turns it on; on servers using the voice relay, the person sharing does too.
 - A 📌 Keep playing pin lets one video or sound keep playing when you scroll away from it.
+- Listen Together plays audio files uploaded to the server (#5826): a 🎶 button on an uploaded sound plays it for everyone in your voice channel, straight from the server, so no outside service can refuse it for one listener and not another. A link to an uploaded file works in the share box too.
 - A Shut Down Server button under Settings > Admin > Server Updates stops Haven cleanly, the same as Ctrl+C, for servers Ctrl+C can no longer reach (for example after an in-app update restarted Haven outside tmux).
 - Two switches per role (#5822): "Can be @mentioned" keeps cosmetic and game roles out of the @ list and stops them pinging, and "Show on profile cards" leaves a role off profile cards for everyone but the people who manage roles.
 - Replies cross the Ferry bridge to Discord. A Discord reply to a message from Haven shows up in Haven as a reply, and the person it answers is notified. A Haven reply shows on Discord with a small line naming the message it answers and a link to it (and pings its Discord author when Ferry's "Allow mentions" is on).
@@ -57,6 +58,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Link cards turned see-through when you pointed at them, so their buttons were hard to see over a background picture. They stay solid now, and their top bar buttons are evenly sized.
 - Copy link and Mark NSFW were missing from the toolbar slot order setting (#5821).
 - The theme picker could be scrolled far past its content, into empty space (#5823).
+- When YouTube refuses to play a shared track (embedding turned off, video removed, or blocked in that country), Listen Together now says so instead of sitting silent (#5826).
 - A # in an unquoted .env value cuts the value off there, which broke a TURN secret on a server run without Docker while the same file worked in Docker (#5824). Haven now names any setting this happens to when it starts, and .env.example says to use quotes.
 - Videos and sounds in encrypted DMs had no 🔁 Loop or 📌 Keep playing button, and clicking a video there didn't play it (#5825).
 - Big channels: member list updates go out in one broadcast instead of one per member. With 2,000 people connected to one channel, everyone reconnecting after a restart took 8 seconds of server time and 1.8 GB of memory and left messages arriving seconds late; it now takes 3 seconds and 270 MB, with messages arriving in about a tenth of a second.

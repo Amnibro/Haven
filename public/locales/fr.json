@@ -676,7 +676,14 @@
       "soundboard": "Soundboard",
       "listen_together": "Écouter ensemble",
       "settings": "Paramètres vocaux"
-    }
+    },
+    "music_file_platform": "Fichier audio",
+    "music_file_listen": "Lire pour tout le monde en vocal",
+    "music_file_join_voice": "Rejoignez un salon vocal pour le lire pour tout le monde",
+    "music_file_failed": "Ce fichier audio n’a pas pu être lu",
+    "music_yt_gone": "YouTube indique que cette vidéo n’existe plus",
+    "music_yt_blocked": "YouTube ne lit pas cette vidéo ici (intégration désactivée ou bloquée dans ce pays)",
+    "music_yt_failed": "YouTube n’a pas pu lire cette vidéo"
   },
   "calls": {
     "incoming": "Appel entrant",

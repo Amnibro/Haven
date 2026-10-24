@@ -650,7 +650,14 @@
     },
     "push_to_mute_held": "按住静音已生效。松开前你的麦克风保持静音。",
     "sharing_ended": "{{who}} 已不再共享屏幕",
-    "status_push_to_mute": "已静音（按住静音）"
+    "status_push_to_mute": "已静音（按住静音）",
+    "music_file_platform": "音频文件",
+    "music_file_listen": "为语音中的所有人播放",
+    "music_file_join_voice": "加入语音频道后可为那里的所有人播放",
+    "music_file_failed": "无法播放此音频文件",
+    "music_yt_gone": "YouTube 表示此视频已不存在",
+    "music_yt_blocked": "YouTube 不会在这里播放此视频（上传者关闭了嵌入，或在此国家/地区被屏蔽）",
+    "music_yt_failed": "YouTube 无法播放此视频"
   },
   "calls": {
     "incoming": "来电",

@@ -562,7 +562,14 @@
     "music_shared_spotify": "Spotify (über YouTube) – geteilt von {{user}}",
     "music_shared": "{{platform}} – geteilt von {{user}}",
     "music": "Musik",
-    "someone": "jemand"
+    "someone": "jemand",
+    "music_file_platform": "Audiodatei",
+    "music_file_listen": "Für alle im Sprachkanal abspielen",
+    "music_file_join_voice": "Tritt einem Sprachkanal bei, um das dort für alle abzuspielen",
+    "music_file_failed": "Diese Audiodatei konnte nicht abgespielt werden",
+    "music_yt_gone": "YouTube meldet, dass dieses Video weg ist",
+    "music_yt_blocked": "YouTube spielt dieses Video hier nicht ab (Einbetten ist abgeschaltet oder es ist in diesem Land gesperrt)",
+    "music_yt_failed": "YouTube konnte dieses Video nicht abspielen"
   },
   "channels": {
     "status_none": "Keine",

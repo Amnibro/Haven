@@ -676,7 +676,14 @@
       "soundboard": "Soundboard",
       "listen_together": "Listen Together",
       "settings": "Voice Settings"
-    }
+    },
+    "music_file_platform": "Audio file",
+    "music_file_listen": "Play for everyone in voice",
+    "music_file_join_voice": "Join a voice channel to play this for everyone there",
+    "music_file_failed": "This audio file could not be played",
+    "music_yt_gone": "YouTube says this video is gone",
+    "music_yt_blocked": "YouTube will not play this video here (the uploader turned off embedding, or it is blocked in this country)",
+    "music_yt_failed": "YouTube could not play this video"
   },
   "calls": {
     "incoming": "Incoming call",

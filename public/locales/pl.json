@@ -665,7 +665,14 @@
       "soundboard": "Panel dźwięków",
       "listen_together": "Słuchaj razem",
       "settings": "Ustawienia głosu"
-    }
+    },
+    "music_file_platform": "Plik audio",
+    "music_file_listen": "Odtwórz dla wszystkich na głosowym",
+    "music_file_join_voice": "Dołącz do kanału głosowego, aby odtworzyć to dla wszystkich",
+    "music_file_failed": "Nie udało się odtworzyć tego pliku audio",
+    "music_yt_gone": "YouTube podaje, że tego filmu już nie ma",
+    "music_yt_blocked": "YouTube nie odtworzy tu tego filmu (osadzanie wyłączone lub zablokowany w tym kraju)",
+    "music_yt_failed": "YouTube nie mógł odtworzyć tego filmu"
   },
   "calls": {
     "incoming": "Połączenie przychodzące",

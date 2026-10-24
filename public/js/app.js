@@ -49,10 +49,11 @@ import ThemePickerMethods from './modules/app-theme-picker.js?v=4.25.30';
 import PushToMuteMethods from './modules/app-push-to-mute.js?v=4.24.5';
 import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.24.20';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.23.9';
-import MusicMethods from './modules/app-music.js?v=4.24.19';
+import MusicMethods from './modules/app-music.js?v=4.27.17';
+import MusicFileMethods from './modules/app-music-file.js?v=4.27.17';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.27.14';
-import MessageContentMethods from './modules/app-message-content.js?v=4.26.18';
+import MessageContentMethods from './modules/app-message-content.js?v=4.27.17';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
 import ThreadMethods from './modules/app-threads.js?v=4.25.10';
@@ -444,6 +445,7 @@ class HavenApp {
     this._setupTyping();
     this._setupMessageNsfw();
     this._setupMediaPlayback();
+    this._setupMusicListenButtons();
     this._setupSilentToggle();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
@@ -592,6 +594,7 @@ Object.assign(HavenApp.prototype,
   ScreenWebcamMethods,
   StreamTileMethods,
   MusicMethods,
+  MusicFileMethods,
   MusicKeyMethods,
   UtilityMethods,
   MessageContentMethods,

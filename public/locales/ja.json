@@ -581,7 +581,14 @@
       "soundboard": "サウンドボード",
       "listen_together": "一緒に聴く",
       "settings": "ボイス設定"
-    }
+    },
+    "music_file_platform": "音声ファイル",
+    "music_file_listen": "ボイスの全員に再生",
+    "music_file_join_voice": "ボイスチャンネルに参加すると全員に再生できます",
+    "music_file_failed": "この音声ファイルを再生できませんでした",
+    "music_yt_gone": "YouTube によるとこの動画は削除されています",
+    "music_yt_blocked": "YouTube はこの動画をここで再生しません（埋め込みが無効か、この国でブロックされています）",
+    "music_yt_failed": "YouTube はこの動画を再生できませんでした"
   },
   "calls": {
     "incoming": "着信",
