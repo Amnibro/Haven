@@ -1847,7 +1847,11 @@
       "transfer_hint": "別のメンバーを管理者にし、あなたは管理者でなくなります。パスワードで確認します。",
       "transfer_placeholder": "メンバー名…",
       "transfer_btn": "管理者を移譲…",
-      "transfer_pick": "先にリストからメンバーを選んでください"
+      "transfer_pick": "先にリストからメンバーを選んでください",
+      "shutdown_btn": "サーバーを停止",
+      "shutdown_hint": "Ctrl+C と同じように Haven を安全に停止します。いつもの方法で再起動してください。Docker やサービスマネージャーが自動で再起動する場合は、再起動になります。",
+      "shutdown_confirm": "今すぐサーバーを停止しますか？再起動するまで全員の接続が切れます。",
+      "shutdown_sent": "サーバーを停止しています。"
     },
     "debug_section": {
       "stereo_stream_audio": "配信音声をステレオに（実験的）",

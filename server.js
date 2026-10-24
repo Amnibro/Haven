@@ -3672,11 +3672,25 @@ function gracefulShutdown(signal) {
   const ts = new Date().toISOString();
   const line = `[${ts}] Graceful shutdown: ${signal}\n`;
   try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch { /* crash log is a diagnostic extra; shutdown continues */ }
-  console.log(`\n${signal} received, shutting down`);
+  console.log(`\n${signal === 'admin' ? 'Shut down from Settings' : `${signal} received`}, shutting down`);
   botAudioManager?.shutdown();
   require('./src/mediaTools').stopExiftool();
   io.close();
-  server.close(() => process.exit(0));
+  const finish = () => {
+    // Closing the database writes out its journal, so the next start does
+    // not have to replay it.
+    try { db.close(); } catch (err) { console.warn('[shutdown] database close failed:', err.message); }
+    process.exit(0);
+  };
+  server.close(finish);
+  // A browser holding a keep-alive connection open can keep server.close()
+  // waiting; don't let that stall the shutdown.
+  setTimeout(finish, 5000).unref();
 }
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+// The same shutdown for the admin's button in Settings (src/routes/maintenance.js).
+late.shutdown = (reason) => {
+  try { stopFerry(); } catch { /* shutting down anyway; Discord drops the session on its own */ }
+  gracefulShutdown(reason);
+};

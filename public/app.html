@@ -2777,6 +2777,10 @@
             <button class="btn-sm" id="update-run-btn" disabled data-i18n="settings.admin.update_run_btn">Update Now</button>
           </div>
           <div id="update-status" style="margin-top:10px;padding:8px;border:1px solid var(--border);border-radius:4px;display:none"></div>
+          <div style="margin-top:10px">
+            <button class="btn-sm danger" id="server-shutdown-btn" data-i18n="settings.admin.shutdown_btn">Shut Down Server</button>
+          </div>
+          <small class="settings-hint" data-i18n="settings.admin.shutdown_hint">Stops Haven cleanly, the same as Ctrl+C. Start it again the way you usually do. If Docker or a service manager restarts Haven on its own, this restarts it instead.</small>
         </div>
 
         <!-- Plugin and Theme Updates -->
@@ -5441,7 +5445,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.27.14"></script>
+  <script type="module" src="/js/app.js?v=4.27.15"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

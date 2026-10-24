@@ -1847,7 +1847,11 @@
       "transfer_hint": "다른 멤버를 관리자로 만들고 당신은 관리자가 아니게 됩니다. 비밀번호로 확인합니다.",
       "transfer_placeholder": "멤버 이름…",
       "transfer_btn": "관리자 넘기기…",
-      "transfer_pick": "먼저 목록에서 멤버를 고르세요"
+      "transfer_pick": "먼저 목록에서 멤버를 고르세요",
+      "shutdown_btn": "서버 종료",
+      "shutdown_hint": "Ctrl+C처럼 Haven을 안전하게 멈춥니다. 평소처럼 다시 시작하세요. Docker나 서비스 관리자가 Haven을 자동으로 다시 시작하면 재시작이 됩니다.",
+      "shutdown_confirm": "지금 서버를 종료할까요? 다시 시작할 때까지 모두 연결이 끊깁니다.",
+      "shutdown_sent": "서버를 종료하는 중입니다."
     },
     "debug_section": {
       "stereo_stream_audio": "스트림 오디오 스테레오 (실험)",

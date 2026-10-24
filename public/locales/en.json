@@ -2174,6 +2174,10 @@
       "update_hint": "Check for new Haven releases and apply them in place. The server will create a pre-update backup automatically and restart itself.",
       "update_check_btn": "Check for Updates",
       "update_run_btn": "Update Now",
+      "shutdown_btn": "Shut Down Server",
+      "shutdown_hint": "Stops Haven cleanly, the same as Ctrl+C. Start it again the way you usually do. If Docker or a service manager restarts Haven on its own, this restarts it instead.",
+      "shutdown_confirm": "Shut down the server now? Everyone is disconnected until it is started again.",
+      "shutdown_sent": "The server is shutting down.",
       "update_checking": "Checking…",
       "update_run_on_host": "Run on host:",
       "update_copy_command": "Copy command",
@@ -4026,7 +4030,8 @@
         "webhook_delete": "deleted bot",
         "webhook_update": "changed bot",
         "whitelist_add": "added to the whitelist:",
-        "whitelist_remove": "removed from the whitelist:"
+        "whitelist_remove": "removed from the whitelist:",
+        "server_shutdown": "shut the server down"
       },
       "exporting": "Exporting...",
       "on": "on",
