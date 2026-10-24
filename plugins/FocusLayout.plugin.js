@@ -1,22 +1,22 @@
 /**
  * @name Focus Layout
- * @description Carousel Focus view, picked in Settings, Layout. The conversation that needs you sits in the middle, the one you just cleared fades on the left and the next one waits on the right. Menus live in a dock along the bottom. Replies aim at a person's message, and sending moves you to the next thing to answer. Press the ? button for shortcuts.
+ * @description Focus view, picked in Settings, Layout. Focus is the carousel and Focus Classic is the original rail with one list beside the chat. The conversation that needs you sits in the middle, the one you just cleared fades on the left and the next one waits on the right. Menus live in a dock along the bottom. Replies aim at a person's message, and sending moves you to the next thing to answer. Press the ? button for shortcuts.
  * @author Amni-Scient
- * @version 2.0.0
+ * @version 2.1.0
  */
 class FocusLayout {
   start() {
     if (this._started) return;
-    Object.assign(this, { _started: true, _engaged: false, _placed: [], _built: [], _off: [], _media: window.matchMedia('(min-width: 901px)'), _chip: 'all', _seq: 0, _skip: [], _aim: null, _pop: null, _entered: false });
+    Object.assign(this, { _started: true, _engaged: false, _placed: [], _built: [], _off: [], _media: window.matchMedia('(min-width: 901px)'), _chip: 'all', _seq: 0, _skip: [], _aim: null, _pop: null, _entered: false, _style: 'carousel', _tab: HavenApi.Data.load('FocusLayout', 'tab', 'server') });
     HavenApi.DOM.addStyle('FocusLayout', FocusLayout.CSS);
     this._on(this._media, 'change', () => this._sync());
     this._on(document, 'haven:layout-editing', () => this._sync());
-    this._on(document, 'haven:layout-owner-change', (e) => e.detail?.owner !== 'FocusLayout' && this._sync());
+    this._on(document, 'haven:layout-owner-change', (e) => e.detail?.owner !== this._owner() && this._sync());
     this._on(document, 'keydown', (e) => this._key(e), true);
     this._on(window, 'resize', () => this._railSoon());
     this._wire = setInterval(() => this._attach(), 1000);
     this._attach();
-    HavenApi.Data.load('FocusLayout', 'layoutOn', '1') !== '0' && this._engage(false);
+    HavenApi.Data.load('FocusLayout', 'layoutOn', '1') !== '0' ? this._engage(false) : HavenApi.Data.load('FocusClassicLayout', 'layoutOn', '0') === '1' && this._engage(false, 'classic');
   }
   stop() {
     if (!this._started) return;
@@ -31,10 +31,12 @@ class FocusLayout {
   }
   _on(t, ty, fn, o) { t.addEventListener(ty, fn, o); this._off.push([t, ty, fn, o]); }
   _t(key, fallback) { const s = typeof window.t === 'function' ? window.t(key) : null; return typeof s === 'string' && s && s !== key ? s : fallback; }
-  _engage(persist = true) {
-    if (this._engaged) return;
-    this._engaged = true;
-    document.documentElement.setAttribute('data-focus-layout', '1');
+  _owner() { return this._style === 'classic' ? 'FocusClassicLayout' : 'FocusLayout'; }
+  _engage(persist = true, style = 'carousel') {
+    if (this._engaged && this._style === style) return;
+    this._engaged && this._restore();
+    Object.assign(this, { _engaged: true, _style: style });
+    document.documentElement.setAttribute('data-focus-layout', style);
     persist && HavenApi.Data.save('FocusLayout', 'layoutOn', '1');
     this._sync();
   }
@@ -65,11 +67,12 @@ class FocusLayout {
     s.connected && this._backfill();
   }
   _apply() {
+    if (this._style === 'classic') return this._cApply();
     if (this._dock) return this._render();
     const q = (sel) => document.querySelector(sel), R = (n) => q(`[data-haven-region="${n}"]`);
     const side = R('navigation-sidebar'), bar = R('server-rail'), main = R('main'), chans = R('channels'), dms = R('direct-messages'), account = R('account'), ctx = R('context-sidebar');
     if (!side || !bar || !main || !chans || !dms || !account) return console.warn('[FocusLayout] Required layout regions are unavailable');
-    if (HavenApi.Layout && !HavenApi.Layout.acquire('FocusLayout')) return;
+    if (HavenApi.Layout && !HavenApi.Layout.acquire(this._owner())) return;
     const el = this._el, svg = (p, s = 20) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
     const dock = this._dock = el('nav', 'fc-dock'), row = el('div', 'fc-row'), servers = el('div', 'fc-servers'), pop = this._popEl = el('div', 'fc-pop');
     dock.setAttribute('aria-label', this._t('focus.menu', 'Menu'));
@@ -122,12 +125,13 @@ class FocusLayout {
   _move(node, parent, before) { this._placed.push([node, node.parentNode, node.nextSibling]); parent.insertBefore(node, before); }
   _restore() {
     const root = document.documentElement;
-    ['data-focus-desktop', 'data-fc-flash', 'data-fc-enter', 'data-fc-leave', 'data-fc-pop'].forEach(a => root.removeAttribute(a));
+    ['data-focus-desktop', 'data-fc-flash', 'data-fc-enter', 'data-fc-leave', 'data-fc-pop', 'data-focus-tab', 'data-focus-pane-hidden', 'data-focus-add'].forEach(a => root.removeAttribute(a));
     this._placed.reverse().forEach(([node, parent, next]) => parent.insertBefore(node, next?.parentNode === parent ? next : null));
     this._built.forEach(n => n.remove());
+    this._aim && window.app?._clearReply?.();
     document.querySelectorAll('.fc-aimed').forEach(n => n.classList.remove('fc-aimed'));
-    Object.assign(this, { _placed: [], _built: [], _dock: null, _popEl: null, _panes: null, _left: null, _right: null, _flashEl: null, _railEl: null, _prog: null, _banner: null, _pop: null, _aim: null });
-    HavenApi.Layout?.release('FocusLayout');
+    Object.assign(this, { _placed: [], _built: [], _dock: null, _popEl: null, _panes: null, _left: null, _right: null, _flashEl: null, _railEl: null, _prog: null, _banner: null, _pop: null, _aim: null, _cRail: null, _cHead: null, _cAct: null, _cYou: null });
+    ['FocusLayout', 'FocusClassicLayout'].forEach(o => HavenApi.Layout?.release(o));
   }
   _dockAct(id, act) { act ? document.querySelector(act)?.click() : this._toggle(id); }
   _toggle(id) {
@@ -139,6 +143,7 @@ class FocusLayout {
   }
   _outside(e) { this._pop && !e.target.closest?.('.fc-pop, .fc-dock, .fc-help-btn, .modal, .modal-overlay, [role="menu"], .context-menu') && this._toggle(null); }
   _key(e) {
+    if (this._cRail) return this._cKey(e);
     if (!this._dock) return;
     const k = e.code || '', bare = !e.ctrlKey && !e.metaKey, input = e.target?.id === 'message-input', empty = input && !e.target.value, dd = ['mention-dropdown', 'slash-dropdown', 'emoji-dropdown', 'channel-dropdown'].some(id => { const d = document.getElementById(id); return d && d.offsetParent; });
     const go = (fn) => { e.preventDefault(); e.stopPropagation(); fn(); };
@@ -152,7 +157,7 @@ class FocusLayout {
       : k === 'KeyL' ? go(() => this._like()) : k === 'KeyJ' ? go(() => document.getElementById('voice-btn')?.click())
       : k === 'KeyK' ? go(() => this._toggle('channels')) : k === 'KeyD' ? go(() => this._toggle('dms')) : k === 'KeyA' ? go(() => this._toggle('activity')) : k === 'Slash' ? go(() => this._toggle('help')) : null;
   }
-  _soon() { clearTimeout(this._pending); this._pending = setTimeout(() => this._dock && (this._render(), this._rail()), 120); }
+  _soon() { clearTimeout(this._pending); this._pending = setTimeout(() => this._dock ? (this._render(), this._rail()) : this._cRail && this._cRender(), 120); }
   _railSoon() { cancelAnimationFrame(this._raf); this._raf = requestAnimationFrame(() => this._rail()); }
   _chan(code) { return (window.app?.channels || []).find(c => c.code === code); }
   _name(code) { const c = this._chan(code); return !c ? '' : c.is_dm ? (c.dm_target?.displayName || c.dm_target?.username || c.name) : '#' + c.name; }
@@ -205,7 +210,7 @@ class FocusLayout {
   _counts() {
     const app = window.app, counts = app?.unreadCounts || {}, chans = app?.channels || [];
     const dms = chans.filter(c => c.is_dm).reduce((n, c) => n + (counts[c.code] || 0), 0), server = chans.some(c => !c.is_dm && counts[c.code] > 0 && !this._muted(c.code));
-    return { channels: server ? -1 : 0, dms, activity: this._store().filter(x => !x.read).length };
+    return { server: server ? -1 : 0, channels: server ? -1 : 0, dms, activity: this._store().filter(x => !x.read).length };
   }
   _queue() {
     const cur = window.app?.currentChannel, by = new Map();
@@ -217,6 +222,7 @@ class FocusLayout {
   _label(e) { return e.kind === 'mention' ? (e.n > 1 ? `${e.n} ${this._t('focus.to_answer', 'to answer')}` : this._t('focus.mentioned', 'Mentioned you')) : e.kind === 'reply' ? this._t('focus.replied', 'Replied to you') : e.kind === 'dm' ? this._t('focus.messaged', 'Messaged you') : `${e.count} ${this._t('focus.new_messages', 'new messages')}`; }
   _lines() { return [...document.querySelectorAll('#messages .message, #messages .message-compact')].slice(-3).map(m => { let a = m.querySelector('.message-author')?.textContent, p = m; while (!a && (p = p.previousElementSibling)) a = p.querySelector?.('.message-author')?.textContent; return [a || '', (m.querySelector('.message-content')?.textContent || '').trim().slice(0, 120)]; }).filter(l => l[1]); }
   _done(pre, how) {
+    if (!this._dock) return;
     const items = this._store(), hit = items.find(x => x.code === pre.code && x.id === pre.id && !x.done);
     if (!hit && !this._via) return;
     hit && this._keep(items.map(x => x === hit ? { ...x, done: true, read: true } : x));
@@ -292,7 +298,7 @@ class FocusLayout {
     next && this._aimAt(+next.dataset.msgId);
   }
   _clickAim(e) {
-    const m = e.target.closest?.('#messages [data-msg-id]');
+    const m = this._dock && e.target.closest?.('#messages [data-msg-id]');
     if (!m || e.target.closest('a, button, img, video, audio, input, textarea, .reaction, .message-reactions, .message-avatar, .message-author, .spoiler, code, pre') || String(window.getSelection?.() || '')) return;
     this._aimAt(+m.dataset.msgId);
   }
@@ -314,7 +320,7 @@ class FocusLayout {
   }
   _leave(e) {
     const icon = e.target.closest?.('.server-icon.remote');
-    if (!icon || this._passing) return;
+    if (!icon || this._passing || !this._dock) return;
     e.preventDefault();
     e.stopPropagation();
     const root = document.documentElement, b = this._banner;
@@ -324,6 +330,7 @@ class FocusLayout {
     setTimeout(() => root.removeAttribute('data-fc-leave'), 2400);
   }
   _render() {
+    if (this._cRail) return this._cRender();
     if (!this._dock) return;
     const counts = this._counts(), root = document.documentElement;
     this._dock.querySelectorAll('.fc-di[data-id]').forEach(b => {
@@ -353,7 +360,7 @@ class FocusLayout {
     card.setAttribute('aria-label', `${d.tag}: ${d.name}`);
   }
   _renderActivity() {
-    const chips = this._panes.activity.querySelector('.fa-chips'), list = this._panes.activity.querySelector('.fa-list');
+    const pane = this._panes?.activity || this._cAct, chips = pane.querySelector('.fa-chips'), list = pane.querySelector('.fa-list');
     const all = [...this._store(), ...this._unreadRows()], match = (x) => this._chip === 'all' || x.kind === this._chip;
     chips.replaceChildren(...FocusLayout.CHIPS.map(([id, key, label]) => {
       const n = all.filter(x => !x.read && (id === 'all' || x.kind === id)).length, b = Object.assign(this._el('button', 'fa-chip' + (id === this._chip ? ' active' : ''), this._t(key, label) + (n ? ` ${n > 99 ? '99+' : n}` : '')), { type: 'button' });
@@ -372,8 +379,98 @@ class FocusLayout {
     const label = { mention: this._t('focus.mentioned', 'Mentioned you'), reply: this._t('focus.replied', 'Replied to you') }[x.kind];
     main.append(top, el('span', 'fa-sub', x.count ? (x.count === 1 ? this._t('focus.new_message', '1 new message') : `${x.count} ${this._t('focus.new_messages', 'new messages')}`) : [label, place].filter(Boolean).join(' · ')), ...(x.text ? [el('span', 'fa-text', x.text)] : []));
     row.append(av, main, ...(x.read ? [] : [el('span', 'fa-dot')]));
-    row.addEventListener('click', () => { this._toggle(null); this._keep(this._store().map(y => y.k === x.k ? { ...y, done: false } : y)); this._go(x.code); });
+    row.addEventListener('click', () => this._cRail ? this._jump(x) : (this._toggle(null), this._keep(this._store().map(y => y.k === x.k ? { ...y, done: false } : y)), this._go(x.code)));
     return row;
+  }
+  _cApply() {
+    if (this._cRail) return this._cRender();
+    const q = (sel) => document.querySelector(sel), side = q('[data-haven-region="navigation-sidebar"]'), bar = q('[data-haven-region="server-rail"]'), content = q('[data-haven-region="sidebar-content"]'), account = q('[data-haven-region="account"]');
+    if (!side || !bar || !content || !account) return console.warn('[FocusLayout] Required layout regions are unavailable');
+    if (HavenApi.Layout && !HavenApi.Layout.acquire(this._owner())) return;
+    const el = this._el;
+    const rail = this._cRail = el('nav', 'focus-rail'), servers = el('div', 'fr-servers'), tabs = el('div', 'fr-tabs');
+    rail.id = 'focus-rail';
+    rail.setAttribute('aria-label', 'Focus');
+    tabs.setAttribute('role', 'tablist');
+    FocusLayout.TABS.forEach(([id, key, label, path]) => {
+      const b = el('button', 'fr-tab'), name = this._t(key, label);
+      b.type = 'button';
+      b.dataset.tab = id;
+      b.setAttribute('role', 'tab');
+      b.title = `${name} (Alt+${FocusLayout.TABS.findIndex(x => x[0] === id) + 1}). ${this._t('focus.hide_hint', 'Click again to hide the list')}`;
+      b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+      b.append(el('span', 'fr-label', name), el('b', 'fr-badge'));
+      b.addEventListener('click', () => this._cSelect(id, true));
+      tabs.append(b);
+    });
+    rail.append(servers, tabs);
+    side.parentNode.insertBefore(rail, side);
+    this._move(bar, servers, null);
+    const head = this._cHead = el('div', 'focus-head'), title = el('h2', 'fh-title'), actions = el('div', 'fh-actions');
+    head.append(title, actions);
+    const act = this._cAct = el('div', 'focus-pane focus-activity'), chips = el('div', 'fa-chips'), list = el('div', 'fa-list');
+    chips.setAttribute('role', 'tablist');
+    act.append(chips, list);
+    const you = this._cYou = el('div', 'focus-pane focus-you'), card = el('div', 'fy-card'), rows = el('div', 'fy-rows');
+    you.append(card, rows);
+    side.insertBefore(head, content);
+    side.insertBefore(act, content);
+    side.insertBefore(you, content);
+    this._built = [rail, head, act, you];
+    this._move(account, card, null);
+    FocusLayout.CYOU.forEach(([sel, key, label]) => {
+      const target = q(sel);
+      if (!target) return;
+      const r = el('button', 'fy-row', this._t(key, label));
+      r.type = 'button';
+      r.addEventListener('click', () => q(sel)?.click());
+      rows.append(r);
+    });
+    document.documentElement.setAttribute('data-focus-desktop', 'classic');
+    this._cRender();
+  }
+  _cSelect(id, fromClick) {
+    const root = document.documentElement, same = id === this._tab && root.hasAttribute('data-focus-tab');
+    fromClick && same ? root.toggleAttribute('data-focus-pane-hidden') : root.removeAttribute('data-focus-pane-hidden');
+    this._tab = id;
+    HavenApi.Data.save('FocusLayout', 'tab', id);
+    id !== 'server' && root.removeAttribute('data-focus-add');
+    this._cRender();
+  }
+  _cKey(e) {
+    const i = /^Digit([1-4])$/.exec(e.code || '');
+    if (!i || !this._cRail || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    this._cSelect(FocusLayout.TABS[i[1] - 1][0], false);
+  }
+  _cRender() {
+    const root = document.documentElement, tab = FocusLayout.TABS.some(x => x[0] === this._tab) ? this._tab : 'server';
+    root.setAttribute('data-focus-tab', tab);
+    const counts = this._counts();
+    this._cRail.querySelectorAll('.fr-tab').forEach(b => {
+      const on = b.dataset.tab === tab, n = counts[b.dataset.tab], badge = b.querySelector('.fr-badge');
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+      badge.textContent = n > 0 ? (n > 99 ? '99+' : String(n)) : '';
+      badge.classList.toggle('dot', n === -1);
+    });
+    const title = this._cHead.querySelector('.fh-title'), actions = this._cHead.querySelector('.fh-actions');
+    title.textContent = tab === 'server' ? this._serverName() : tab === 'dms' ? this._t('app.sidebar.direct_messages', 'Direct Messages') : this._t(FocusLayout.TABS.find(x => x[0] === tab)[1], FocusLayout.TABS.find(x => x[0] === tab)[2]);
+    actions.replaceChildren(...this._cActions(tab));
+    tab === 'activity' && this._renderActivity();
+  }
+  _cActions(tab) {
+    const mk = (label, title, fn, pressed) => { const b = Object.assign(document.createElement('button'), { type: 'button', className: 'fh-btn', textContent: label, title }); pressed != null && b.setAttribute('aria-pressed', String(pressed)); b.addEventListener('click', fn); return b; };
+    const root = document.documentElement;
+    return tab === 'server' ? [mk('+', `${this._t('app.sidebar.join_channel', 'Join a Channel')} / ${this._t('app.sidebar.create_channel', 'Create Channel')}`, () => { root.toggleAttribute('data-focus-add'); this._cRender(); }, root.hasAttribute('data-focus-add'))]
+      : tab === 'activity' ? [mk(this._t('forum.mark_all_read', 'Mark all read'), this._t('forum.mark_all_read', 'Mark all read'), () => this._markAll())] : [];
+  }
+  async _jump(x) {
+    const app = window.app;
+    if (!app) return;
+    x.code !== app.currentChannel && await app.switchChannel(x.code);
+    x.id && setTimeout(() => app._jumpToMessage?.(x.id), 600);
+    this._keep(this._store().map(y => y.k === x.k || y.code === x.code ? { ...y, read: true } : y));
   }
 }
 FocusLayout.DOCK = Object.freeze([
@@ -391,8 +488,68 @@ FocusLayout.DOCK = Object.freeze([
 FocusLayout.KEYS = Object.freeze([['Enter', 'focus.k_send', 'Send, then the next thing to answer'], ['⇧Enter', 'focus.k_line', 'New line'], ['Tab', 'focus.k_skip', 'Skip (empty message box)'], ['⇧Tab', 'focus.k_back', 'Bring back the last one'], ['Alt →  Alt ←', 'focus.k_arrows', 'Next or back from anywhere'], ['Alt [  Alt ]', 'focus.k_aim', 'Aim at another message'], ['Alt L', 'focus.k_like', 'Like and clear'], ['Alt J', 'focus.k_voice', 'Join or leave voice'], ['Alt K', 'focus.k_channels', 'Channels'], ['Alt D', 'focus.k_dms', 'Direct messages'], ['Alt A', 'focus.k_activity', 'Activity'], ['Alt 1–9', 'focus.k_servers', 'Switch server'], ['Esc', 'focus.k_close', 'Close a menu']]);
 FocusLayout.CHIPS = Object.freeze([['all', 'modals.all_members.filter_all', 'All'], ['mention', 'focus.mentions', 'Mentions'], ['reply', 'settings.sounds_section.replies', 'Replies'], ['dm', 'focus.dms', 'DMs'], ['unread', 'focus.unread', 'Unread']]);
 FocusLayout.YOU = Object.freeze([['#activities-btn', 'modals.activities.title', 'Activities'], ['#donors-btn', 'focus.support', 'Support Haven']]);
-FocusLayout.CSS = `
-html[data-focus-desktop="1"] { --fc-w: min(860px, calc(100vw - 96px)); --fc-r: calc(var(--radius, 8px) * 2.25); --fc-ease: cubic-bezier(.2, .8, .2, 1); --fc-shadow: 0 24px 60px color-mix(in srgb, #000 34%, transparent); --fc-side: clamp(0px, calc((100vw - var(--fc-w)) / 2 - 56px), 320px); }
+FocusLayout.TABS = Object.freeze([
+  ['server', 'status_bar.server', 'Server', '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/>'],
+  ['dms', 'focus.dms', 'DMs', '<path d="M21 12a8 8 0 0 1-11.7 7.1L4 20l1-4.7A8 8 0 1 1 21 12Z"/>'],
+  ['activity', 'users.activity', 'Activity', '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>'],
+  ['you', 'voice_runtime.you', 'You', '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']
+]);
+FocusLayout.CYOU = Object.freeze([['#open-settings-btn', 'settings.title', 'Settings'], ['#theme-popup-toggle', 'settings.plugins_section.themes_label', 'Themes'], ['#activities-btn', 'modals.activities.title', 'Activities'], ['#sidebar-members-btn', 'settings.nav.members', 'Members'], ['#donors-btn', 'focus.support', 'Support Haven']]);
+FocusLayout.CSS = `@font-face { font-family: 'Focus Archivo'; src: url('/fonts/archivo-var.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+html[data-focus-desktop="classic"] .focus-rail, html[data-focus-desktop="classic"] [data-haven-region="navigation-sidebar"], html[data-focus-desktop="classic"] [data-haven-region="channel-header"] { font-family: 'Focus Archivo', var(--font-main, system-ui), system-ui, sans-serif; }
+html[data-focus-desktop="classic"] .focus-rail { display: flex; flex-direction: column; flex: 0 0 77px; width: 77px; height: 100%; box-sizing: border-box; background: var(--bg-tertiary); border-inline-end: 1px solid var(--border); padding: 7px 0; z-index: 3; }
+html[data-focus-desktop="classic"] .fr-servers { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+html[data-focus-desktop="classic"] .fr-servers [data-haven-region="server-rail"] { display: flex !important; flex-direction: column !important; align-items: center !important; gap: 7px !important; width: 100% !important; height: auto !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; background: none !important; position: static !important; overflow: visible !important; }
+html[data-focus-desktop="classic"] .fr-servers [data-haven-region="server-list"] { display: flex !important; flex-direction: column !important; align-items: center; gap: 7px; width: 100%; height: auto !important; position: static !important; }
+html[data-focus-desktop="classic"] .fr-servers .server-separator { width: 32px !important; height: 2px !important; margin: 2px auto !important; }
+html[data-focus-desktop="classic"] .fr-tabs { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 10px; margin: 7px 10px 0; border-top: 1px solid var(--border); }
+html[data-focus-desktop="classic"] .fr-tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 61px; padding: 8px 0 7px; border: 0; border-radius: 14px; background: none; color: var(--text-muted); cursor: pointer; font: inherit; font-size: 11px; font-weight: 600; transition: background .15s, color .15s; }
+html[data-focus-desktop="classic"] .fr-tab:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--text-primary); }
+html[data-focus-desktop="classic"] .fr-tab.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+html[data-focus-desktop="classic"] .fr-tab:focus-visible, html[data-focus-desktop="classic"] .fa-row:focus-visible, html[data-focus-desktop="classic"] .fa-chip:focus-visible, html[data-focus-desktop="classic"] .fy-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+html[data-focus-desktop="classic"] .fr-badge { position: absolute; top: 3px; right: 9px; min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: var(--accent); color: var(--accent-text, #fff); font-size: 10px; font-weight: 700; line-height: 17px; text-align: center; }
+html[data-focus-desktop="classic"] .fr-badge:empty:not(.dot) { display: none; }
+html[data-focus-desktop="classic"] .fr-badge.dot { min-width: 9px; width: 9px; height: 9px; padding: 0; top: 7px; right: 17px; }
+html[data-focus-desktop="classic"] [data-haven-region="navigation-sidebar"] { display: flex; flex-direction: column; }
+html[data-focus-desktop="classic"] .sidebar-header { display: none !important; }
+html[data-focus-desktop="classic"] .focus-head { display: flex; align-items: center; gap: 8px; padding: 18px 16px 12px; flex: 0 0 auto; }
+html[data-focus-desktop="classic"] .fh-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-focus-desktop="classic"] .fh-btn { flex: 0 0 auto; min-width: 32px; height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+html[data-focus-desktop="classic"] .fh-btn:hover, html[data-focus-desktop="classic"] .fh-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+html[data-focus-desktop="classic"] .focus-pane { display: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 10px 14px; }
+html[data-focus-desktop="classic"][data-focus-tab="activity"] .focus-activity, html[data-focus-desktop="classic"][data-focus-tab="you"] .focus-you { display: block; }
+html[data-focus-desktop="classic"][data-focus-tab="activity"] [data-haven-region="sidebar-content"], html[data-focus-desktop="classic"][data-focus-tab="you"] [data-haven-region="sidebar-content"] { display: none !important; }
+html[data-focus-desktop="classic"]:not([data-focus-add]) [data-haven-region="join-channel"], html[data-focus-desktop="classic"]:not([data-focus-add]) [data-haven-region="create-channel"], html[data-focus-desktop="classic"][data-focus-tab="dms"] [data-haven-region="join-channel"], html[data-focus-desktop="classic"][data-focus-tab="dms"] [data-haven-region="create-channel"] { display: none !important; }
+html[data-focus-desktop="classic"][data-focus-tab="server"] [data-haven-region="direct-messages"], html[data-focus-desktop="classic"][data-focus-tab="server"] #sidebar-split-handle, html[data-focus-desktop="classic"][data-focus-tab="dms"] [data-haven-region="channels"], html[data-focus-desktop="classic"][data-focus-tab="dms"] #sidebar-split-handle { display: none !important; }
+html[data-focus-desktop="classic"][data-focus-tab="server"] [data-haven-region="channels"], html[data-focus-desktop="classic"][data-focus-tab="dms"] [data-haven-region="direct-messages"] { flex: 1 1 auto !important; height: auto !important; max-height: none !important; }
+html[data-focus-desktop="classic"] #sidebar-split { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+html[data-focus-desktop="classic"] [data-haven-region="sidebar-actions"] { display: none !important; }
+html[data-focus-desktop="classic"][data-focus-pane-hidden] [data-haven-region="navigation-sidebar"] { display: none !important; }
+html[data-focus-desktop="classic"] .fa-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 6px 10px; }
+html[data-focus-desktop="classic"] .fa-chip { height: 30px; padding: 0 12px; border: 1px solid var(--border); border-radius: 15px; background: var(--bg-secondary); color: var(--text-secondary, var(--text-primary)); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+html[data-focus-desktop="classic"] .fa-chip:hover { border-color: var(--accent); }
+html[data-focus-desktop="classic"] .fa-chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text, #fff); }
+html[data-focus-desktop="classic"] .fa-section { padding: 12px 8px 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+html[data-focus-desktop="classic"] .fa-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 8px; border: 0; border-radius: 12px; background: none; color: var(--text-primary); font: inherit; text-align: start; cursor: pointer; }
+html[data-focus-desktop="classic"] .fa-row:hover { background: var(--bg-hover, color-mix(in srgb, var(--accent) 8%, transparent)); }
+html[data-focus-desktop="classic"] .fa-row.unread { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+html[data-focus-desktop="classic"] .fa-avatar { flex: 0 0 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--accent) 22%, var(--bg-secondary)); color: var(--text-primary); font-weight: 700; font-size: 14px; }
+html[data-focus-desktop="classic"] .fa-avatar[data-kind="unread"] { background: var(--bg-secondary); color: var(--text-muted); }
+html[data-focus-desktop="classic"] .fa-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+html[data-focus-desktop="classic"] .fa-top { display: flex; align-items: baseline; gap: 8px; }
+html[data-focus-desktop="classic"] .fa-who { flex: 1 1 auto; min-width: 0; font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-focus-desktop="classic"] .fa-time { flex: 0 0 auto; font-size: 11.5px; color: var(--text-muted); }
+html[data-focus-desktop="classic"] .fa-sub { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-focus-desktop="classic"] .fa-text { font-size: 13px; color: var(--text-secondary, var(--text-primary)); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+html[data-focus-desktop="classic"] .fa-dot { flex: 0 0 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: var(--accent); }
+html[data-focus-desktop="classic"] .fa-empty { padding: 40px 12px; text-align: center; color: var(--text-muted); font-size: 13px; }
+html[data-focus-desktop="classic"] .fy-card { margin: 0 4px 14px; padding: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-secondary); }
+html[data-focus-desktop="classic"] .fy-card [data-haven-region="account"] { margin: 0 !important; border: 0 !important; background: none !important; }
+html[data-focus-desktop="classic"] .fy-rows { display: flex; flex-direction: column; gap: 2px; }
+html[data-focus-desktop="classic"] .fy-row { width: 100%; padding: 11px 14px; border: 0; border-radius: 12px; background: none; color: var(--text-primary); font: inherit; font-size: 14px; font-weight: 600; text-align: start; cursor: pointer; }
+html[data-focus-desktop="classic"] .fy-row:hover { background: var(--bg-hover, color-mix(in srgb, var(--accent) 8%, transparent)); }
+html[data-focus-desktop="1"] { --fc-edge: 24px; --fc-gap: 24px; --fc-side: clamp(220px, 17vw, 440px); --fc-w: calc(100vw - 2 * var(--fc-side) - 2 * var(--fc-gap) - 2 * var(--fc-edge)); --fc-r: calc(var(--radius, 8px) * 2.25); --fc-ease: cubic-bezier(.2, .8, .2, 1); --fc-shadow: 0 24px 60px color-mix(in srgb, #000 34%, transparent); }
+@media (max-width: 1239px) { html[data-focus-desktop="1"] { --fc-side: 0px; --fc-gap: 0px; } }
 html[data-focus-desktop="1"] [data-haven-region="navigation-sidebar"], html[data-focus-desktop="1"] [data-haven-region="status-bar"], html[data-focus-desktop="1"] #sidebar-split-handle, html[data-focus-desktop="1"] #sidebar-toggle-btn, html[data-focus-desktop="1"] #status-bar-toggle { display: none !important; }
 html[data-focus-desktop="1"] [data-haven-region="workspace"] { background: color-mix(in srgb, var(--bg-tertiary) 70%, var(--bg-primary)); justify-content: center; }
 html[data-focus-desktop="1"] [data-haven-region="main"] { flex: 0 1 var(--fc-w) !important; width: var(--fc-w) !important; max-width: var(--fc-w) !important; margin: 20px auto 104px !important; height: calc(100vh - 124px) !important; min-height: 0 !important; border-radius: var(--fc-r); overflow: hidden; background: var(--bg-primary); box-shadow: var(--fc-shadow), 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent); position: relative; transition: transform .75s var(--fc-ease), opacity .55s, filter .55s; }
@@ -414,11 +571,11 @@ html[data-focus-desktop="1"] .fc-pips span { flex: 1 1 0; height: 4px; border-ra
 html[data-focus-desktop="1"] .fc-pips span.done { background: var(--success, var(--accent)); }
 html[data-focus-desktop="1"] .fc-pips span.now { background: var(--accent); }
 html[data-focus-desktop="1"] .fc-count { flex: 0 0 auto; font-size: 12px; color: var(--text-muted); }
-.fc-side { position: fixed; top: 64px; bottom: 140px; width: var(--fc-side); z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 18px 18px 16px; box-sizing: border-box; border: 0; border-radius: var(--fc-r); background: var(--bg-secondary); color: var(--text-primary); font: inherit; text-align: start; cursor: pointer; opacity: .62; transform: scale(.96); transition: opacity .5s, transform .72s var(--fc-ease); overflow: hidden; box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 50%, transparent); }
+.fc-side { position: fixed; top: 44px; bottom: 124px; width: var(--fc-side); z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 18px 18px 16px; box-sizing: border-box; border: 0; border-radius: var(--fc-r); background: var(--bg-secondary); color: var(--text-primary); font: inherit; text-align: start; cursor: pointer; opacity: .62; transform: scale(.96); transition: opacity .5s, transform .72s var(--fc-ease); overflow: hidden; box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 50%, transparent); }
 .fc-side:hover, .fc-side:focus-visible { opacity: .82; transform: scale(.98); }
 .fc-side.empty, html:not([data-focus-desktop="1"]) .fc-side { display: none; }
-.fc-left { left: max(16px, calc((100vw - var(--fc-w)) / 2 - var(--fc-side) - 28px)); -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, .2), #000 60%); mask-image: linear-gradient(to right, rgba(0, 0, 0, .2), #000 60%); }
-.fc-right { right: max(16px, calc((100vw - var(--fc-w)) / 2 - var(--fc-side) - 28px)); -webkit-mask-image: linear-gradient(to left, rgba(0, 0, 0, .2), #000 60%); mask-image: linear-gradient(to left, rgba(0, 0, 0, .2), #000 60%); }
+.fc-left { left: var(--fc-edge); -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, .2), #000 60%); mask-image: linear-gradient(to right, rgba(0, 0, 0, .2), #000 60%); }
+.fc-right { right: var(--fc-edge); -webkit-mask-image: linear-gradient(to left, rgba(0, 0, 0, .2), #000 60%); mask-image: linear-gradient(to left, rgba(0, 0, 0, .2), #000 60%); }
 @media (max-width: 1239px) { .fc-side { display: none !important; } }
 .fs-head { display: flex; flex-direction: column; gap: 4px; }
 .fs-name { font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
