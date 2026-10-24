@@ -5,7 +5,7 @@ const SETTINGS_PAGES = {
     ['voice', '🎧', 'settings.pages.voice', 'Voice & video', ['section-call-settings']],
     ['alerts', '🔔', 'settings.pages.alerts', 'Notifications', ['section-sounds', 'section-push', 'section-whats-new']],
     ['profile', '🎮', 'settings.pages.profile', 'Profile & activity', ['section-activity', 'section-score-badges']],
-    ['security', '🔒', 'settings.pages.security', 'Account & security', ['section-password', 'section-e2e-passphrase', 'section-2fa', 'section-recovery', 'section-sessions', 'section-delete-account']],
+    ['security', '🔒', 'settings.pages.security', 'Account & security', ['section-password', 'section-e2e-passphrase', 'section-2fa', 'section-recovery', 'section-sessions', 'section-data-privacy', 'section-delete-account']],
     ['language', '🗣️', 'settings.pages.language', 'Language', ['section-language']],
     ['access', '♿', 'settings.pages.access', 'Accessibility', ['section-zoom']],
     // Only in Haven Desktop: both sections are hidden in a browser, and a page with nothing in it is not listed.
