@@ -73,6 +73,7 @@ const registerPermExceptions = require('./permExceptions');
 const modCases = require('../modCases');
 const { quietRecipients, pingedRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
+const registerThreadReadState = require('./threadReadState');
 const forumUnread = require('../forumUnread');
 const { groupHistoryFloor } = require('../groupHistory');
 const registerForumVotes = require('./forumVotes');
@@ -2970,6 +2971,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerMessageHighlights(socket, ctx);
     registerModCases(socket, ctx);
     registerForumUnread(socket, ctx);
+    registerThreadReadState(socket, ctx);
     registerForumVotes(socket, ctx);
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);

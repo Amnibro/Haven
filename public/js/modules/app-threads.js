@@ -166,6 +166,31 @@ _clearThreadMentionsForChannel(channelCode) {
   this._renderChannels?.();
   this._updateThreadMentionsPill();
 },
+// The bell is kept per device. Mentions in threads this account has since
+// read past, on any device, are dropped (server: threadReadState.js).
+_pruneReadThreadMentions() {
+  if (!this.socket || !this.socket.connected) return;
+  if (!this._threadMentions) {
+    try { this._threadMentions = JSON.parse(localStorage.getItem('haven_thread_mentions') || '{}'); }
+    catch { this._threadMentions = {}; }
+  }
+  const parentIds = [...new Set(Object.values(this._threadMentions).flat().map(m => Number(m.parentId)).filter(Number.isInteger))];
+  if (!parentIds.length) return;
+  this.socket.emit('get-thread-read-state', { parentIds }, (res) => {
+    const reads = (res && res.reads) || {};
+    let changed = false;
+    for (const code of Object.keys(this._threadMentions)) {
+      const kept = this._threadMentions[code].filter(m => !(Number(reads[m.parentId]) >= Number(m.messageId)));
+      if (kept.length !== this._threadMentions[code].length) changed = true;
+      if (kept.length) this._threadMentions[code] = kept;
+      else delete this._threadMentions[code];
+    }
+    if (!changed) return;
+    this._persistThreadMentions();
+    this._renderChannels?.();
+    this._updateThreadMentionsPill();
+  });
+},
 _persistThreadMentions() {
   try { localStorage.setItem('haven_thread_mentions', JSON.stringify(this._threadMentions || {})); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
 },

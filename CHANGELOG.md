@@ -59,6 +59,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Link cards turned see-through when you pointed at them, so their buttons were hard to see over a background picture. They stay solid now, and their top bar buttons are evenly sized.
 - Copy link and Mark NSFW were missing from the toolbar slot order setting (#5821).
 - The theme picker could be scrolled far past its content, into empty space (#5823).
+- The 🔔 thread mention bell could ring for a thread you had already read, days later. It is kept per device, so a device that was open when you were mentioned, or opened later, still had it after you read the thread elsewhere. Reading a thread now clears its bell on all your devices, and a device catching up after being closed drops the ones you have read.
 - In DMs, links from admins and from people at or above "Skip filtering at role level" were still marked "blocked link" (they always sent fine). The check a DM's readers run now skips them, the same as everywhere else.
 - When YouTube refuses to play a shared track (embedding turned off, video removed, or blocked in that country), Listen Together now says so instead of sitting silent (#5826).
 - A # in an unquoted .env value cuts the value off there, which broke a TURN secret on a server run without Docker while the same file worked in Docker (#5824). Haven now names any setting this happens to when it starts, and .env.example says to use quotes.
