@@ -83,6 +83,7 @@ const registerChannelAddAll = require('./channelAddAll');
 const registerMessageNsfw = require('./messageNsfw');
 const createLiveAccess = require('./liveAccess');
 const registerDataControls = require('./dataControls');
+const registerLayoutVotes = require('./layoutVotes');
 const userBlocks = require('../userBlocks');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -2761,6 +2762,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerForumUnread(socket, ctx);
     registerThreadReadState(socket, ctx);
     registerForumVotes(socket, ctx);
+    registerLayoutVotes(socket, ctx);
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);
