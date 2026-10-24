@@ -15,11 +15,13 @@ _renderLayoutVotes() {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), cls ? { className: cls } : {}, text != null ? { textContent: text } : {});
   let box = document.getElementById('layout-votes-subsection');
   if (!box) {
-    box = Object.assign(el('div', 'settings-subsection'), { id: 'layout-votes-subsection' });
-    box.append(el('small', 'settings-group-label', `🗳️ ${tr('settings.layout.votes.title', 'Focus concepts: vote for your favorites')}`), el('small', 'settings-hint', tr('settings.layout.votes.hint', 'Vote for every layout you like. The ones with Try it are ready in the picker above; the rest are designs that could be built next. Everyone on this server sees the totals.')), el('div', 'lv-grid'));
+    box = Object.assign(el('details', 'settings-subsection lv-wrap'), { id: 'layout-votes-subsection' });
+    box.append(el('summary', 'lv-summary'), el('small', 'settings-hint', tr('settings.layout.votes.hint', 'Vote for every layout you like. The ones with Try it are ready in the picker above; the rest are designs that could be built next. Everyone on this server sees the totals.')), el('div', 'lv-grid'));
     anchor.after(box);
   }
   const mine = new Set(v.mine || []), top = Math.max(0, ...Object.values(v.tally || {})), loaded = window.HavenPluginLoader?.loadedPlugins;
+  const lead = top ? (v.catalog || []).find(c => v.tally?.[c.id] === top) : null, sum = box.querySelector('.lv-summary');
+  sum.replaceChildren(el('span', 'lv-sum-title', `🗳️ ${tr('settings.layout.votes.title', 'Vote on Focus layouts')}`), el('span', 'lv-sum-sub', `${(v.catalog || []).length} ${tr('settings.layout.votes.designs', 'designs')}${lead ? ` · ${lead.name} ${tr('settings.layout.votes.leads', 'leads')}` : ''}${mine.size ? ` · ${tr('settings.layout.votes.yours', 'you voted')} ${mine.size}` : ''}`));
   box.querySelector('.lv-grid').replaceChildren(...(v.catalog || []).map(c => {
     const n = v.tally?.[c.id] || 0, on = mine.has(c.id), card = el('div', 'lv-card' + (on ? ' voted' : '')), body = el('div', 'lv-body'), row = el('div', 'lv-row');
     const img = Object.assign(el('img', 'lv-img'), { src: c.image, alt: `${c.name} ${tr('settings.layout.votes.preview', 'preview')}`, loading: 'lazy', decoding: 'async', tabIndex: 0, onclick: () => card.classList.toggle('big'), onkeydown: (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), card.classList.toggle('big')) });
