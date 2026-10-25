@@ -87,6 +87,7 @@ const registerBlockedNames = require('./blockedNames');
 const createLiveAccess = require('./liveAccess');
 const registerDataControls = require('./dataControls');
 const registerLayoutVotes = require('./layoutVotes');
+const registerDmReceipts = require('./dmReceipts');
 const userBlocks = require('../userBlocks');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -2806,6 +2807,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerThreadReadState(socket, ctx);
     registerForumVotes(socket, ctx);
     registerLayoutVotes(socket, ctx);
+    registerDmReceipts(socket, ctx);
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);
