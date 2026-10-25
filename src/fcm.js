@@ -154,6 +154,7 @@ async function sendDirect(tokens, title, body, dataPayload) {
               priority: 'high',
               notification: { channel_id: 'haven_messages' },
             },
+            apns: { payload: { aps: { sound: 'default' } } },
           },
         }),
       });
