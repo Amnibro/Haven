@@ -1676,6 +1676,8 @@
     },
     "layout": {
       "title": "Layout",
+      "dms_first": "Direct messages above channels",
+      "dms_first_hint": "Show your direct messages first in the sidebar, with the server's channels below them. Saved on your account.",
       "categories": {
         "title": "Channel Categories",
         "server": "Server default",
@@ -1905,6 +1907,8 @@
       "up_arrow_edit_hint": "Press the Up arrow key on an empty input to quickly edit your last message.",
       "dm_fullscreen": "Open DMs in fullscreen on single click",
       "dm_fullscreen_hint": "Single-click a DM to open it in the full pane instead of a floating PiP. Double-click opens the PiP.",
+      "read_receipts": "Read receipts in DMs",
+      "read_receipts_hint": "Show Delivered and Seen under your last message in a DM. Turning this off also stops others from seeing when you have read theirs.",
       "hover_profile_card": "Show profile card on hover",
       "hover_profile_card_hint": "Hovering over a name or avatar shows a quick profile preview. Clicking opens the full card either way.",
       "official_style": "Official messages",
@@ -5162,5 +5166,10 @@
     "title": "What's new in Haven {{version}}",
     "settings_hint": "Settings > What's New picks which updates show this.",
     "unavailable": "The release notes aren't available on this server."
+  },
+  "dm_receipts": {
+    "sent": "Sent",
+    "delivered": "Delivered",
+    "seen": "Seen"
   }
 }

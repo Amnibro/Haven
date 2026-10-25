@@ -1660,6 +1660,13 @@
           </div>
           <small class="settings-hint" data-i18n="settings.layout.style.hint">Original is Haven's own layout. The others come from layout plugins on this server. Saved per browser.</small>
         </div>
+        <div class="settings-subsection" id="layout-dms-first-subsection">
+          <label class="toggle-row">
+            <span data-i18n="settings.layout.dms_first">Direct messages above channels</span>
+            <input type="checkbox" id="dms-first-toggle">
+          </label>
+          <small class="settings-hint" data-i18n="settings.layout.dms_first_hint">Show your direct messages first in the sidebar, with the server's channels below them. Saved on your account.</small>
+        </div>
         <div class="settings-subsection" id="layout-categories-subsection">
           <small class="settings-group-label">🗂️ <span data-i18n="settings.layout.categories.title">Channel Categories</span></small>
           <select id="category-layout-select" class="settings-select">
@@ -2105,6 +2112,11 @@
           <input type="checkbox" id="dm-fullscreen-default">
         </label>
         <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.dm_fullscreen_hint">Single-click a DM to open it in the full pane instead of a floating PiP. Double-click opens the PiP.</small>
+        <label class="toggle-row">
+          <span data-i18n="settings.chat_behavior.read_receipts">Read receipts in DMs</span>
+          <input type="checkbox" id="read-receipts-toggle" checked>
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.read_receipts_hint">Show Delivered and Seen under your last message in a DM. Turning this off also stops others from seeing when you have read theirs.</small>
         <label class="toggle-row">
           <span data-i18n="settings.chat_behavior.hover_profile_card">Show profile card on hover</span>
           <input type="checkbox" id="hover-profile-card" checked>

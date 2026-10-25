@@ -802,6 +802,7 @@ module.exports = function register(socket, ctx) {
       // How pictures sent together show for you (#5799): 'grid' or
       // 'stacked'. No row follows the server's media_group_layout.
       'media_group_layout',
+      'read_receipts', 'dms_first',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
     // A theme is saved as file:<file name>, and a community theme's file name
@@ -815,6 +816,7 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'server_mute' && value !== 'all' && value !== 'mentions') return;
     if (key === 'media_group_layout' && !MEDIA_GROUP_LAYOUTS.includes(value)) return;
+    if ((key === 'read_receipts' || key === 'dms_first') && value !== 'on' && value !== 'off') return;
     // Members pick from Haven's own themes and the published theme files. A
     // refusal is quiet: the picker only offers allowed themes, so this is a
     // stale list or a crafted request, and the client falls back on its own.
