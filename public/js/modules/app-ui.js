@@ -311,6 +311,27 @@ _bindAppChrome() {
     this._jumpToLatest();
   }, true);
 
+  // Escape closes the open thread or forum topic when nothing in front of
+  // it (a menu, picker or window) has Escape to close, and no message is
+  // being edited. A reply half typed in the thread box keeps it open, so
+  // the draft is not lost to a stray key.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    const panel = document.getElementById('thread-panel');
+    if (!panel || !panel.getClientRects().length || panel.classList.contains('pip')) return;
+    if (document.querySelector('.edit-textarea')) return;
+    const draft = document.getElementById('thread-input');
+    if (draft && draft.value.trim()) return;
+    const inFront = [...document.querySelectorAll(
+      '.modal-overlay, #quick-switcher-overlay, #theme-popup, #search-container, ' +
+      '#search-panel, #image-lightbox, .image-lightbox, #emoji-picker, ' +
+      '#gif-picker, .channel-ctx-menu, #emoji-dropdown, #slash-dropdown, ' +
+      '#mention-dropdown, #channel-dropdown, #persona-dropdown, #ferry-dropdown, #gif-slash-picker'
+    )].some(el => el.getClientRects().length > 0);
+    if (inFront) return;
+    this._closeThread?.();
+  }, true);
+
   // Theme popup toggle
   document.getElementById('theme-popup-toggle')?.addEventListener('click', () => {
     const popup = document.getElementById('theme-popup');
