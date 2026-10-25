@@ -97,6 +97,7 @@ const createLiveAccess = require('./liveAccess');
 const { createMemberView } = require('../memberView');
 const registerDataControls = require('./dataControls');
 const registerLayoutVotes = require('./layoutVotes');
+const registerDmReceipts = require('./dmReceipts');
 const userBlocks = require('../userBlocks');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -2919,6 +2920,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerForumVotes(socket, ctx);
     registerCalendar(socket, ctx);
     registerLayoutVotes(socket, ctx);
+    registerDmReceipts(socket, ctx);
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);

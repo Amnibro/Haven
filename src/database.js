@@ -13,6 +13,7 @@ const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
 const calendarEvents = require('./calendarEvents');
 const layoutVotes = require('./layoutVotes');
+const dmReceipts = require('./dmReceipts');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
 const { migrateMessageNsfw } = require('./messageNsfw');
@@ -1795,6 +1796,7 @@ function initDatabase() {
   forumUnread.ensureTable(db);
   calendarEvents.ensureTables(db);
   layoutVotes.ensureTable(db);
+  dmReceipts.ensureTable(db);
   // Profile badges (#5632); needs forum_votes, made above.
   migrateBadges(db);
 

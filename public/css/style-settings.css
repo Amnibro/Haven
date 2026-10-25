@@ -1079,3 +1079,4 @@
 .sp-body .settings-section.sp-off, .sp-body .admin-settings.sp-off { display: none !important; }
 #settings-modal.sp-search .sp-body .sp-off:not(.settings-search-hidden) { display: block !important; }
 #settings-modal.sp-search .sp-cat.active { background: none; color: var(--text-secondary); }
+.dm-receipt{font-size:.7rem;opacity:.7;text-align:right;padding:2px 8px 0;color:var(--text-muted)}
