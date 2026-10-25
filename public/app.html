@@ -829,6 +829,16 @@
               <option value="" data-i18n="voice_settings.default_camera">Default Camera</option>
             </select>
           </div>
+          <div class="voice-settings-row">
+            <label class="voice-settings-label" data-i18n="voice_settings.camera_quality">Camera Quality</label>
+            <select id="voice-cam-quality" class="voice-settings-select" data-i18n-title="voice_settings.camera_quality_hint" title="Higher quality looks sharper but uses more bandwidth, for you and everyone watching. Your camera may top out lower.">
+              <option value="480">480p</option>
+              <option value="720">720p</option>
+              <option value="720p60">720p 60 fps</option>
+              <option value="1080">1080p</option>
+              <option value="1080p60">1080p 60 fps</option>
+            </select>
+          </div>
           <div class="voice-settings-divider"></div>
           <div class="voice-settings-row">
             <label class="voice-settings-label">🤫 <span data-i18n="voice_settings.noise_reduction">Noise Reduction</span></label>
@@ -5446,14 +5456,14 @@
   <script src="/js/notifications.js?v=4.23.6"></script>
   <script src="/js/servers.js?v=4.23.9"></script>
   <script src="/js/voice-relay.js?v=4.27.5"></script>
-  <script src="/js/voice.js?v=4.27.5"></script>
+  <script src="/js/voice.js?v=4.27.22"></script>
   <script src="/js/modmode.js?v=4.21.0"></script>
   <script src="/js/e2e-group.js?v=4.21.0"></script>
   <script src="/js/e2e.js?v=4.21.0"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.27.21"></script>
+  <script type="module" src="/js/app.js?v=4.27.22"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

@@ -2422,16 +2422,25 @@ class VoiceManager {
 
   // ── Webcam Video ────────────────────────────────────────
 
+  // The camera size and frame rate picked in voice settings (Camera Quality),
+  // as constraints. 480p at 30 fps unless something else was picked.
+  _webcamConstraints(deviceId) {
+    const pick = (() => {
+      try { return localStorage.getItem('haven_cam_quality') || '480'; } catch { return '480'; /* private mode: the default */ }
+    })();
+    const [height, fps] = String(pick).split('p').map(Number);
+    const sizes = { 480: 640, 720: 1280, 1080: 1920 };
+    const h = sizes[height] ? height : 480;
+    const constraints = { width: { ideal: sizes[h] }, height: { ideal: h }, frameRate: { ideal: fps === 60 ? 60 : 30 } };
+    if (deviceId) constraints.deviceId = { exact: deviceId };
+    return constraints;
+  }
+
   async startWebcam() {
     if (!this.inVoice || this.isWebcamActive) return false;
     try {
       const savedCamId = localStorage.getItem('haven_cam_device') || '';
-      const videoConstraints = {
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-        frameRate: { ideal: 30 }
-      };
-      if (savedCamId) videoConstraints.deviceId = { exact: savedCamId };
+      const videoConstraints = this._webcamConstraints(savedCamId);
 
       this.webcamStream = await navigator.mediaDevices.getUserMedia({
         video: videoConstraints,
@@ -2512,12 +2521,7 @@ class VoiceManager {
 
   async switchCamera(deviceId) {
     if (!this.isWebcamActive) return;
-    const videoConstraints = {
-      width: { ideal: 640 },
-      height: { ideal: 480 },
-      frameRate: { ideal: 30 }
-    };
-    if (deviceId) videoConstraints.deviceId = { exact: deviceId };
+    const videoConstraints = this._webcamConstraints(deviceId);
 
     let newStream;
     try {

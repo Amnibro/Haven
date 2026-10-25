@@ -1425,7 +1425,9 @@
     "frame_rate": "帧率",
     "bitrate": "码率",
     "bitrate_unlimited": "不限",
-    "camera_fallback": "摄像头 {{n}}"
+    "camera_fallback": "摄像头 {{n}}",
+    "camera_quality": "摄像头画质",
+    "camera_quality_hint": "画质越高越清晰，但你和观看者都会用更多带宽。你的摄像头可能达不到这么高。"
   },
   "notifications_runtime": {
     "title": "{{sender}} 在 {{channel}}",

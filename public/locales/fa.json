@@ -1296,7 +1296,9 @@
     "frame_rate": "نرخ فریم",
     "bitrate": "بیت‌ریت",
     "bitrate_unlimited": "نامحدود",
-    "camera_fallback": "دوربین {{n}}"
+    "camera_fallback": "دوربین {{n}}",
+    "camera_quality": "کیفیت دوربین",
+    "camera_quality_hint": "کیفیت بالاتر واضح‌تر است اما پهنای باند بیشتری از شما و بینندگان مصرف می‌کند. شاید دوربین شما به این حد نرسد."
   },
   "notifications_runtime": {
     "title": "{{sender}} در {{channel}}",

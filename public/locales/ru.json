@@ -1440,7 +1440,9 @@
     "frame_rate": "Частота кадров",
     "bitrate": "Битрейт",
     "bitrate_unlimited": "Без ограничений",
-    "camera_fallback": "Камера {{n}}"
+    "camera_fallback": "Камера {{n}}",
+    "camera_quality": "Качество камеры",
+    "camera_quality_hint": "Выше качество чётче, но тратит больше трафика у вас и у зрителей. Ваша камера может не тянуть столько."
   },
   "notifications_runtime": {
     "title": "{{sender}} в {{channel}}",

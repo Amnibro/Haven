@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Login page branding under Settings > Branding (#5819): show the server icon and banner on the login page, a short message under the title, and custom CSS for the login and registration page (admin only; add `?nocss` to the address to skip it).
 - Stereo stream audio, an experiment under Settings > Debug: plays the sound of screen shares in stereo at a music bitrate. Each listener turns it on; on servers using the voice relay, the person sharing does too.
 - A 📌 Keep playing pin lets one video or sound keep playing when you scroll away from it.
+- Camera Quality in voice settings: 480p (as before), 720p or 1080p, at 30 or 60 frames a second. A camera that's on switches straight away.
 - Escape closes an open thread or forum topic, unless something in front of it (a menu, picker or window) is open or a reply is half typed in it.
 - Twemoji as an emoji style: Settings > Accessibility > Emoji draws emoji the same on every device instead of with the device's own (Windows' included). The font ships with Haven, so nothing is fetched from anywhere else.
 - Listen Together plays audio files uploaded to the server (#5826): a 🎶 button on an uploaded sound plays it for everyone in your voice channel, straight from the server, so no outside service can refuse it for one listener and not another. A link to an uploaded file works in the share box too.

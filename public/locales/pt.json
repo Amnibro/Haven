@@ -1292,7 +1292,9 @@
     "frame_rate": "Taxa de quadros",
     "bitrate": "Taxa de bits",
     "bitrate_unlimited": "Ilimitado",
-    "camera_fallback": "Câmera {{n}}"
+    "camera_fallback": "Câmera {{n}}",
+    "camera_quality": "Qualidade da câmera",
+    "camera_quality_hint": "Mais qualidade fica mais nítida, mas usa mais banda, sua e de quem assiste. Sua câmera pode não chegar tão alto."
   },
   "notifications_runtime": {
     "title": "{{sender}} em {{channel}}",

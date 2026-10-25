@@ -1451,7 +1451,9 @@
     "frame_rate": "Fréquence d'images",
     "bitrate": "Débit",
     "bitrate_unlimited": "Illimité",
-    "camera_fallback": "Caméra {{n}}"
+    "camera_fallback": "Caméra {{n}}",
+    "camera_quality": "Qualité de la caméra",
+    "camera_quality_hint": "Une qualité plus haute est plus nette mais utilise plus de bande passante, pour vous et ceux qui regardent. Votre caméra peut plafonner plus bas."
   },
   "notifications_runtime": {
     "title": "{{sender}} dans {{channel}}",

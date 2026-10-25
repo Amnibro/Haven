@@ -1440,7 +1440,9 @@
     "frame_rate": "Liczba klatek",
     "bitrate": "Bitrate",
     "bitrate_unlimited": "Bez limitu",
-    "camera_fallback": "Kamera {{n}}"
+    "camera_fallback": "Kamera {{n}}",
+    "camera_quality": "Jakość kamery",
+    "camera_quality_hint": "Wyższa jakość jest ostrzejsza, ale zużywa więcej łącza, u ciebie i u oglądających. Twoja kamera może nie sięgać tak wysoko."
   },
   "notifications_runtime": {
     "title": "{{sender}} w {{channel}}",

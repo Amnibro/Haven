@@ -1305,7 +1305,9 @@
     "frame_rate": "フレームレート",
     "bitrate": "ビットレート",
     "bitrate_unlimited": "無制限",
-    "camera_fallback": "カメラ {{n}}"
+    "camera_fallback": "カメラ {{n}}",
+    "camera_quality": "カメラ画質",
+    "camera_quality_hint": "画質を上げるとくっきりしますが、あなたと視聴者の通信量が増えます。カメラによっては上限が低い場合があります。"
   },
   "notifications_runtime": {
     "title": "{{channel}} の {{sender}}",

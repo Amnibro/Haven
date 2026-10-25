@@ -1076,7 +1076,9 @@
     "output_unsupported_title": "Dein Browser unterstützt das Wechseln des Audioausgabegeräts nicht. Wähle das Ausgabegerät in den Soundeinstellungen deines Betriebssystems aus.",
     "output_unsupported_hint": "Dein Browser kann das Audioausgabegerät nicht wechseln. Nutze stattdessen die Soundeinstellungen deines Betriebssystems.",
     "bitrate": "Bitrate",
-    "bitrate_unlimited": "Unbegrenzt"
+    "bitrate_unlimited": "Unbegrenzt",
+    "camera_quality": "Kameraqualität",
+    "camera_quality_hint": "Höhere Qualität sieht schärfer aus, braucht aber mehr Bandbreite, bei dir und allen Zuschauern. Deine Kamera schafft vielleicht weniger."
   },
   "status_bar": {
     "server": "Server",

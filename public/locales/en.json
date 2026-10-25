@@ -1451,7 +1451,9 @@
     "frame_rate": "Frame Rate",
     "bitrate": "Bitrate",
     "bitrate_unlimited": "Unlimited",
-    "camera_fallback": "Camera {{n}}"
+    "camera_fallback": "Camera {{n}}",
+    "camera_quality": "Camera Quality",
+    "camera_quality_hint": "Higher quality looks sharper but uses more bandwidth, for you and everyone watching. Your camera may top out lower."
   },
   "notifications_runtime": {
     "title": "{{sender}} in {{channel}}",
