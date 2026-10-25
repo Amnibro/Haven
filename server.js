@@ -2575,7 +2575,8 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
 
   // Same ceiling as the app: 30 days.
   const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
-  const expiresAt = new Date(Date.now() + durationMs).toISOString();
+  // SQLite's own time format, which every mute check compares against.
+  const expiresAt = new Date(Date.now() + durationMs).toISOString().slice(0, 19).replace('T', ' ');
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);
@@ -2846,7 +2847,8 @@ app.post('/api/webhooks/:token/moderation/mute', webhookLimiter, express.json({ 
 
   // Same ceiling as the app: 30 days.
   const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
-  const expiresAt = new Date(Date.now() + durationMs).toISOString();
+  // SQLite's own time format, which every mute check compares against.
+  const expiresAt = new Date(Date.now() + durationMs).toISOString().slice(0, 19).replace('T', ' ');
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);

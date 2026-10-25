@@ -631,6 +631,14 @@ function initDatabase() {
     console.error('automod: adding klipy.com to the allowlist failed:', err.message);
   }
 
+  // Mutes made through the bot or HTTP API were stored as ISO times, which
+  // the mute checks misread as lasting until the next day. Cheap to repeat.
+  try {
+    db.prepare("UPDATE mutes SET expires_at = datetime(expires_at) WHERE expires_at LIKE '%T%'").run();
+  } catch (err) {
+    console.error('mutes: normalizing expiry times failed:', err.message);
+  }
+
   // ── Migration: turn the safe protections on, once (v3.43.0) ──
   // The seeds above are INSERT OR IGNORE, so they only reach brand-new
   // installs. A server that already ran 3.42.0 (where everything defaulted
