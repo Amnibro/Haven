@@ -1108,7 +1108,7 @@ _setupResizableSidebars() {
       const y = e.clientY - rect.top;
       const total = rect.height;
       if (total <= 0) return;
-      let ratio = y / total;
+      let ratio = splitContainer.classList.contains('dms-first') ? 1 - y / total : y / total;
       ratio = Math.max(0.05, Math.min(0.95, ratio));
       currentRatio = ratio;
       applySplitRatio(ratio);
