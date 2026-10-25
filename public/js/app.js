@@ -103,6 +103,7 @@ import MasterVolumeMethods from './modules/app-master-volume.js?v=4.29.71';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
 import DataControlMethods from './modules/app-data-controls.js?v=4.23.0-afff018db';
 import LayoutVoteMethods from './modules/app-layout-votes.js?v=1';
+import DmReceiptMethods from './modules/app-dm-receipts.js?v=1';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.27.20';
 import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
@@ -490,6 +491,7 @@ class HavenApp {
     this._setupServerMute();
     this._setupDataControls();
     this._setupLayoutVotes();
+    this._setupDmReceipts();
     this._setupForumUnread();
     this._setupThreadUnread();
     this._setupThreadScroll();
@@ -706,6 +708,7 @@ Object.assign(HavenApp.prototype,
   CallSettingsMethods,
   DataControlMethods,
   LayoutVoteMethods,
+  DmReceiptMethods,
   ForumUnreadMethods,
   ThreadUnreadMethods,
   ThreadDockMethods,
