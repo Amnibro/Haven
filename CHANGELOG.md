@@ -76,6 +76,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Security
 - Updated follow-redirects, used by the tunnel feature, for two security advisories.
+- Updated multer and body-parser, which read uploads and requests, for two advisories that let one bad request slow the server down.
 
 ## [4.26.4] - 2026-10-22
 
