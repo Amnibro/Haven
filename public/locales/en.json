@@ -3505,7 +3505,9 @@
       "not_here": "Send later is not available in direct messages",
       "scheduled": "Scheduled for {{when}}",
       "updated": "Updated, sending at {{when}}",
-      "sent": "Your scheduled message went out in #{{channel}}"
+      "sent": "Your scheduled message went out in #{{channel}}",
+      "attach": "📎 Attach files",
+      "remove_file": "Remove"
     },
     "self_destruct": {
       "title": "Self-destructing message",

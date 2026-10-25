@@ -3492,7 +3492,9 @@
       "not_here": "Enviar más tarde no está disponible en mensajes directos",
       "scheduled": "Programado para {{when}}",
       "updated": "Actualizado, se enviará a las {{when}}",
-      "sent": "Tu mensaje programado se envió en #{{channel}}"
+      "sent": "Tu mensaje programado se envió en #{{channel}}",
+      "attach": "📎 Adjuntar archivos",
+      "remove_file": "Quitar"
     },
     "self_destruct": {
       "title": "Mensaje autodestructivo",

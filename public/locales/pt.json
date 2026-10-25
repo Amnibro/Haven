@@ -3143,7 +3143,9 @@
       "not_here": "Enviar depois não funciona em mensagens diretas",
       "scheduled": "Agendada para {{when}}",
       "updated": "Atualizada, enviando às {{when}}",
-      "sent": "Sua mensagem agendada foi enviada em #{{channel}}"
+      "sent": "Sua mensagem agendada foi enviada em #{{channel}}",
+      "attach": "📎 Anexar arquivos",
+      "remove_file": "Remover"
     },
     "poll": {
       "title": "Criar enquete",

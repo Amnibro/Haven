@@ -3505,7 +3505,9 @@
       "not_here": "L'envoi différé n'est pas disponible dans les messages privés",
       "scheduled": "Programmé pour {{when}}",
       "updated": "Mis à jour, envoi à {{when}}",
-      "sent": "Votre message programmé est parti dans #{{channel}}"
+      "sent": "Votre message programmé est parti dans #{{channel}}",
+      "attach": "📎 Joindre des fichiers",
+      "remove_file": "Retirer"
     },
     "self_destruct": {
       "title": "Message à autodestruction",

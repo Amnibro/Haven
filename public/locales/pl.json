@@ -3492,7 +3492,9 @@
       "not_here": "Wysyłanie później nie jest dostępne w wiadomościach prywatnych",
       "scheduled": "Zaplanowano na {{when}}",
       "updated": "Zaktualizowano, wysłanie o {{when}}",
-      "sent": "Twoja zaplanowana wiadomość została wysłana na #{{channel}}"
+      "sent": "Twoja zaplanowana wiadomość została wysłana na #{{channel}}",
+      "attach": "📎 Dołącz pliki",
+      "remove_file": "Usuń"
     },
     "self_destruct": {
       "title": "Wiadomość samoniszcząca się",

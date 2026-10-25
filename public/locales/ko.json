@@ -2355,6 +2355,10 @@
       "desc": "대상 채널을 선택하세요",
       "move_one": "메시지 {{n}}개를 이동할 위치:",
       "move_many": "메시지 {{n}}개를 이동할 위치:"
+    },
+    "schedule": {
+      "attach": "📎 파일 첨부",
+      "remove_file": "제거"
     }
   },
   "context_menu": {

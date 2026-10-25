@@ -3184,7 +3184,9 @@
       "not_here": "„Später senden“ ist für Direktnachrichten nicht verfügbar",
       "scheduled": "Geplant für {{when}}",
       "updated": "Aktualisiert, Versand um {{when}}",
-      "sent": "Deine geplante Nachricht wurde in #{{channel}} gesendet"
+      "sent": "Deine geplante Nachricht wurde in #{{channel}} gesendet",
+      "attach": "📎 Dateien anhängen",
+      "remove_file": "Entfernen"
     },
     "self_destruct": {
       "title": "Selbstzerstörende Nachricht",

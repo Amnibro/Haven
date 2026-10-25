@@ -3466,7 +3466,9 @@
       "not_here": "私信中不可用稍后发送",
       "scheduled": "已计划于 {{when}} 发送",
       "updated": "已更新，将于 {{when}} 发送",
-      "sent": "你的计划消息已在 #{{channel}} 发出"
+      "sent": "你的计划消息已在 #{{channel}} 发出",
+      "attach": "📎 附加文件",
+      "remove_file": "移除"
     },
     "self_destruct": {
       "title": "自毁消息",

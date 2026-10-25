@@ -2355,6 +2355,10 @@
       "desc": "移動先のチャンネルを選択してください",
       "move_one": "{{n}}件のメッセージの移動先:",
       "move_many": "{{n}}件のメッセージの移動先:"
+    },
+    "schedule": {
+      "attach": "📎 ファイルを添付",
+      "remove_file": "削除"
     }
   },
   "context_menu": {

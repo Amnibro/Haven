@@ -27,6 +27,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Two switches per role (#5822): "Can be @mentioned" keeps cosmetic and game roles out of the @ list and stops them pinging, and "Show on profile cards" leaves a role off profile cards for everyone but the people who manage roles.
 - Replies cross the Ferry bridge to Discord. A Discord reply to a message from Haven shows up in Haven as a reply, and the person it answers is notified. A Haven reply shows on Discord with a small line naming the message it answers and a link to it (and pings its Discord author when Ferry's "Allow mentions" is on).
 - Create Channel has a More options section: topic, read only, slow mode, uploads and voice.
+- Send later takes files: attach them in the Send later window, and files already waiting in the message box come along.
 - French is now fully translated.
 - Server templates keep a channel's setting for disconnecting idle people from voice.
 - A 🧹 Remove messages button on the banned users list deletes everything a banned member wrote in the server's channels, for a ban made without "Scrub messages". Protected messages and DMs stay.
