@@ -2638,6 +2638,8 @@ app.get('/api/moderation/mutes', modLimiter, (req, res) => {
   `).all();
   res.json({ mutes });
 });
+const automod = require('./src/routes/automodRelay')({ app, getModUser, verifyToken, rateLimit });
+
 
 // ═══════════════════════════════════════════════════════════
 // BOT SLASH COMMANDS API
@@ -3223,6 +3225,7 @@ socketRuntime = setupSocketHandlers(io, db, {
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
 });
 activityRef.engine = socketRuntime.activity;
+automod.attachSweep(io);
 require('./src/httpAudit').setAuditSink(socketRuntime.logAudit);
 require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted: storage.softDelete, removeUpload: storage.remove });
 
