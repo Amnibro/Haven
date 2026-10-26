@@ -1450,7 +1450,8 @@
       "debug": "Depuração",
       "backup": "Backup",
       "audit_log": "Registro de auditoria",
-      "extension_updates": "Atualizações de extensões"
+      "extension_updates": "Atualizações de extensões",
+      "whats_new": "Novidades"
     },
     "localization_section": {
       "title": "Localização"
@@ -2807,6 +2808,16 @@
         "twemoji": "Twemoji",
         "hint": "O Twemoji desenha os emoji iguais em todos os dispositivos, com uma fonte que o próprio Haven fornece."
       }
+    },
+    "whats_new": {
+      "title": "Novidades",
+      "show_label": "Mostrar novidades após",
+      "all": "Cada atualização",
+      "minor": "Recursos novos",
+      "major": "Só grandes atualizações",
+      "off": "Nunca",
+      "hint": "Um número de versão tem três partes: uma grande atualização muda a primeira, recursos novos a segunda e correções a terceira. Quando uma parte sublinhada muda, aparecem as notas da versão. Salvo neste dispositivo.",
+      "show_now": "Ver as novidades desta versão"
     }
   },
   "modals": {
@@ -4236,5 +4247,10 @@
   "groups": {
     "no_key": "🔒 Esperando outro membro do grupo abrir o Haven e compartilhar a chave",
     "before_join": "🔒 Enviado antes de você entrar (ou antes de suas chaves serem redefinidas), então não pode ser aberto aqui"
+  },
+  "whats_new": {
+    "title": "Novidades do Haven {{version}}",
+    "settings_hint": "Em Configurações > Novidades você escolhe quando isso aparece.",
+    "unavailable": "As notas da versão não estão disponíveis neste servidor."
   }
 }

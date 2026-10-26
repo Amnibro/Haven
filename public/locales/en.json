@@ -1612,7 +1612,8 @@
       "debug": "Debug",
       "backup": "Backup",
       "template": "Server Template",
-      "audit_log": "Audit Log"
+      "audit_log": "Audit Log",
+      "whats_new": "What's New"
     },
     "localization_section": {
       "title": "Localization"
@@ -3163,7 +3164,17 @@
       "blur": "Blur NSFW topics and messages until clicked",
       "blur_hint": "Topics and messages marked 🔞 sit behind a blur, like a spoiler. Turn this off to see them plainly."
     },
-    "search_placeholder": "Search settings (Ctrl+F)"
+    "search_placeholder": "Search settings (Ctrl+F)",
+    "whats_new": {
+      "title": "What's New",
+      "show_label": "Show what's new after",
+      "all": "Every update",
+      "minor": "New features",
+      "major": "Big updates only",
+      "off": "Never",
+      "hint": "A version number has three parts: a big update changes the first, new features the second, and fixes the third. When an underlined part changes, you get a popup with the release notes. Saved on this device.",
+      "show_now": "See what's new in this version"
+    }
   },
   "modals": {
     "timezone": {
@@ -4941,5 +4952,10 @@
       "none": "There are no hand-given badges yet. Make one in Settings, Admin, Badges.",
       "switched_off": "switched off"
     }
+  },
+  "whats_new": {
+    "title": "What's new in Haven {{version}}",
+    "settings_hint": "Settings > What's New picks which updates show this.",
+    "unavailable": "The release notes aren't available on this server."
   }
 }

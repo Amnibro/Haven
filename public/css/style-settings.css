@@ -987,3 +987,18 @@
 
 .btn-delete-user:hover { opacity: 0.85; }
 
+/* What's new: the version in settings, with the parts that bring up the
+   popup underlined, and the popup itself (app-whats-new.js). */
+.whats-new-version { font-family: var(--font-mono, monospace); font-size: 1.05rem; letter-spacing: 0.02em; margin: 0.2rem 0 0.5rem; }
+.whats-new-part-on { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.whats-new-suffix { color: var(--text-muted); }
+.whats-new-modal { width: 560px; max-width: calc(100vw - 32px); }
+.whats-new-body { max-height: 60vh; overflow-y: auto; padding-right: 0.25rem; }
+.whats-new-release + .whats-new-release { border-top: 1px solid var(--border-light); margin-top: 0.6rem; padding-top: 0.4rem; }
+.whats-new-release h4 { margin: 0.3rem 0; }
+.whats-new-date { color: var(--text-muted); font-weight: normal; font-size: 0.8rem; margin-left: 0.3rem; }
+.whats-new-release h5 { margin: 0.5rem 0 0.2rem; color: var(--text-secondary); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.04em; }
+.whats-new-release ul { margin: 0; padding-left: 1.1rem; }
+.whats-new-release li { font-size: 0.85rem; margin: 0.15rem 0; line-height: 1.4; }
+.whats-new-release p { font-size: 0.85rem; margin: 0.2rem 0; }
+.whats-new-hint { display: block; margin-top: 0.6rem; }

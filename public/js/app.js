@@ -4,13 +4,14 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.26.5';
+import SocketMethods   from './modules/app-socket.js?v=4.27.25';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14';
 import UIBindMethods   from './modules/app-ui.js?v=4.27.25';
 import ComposerMethods from './modules/app-composer.js?v=4.27.24';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
 import DraftMethods from './modules/app-drafts.js?v=4.27.25';
+import WhatsNewMethods from './modules/app-whats-new.js?v=4.27.25';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.26.5';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.22';
@@ -599,6 +600,7 @@ Object.assign(HavenApp.prototype,
   MusicFileMethods,
   ScheduleFileMethods,
   DraftMethods,
+  WhatsNewMethods,
   MusicKeyMethods,
   UtilityMethods,
   MessageContentMethods,

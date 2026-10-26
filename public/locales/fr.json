@@ -1612,7 +1612,8 @@
       "debug": "Débogage",
       "backup": "Sauvegarde",
       "template": "Modèle de serveur",
-      "audit_log": "Journal d'audit"
+      "audit_log": "Journal d'audit",
+      "whats_new": "Nouveautés"
     },
     "localization_section": {
       "title": "Localisation"
@@ -3163,7 +3164,17 @@
       "blur": "Flouter les sujets et messages NSFW jusqu'au clic",
       "blur_hint": "Les sujets et messages marqués 🔞 sont derrière un flou, comme un spoiler. Désactivez cette option pour les voir normalement."
     },
-    "search_placeholder": "Rechercher dans les paramètres (Ctrl+F)"
+    "search_placeholder": "Rechercher dans les paramètres (Ctrl+F)",
+    "whats_new": {
+      "title": "Nouveautés",
+      "show_label": "Afficher les nouveautés après",
+      "all": "Chaque mise à jour",
+      "minor": "Nouvelles fonctions",
+      "major": "Grosses mises à jour seulement",
+      "off": "Jamais",
+      "hint": "Un numéro de version a trois parties : une grosse mise à jour change la première, les nouvelles fonctions la deuxième et les correctifs la troisième. Quand une partie soulignée change, les notes de version s’affichent. Enregistré sur cet appareil.",
+      "show_now": "Voir les nouveautés de cette version"
+    }
   },
   "modals": {
     "timezone": {
@@ -4852,5 +4863,10 @@
       "none": "Il n'y a pas encore de badge donné à la main. Créez-en un dans Paramètres, Admin, Badges.",
       "switched_off": "désactivé"
     }
+  },
+  "whats_new": {
+    "title": "Nouveautés de Haven {{version}}",
+    "settings_hint": "Paramètres > Nouveautés choisit quand cela s’affiche.",
+    "unavailable": "Les notes de version ne sont pas disponibles sur ce serveur."
   }
 }

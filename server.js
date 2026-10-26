@@ -1691,6 +1691,9 @@ app.get('/api/gif/trending', gifLimiter, (req, res) => {
 // ── Link previews and the media proxy: src/routes/link-preview.js ──
 require('./src/routes/link-preview')({ app });
 
+// ── Release notes for the "What's new" popup: src/routes/changelog.js ──
+require('./src/routes/changelog')({ app, verifyToken });
+
 // ── Games list endpoint: discover available games ──
 app.get('/api/games', (req, res) => {
   const gamesDir = path.join(__dirname, 'public', 'games');

@@ -1601,7 +1601,8 @@
       "debug": "Debugowanie",
       "backup": "Kopia zapasowa",
       "template": "Szablon serwera",
-      "audit_log": "Dziennik audytu"
+      "audit_log": "Dziennik audytu",
+      "whats_new": "Co nowego"
     },
     "localization_section": {
       "title": "Lokalizacja"
@@ -3150,7 +3151,17 @@
       "blur": "Rozmywaj tematy i wiadomości NSFW do czasu kliknięcia",
       "blur_hint": "Tematy i wiadomości oznaczone 🔞 są za rozmyciem, jak spoiler. Wyłącz, aby widzieć je bez rozmycia."
     },
-    "search_placeholder": "Szukaj w ustawieniach (Ctrl+F)"
+    "search_placeholder": "Szukaj w ustawieniach (Ctrl+F)",
+    "whats_new": {
+      "title": "Co nowego",
+      "show_label": "Pokazuj nowości po",
+      "all": "Każdej aktualizacji",
+      "minor": "Nowych funkcjach",
+      "major": "Tylko dużych aktualizacjach",
+      "off": "Nigdy",
+      "hint": "Numer wersji ma trzy części: duża aktualizacja zmienia pierwszą, nowe funkcje drugą, a poprawki trzecią. Gdy zmieni się podkreślona część, pokażą się informacje o wydaniu. Zapisane na tym urządzeniu.",
+      "show_now": "Zobacz nowości w tej wersji"
+    }
   },
   "modals": {
     "timezone": {
@@ -4839,5 +4850,10 @@
       "none": "Nie ma jeszcze odznak nadawanych ręcznie. Utwórz jedną w Ustawienia, Administrator, Odznaki.",
       "switched_off": "wyłączona"
     }
+  },
+  "whats_new": {
+    "title": "Co nowego w Haven {{version}}",
+    "settings_hint": "W Ustawienia > Co nowego wybierasz, kiedy to się pokazuje.",
+    "unavailable": "Informacje o wydaniu nie są dostępne na tym serwerze."
   }
 }
