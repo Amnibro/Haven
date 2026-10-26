@@ -135,9 +135,9 @@ kbd{border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;pad
 </div>
 </nav>
 <header class="g-hero">
-<p class="g-eyebrow">AMNI-HAVEN &middot; AUTOMOD QUARANTINE v1.3.0</p>
+<p class="g-eyebrow">AMNI-HAVEN &middot; AUTOMOD QUARANTINE v1.4.0</p>
 <h1>Quarantine links before anyone clicks them</h1>
-<p class="g-lede">AutoMod Quarantine is a security plugin for <a href="https://amni-scient.com/amni-haven.html">Haven</a> servers. It isolates every unverified link in a non-clickable capsule, processes multi-link bursts 1-at-a-time in a GPU-safe queue, blacklists malicious domains automatically, and unloads your local AI model from VRAM/RAM the instant scanning finishes.</p>
+<p class="g-lede">AutoMod Quarantine is a security plugin for <a href="https://amni-scient.com/amni-haven.html">Haven</a> servers. It isolates every unverified link in a non-clickable capsule, sweeps every new link on your own hardware the moment it is posted, processes multi-link bursts 1-at-a-time in a GPU-safe queue, blacklists malicious domains automatically, and unloads your local AI model from VRAM/RAM the instant scanning finishes.</p>
 <div class="g-quick">
 <a href="#steps" class="g-pick"><b>1-Command Git Setup</b><span>Auto-detects GPU/RAM &amp; pulls best model</span></a>
 <a href="#how" class="g-pick"><b>Queue &amp; Auto-Unload</b><span>Zero VRAM spikes, instant domain blocklist</span></a>
@@ -172,7 +172,7 @@ kbd{border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;pad
 <ol class="g-steps">
 <li><b>Stage 1 &mdash; Intercept &amp; Isolate:</b> Every link posted in chat is wrapped in a non-clickable Quarantine Capsule before it reaches the screen.</li>
 <li><b>Stage 2 &mdash; 0 ms Source Trust Gate:</b> Trusted domains (GitHub, Wikipedia, YouTube, Steam, etc.) are released immediately. Raw IP links, punycode homoglyphs (<code>xn--</code>), dangerous executables (<code>.exe</code>, <code>.scr</code>, <code>.bat</code>), known scam patterns, and previously blacklisted domains are blocked in 0 ms without touching the AI.</li>
-<li><b>Stage 3 &mdash; Serial FIFO AI Queue:</b> Unverified third-party domains enter a strict 1-at-a-time queue (<code>Queued (#1)...</code>, <code>Queued (#2)...</code>) and are evaluated against your server moderation rules.</li>
+<li><b>Stage 3 &mdash; Automatic Server Sweep:</b> The moment a message is posted, your Haven server queues its unverified links for the local AI, one at a time, and checks them against your server rules. By the time anyone opens the message the verdict is usually waiting (<code>Queued (#1)...</code>, <code>Queued (#2)...</code> while it isn&rsquo;t).</li>
 <li><b>Stage 4 &mdash; Verdict, Auto-Blacklist &amp; Strike:</b> Safe links unlock in place with a verified badge (<code>&#128737;&#65039;&#10003;</code>). Malicious links turn into a red Blocked Card, blacklist the offending domain, and issue a deduplicated channel strike warning.</li>
 </ol>
 <div class="hq-demo-box">
@@ -202,28 +202,31 @@ https://docs.python.org/3/library/urllib.parse.html
 <h2>Queueing, auto-blacklisting &amp; GPU/RAM unloading</h2>
 <p>If someone pastes 10 links in a single message (or a raid floods a channel), running 10 LLM calls in parallel would spike GPU VRAM and system RAM. AutoMod Quarantine prevents this with three mechanisms:</p>
 <ul class="g-list">
-<li><b>Strict 1-at-a-time FIFO queue (<code>maxConcurrentScans: 1</code>):</b> Only one link is sent to the AI model at a time. Waiting capsules show their live position (<code>Queued (#1)...</code>, <code>Queued (#2)...</code>).</li>
+<li><b>One GPU queue on the Haven server:</b> The automatic sweep and every moderator share a single queue on your server, so only one link reaches the model at a time no matter how many people are online. Links already checked are answered from the server&rsquo;s cache without touching the GPU. Waiting capsules show their live position (<code>Queued (#1)...</code>, <code>Queued (#2)...</code>).</li>
 <li><b>Mid-burst domain blacklisting (<code>autoBlacklistBadHosts: true</code>):</b> If link #1 in a 10-link spam burst points to <code>scam-drop.org/page1</code> and the AI flags it, <code>scam-drop.org</code> is blacklisted immediately. Links #2 through #10 on <code>scam-drop.org</code> are caught by the 0 ms Source Trust check as they pop off the queue&mdash;never calling the GPU/LLM again.</li>
-<li><b>Load on queued links, unload on completion (<code>unloadModelAfterQueue: true</code>):</b> While items remain in the queue, AutoMod passes <code>keep_alive: "2m"</code> so Ollama keeps weights warm between back-to-back links. On the final link in the queue, AutoMod passes <code>keep_alive: 0</code> (or calls <code>/api/generate</code> with <code>keep_alive: 0</code>), instructing Ollama to evict the model from GPU VRAM and RAM immediately.</li>
+<li><b>Load on queued links, unload on completion:</b> While links remain in the queue, the server passes <code>keep_alive: "2m"</code> so Ollama keeps weights warm between back-to-back links. When the queue empties it calls <code>/api/generate</code> with <code>keep_alive: 0</code>, instructing Ollama to evict the model from GPU VRAM and RAM immediately.</li>
 </ul>
 </div>
 
 <div class="g-sec" id="steps">
 <h2>Steps to set it up</h2>
 <ol class="g-steps">
-<li><b>Pull &amp; run the automatic hardware setup via Git.</b> From your Haven server checkout, run one command. It inspects your GPU VRAM (NVIDIA, AMD ROCm/sysfs, or Apple Silicon), CPU cores, and system RAM, installs Ollama if needed, pulls the best model for your hardware tier, and writes <code>config/automod-local.json</code>:
+<li><b>Run the automatic hardware setup on your Haven server.</b> From your Haven server checkout, run one command. It inspects your GPU VRAM (NVIDIA, AMD ROCm/sysfs, or Apple Silicon), CPU cores, and system RAM, installs and starts Ollama if needed, pulls the best model for your hardware tier, and writes <code>config/automod-local.json</code>. No restart needed: from then on Haven sweeps every new link automatically.
+
 <pre class="g-code"><code>git pull &amp;&amp; ./scripts/setup-automod-ai.sh --install-ollama --pull</code></pre>
-Or install into any Haven server directory with a single Git one-liner:
-<pre class="g-code"><code>git clone --depth 1 https://github.com/Amnibro/Haven.git /tmp/haven-automod &amp;&amp; \
-  /tmp/haven-automod/dist/staging/haven-automod-quarantine/install.sh /path/to/haven --install-ollama --pull &amp;&amp; \
+Checkout without the script? Fetch it with Git and point it at your Haven folder:
+<pre class="g-code"><code>git clone --depth 1 -b amni/live https://github.com/Amnibro/Haven.git /tmp/haven-automod &amp;&amp; \
+  /tmp/haven-automod/scripts/setup-automod-ai.sh /path/to/haven --install-ollama --pull &amp;&amp; \
   rm -rf /tmp/haven-automod</code></pre>
+The automatic sweep runs inside the Haven server, so it needs a Haven build with the AutoMod engine (<code>Amnibro/Haven</code> <code>amni/live</code>). On other builds the script still installs the plugin and tells you what to update.
 </li>
-<li><b>Enable AutoMod Quarantine in Haven.</b> Open Haven in your browser or desktop app &rsaquo; <b>Settings &rsaquo; Plugins &amp; Themes</b> &rsaquo; toggle <b>AutoMod Quarantine</b> to <b>ON</b>. On startup, the plugin queries <code>/api/automod/local-status</code> and automatically binds to your detected local Ollama model.</li>
-<li><b>Pick a model manually or configure unloading (Optional).</b> Click the <b>&#128737;&#65039; AutoMod</b> button in the top header:
+<li><b>Enable AutoMod Quarantine in Haven.</b> Open Haven in your browser or desktop app &rsaquo; <b>Settings &rsaquo; Plugins &amp; Themes</b> &rsaquo; toggle <b>AutoMod Quarantine</b> to <b>ON</b>. On startup the plugin finds your server&rsquo;s local AI and switches to <b>This Haven Server (Local AI)</b>, so every moderator uses your machine&rsquo;s model from any device, phones included. No keys, no ports to open.</li>
+<li><b>Change the model or rules (Optional).</b> Click the <b>&#128737;&#65039; AutoMod</b> button in the top header:
 <ul class="g-list">
-<li><b>Manual Model Selection:</b> Click the <b>Model Name</b> input/dropdown to choose from any installed local Ollama model, any recommended preset (<code>qwen3.8:27b</code>, <code>qwen3.6:35b-a3b</code>, <code>granite4.2:8b</code>, <code>granite4:7b-a1b-h</code>, <code>qwen3.5:0.8b</code>), or type any custom model tag. You can also force a specific model from the CLI with <code>./scripts/setup-automod-ai.sh --model=qwen3.6:35b-a3b --pull</code>.</li>
-<li><b>Auto-Detect Local AI:</b> Click <b>&#128421;&#65039; Auto-Detect Local AI</b> at any time to re-scan your local machine and Haven server for running Ollama models.</li>
-<li><b>Unload Toggle:</b> Keep <em>&ldquo;Load on queued links &amp; unload local AI model from GPU/RAM immediately when queue finishes&rdquo;</em> checked (enabled by default) so your GPU VRAM is completely free whenever no links are being scanned.</li>
+<li><b>Model:</b> The setup script picks the server&rsquo;s model. To force one, re-run it with <code>./scripts/setup-automod-ai.sh --model=qwen3.6:35b-a3b --pull</code>. For cloud providers, pick from <b>Model Name</b>: any recommended preset (<code>qwen3.8:27b</code>, <code>qwen3.6:35b-a3b</code>, <code>granite4.2:8b</code>, <code>granite4:7b-a1b-h</code>, <code>qwen3.5:0.8b</code>), or type any custom model tag. You can also force a specific model from the CLI with <code>./scripts/setup-automod-ai.sh --model=qwen3.6:35b-a3b --pull</code>.</li>
+<li><b>Auto-Detect Local AI:</b> Click <b>&#128421;&#65039; Auto-Detect Local AI</b> at any time to re-check your Haven server&rsquo;s AI (and, as a fallback, Ollama on the device you&rsquo;re using).</li>
+<li><b>Server Rules:</b> When an admin saves the <b>Server Rules</b> box, the server AI checks every link against those rules for everyone.</li>
+<li><b>Unloading:</b> The server unloads its model whenever the queue is empty, so your GPU is free between scans. The <em>&ldquo;Load on queued links &amp; unload&rdquo;</em> checkbox does the same for a direct Ollama connection.</li>
 </ul>
 </li>
 <li><b>Test your connection.</b> Click <b>&#128268; Test AI Connection</b> to run a live verification probe and see the exact verdict and latency.</li>
@@ -239,8 +242,8 @@ Or install into any Haven server directory with a single Git one-liner:
 <tr><td><code>gpu-high</code></td><td>10&ndash;19 GB VRAM (RX 9060 XT 16GB, RTX 4070/4080, M-series 16GB+)</td><td><code>granite4.2:8b</code></td><td>Dense 8.8B (~5.3 GB VRAM, or <code>qwen3.5:9b</code>)</td></tr>
 <tr><td><code>gpu-mid-moe</code></td><td>5.5&ndash;9.9 GB VRAM (RTX 3060/4060, RX 6600/7600)</td><td><code>granite4:7b-a1b-h</code></td><td><b>Hybrid MoE</b>: 7B total / <b>1B active per token</b> (or <code>qwen3.5:4b</code>)</td></tr>
 <tr><td><code>gpu-entry</code></td><td>2.5&ndash;5.4 GB VRAM (GTX 1650, RTX 3050, iGPU)</td><td><code>granite4.2:3b</code></td><td>Compact 3B (~1.9 GB VRAM, or <code>qwen3.5:2b</code>)</td></tr>
-<tr><td><code>cpu-server-moe</code></td><td>CPU-only with &ge; 28 GB RAM &amp; &ge; 8 cores</td><td><code>qwen3.6:35b-a3b</code></td><td><b>MoE</b>: 35B total / <b>3B active per token</b> (~19 GB RAM)</td></tr>
-<tr><td><code>cpu-moe</code></td><td>CPU-only with 8&ndash;27 GB RAM</td><td><code>granite4:7b-a1b-h</code></td><td><b>Hybrid MoE</b>: 7B total / <b>1B active per token</b> (~4.2 GB RAM)</td></tr>
+<tr><td><code>cpu-server-moe</code></td><td>CPU-only with &ge; 48 GB RAM &amp; &ge; 8 cores</td><td><code>qwen3.6:35b-a3b</code></td><td><b>MoE</b>: 35B total / <b>3B active per token</b> (~19 GB RAM)</td></tr>
+<tr><td><code>cpu-moe</code></td><td>CPU-only with 8&ndash;47 GB RAM</td><td><code>granite4:7b-a1b-h</code></td><td><b>Hybrid MoE</b>: 7B total / <b>1B active per token</b> (~4.2 GB RAM)</td></tr>
 <tr><td><code>cpu-light</code></td><td>Low-memory VPS (&lt; 8 GB RAM)</td><td><code>qwen3.5:0.8b</code></td><td>Ultra-light 0.8B (~800 MB RAM, or <code>granite4:1b-h</code>)</td></tr>
 </table>
 </div>
@@ -250,7 +253,8 @@ Or install into any Haven server directory with a single Git one-liner:
 <p>Prefer a cloud model or an existing subscription instead of local inference? Select any provider in the <b>&#128737;&#65039; AutoMod</b> modal. Providers that block direct browser CORS requests are automatically routed through Haven&rsquo;s moderator-only server relay (<code>POST /api/automod/relay</code>):</p>
 <table class="spec-table">
 <tr><th>PROVIDER</th><th>DEFAULT MODEL</th><th>AUTHENTICATION (API KEY OR SUBSCRIBER SSO)</th></tr>
-<tr><td><b>Ollama (Local / Open)</b></td><td><code>granite4.2:8b</code></td><td>None required (auto-detected locally)</td></tr>
+<tr><td><b>This Haven Server (Local AI)</b></td><td>Picked by <code>setup-automod-ai.sh</code></td><td>None: uses your Haven login (auto-selected when the server has local AI)</td></tr>
+<tr><td><b>Ollama (Local / Open)</b></td><td><code>granite4.2:8b</code></td><td>None, but only reaches Ollama on the device you&rsquo;re using (set <code>OLLAMA_ORIGINS</code> to your Haven address)</td></tr>
 <tr><td><b>Meta Muse Spark</b></td><td><code>muse-spark-1.3</code></td><td>Meta Model API key (relayed via <code>https://api.meta.ai/v1/chat/completions</code>)</td></tr>
 <tr><td><b>Google Gemini</b></td><td><code>gemini-3.8-flash</code></td><td>API key, or check <b>Subscriber SSO</b> with <code>gcloud auth print-access-token</code></td></tr>
 <tr><td><b>Anthropic Claude</b></td><td><code>claude-sonnet-5-5</code></td><td>API key, or check <b>Subscriber SSO</b> with <code>claude setup-token</code></td></tr>
@@ -265,7 +269,7 @@ Or install into any Haven server directory with a single Git one-liner:
 <div class="g-sec" id="moderation">
 <h2>Moderator controls &amp; false-positive recovery</h2>
 <ul class="g-list">
-<li><b>&#9888;&#65039; Warn User:</b> Issues a formal strike and posts a customizable warning notice in the channel. Automatic warnings are deduplicated per message and only emitted by moderator/admin clients.</li>
+<li><b>&#9888;&#65039; Warn User:</b> Issues a formal strike and posts a customizable warning notice in the channel. Automatic warnings come only from moderator and admin clients, and the server hands each warning to exactly one of them, so a link is never warned twice.</li>
 <li><b>&#128275; Override &amp; Release:</b> Immediately unquarantines a blocked link, marks it safe in the cache, and automatically removes its domain from <code>blockedDomains</code> so future links to that site aren&rsquo;t blocked.</li>
 </ul>
 </div>
