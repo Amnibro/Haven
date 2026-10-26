@@ -7,9 +7,10 @@
 import SocketMethods   from './modules/app-socket.js?v=4.26.5';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14';
-import UIBindMethods   from './modules/app-ui.js?v=4.27.21';
+import UIBindMethods   from './modules/app-ui.js?v=4.27.25';
 import ComposerMethods from './modules/app-composer.js?v=4.27.24';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
+import DraftMethods from './modules/app-drafts.js?v=4.27.25';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.26.5';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.22';
@@ -35,7 +36,7 @@ import SoundMethods from './modules/app-sounds.js?v=4.25.21';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.23.9';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
-import ChannelMethods  from './modules/app-channels.js?v=4.25.8';
+import ChannelMethods  from './modules/app-channels.js?v=4.27.25';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.25.22';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.25.11';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.32';
@@ -597,6 +598,7 @@ Object.assign(HavenApp.prototype,
   MusicMethods,
   MusicFileMethods,
   ScheduleFileMethods,
+  DraftMethods,
   MusicKeyMethods,
   UtilityMethods,
   MessageContentMethods,

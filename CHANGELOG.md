@@ -48,6 +48,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
+- Text typed in the message box followed you into the next channel or DM. Each one now keeps its own unsent message, also after a reload.
 - A temporary channel lasted until the server's date changed instead of the hours it was set for, so a 1 hour channel could stay up most of a day. Mutes made through the bot or HTTP API had the same problem.
 - Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
 - More options in Create Channel was cut off at the bottom (thanks KamdenB, #5814).

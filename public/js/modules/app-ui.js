@@ -23,6 +23,7 @@ _setupUI() {
   this._bindSettings();
   this._bindAdminControls();
   this._bindMemberSearch();
+  this._initDrafts();
 },
 
 _bindSearchAndPins() {
