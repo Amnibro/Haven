@@ -49,6 +49,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
+- An unread count on the channel you had open could stay stuck after you scrolled back down to the newest messages, until the window lost and regained focus. Reaching the bottom, or clicking or typing there, now clears it.
 - Bot (webhook) posts sent no push notifications, so phones, and browsers with push turned on, heard nothing when a bot posted.
 - Text typed in the message box followed you into the next channel or DM. Each one now keeps its own unsent message, also after a reload.
 - A temporary channel lasted until the server's date changed instead of the hours it was set for, so a 1 hour channel could stay up most of a day. Mutes made through the bot or HTTP API had the same problem.

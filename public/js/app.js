@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.27.25';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.27.26';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14';
 import UIBindMethods   from './modules/app-ui.js?v=4.27.25';
 import ComposerMethods from './modules/app-composer.js?v=4.27.24';
@@ -40,7 +40,7 @@ import ContextMethods  from './modules/app-context.js?v=4.27.10';
 import ChannelMethods  from './modules/app-channels.js?v=4.27.25';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.25.22';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.25.11';
-import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.32';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.27.26';
 import MessageMethods  from './modules/app-messages.js?v=4.27.7';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.26.9';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
