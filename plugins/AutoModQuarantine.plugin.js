@@ -1554,7 +1554,7 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
         <div class="hq-form-group" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <button type="button" class="hq-btn-test" id="hq-test-ai-btn">🔌 Test AI Connection</button>
           <button type="button" class="hq-btn-test" id="hq-detect-local-btn">🖥️ Auto-Detect Local AI</button>
-          <a href="https://github.com/ancsemi/Haven/blob/main/docs/automod.md" target="_blank" rel="noopener noreferrer" class="hq-btn-test" style="text-decoration:none;display:inline-flex;align-items:center">📖 How It Works</a>
+          <a href="/automod-guide.html" target="_blank" rel="noopener noreferrer" class="hq-btn-test" style="text-decoration:none;display:inline-flex;align-items:center">📖 How It Works</a>
           <span id="hq-test-status" style="margin-left: 4px; font-size: 0.85em;"></span>
         </div>
 
