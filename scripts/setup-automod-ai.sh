@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Haven AutoMod Quarantine: hardware-Aware AI & Plugin Setup
+# Haven AutoMod Quarantine: Hardware-Aware AI & Plugin Setup
 # ==============================================================================
 # Automatically detects GPU VRAM, system RAM, CPU cores, and active CLI
 # subscriptions, selects the optimal local or cloud AI configuration, optionally
@@ -56,7 +56,7 @@ if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
 fi
 
 echo "========================================================"
-echo "  Haven AutoMod AI: hardware & Subscription Detector"
+echo "  Haven AutoMod AI: Hardware & Subscription Detector"
 echo "========================================================"
 
 # ------------------------------------------------------------------------------

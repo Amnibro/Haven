@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#FBFAF8">
+<title>Haven AutoMod Quarantine &amp; AI Link Scanner Guide | AMNI-SCIENT</title>
+<meta name="description" content="Real-time link quarantine, on-demand GPU-safe serial AI queuing, automatic bad-domain blacklisting, and 1-command hardware-aware Ollama / Subscriber SSO setup for Haven servers.">
+<meta property="og:title" content="Haven AutoMod Quarantine &amp; AI Link Scanner Guide">
+<meta property="og:description" content="Real-time link quarantine, on-demand GPU-safe serial AI queuing, automatic bad-domain blacklisting, and 1-command hardware-aware Ollama / Subscriber SSO setup for Haven servers.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://amni-scient.com/haven-automod-guide">
+<meta property="og:image" content="https://amni-scient.com/assets/haven/FfNHy.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Haven AutoMod Quarantine &amp; AI Link Scanner Guide">
+<meta name="twitter:description" content="Real-time link quarantine, on-demand GPU-safe serial AI queuing, automatic bad-domain blacklisting, and 1-command hardware-aware Ollama / Subscriber SSO setup for Haven servers.">
+<meta name="twitter:image" content="https://amni-scient.com/assets/haven/FfNHy.jpg">
+<link rel="canonical" href="https://amni-scient.com/haven-automod-guide">
+<link rel="stylesheet" href="https://amni-scient.com/css/style.css?v=b264">
+<script>
+(function(){var h=document.documentElement,s=localStorage.getItem('amni-theme')||'light';h.dataset.theme=s;function u(){var b=document.getElementById('theme-toggle');if(b)b.textContent=h.dataset.theme==='dark'?'LIGHT':'DARK';var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',h.dataset.theme==='dark'?'#0A0B0E':'#FBFAF8');}window.addEventListener('DOMContentLoaded',u);window.toggleTheme=function(){var n=h.dataset.theme==='dark'?'light':'dark';h.dataset.theme=n;localStorage.setItem('amni-theme',n);u();};})();
+</script>
+<style>
+.g-hero{max-width:1080px;margin:0 auto;padding:7rem 1.25rem 2rem}
+.g-eyebrow{font-size:.72rem;letter-spacing:.18em;color:var(--accent);margin:0 0 .7rem}
+.g-hero h1{font-size:clamp(2.1rem,5vw,3.4rem);line-height:1.05;margin:0 0 1rem}
+.g-lede{max-width:680px;color:var(--dim);font-size:1.05rem;line-height:1.6;margin:0 0 1.7rem}
+.g-quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:.7rem;max-width:820px}
+.g-pick{display:flex;flex-direction:column;gap:.2rem;padding:1rem 1.1rem;border:1px solid var(--border);border-radius:7px;text-decoration:none;color:var(--text);background:var(--panel,transparent);transition:border-color .2s,transform .2s}
+.g-pick:hover{border-color:var(--accent);transform:translateY(-1px)}
+.g-pick span{color:var(--dim);font-size:.85rem}
+.g-wrap{max-width:1080px;margin:0 auto;padding:0 1.25rem 4rem;display:grid;grid-template-columns:210px minmax(0,1fr);gap:3rem}
+.g-toc{position:sticky;top:5.5rem;align-self:start;display:flex;flex-direction:column;gap:.15rem;font-size:.85rem}
+.g-toc p{font-size:.68rem;letter-spacing:.16em;color:var(--dim);margin:0 0 .5rem}
+.g-toc a{color:var(--dim);text-decoration:none;padding:.3rem .7rem;border-left:2px solid var(--border)}
+.g-toc a:hover{color:var(--text);border-left-color:var(--accent)}
+.g-body .g-sec{padding:1.7rem 0;border-top:1px solid var(--border);scroll-margin-top:5rem}
+.g-body .g-sec:first-child{border-top:0;padding-top:0}
+.g-body h2{font-size:1.45rem;margin:0 0 .9rem;text-align:left}
+.g-body h3{font-size:1rem;margin:0 0 .4rem}
+.g-body p{margin:.7rem 0}
+.g-body p,.g-body li,.g-body dd{line-height:1.65;color:var(--text);max-width:740px}
+.g-list,.g-steps{padding-left:1.2rem;margin:.6rem 0 1rem}
+.g-list li,.g-steps li{margin:.55rem 0}
+.g-steps{counter-reset:s;list-style:none;padding-left:0}
+.g-steps li{counter-increment:s;position:relative;padding-left:2.2rem}
+.g-steps li::before{content:counter(s);position:absolute;left:0;top:.05rem;width:1.5rem;height:1.5rem;border-radius:50%;background:var(--accent);color:#fff;font-size:.78rem;display:grid;place-items:center;font-weight:700}
+.g-code{background:#0a0d12;color:#d7dde4;border:1px solid var(--border);border-radius:7px;padding:1rem 1.1rem;overflow-x:auto;font-size:.85rem;line-height:1.6;margin:.8rem 0 1rem;max-width:780px}
+.g-body code{font-size:.86em}
+.g-body :not(pre)>code{background:rgba(127,127,127,.12);padding:.1rem .35rem;border-radius:4px;word-break:break-word}
+.g-note{font-size:.88rem;color:var(--dim)!important;border-left:3px solid var(--accent);padding:.2rem 0 .2rem .9rem}
+.g-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:.8rem;margin:.8rem 0 1.1rem}
+.g-card{border:1px solid var(--border);border-radius:7px;padding:1rem 1.1rem;background:var(--panel,transparent)}
+.g-card p{margin:0;font-size:.9rem;color:var(--dim)}
+kbd{border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 .35rem;font-size:.82em}
+.g-faq dt{font-weight:700;margin-top:1rem}
+.g-faq dd{margin:.3rem 0 0;color:var(--dim)}
+.g-body .spec-table code{white-space:nowrap}
+.hq-demo-box{border:1px solid var(--border);border-radius:7px;padding:1.1rem 1.25rem;background:var(--panel,transparent);display:flex;flex-direction:column;gap:.85rem;max-width:780px;margin:.8rem 0 1rem}
+.hq-capsule{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.45);border-radius:6px;font-size:.86rem;width:fit-content}
+.hq-dot{width:7px;height:7px;border-radius:50%;background:#3b82f6}
+.hq-pill{font-size:.75rem;padding:1px 6px;border-radius:4px;background:rgba(127,127,127,.2);color:var(--text-soft)}
+.hq-safe{display:inline-flex;align-items:center;gap:6px;color:var(--accent);text-decoration:underline;font-size:.9rem}
+.hq-safe-badge{font-size:.74rem;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.35);border-radius:4px;padding:0 5px;text-decoration:none;font-weight:600}
+.hq-blocked{padding:10px 12px;border-radius:7px;background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.35);font-size:.86rem}
+@media(max-width:860px){.g-wrap{grid-template-columns:minmax(0,1fr);gap:1rem}.g-toc{position:static;flex-direction:row;flex-wrap:wrap;gap:.4rem}.g-toc p{width:100%}.g-toc a{border:1px solid var(--border);border-radius:999px;padding:.3rem .75rem}.g-body .spec-table code{white-space:normal}.g-body .spec-table{display:block;overflow-x:auto}}
+</style>
+</head>
+<body class="pp theme-haven">
+<div class="grid-bg"></div>
+<div class="scanlines"></div>
+<nav>
+<a href="https://amni-scient.com/" class="logo">AMNI<span>-SCIENT</span></a>
+<div class="links" id="nav-links">
+<a href="https://amni-scient.com/">HOME</a>
+<a href="https://amni-scient.com/amni-calc.html">CALCULATORS</a>
+<a href="https://amni-scient.com/amni-learn.html">LEARN</a>
+<a href="https://amni-scient.com/blog/">BLOG</a>
+<a href="https://amni-scient.com/research.html">RESEARCH</a>
+<div class="nav-dd nav-dd--active">
+<button class="nav-dd-trigger">PROJECTS</button>
+<div class="nav-dd-menu nav-dd-menu--groups">
+<div class="nav-dd-group"><span class="nav-dd-head">AI</span>
+<a href="https://amni-scient.com/braid">BRAID</a>
+<a href="https://amni-scient.com/amni-ai.html">AMNI-AI</a>
+<a href="https://amni-scient.com/amni-llm.html">AMNI-LLM</a>
+<a href="https://amni-scient.com/amni-code.html">AMNI-CODE</a>
+</div>
+<div class="nav-dd-group"><span class="nav-dd-head">DESKTOP &amp; OS</span>
+<a href="https://amni-scient.com/amni-os.html">AMNI-OS</a>
+<a href="https://amni-scient.com/amni-core.html">AMNI-CORE</a>
+<a href="https://amni-scient.com/amni-browse.html">AMNI-BROWSE</a>
+<a href="https://amni-scient.com/amni-connect.html">AMNI-CONNECT</a>
+<a href="https://amni-scient.com/grok-remote.html">GROK-REMOTE</a>
+<a href="https://amni-scient.com/amni-mail.html">AMNI-MAIL</a>
+<a href="https://amni-scient.com/amni-space.html">AMNI-SPACE</a>
+<a href="https://amni-scient.com/amni-crypt.html">AMNI-CRYPT</a>
+</div>
+<div class="nav-dd-group"><span class="nav-dd-head">PHONE</span>
+<a href="https://amni-scient.com/amni-phone.html">AMNI-PHONE</a>
+<a href="https://amni-scient.com/amni-type.html">AMNI-TYPE</a>
+<a href="https://amni-scient.com/amni-price.html">AMNI-PRICE</a>
+<a href="https://amni-scient.com/pom-pom-grove.html">POM-POM GROVE</a>
+<a href="https://amni-scient.com/waystone.html">WAYSTONE</a>
+<a href="https://amni-scient.com/amni-haven.html" class="active">AMNI-HAVEN</a>
+<a href="https://amni-scient.com/amni-chat.html">AMNI-CHAT</a>
+<a href="https://amni-scient.com/amni-chat-relay.html">CHAT RELAY</a>
+<a href="https://amni-scient.com/amni-hedgedoc.html">HEDGEDOC</a>
+<a href="https://amni-scient.com/symphony.html">SYMPHONY</a>
+</div>
+<div class="nav-dd-group"><span class="nav-dd-head">LEARN &amp; EXPLORE</span>
+<a href="https://amni-scient.com/amni-calc.html">AMNI-CALC</a>
+<a href="https://amni-scient.com/amni-cad.html">AMNI-CAD</a>
+<a href="https://amni-scient.com/amni-learn.html">AMNI-LEARN</a>
+<a href="https://amni-scient.com/amni-explore.html">AMNI-EXPLORE</a>
+<a href="https://amni-scient.com/amni-weather.html">AMNI-WEATHER</a>
+<a href="https://amni-scient.com/game/revamp/">AMNI-GAME</a>
+</div>
+<div class="nav-dd-group"><span class="nav-dd-head">LIFE</span>
+<a href="https://amni-scient.com/amni-life.html">AMNI-LIFE</a>
+<a href="https://amni-scient.com/amni-prayer.html">AMNI-PRAYER</a>
+</div>
+</div>
+</div>
+<a href="https://amni-scient.com/beta.html">BETA</a>
+<a href="https://amni-scient.com/about.html">ABOUT</a>
+<a href="https://amni-scient.com/faq.html">FAQ</a>
+<a href="https://ko-fi.com/amnibro" target="_blank" rel="noopener noreferrer">SUPPORT</a>
+</div>
+<button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">LIGHT</button>
+<div class="hamburger" id="hamburger" onclick="document.getElementById('nav-links').classList.toggle('open')">
+<span></span><span></span><span></span>
+</div>
+</nav>
+<header class="g-hero">
+<p class="g-eyebrow">AMNI-HAVEN &middot; AUTOMOD QUARANTINE v1.3.0</p>
+<h1>Quarantine links before anyone clicks them</h1>
+<p class="g-lede">AutoMod Quarantine is a security plugin for <a href="https://amni-scient.com/amni-haven.html">Haven</a> servers. It isolates every unverified link in a non-clickable capsule, processes multi-link bursts 1-at-a-time in a GPU-safe queue, blacklists malicious domains automatically, and unloads your local AI model from VRAM/RAM the instant scanning finishes.</p>
+<div class="g-quick">
+<a href="#steps" class="g-pick"><b>1-Command Git Setup</b><span>Auto-detects GPU/RAM &amp; pulls best model</span></a>
+<a href="#how" class="g-pick"><b>Queue &amp; Auto-Unload</b><span>Zero VRAM spikes, instant domain blocklist</span></a>
+<a href="#models" class="g-pick"><b>Hardware Tiers (MoE)</b><span>Qwen 3.8 / 3.6 MoE / 3.5 &amp; Granite 4.2</span></a>
+<a href="https://github.com/Amnibro/Haven" target="_blank" rel="noopener" class="g-pick"><b>GitHub Repository</b><span>Amnibro/Haven source &amp; plugin</span></a>
+</div>
+</header>
+<div class="g-wrap">
+<aside class="g-toc" aria-label="On this page">
+<p>ON THIS PAGE</p>
+<a href="#what">What it does</a>
+<a href="#how">How the pipeline works</a>
+<a href="#queue">Queue, blacklist &amp; unload</a>
+<a href="#steps">Steps to set it up</a>
+<a href="#models">Hardware &amp; MoE model tiers</a>
+<a href="#providers">Cloud APIs &amp; Subscriber SSO</a>
+<a href="#moderation">Moderator controls</a>
+</aside>
+<article class="g-body">
+<div class="g-sec" id="what">
+<h2>What it does</h2>
+<div class="g-grid">
+<div class="g-card"><h3>Instant Link Quarantine</h3><p>Intercepts markdown and raw URLs (including bare root domains and HTML-escaped query strings) at render time and replaces them with a safe quarantine capsule.</p></div>
+<div class="g-card"><h3>Context + URL AI Scan</h3><p>Evaluates both the message text (e.g. <em>&ldquo;claim your free gift before it expires&rdquo;</em>) and the target domain against your server rules using local Ollama, Cloud APIs, or Subscriber SSO.</p></div>
+<div class="g-card"><h3>On-Demand Load &amp; Unload</h3><p>Wakes up your local Ollama model only when links are queued, scans them 1-at-a-time, and unloads the model from GPU VRAM / RAM (<code>keep_alive: 0</code>) as soon as the queue empties.</p></div>
+<div class="g-card"><h3>0ms Domain Blacklisting</h3><p>When a link is flagged as malicious, its host is automatically added to <code>blockedDomains</code>. Remaining or future links to that domain are blocked in 0 ms without calling the AI again.</p></div>
+</div>
+</div>
+
+<div class="g-sec" id="how">
+<h2>How the pipeline works</h2>
+<ol class="g-steps">
+<li><b>Stage 1 &mdash; Intercept &amp; Isolate:</b> Every link posted in chat is wrapped in a non-clickable Quarantine Capsule before it reaches the screen.</li>
+<li><b>Stage 2 &mdash; 0 ms Source Trust Gate:</b> Trusted domains (GitHub, Wikipedia, YouTube, Steam, etc.) are released immediately. Raw IP links, punycode homoglyphs (<code>xn--</code>), dangerous executables (<code>.exe</code>, <code>.scr</code>, <code>.bat</code>), known scam patterns, and previously blacklisted domains are blocked in 0 ms without touching the AI.</li>
+<li><b>Stage 3 &mdash; Serial FIFO AI Queue:</b> Unverified third-party domains enter a strict 1-at-a-time queue (<code>Queued (#1)...</code>, <code>Queued (#2)...</code>) and are evaluated against your server moderation rules.</li>
+<li><b>Stage 4 &mdash; Verdict, Auto-Blacklist &amp; Strike:</b> Safe links unlock in place with a verified badge (<code>&#128737;&#65039;&#10003;</code>). Malicious links turn into a red Blocked Card, blacklist the offending domain, and issue a deduplicated channel strike warning.</li>
+</ol>
+<div class="hq-demo-box">
+<div>
+<span class="hq-capsule">
+<span>&#128737;&#65039;</span>
+<span class="hq-dot"></span>
+<strong style="color:#60a5fa">Quarantined Link</strong>
+<code>unknown-site.org</code>
+<span class="hq-pill">Queued (#2)...</span>
+</span>
+</div>
+<div>
+<span class="hq-safe">
+https://docs.python.org/3/library/urllib.parse.html
+<span class="hq-safe-badge">&#128737;&#65039;&#10003;</span>
+</span>
+</div>
+<div class="hq-blocked">
+<strong>&#128683; Link Blocked by AutoMod</strong> &mdash; <em>Phishing domain attempting credential harvesting</em><br>
+<code>https://steam-community-gift-drop.org/login</code>
+</div>
+</div>
+</div>
+
+<div class="g-sec" id="queue">
+<h2>Queueing, auto-blacklisting &amp; GPU/RAM unloading</h2>
+<p>If someone pastes 10 links in a single message (or a raid floods a channel), running 10 LLM calls in parallel would spike GPU VRAM and system RAM. AutoMod Quarantine prevents this with three mechanisms:</p>
+<ul class="g-list">
+<li><b>Strict 1-at-a-time FIFO queue (<code>maxConcurrentScans: 1</code>):</b> Only one link is sent to the AI model at a time. Waiting capsules show their live position (<code>Queued (#1)...</code>, <code>Queued (#2)...</code>).</li>
+<li><b>Mid-burst domain blacklisting (<code>autoBlacklistBadHosts: true</code>):</b> If link #1 in a 10-link spam burst points to <code>scam-drop.org/page1</code> and the AI flags it, <code>scam-drop.org</code> is blacklisted immediately. Links #2 through #10 on <code>scam-drop.org</code> are caught by the 0 ms Source Trust check as they pop off the queue&mdash;never calling the GPU/LLM again.</li>
+<li><b>Load on queued links, unload on completion (<code>unloadModelAfterQueue: true</code>):</b> While items remain in the queue, AutoMod passes <code>keep_alive: "2m"</code> so Ollama keeps weights warm between back-to-back links. On the final link in the queue, AutoMod passes <code>keep_alive: 0</code> (or calls <code>/api/generate</code> with <code>keep_alive: 0</code>), instructing Ollama to evict the model from GPU VRAM and RAM immediately.</li>
+</ul>
+</div>
+
+<div class="g-sec" id="steps">
+<h2>Steps to set it up</h2>
+<ol class="g-steps">
+<li><b>Pull &amp; run the automatic hardware setup via Git.</b> From your Haven server checkout, run one command. It inspects your GPU VRAM (NVIDIA, AMD ROCm/sysfs, or Apple Silicon), CPU cores, and system RAM, installs Ollama if needed, pulls the best model for your hardware tier, and writes <code>config/automod-local.json</code>:
+<pre class="g-code"><code>git pull &amp;&amp; ./scripts/setup-automod-ai.sh --install-ollama --pull</code></pre>
+Or install into any Haven server directory with a single Git one-liner:
+<pre class="g-code"><code>git clone --depth 1 https://github.com/Amnibro/Haven.git /tmp/haven-automod &amp;&amp; \
+  /tmp/haven-automod/dist/staging/haven-automod-quarantine/install.sh /path/to/haven --install-ollama --pull &amp;&amp; \
+  rm -rf /tmp/haven-automod</code></pre>
+</li>
+<li><b>Enable AutoMod Quarantine in Haven.</b> Open Haven in your browser or desktop app &rsaquo; <b>Settings &rsaquo; Plugins &amp; Themes</b> &rsaquo; toggle <b>AutoMod Quarantine</b> to <b>ON</b>. On startup, the plugin queries <code>/api/automod/local-status</code> and automatically binds to your detected local Ollama model.</li>
+<li><b>Pick a model manually or configure unloading (Optional).</b> Click the <b>&#128737;&#65039; AutoMod</b> button in the top header:
+<ul class="g-list">
+<li><b>Manual Model Selection:</b> Click the <b>Model Name</b> input/dropdown to choose from any installed local Ollama model, any recommended preset (<code>qwen3.8:27b</code>, <code>qwen3.6:35b-a3b</code>, <code>granite4.2:8b</code>, <code>granite4:7b-a1b-h</code>, <code>qwen3.5:0.8b</code>), or type any custom model tag. You can also force a specific model from the CLI with <code>./scripts/setup-automod-ai.sh --model=qwen3.6:35b-a3b --pull</code>.</li>
+<li><b>Auto-Detect Local AI:</b> Click <b>&#128421;&#65039; Auto-Detect Local AI</b> at any time to re-scan your local machine and Haven server for running Ollama models.</li>
+<li><b>Unload Toggle:</b> Keep <em>&ldquo;Load on queued links &amp; unload local AI model from GPU/RAM immediately when queue finishes&rdquo;</em> checked (enabled by default) so your GPU VRAM is completely free whenever no links are being scanned.</li>
+</ul>
+</li>
+<li><b>Test your connection.</b> Click <b>&#128268; Test AI Connection</b> to run a live verification probe and see the exact verdict and latency.</li>
+</ol>
+</div>
+
+<div class="g-sec" id="models">
+<h2>Hardware-aware local model tiers (Dense &amp; MoE)</h2>
+<p><code>setup-automod-ai.sh</code> automatically chooses between dense models and <b>Mixture-of-Experts (MoE)</b> architectures so mid-range GPUs and CPU-only servers get high accuracy while only computing a fraction of parameters per token:</p>
+<table class="spec-table">
+<tr><th>HARDWARE TIER</th><th>DETECTED SPECS</th><th>RECOMMENDED MODEL</th><th>ARCHITECTURE &amp; ACTIVE COMPUTE</th></tr>
+<tr><td><code>gpu-ultra-moe</code></td><td>&ge; 20 GB VRAM (RTX 3090/4090/5090, RX 7900 XTX, Mac Studio)</td><td><code>qwen3.6:35b-a3b</code></td><td><b>MoE</b>: 35B total / <b>3B active per token</b> (or <code>qwen3.8:27b</code>)</td></tr>
+<tr><td><code>gpu-high</code></td><td>10&ndash;19 GB VRAM (RX 9060 XT 16GB, RTX 4070/4080, M-series 16GB+)</td><td><code>granite4.2:8b</code></td><td>Dense 8.8B (~5.3 GB VRAM, or <code>qwen3.5:9b</code>)</td></tr>
+<tr><td><code>gpu-mid-moe</code></td><td>5.5&ndash;9.9 GB VRAM (RTX 3060/4060, RX 6600/7600)</td><td><code>granite4:7b-a1b-h</code></td><td><b>Hybrid MoE</b>: 7B total / <b>1B active per token</b> (or <code>qwen3.5:4b</code>)</td></tr>
+<tr><td><code>gpu-entry</code></td><td>2.5&ndash;5.4 GB VRAM (GTX 1650, RTX 3050, iGPU)</td><td><code>granite4.2:3b</code></td><td>Compact 3B (~1.9 GB VRAM, or <code>qwen3.5:2b</code>)</td></tr>
+<tr><td><code>cpu-server-moe</code></td><td>CPU-only with &ge; 28 GB RAM &amp; &ge; 8 cores</td><td><code>qwen3.6:35b-a3b</code></td><td><b>MoE</b>: 35B total / <b>3B active per token</b> (~19 GB RAM)</td></tr>
+<tr><td><code>cpu-moe</code></td><td>CPU-only with 8&ndash;27 GB RAM</td><td><code>granite4:7b-a1b-h</code></td><td><b>Hybrid MoE</b>: 7B total / <b>1B active per token</b> (~4.2 GB RAM)</td></tr>
+<tr><td><code>cpu-light</code></td><td>Low-memory VPS (&lt; 8 GB RAM)</td><td><code>qwen3.5:0.8b</code></td><td>Ultra-light 0.8B (~800 MB RAM, or <code>granite4:1b-h</code>)</td></tr>
+</table>
+</div>
+
+<div class="g-sec" id="providers">
+<h2>Cloud APIs &amp; Subscriber SSO tokens</h2>
+<p>Prefer a cloud model or an existing subscription instead of local inference? Select any provider in the <b>&#128737;&#65039; AutoMod</b> modal. Providers that block direct browser CORS requests are automatically routed through Haven&rsquo;s moderator-only server relay (<code>POST /api/automod/relay</code>):</p>
+<table class="spec-table">
+<tr><th>PROVIDER</th><th>DEFAULT MODEL</th><th>AUTHENTICATION (API KEY OR SUBSCRIBER SSO)</th></tr>
+<tr><td><b>Ollama (Local / Open)</b></td><td><code>granite4.2:8b</code></td><td>None required (auto-detected locally)</td></tr>
+<tr><td><b>Meta Muse Spark</b></td><td><code>muse-spark-1.3</code></td><td>Meta Model API key (relayed via <code>https://api.meta.ai/v1/chat/completions</code>)</td></tr>
+<tr><td><b>Google Gemini</b></td><td><code>gemini-3.8-flash</code></td><td>API key, or check <b>Subscriber SSO</b> with <code>gcloud auth print-access-token</code></td></tr>
+<tr><td><b>Anthropic Claude</b></td><td><code>claude-sonnet-5-5</code></td><td>API key, or check <b>Subscriber SSO</b> with <code>claude setup-token</code></td></tr>
+<tr><td><b>OpenAI / Codex</b></td><td><code>gpt-6-luna</code></td><td>API key, or check <b>Subscriber SSO</b> with a ChatGPT / Codex subscriber token</td></tr>
+<tr><td><b>xAI Grok</b></td><td><code>grok-4.7</code></td><td>API key, or SuperGrok session token</td></tr>
+<tr><td><b>OpenCode</b></td><td><code>glm-5.3-flash</code></td><td>Zen key, or Go subscription key (<code>oc_sk_...</code>) at <code>.../zen/go/v1/chat/completions</code></td></tr>
+<tr><td><b>OpenRouter / Mistral / DeepSeek</b></td><td><code>openrouter/auto</code></td><td>Standard Bearer API key</td></tr>
+<tr><td><b>AGY / Antigravity Gateway</b></td><td><code>agy-default</code></td><td>Local gateway on <code>http://127.0.0.1:41701/v1/chat/completions</code></td></tr>
+</table>
+</div>
+
+<div class="g-sec" id="moderation">
+<h2>Moderator controls &amp; false-positive recovery</h2>
+<ul class="g-list">
+<li><b>&#9888;&#65039; Warn User:</b> Issues a formal strike and posts a customizable warning notice in the channel. Automatic warnings are deduplicated per message and only emitted by moderator/admin clients.</li>
+<li><b>&#128275; Override &amp; Release:</b> Immediately unquarantines a blocked link, marks it safe in the cache, and automatically removes its domain from <code>blockedDomains</code> so future links to that site aren&rsquo;t blocked.</li>
+</ul>
+</div>
+</article>
+</div>
+<aside class="support-cta" aria-label="Support"><a href="https://ko-fi.com/amnibro" target="_blank" rel="noopener noreferrer" class="support-link"><span class="support-ico">&#9749;</span><span>Enjoying this? <strong>Support on Ko-fi</strong></span></a></aside>
+<footer>
+<div class="footer-links">
+<a href="about.html">ABOUT</a>
+<a href="faq.html">FAQ</a>
+<a href="privacy.html">PRIVACY</a>
+<a href="terms.html">TERMS</a>
+<a href="https://amni-scient.com/contact.html">CONTACT</a>
+<a href="https://ko-fi.com/amnibro" target="_blank" rel="noopener noreferrer" class="kofi-link">&#9749; SUPPORT</a>
+</div>
+<p>&copy; 2025-2026 Amniscient, LLC. All rights reserved.</p>
+</footer>
+</body>
+</html>
