@@ -2,7 +2,7 @@
  * @name Braid Layout
  * @description Two-edge rounded layout driven from Theme → Effect Overlay (Braid layout). Folds the server rail into the sidebar, docks voice bottom-left, tucks header extras into a kebab menu, and merges message runs into cards. Match theme turns it on with the Braid palettes; you can stack it on any other theme. Suspends itself while Mod Mode edits the layout.
  * @author Amnibro
- * @version 2.11
+ * @version 2.12
  */
 class BraidLayout {
   static _DENSITIES = [
@@ -1035,10 +1035,14 @@ html[data-braid-layout="1"] .voice-controls span[style*="background"]{background
    lives in there), people, leave: every streaming option in reach. */
 html[data-braid-layout="1"] #braid-voice-dock{flex-shrink:0;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:.375rem;min-width:0;padding:.4375rem .625rem;border-top:1px solid var(--border)}
 html[data-braid-layout="1"] #braid-voice-dock .voice-panel{border:0!important;background:transparent!important;padding:0!important;gap:.25rem!important;justify-content:flex-start!important;flex-wrap:nowrap;flex:1 1 auto;min-width:0}
-html[data-braid-layout="1"] #braid-voice-dock .voice-bar{display:flex;flex-direction:row;align-items:center;gap:.375rem;padding:0;margin:0;border:0;background:transparent;flex:0 1 auto;min-width:0}
-html[data-braid-layout="1"] #braid-voice-dock .voice-bar-top{align-items:center;width:auto;gap:.375rem}
-html[data-braid-layout="1"] #braid-voice-dock .voice-bar-status-copy{flex-direction:row;align-items:center;gap:.375rem}
-html[data-braid-layout="1"] #braid-voice-dock .voice-bar-actions{flex-direction:row;align-items:center}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar{display:flex;flex-direction:row;align-items:center;gap:.375rem;padding:0;margin:0;border:0;background:transparent;flex:1 1 100%;min-width:0}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-top{align-items:center;width:100%;min-width:0;gap:.375rem}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-status{flex:1 1 auto;min-width:0;overflow:hidden}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-status-copy{flex-direction:row;align-items:center;gap:.375rem;min-width:0;overflow:hidden}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-status-text{display:none}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-channel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-actions{flex-direction:row;align-items:center;flex-shrink:0}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-leave{flex-shrink:0;white-space:nowrap}
 html[data-braid-layout="1"] #braid-voice-dock .voice-panel-leave{display:none!important}
 html[data-braid-layout="1"] #mobile-users-btn{display:none!important}
 html[data-braid-layout="1"] .channel-join-voice.is-leave{background:var(--danger,#ed4245)!important;border-color:var(--danger,#ed4245)!important;color:#fff!important}
