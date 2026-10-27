@@ -263,6 +263,7 @@
 .status-bar-toggle-tab:hover { opacity: 1; }
 /* Desktop app has its own footer; never show the toggle tab */
 [data-desktop-app] .status-bar-toggle-tab { display: none !important; }
+@media (max-width: 480px) { .status-bar-toggle-tab { display: none !important; } }
 
 /* ── Backup restore progress bar (#5438) ── */
 .restore-progress { margin-top: 0.625rem; }
