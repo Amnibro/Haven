@@ -1709,6 +1709,35 @@ All webhook endpoints are rate-limited to **30 requests per minute** per IP.
 
 If your webhook has a `callback_url` and `callback_secret` configured, Haven will POST command invocations to your URL. The payload includes an HMAC signature in the `X-Haven-Signature` header that you should verify using your callback secret.
 
+### Receiving Messages
+
+A bot with a `callback_url` also hears ordinary chat: every message posted in its channel is sent to that URL as it arrives, so a bot can read what people say and answer with the Sending Messages call above. This is how assistants and chat bridges plug in. Each delivery looks like this:
+
+```
+POST <your callback_url>
+Content-Type: application/json
+X-Haven-Event: message
+X-Haven-Signature: sha256=<HMAC of the body with your callback secret>
+
+{
+  "event": "message",
+  "channelId": "<channel code>",
+  "timestamp": "2026-10-27T18:04:11.000Z",
+  "message": {
+    "id": 1234,
+    "content": "hey bot, what's the weather?",
+    "author": { "id": 7, "username": "alice" },
+    "reply_to": null,
+    "is_webhook": false,
+    "timestamp": "2026-10-27 18:04:11"
+  }
+}
+```
+
+- Bot posts (its own included) are not sent back, so a bot cannot loop on itself.
+- DMs never reach a bot, and a bot only hears its channel while the person who made it can still read that channel.
+- The callback URL must be reachable from the server. A bot on your own network (`192.168.x`, `localhost`, a sibling Docker container) needs `HAVEN_ALLOW_PRIVATE_CALLBACKS=true` in `.env`. A failed delivery is retried once, and the last result shows on the bot's card in Settings.
+
 ---
 
 ## Troubleshooting
