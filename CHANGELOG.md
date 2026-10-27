@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.27.0] - Unreleased
 
 ### Added
+- Settings are split into a few pages, so each one is short: Appearance, Chat & media, Notifications and so on for you, and Server, People & roles, Safety, Content, Network & scale and Bots & data for admins. Longer explanations fold behind an ⓘ button (thanks Amnibro, #5838).
 - AutoMod Quarantine, an experimental plugin (thanks Amnibro, #5836): holds links in chat until they are checked, by an AI model on your own server or a cloud AI a moderator picks. Off unless a member turns the plugin on and, for the server parts, an admin turns on Settings > Safety > Auto-Mod > AI link checks. Only the link is ever sent to an AI, never the message. See docs/automod.md.
 - Optional external storage for uploads (thanks KamdenB, #5813): pictures, files, avatars, emoji, stickers and sounds can live in an S3-compatible bucket, such as MinIO or Garage on your own NAS, or a hosted one. It's off unless you turn it on, and the S3 library it needs is downloaded only on servers that do. See "External Media Storage" in GUIDE.md.
 - Importing from Discord now copies pictures and files into Haven, so they don't turn into dead links when Discord's links expire. It's a checkbox on the import screen, on by default (#5811).
@@ -53,6 +54,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
+- A file name in brackets, like [720p], no longer counts as posting a link (thanks Amnibro, #5832).
+- In a blog post's thread, the author's reply box said the wrong thing while answering a comment (thanks Amnibro, #5831).
+- Opening a bot's webhook link in a browser said only "Not found", which looked like a broken webhook. It now explains that webhooks take POST requests and points to the bot guide.
 - On a phone or tablet browser, Enter now starts a new line in the message box, thread replies, DM pop-outs and message edits, and the Send button sends, as in the mobile apps. Shift+Enter and Ctrl+Enter still work, and with a keyboard on a desktop or laptop Enter still sends. Turn on Hide the Send button and Enter sends everywhere.
 - An unread count on the channel you had open could stay stuck after you scrolled back down to the newest messages, until the window lost and regained focus. Reaching the bottom, or clicking or typing there, now clears it.
 - Bot (webhook) posts sent no push notifications, so phones, and browsers with push turned on, heard nothing when a bot posted.
