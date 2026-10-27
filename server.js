@@ -1691,6 +1691,9 @@ app.get('/api/gif/trending', gifLimiter, (req, res) => {
 // ── Link previews and the media proxy: src/routes/link-preview.js ──
 require('./src/routes/link-preview')({ app });
 
+// ── Release notes for the "What's new" popup: src/routes/changelog.js ──
+require('./src/routes/changelog')({ app, verifyToken });
+
 // ── Games list endpoint: discover available games ──
 app.get('/api/games', (req, res) => {
   const gamesDir = path.join(__dirname, 'public', 'games');
@@ -1934,6 +1937,13 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
       channelCode: webhook.channel_code,
       message
     });
+    // Phones, and browsers with push on, are told as for a member's message.
+    // Bot posts never pushed, and a browser with push on leaves its pop-ups
+    // to the push, so those people heard nothing at all.
+    if (socketRuntime?.sendPushNotifications) {
+      socketRuntime.sendPushNotifications(webhook.channel_id, webhook.channel_code, webhook.channel_name, 0, username, content,
+        { silent, replyToUserId: replyContext?.user_id || undefined });
+    }
   }
 
   res.status(200).json({ success: true, message_id: result.lastInsertRowid, ...(threadId ? { thread_id: threadId } : {}) });
@@ -2575,7 +2585,8 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
 
   // Same ceiling as the app: 30 days.
   const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
-  const expiresAt = new Date(Date.now() + durationMs).toISOString();
+  // SQLite's own time format, which every mute check compares against.
+  const expiresAt = new Date(Date.now() + durationMs).toISOString().slice(0, 19).replace('T', ' ');
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);
@@ -2846,7 +2857,8 @@ app.post('/api/webhooks/:token/moderation/mute', webhookLimiter, express.json({ 
 
   // Same ceiling as the app: 30 days.
   const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
-  const expiresAt = new Date(Date.now() + durationMs).toISOString();
+  // SQLite's own time format, which every mute check compares against.
+  const expiresAt = new Date(Date.now() + durationMs).toISOString().slice(0, 19).replace('T', ' ');
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);

@@ -1165,7 +1165,8 @@
       "group_advanced": "Erweitert",
       "debug": "Debug",
       "backup": "Sicherung",
-      "audit_log": "Prüfprotokoll"
+      "audit_log": "Prüfprotokoll",
+      "whats_new": "Neuigkeiten"
     },
     "language_section": {
       "title": "Sprache",
@@ -2525,6 +2526,16 @@
         "twemoji": "Twemoji",
         "hint": "Twemoji zeichnet Emoji auf jedem Gerät gleich, mit einer Schrift, die Haven selbst bereitstellt."
       }
+    },
+    "whats_new": {
+      "title": "Neuigkeiten",
+      "show_label": "Neuigkeiten zeigen nach",
+      "all": "Jedem Update",
+      "minor": "Neuen Funktionen",
+      "major": "Nur großen Updates",
+      "off": "Nie",
+      "hint": "Eine Versionsnummer hat drei Teile: ein großes Update ändert den ersten, neue Funktionen den zweiten, Fehlerbehebungen den dritten. Ändert sich ein unterstrichener Teil, erscheinen die Versionshinweise. Auf diesem Gerät gespeichert.",
+      "show_now": "Neuigkeiten dieser Version ansehen"
     }
   },
   "modals": {
@@ -3184,7 +3195,9 @@
       "not_here": "„Später senden“ ist für Direktnachrichten nicht verfügbar",
       "scheduled": "Geplant für {{when}}",
       "updated": "Aktualisiert, Versand um {{when}}",
-      "sent": "Deine geplante Nachricht wurde in #{{channel}} gesendet"
+      "sent": "Deine geplante Nachricht wurde in #{{channel}} gesendet",
+      "attach": "📎 Dateien anhängen",
+      "remove_file": "Entfernen"
     },
     "self_destruct": {
       "title": "Selbstzerstörende Nachricht",
@@ -4248,5 +4261,10 @@
   "groups": {
     "no_key": "🔒 Wartet darauf, dass ein anderes Gruppenmitglied Haven öffnet und den Schlüssel teilt",
     "before_join": "🔒 Gesendet, bevor du beigetreten bist (oder bevor deine Schlüssel zurückgesetzt wurden), kann hier nicht geöffnet werden"
+  },
+  "whats_new": {
+    "title": "Neu in Haven {{version}}",
+    "settings_hint": "Unter Einstellungen > Neuigkeiten wählst du, wann das erscheint.",
+    "unavailable": "Die Versionshinweise sind auf diesem Server nicht verfügbar."
   }
 }

@@ -27,6 +27,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Two switches per role (#5822): "Can be @mentioned" keeps cosmetic and game roles out of the @ list and stops them pinging, and "Show on profile cards" leaves a role off profile cards for everyone but the people who manage roles.
 - Replies cross the Ferry bridge to Discord. A Discord reply to a message from Haven shows up in Haven as a reply, and the person it answers is notified. A Haven reply shows on Discord with a small line naming the message it answers and a link to it (and pings its Discord author when Ferry's "Allow mentions" is on).
 - Create Channel has a More options section: topic, read only, slow mode, uploads and voice.
+- Send later takes files: attach them in the Send later window, and files already waiting in the message box come along.
+- Listen Together plays Spotify playlists and albums: sharing one queues its songs in order, found on YouTube like single Spotify songs. It used to play one song named after the playlist.
+- What's new after an update: a popup with the release notes since the version you last saw. Settings > What's New picks which updates bring it up (every update, new features, big updates only, or never), with the parts of the version number that count underlined. The notes come from the server's own changelog.
 - French is now fully translated.
 - Server templates keep a channel's setting for disconnecting idle people from voice.
 - A 🧹 Remove messages button on the banned users list deletes everything a banned member wrote in the server's channels, for a ban made without "Scrub messages". Protected messages and DMs stay.
@@ -47,6 +50,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
+- An unread count on the channel you had open could stay stuck after you scrolled back down to the newest messages, until the window lost and regained focus. Reaching the bottom, or clicking or typing there, now clears it.
+- Bot (webhook) posts sent no push notifications, so phones, and browsers with push turned on, heard nothing when a bot posted.
+- Text typed in the message box followed you into the next channel or DM. Each one now keeps its own unsent message, also after a reload.
+- A temporary channel lasted until the server's date changed instead of the hours it was set for, so a 1 hour channel could stay up most of a day. Mutes made through the bot or HTTP API had the same problem.
 - Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
 - More options in Create Channel was cut off at the bottom (thanks KamdenB, #5814).
 - The screen share and camera buttons stayed off after you moved from a voice room that doesn't allow streams to one that does (Desktop #66).
@@ -74,6 +81,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Security
 - Updated follow-redirects, used by the tunnel feature, for two security advisories.
+- Updated multer and body-parser, which read uploads and requests, for two advisories that let one bad request slow the server down.
 
 ## [4.26.4] - 2026-10-22
 

@@ -95,6 +95,7 @@ _setThreadReply(msgEl, msgId) {
   const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
   const preview = rawContent.length > 70 ? rawContent.substring(0, 70) + '…' : rawContent;
   this._threadReplyingTo = { id: msgId, username: author, content: rawContent };
+  this._forumBlogThread && this._forumBlogComposerHint?.();
 
   const bar = document.getElementById('thread-reply-bar');
   const text = document.getElementById('thread-reply-preview-text');
@@ -108,6 +109,7 @@ _setThreadReply(msgEl, msgId) {
 
 _clearThreadReply() {
   this._threadReplyingTo = null;
+  this._forumBlogThread && this._forumBlogComposerHint?.();
   const bar = document.getElementById('thread-reply-bar');
   if (bar) bar.style.display = 'none';
 },
