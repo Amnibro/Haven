@@ -133,6 +133,7 @@ module.exports = function register(socket, ctx) {
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
       'blocked_upload_extensions', // (#5833) file types members cannot upload
+      'automod_ai_enabled', // experimental AutoMod Quarantine AI link checks
       'max_sound_kb', 'max_avatar_mb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'update_channel_early', 'hide_disabled_channel_badges',
       'category_layout', 'category_short_names', // (#5756) category tabs and short names
       'media_group_layout', // (#5799) pictures sent together: 'grid' or 'stacked'
@@ -435,6 +436,9 @@ module.exports = function register(socket, ctx) {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'invites_bypass_registration_token') {
+      if (!['true', 'false'].includes(value)) return;
+    }
+    if (key === 'automod_ai_enabled') {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'guests_enabled' || key === 'guests_allow_voice') {

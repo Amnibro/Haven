@@ -566,6 +566,8 @@ _applyServerSettings() {
   if (tokenToggle) tokenToggle.checked = this.serverSettings.registration_token_enabled === 'true';
   const invBpsTokenToggle = document.getElementById('invites-bypass-registration-token');
   if (invBpsTokenToggle) invBpsTokenToggle.checked = this.serverSettings.invites_bypass_registration_token === 'true';
+  const automodAiToggle = document.getElementById('automod-ai-enabled');
+  if (automodAiToggle) automodAiToggle.checked = this.serverSettings.automod_ai_enabled === 'true';
 
   // These save with the Save button, so leave them alone while the panel is
   // open: the token switches above save at once, and the refresh that follows

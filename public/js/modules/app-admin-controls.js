@@ -612,6 +612,12 @@ _bindAdminControls() {
       value: e.target.checked ? 'true' : 'false'
     });
   });
+  document.getElementById('automod-ai-enabled')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', {
+      key: 'automod_ai_enabled',
+      value: e.target.checked ? 'true' : 'false'
+    });
+  });
   document.getElementById('test-connectivity-btn')?.addEventListener('click', () => {
     this._runConnectivityTest();
   });

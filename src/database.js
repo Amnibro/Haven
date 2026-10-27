@@ -500,6 +500,7 @@ function initDatabase() {
   insertSetting.run('max_attachments', '10');           // files one message may queue, images and other files together (1-50) (#5561)
   insertSetting.run('max_tags_per_attachment', '3');    // upload tags allowed on one attachment (1-20) (#tagging phase 4)
   insertSetting.run('max_tag_len', '20');               // max characters in an upload tag name (1-50) (#tagging phase 4)
+  insertSetting.run('automod_ai_enabled', 'false');      // experimental AutoMod Quarantine AI link checks, off until an admin opts in
   insertSetting.run('blocked_upload_extensions', '');      // (#5833) file types members cannot upload, e.g. "exe,bat"
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2-25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200-100000)
