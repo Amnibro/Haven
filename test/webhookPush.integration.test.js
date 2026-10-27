@@ -81,5 +81,16 @@ test('a bot post pushes the channel members', async () => {
   await h.post(`/api/webhooks/${hook.token}`, { content: 'quiet note', silent: true });
   assert.equal(await waitForPush(phone, from, 1500), false, 'a silent bot post pushes nobody');
 
+  // Opening the link in a browser explains itself instead of "Not found".
+  const opened = await new Promise((resolve, reject) => {
+    http.get(`http://localhost:3512/api/webhooks/${hook.token}`, (r) => {
+      let body = '';
+      r.on('data', (c) => (body += c));
+      r.on('end', () => resolve({ status: r.statusCode, body: JSON.parse(body) }));
+    }).on('error', reject);
+  });
+  assert.equal(opened.status, 405);
+  assert.match(opened.body.error, /POST/);
+
   A.disconnect();
 });

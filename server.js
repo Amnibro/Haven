@@ -1769,6 +1769,15 @@ const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { erro
 const webhookAudioLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Audio rate limit exceeded' } });
 const webhookAudioControlLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Audio control rate limit exceeded' } });
 const botAudioPlaybackLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, message: { error: 'Audio playback rate limit exceeded' } });
+// Opening a webhook URL in a browser sends a GET, which used to fall through
+// to the generic "Not found" and read as a broken webhook. Say how to use it
+// instead. The token is not looked up, so this tells nobody whether it exists.
+app.get('/api/webhooks/:token', webhookLimiter, (req, res) => {
+  res.set('Allow', 'POST').status(405).json({
+    error: 'Webhooks take POST requests, so opening this link in a browser will not work. Send a POST with a JSON body like {"content": "Hello"}. See "Bot & Webhook Developer Guide" in GUIDE.md.'
+  });
+});
+
 app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' }), (req, res) => {
   const { getDb } = require('./src/database');
   const db = getDb();
