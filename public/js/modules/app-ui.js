@@ -609,7 +609,7 @@ _setupCollapsibleSections() {
 
     // Restore saved state (default = expanded)
     const saved = localStorage.getItem(key);
-    if (saved === '1') {
+    if (saved === '1' || (saved === null && window.matchMedia?.('(max-width: 480px)').matches)) {
       arrowEl?.classList.add('collapsed');
       bodyEl.classList.add('collapsed');
     }
