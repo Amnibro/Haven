@@ -4,7 +4,7 @@ const SETTINGS_PAGES = {
     ['chat', '💬', 'settings.pages.chat', 'Chat & media', ['section-chat-behavior', 'section-image-display', 'section-embed-size', 'section-soundboard-mode']],
     ['alerts', '🔔', 'settings.pages.alerts', 'Notifications', ['section-sounds', 'section-push', 'section-whats-new']],
     ['profile', '🎮', 'settings.pages.profile', 'Profile & activity', ['section-activity', 'section-score-badges']],
-    ['security', '🔒', 'settings.pages.security', 'Account & security', ['section-password', 'section-e2e-passphrase', 'section-2fa', 'section-recovery', 'section-sessions', 'section-data-privacy', 'section-delete-account']],
+    ['security', '🔒', 'settings.pages.security', 'Account & security', ['section-password', 'section-e2e-passphrase', 'section-2fa', 'section-recovery', 'section-sessions', 'section-delete-account']],
     ['language', '🗣️', 'settings.pages.language', 'Language', ['section-language']],
     ['access', '♿', 'settings.pages.access', 'Accessibility', ['section-zoom']],
     ['advanced', '🧩', 'settings.pages.advanced', 'Plugins & advanced', ['section-plugins', 'section-desktop-shortcuts', 'section-desktop-app', 'section-debug']]

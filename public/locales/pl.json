@@ -1604,6 +1604,24 @@
       "audit_log": "Dziennik audytu",
       "whats_new": "Co nowego"
     },
+    "pages": {
+      "look": "Wygląd",
+      "chat": "Czat i multimedia",
+      "alerts": "Powiadomienia",
+      "profile": "Profil i aktywność",
+      "security": "Konto i bezpieczeństwo",
+      "language": "Język",
+      "access": "Dostępność",
+      "advanced": "Wtyczki i zaawansowane",
+      "server": "Serwer",
+      "people": "Ludzie i role",
+      "safety": "Bezpieczeństwo",
+      "content": "Treści",
+      "network": "Sieć i skalowanie",
+      "tools": "Boty i dane",
+      "more": "Więcej",
+      "more_info": "Więcej informacji"
+    },
     "localization_section": {
       "title": "Lokalizacja"
     },

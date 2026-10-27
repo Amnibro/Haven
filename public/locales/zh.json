@@ -1589,6 +1589,24 @@
       "badges": "徽章",
       "whats_new": "新功能"
     },
+    "pages": {
+      "look": "外观",
+      "chat": "聊天与媒体",
+      "alerts": "通知",
+      "profile": "个人资料与动态",
+      "security": "账户与安全",
+      "language": "语言",
+      "access": "无障碍",
+      "advanced": "插件与高级",
+      "server": "服务器",
+      "people": "成员与角色",
+      "safety": "安全",
+      "content": "内容",
+      "network": "网络与规模",
+      "tools": "机器人与数据",
+      "more": "更多",
+      "more_info": "更多信息"
+    },
     "localization_section": {
       "title": "本地化"
     },

@@ -1453,6 +1453,24 @@
       "extension_updates": "Atualizações de extensões",
       "whats_new": "Novidades"
     },
+    "pages": {
+      "look": "Aparência",
+      "chat": "Chat e mídia",
+      "alerts": "Notificações",
+      "profile": "Perfil e atividade",
+      "security": "Conta e segurança",
+      "language": "Idioma",
+      "access": "Acessibilidade",
+      "advanced": "Plugins e avançado",
+      "server": "Servidor",
+      "people": "Pessoas e cargos",
+      "safety": "Segurança",
+      "content": "Conteúdo",
+      "network": "Rede e escala",
+      "tools": "Bots e dados",
+      "more": "Mais",
+      "more_info": "Mais informações"
+    },
     "localization_section": {
       "title": "Localização"
     },

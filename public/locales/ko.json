@@ -1422,6 +1422,24 @@
       "mod_mode": "관리 모드",
       "whats_new": "새로운 기능"
     },
+    "pages": {
+      "look": "모양",
+      "chat": "채팅 및 미디어",
+      "alerts": "알림",
+      "profile": "프로필 및 활동",
+      "security": "계정 및 보안",
+      "language": "언어",
+      "access": "접근성",
+      "advanced": "플러그인 및 고급",
+      "server": "서버",
+      "people": "사람 및 역할",
+      "safety": "안전",
+      "content": "콘텐츠",
+      "network": "네트워크 및 규모",
+      "tools": "봇 및 데이터",
+      "more": "더 보기",
+      "more_info": "자세히"
+    },
     "language_section": {
       "title": "언어",
       "label": "언어",

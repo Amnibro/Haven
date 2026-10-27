@@ -1422,6 +1422,24 @@
       "mod_mode": "モデレーターモード",
       "whats_new": "新着情報"
     },
+    "pages": {
+      "look": "外観",
+      "chat": "チャットとメディア",
+      "alerts": "通知",
+      "profile": "プロフィールとアクティビティ",
+      "security": "アカウントとセキュリティ",
+      "language": "言語",
+      "access": "アクセシビリティ",
+      "advanced": "プラグインと詳細",
+      "server": "サーバー",
+      "people": "メンバーとロール",
+      "safety": "安全",
+      "content": "コンテンツ",
+      "network": "ネットワークと規模",
+      "tools": "ボットとデータ",
+      "more": "その他",
+      "more_info": "詳細"
+    },
     "language_section": {
       "title": "言語",
       "label": "言語",

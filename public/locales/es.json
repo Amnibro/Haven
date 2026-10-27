@@ -1604,6 +1604,24 @@
       "audit_log": "Registro de auditoría",
       "whats_new": "Novedades"
     },
+    "pages": {
+      "look": "Apariencia",
+      "chat": "Chat y multimedia",
+      "alerts": "Notificaciones",
+      "profile": "Perfil y actividad",
+      "security": "Cuenta y seguridad",
+      "language": "Idioma",
+      "access": "Accesibilidad",
+      "advanced": "Plugins y avanzado",
+      "server": "Servidor",
+      "people": "Personas y roles",
+      "safety": "Seguridad",
+      "content": "Contenido",
+      "network": "Red y escala",
+      "tools": "Bots y datos",
+      "more": "Más",
+      "more_info": "Más información"
+    },
     "localization_section": {
       "title": "Localización"
     },

@@ -1615,6 +1615,24 @@
       "audit_log": "Journal d'audit",
       "whats_new": "Nouveautés"
     },
+    "pages": {
+      "look": "Apparence",
+      "chat": "Chat et médias",
+      "alerts": "Notifications",
+      "profile": "Profil et activité",
+      "security": "Compte et sécurité",
+      "language": "Langue",
+      "access": "Accessibilité",
+      "advanced": "Plugins et avancé",
+      "server": "Serveur",
+      "people": "Membres et rôles",
+      "safety": "Sécurité",
+      "content": "Contenu",
+      "network": "Réseau et montée en charge",
+      "tools": "Bots et données",
+      "more": "Plus",
+      "more_info": "Plus d'infos"
+    },
     "localization_section": {
       "title": "Localisation"
     },

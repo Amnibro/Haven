@@ -1168,6 +1168,24 @@
       "audit_log": "Prüfprotokoll",
       "whats_new": "Neuigkeiten"
     },
+    "pages": {
+      "look": "Darstellung",
+      "chat": "Chat & Medien",
+      "alerts": "Benachrichtigungen",
+      "profile": "Profil & Aktivität",
+      "security": "Konto & Sicherheit",
+      "language": "Sprache",
+      "access": "Barrierefreiheit",
+      "advanced": "Plugins & Erweitert",
+      "server": "Server",
+      "people": "Personen & Rollen",
+      "safety": "Sicherheit",
+      "content": "Inhalte",
+      "network": "Netzwerk & Skalierung",
+      "tools": "Bots & Daten",
+      "more": "Mehr",
+      "more_info": "Mehr Infos"
+    },
     "language_section": {
       "title": "Sprache",
       "label": "Sprache",

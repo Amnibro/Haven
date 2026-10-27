@@ -101,7 +101,7 @@ import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
-import SettingsPageMethods from './modules/app-settings-pages.js?v=1';
+import SettingsPageMethods from './modules/app-settings-pages.js?v=4.27.29';
 
 class HavenApp {
   constructor() {
