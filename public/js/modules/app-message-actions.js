@@ -590,10 +590,10 @@ _bindMessageActions() {
     });
   });
 
-  document.getElementById('messages').addEventListener('click', (e) => {
+  const onPollClick = (e) => {
     const optBtn = e.target.closest('.poll-option');
     if (!optBtn) return;
-    const msgId = parseInt(optBtn.dataset.msgId);
+    const msgId = parseInt(optBtn.dataset.msgId || optBtn.dataset.pollFor);
     const optionIndex = parseInt(optBtn.dataset.option);
     if (!msgId || isNaN(optionIndex)) return;
     const hasVote = optBtn.classList.contains('poll-voted');
@@ -602,7 +602,9 @@ _bindMessageActions() {
     } else {
       this.socket.emit('vote-poll', { messageId: msgId, optionIndex });
     }
-  });
+  };
+  document.getElementById('messages').addEventListener('click', onPollClick);
+  document.getElementById('thread-parent-poll')?.addEventListener('click', onPollClick);
 },
 
 };
