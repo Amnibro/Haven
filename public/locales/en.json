@@ -1615,6 +1615,24 @@
       "audit_log": "Audit Log",
       "whats_new": "What's New"
     },
+    "pages": {
+      "look": "Appearance",
+      "chat": "Chat & media",
+      "alerts": "Notifications",
+      "profile": "Profile & activity",
+      "security": "Account & security",
+      "language": "Language",
+      "access": "Accessibility",
+      "advanced": "Plugins & advanced",
+      "server": "Server",
+      "people": "People & roles",
+      "safety": "Safety",
+      "content": "Content",
+      "network": "Network & scale",
+      "tools": "Bots & data",
+      "more": "More",
+      "more_info": "More info"
+    },
     "localization_section": {
       "title": "Localization"
     },

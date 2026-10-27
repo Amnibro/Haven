@@ -101,6 +101,7 @@ import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
+import SettingsPageMethods from './modules/app-settings-pages.js?v=1';
 
 class HavenApp {
   constructor() {
@@ -478,6 +479,7 @@ class HavenApp {
     document.getElementById('messages')?.addEventListener('error', avatarErrorHandler, true);
     document.getElementById('online-users')?.addEventListener('error', avatarErrorHandler, true);
     this._setupHeldUploadNotes();
+    this._setupSettingsPages();
 
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
@@ -652,6 +654,7 @@ Object.assign(HavenApp.prototype,
   BadgeMethods,
   ThemePickerMethods,
   SilentMethods,
+  SettingsPageMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────
