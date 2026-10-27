@@ -3726,6 +3726,11 @@
             <input type="number" id="max-poll-options" min="2" max="25" value="10" class="settings-number-input">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.max_poll_hint">Maximum answer choices per poll (2-25, default 10)</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.blocked_upload_types">Blocked file types</span>
+            <input type="text" id="blocked-upload-types" class="settings-text-input" placeholder="exe, bat, dll" data-i18n-placeholder="settings.admin.blocked_upload_types_placeholder" spellcheck="false" autocomplete="off" maxlength="1000">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.blocked_upload_types_hint">Files of these types can't be uploaded, by anyone. Separate them with commas. Common risky ones: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar. Leave empty to allow every type.</small>
         </div>
 
         <!-- Tags (Admin / manage_tags): manage the upload-tag vocabulary -->
@@ -5487,7 +5492,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.27.27"></script>
-  <script type="module" src="/js/app.js?v=4.27.30"></script>
+  <script type="module" src="/js/app.js?v=4.27.31"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

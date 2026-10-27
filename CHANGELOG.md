@@ -28,6 +28,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Replies cross the Ferry bridge to Discord. A Discord reply to a message from Haven shows up in Haven as a reply, and the person it answers is notified. A Haven reply shows on Discord with a small line naming the message it answers and a link to it (and pings its Discord author when Ferry's "Allow mentions" is on).
 - Create Channel has a More options section: topic, read only, slow mode, uploads and voice.
 - Send later takes files: attach them in the Send later window, and files already waiting in the message box come along.
+- Blocked file types under Settings > Admin > Content > Uploads & Limits (#5833): list types such as exe, bat or dll, and nobody can upload files of those types. Empty by default.
 - Listen Together plays Spotify playlists and albums: sharing one queues its songs in order, found on YouTube like single Spotify songs. It used to play one song named after the playlist.
 - What's new after an update: a popup with the release notes since the version you last saw. Settings > What's New picks which updates bring it up (every update, new features, big updates only, or never), with the parts of the version number that count underlined. The notes come from the server's own changelog.
 - French is now fully translated.
