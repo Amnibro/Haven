@@ -45,6 +45,7 @@ _setupSettingsPages() {
     s.nav.prepend(list);
     s.list = list;
     s.body.classList.add('sp-body');
+    this._spTips(s.body, tr);
   });
   nav.classList.add('sp-nav');
   document.addEventListener('click', (e) => {
@@ -57,6 +58,32 @@ _setupSettingsPages() {
   document.querySelectorAll('#settings-tab-bar .settings-tab').forEach(tab => tab.addEventListener('click', () => setTimeout(() => this._showSettingsPage(tab.dataset.tab === 'admin' ? 'admin' : 'user'), 0)));
   document.getElementById('open-settings-btn')?.addEventListener('click', () => setTimeout(() => { this._showSettingsPage('user'); this._showSettingsPage('admin'); }, 0));
   this._showSettingsPage('user');
+},
+_spTips(root, tr) {
+  const rows = '.toggle-row, .select-row, .checkbox-row, .volume-row', heads = 'h5, h6, .settings-group-label, .settings-section-title, .settings-section-subtitle';
+  const mk = () => {
+    const b = Object.assign(document.createElement('button'), { type: 'button', className: 'sp-tip-btn', textContent: 'ⓘ' });
+    b._tips = [];
+    b.setAttribute('aria-expanded', 'false');
+    b.setAttribute('aria-label', tr('settings.pages.more_info', 'More info'));
+    b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); const on = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', String(on)); b._tips.forEach(t => t.classList.toggle('sp-tip-open', on)); });
+    b.addEventListener('pointerenter', () => { b.title = b._tips.map(t => t.textContent.trim()).join('\n\n'); });
+    return b;
+  };
+  root.querySelectorAll('.settings-hint, .settings-desc, p.muted-text').forEach(h => {
+    if (h.dataset.spTip || h.id || h.matches('.error, .success, .env-setting-hint') || /color/.test(h.getAttribute('style') || '') || h.querySelector('strong, b, button, input, select, textarea, label, [id]') || h.textContent.trim().length < 30) return;
+    let p = h.previousElementSibling, btn = null;
+    for (let i = 0; p && i < 4 && !btn; i++, p = p.previousElementSibling) {
+      const span = p.matches(rows) && p.querySelector(':scope > span');
+      btn = p._spBtn || (span ? span.after(mk()) || span.nextElementSibling : p.matches(heads) && !p.hasAttribute('data-i18n') ? p.appendChild(mk()) : null);
+      if (p.matches(rows) || p.matches(heads)) break;
+    }
+    if (!btn) return;
+    h.dataset.spTip = '1';
+    h._spBtn = btn;
+    h.classList.add('sp-tip');
+    btn._tips.push(h);
+  });
 },
 _spAvailable(side, id) {
   const s = this._spSides[side], navItem = s.nav.querySelector(`.settings-nav-item[data-target="${id}"]`), sec = document.getElementById(id);

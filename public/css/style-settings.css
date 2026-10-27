@@ -1016,6 +1016,10 @@
 .sp-body #admin-mod-panel h5.settings-section-subtitle:not(.admin-settings[id] > :first-child), .sp-body .settings-section .settings-section-title ~ .settings-section-title, .sp-body .settings-section * .settings-section-title, .sp-body h6 { margin: 0.75rem 0 0.25rem !important; padding: 0; border: 0; font-size: 0.6875rem !important; font-weight: 600 !important; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted) !important; }
 #settings-modal.sp-search .sp-body .sp-off:not(.settings-search-hidden) { display: block !important; }
 #settings-modal.sp-search .sp-cat.active { background: none; color: var(--text-secondary); }
+#settings-modal:not(.sp-search) .sp-body .sp-tip:not(.sp-tip-open) { display: none !important; }
+.sp-tip-btn { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 1.125rem; height: 1.125rem; margin: 0 auto 0 0.25rem; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); font-size: 0.8125rem; font-weight: 400; line-height: 1; text-transform: none; letter-spacing: 0; vertical-align: middle; cursor: pointer; opacity: 0.7; }
+.sp-tip-btn:hover, .sp-tip-btn:focus-visible, .sp-tip-btn[aria-expanded="true"] { color: var(--accent); opacity: 1; }
+#settings-modal.sp-search .sp-tip-btn { display: none; }
 .sp-body .btn-sm.btn-accent, .sp-body .btn-sm.btn-danger { font-size: 0.75rem; padding: 0.4375rem 0.75rem; line-height: normal; }
 .sp-body .select-row > select { min-width: 0; max-width: 100%; }
 @media (max-width: 480px) {

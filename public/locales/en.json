@@ -1630,7 +1630,8 @@
       "content": "Content",
       "network": "Network & scale",
       "tools": "Bots & data",
-      "more": "More"
+      "more": "More",
+      "more_info": "More info"
     },
     "localization_section": {
       "title": "Localization"
