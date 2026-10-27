@@ -636,7 +636,8 @@ _setupNotifications() {
       if (!compactToggle.checked) this._closeComposerMenu?.();
       this._applyComposerButtons?.();
     };
-    compactToggle.checked = localStorage.getItem('haven_compact_composer') === 'true';
+    const savedCompact = localStorage.getItem('haven_compact_composer');
+    compactToggle.checked = savedCompact === null ? !!window.matchMedia?.('(max-width: 480px)').matches : savedCompact === 'true';
     compactToggle.addEventListener('change', () => {
       localStorage.setItem('haven_compact_composer', String(compactToggle.checked));
       applyCompact();
