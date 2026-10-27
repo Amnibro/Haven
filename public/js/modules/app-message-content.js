@@ -813,8 +813,8 @@ _renderPollWidget(msgId, poll) {
 },
 
 _updatePollVotes(messageId, votes, totalVotes) {
-  const widget = document.querySelector(`.poll-widget[data-msg-id="${messageId}"]`);
-  if (!widget) return;
+  const widgets = document.querySelectorAll(`.poll-widget[data-msg-id="${messageId}"], .poll-widget[data-poll-for="${messageId}"]`);
+  if (!widgets.length) return;
 
   const wasAtBottom = this._coupledToBottom;
   const myId = this.user.id;
@@ -823,27 +823,29 @@ _updatePollVotes(messageId, votes, totalVotes) {
   const msgEl = document.querySelector(`[data-msg-id="${messageId}"]`);
   const pollAnonymous = msgEl && msgEl.dataset.pollAnonymous === '1';
 
-  widget.querySelectorAll('.poll-option').forEach(btn => {
-    const idx = parseInt(btn.dataset.option);
-    const voters = votes[idx] || [];
-    const count = voters.length;
-    const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-    const myVote = voters.some(v => v.user_id === myId);
+  widgets.forEach(widget => {
+    widget.querySelectorAll('.poll-option').forEach(btn => {
+      const idx = parseInt(btn.dataset.option);
+      const voters = votes[idx] || [];
+      const count = voters.length;
+      const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+      const myVote = voters.some(v => v.user_id === myId);
 
-    btn.classList.toggle('poll-voted', myVote);
-    btn.title = pollAnonymous ? '' : voters.map(v => this._escapeHtml(v.username)).join(', ');
-    const bar = btn.querySelector('.poll-option-bar');
-    if (bar) bar.style.width = pct + '%';
-    const countEl = btn.querySelector('.poll-option-count');
-    if (countEl) countEl.textContent = `${count} (${pct}%)`;
+      btn.classList.toggle('poll-voted', myVote);
+      btn.title = pollAnonymous ? '' : voters.map(v => this._escapeHtml(v.username)).join(', ');
+      const bar = btn.querySelector('.poll-option-bar');
+      if (bar) bar.style.width = pct + '%';
+      const countEl = btn.querySelector('.poll-option-count');
+      if (countEl) countEl.textContent = `${count} (${pct}%)`;
+    });
+
+    const footer = widget.querySelector('.poll-footer');
+    if (footer) {
+      const settingsInfo = footer.querySelector('.poll-settings-info');
+      const settingsHtml = settingsInfo ? ' · ' + settingsInfo.outerHTML : '';
+      footer.innerHTML = `${t(totalVotes === 1 ? 'poll.votes_one' : 'poll.votes_other', { count: totalVotes })}${settingsHtml}`;
+    }
   });
-
-  const footer = widget.querySelector('.poll-footer');
-  if (footer) {
-    const settingsInfo = footer.querySelector('.poll-settings-info');
-    const settingsHtml = settingsInfo ? ' · ' + settingsInfo.outerHTML : '';
-    footer.innerHTML = `${t(totalVotes === 1 ? 'poll.votes_one' : 'poll.votes_other', { count: totalVotes })}${settingsHtml}`;
-  }
 
   if (wasAtBottom) this._scrollToBottom(true);
 },

@@ -279,6 +279,14 @@ _openThread(parentId) {
   const author = msgEl?.querySelector('.message-author')?.textContent || t('thread_runtime.starter');
   document.getElementById('thread-panel-title').textContent = t('msg_toolbar.thread');
   document.getElementById('thread-parent-preview').textContent = this._threadRootPreview(msgEl?.dataset?.rawContent ?? msgEl?.querySelector('.message-content')?.textContent ?? '');
+  const pollBox = document.getElementById('thread-parent-poll'), pollSrc = msgEl?.querySelector('.poll-widget');
+  if (pollBox) {
+    const copy = pollSrc?.cloneNode(true);
+    copy?.querySelectorAll('[data-msg-id]').forEach(el => { el.dataset.pollFor = el.dataset.msgId; delete el.dataset.msgId; });
+    if (copy) { copy.dataset.pollFor = copy.dataset.msgId; delete copy.dataset.msgId; }
+    pollBox.replaceChildren(...(copy ? [copy] : []));
+    pollBox.hidden = !copy;
+  }
 
   const avatarImg = msgEl?.querySelector('.message-avatar-img');
   let avatar = null;

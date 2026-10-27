@@ -1661,4 +1661,6 @@ body:has(#thread-panel.thread-panel-forum:not(.pip)) :is(#sidebar-toggle-btn, #s
   overflow-x: auto;
   flex-wrap: nowrap;
 }
-
+.thread-parent-poll { margin-top: 0.5rem; max-height: 45vh; overflow-y: auto; }
+.thread-parent-poll .poll-widget { max-width: 100%; margin: 0; }
+.thread-panel:has(#thread-parent-poll:not([hidden])) #thread-parent-preview { display: none; }
