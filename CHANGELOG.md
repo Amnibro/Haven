@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.27.0] - Unreleased
 
 ### Added
+- AutoMod Quarantine, an experimental plugin (thanks Amnibro, #5836): holds links in chat until they are checked, by an AI model on your own server or a cloud AI a moderator picks. Off unless a member turns the plugin on and, for the server parts, an admin turns on Settings > Safety > Auto-Mod > AI link checks. Only the link is ever sent to an AI, never the message. See docs/automod.md.
 - Optional external storage for uploads (thanks KamdenB, #5813): pictures, files, avatars, emoji, stickers and sounds can live in an S3-compatible bucket, such as MinIO or Garage on your own NAS, or a hosted one. It's off unless you turn it on, and the S3 library it needs is downloaded only on servers that do. See "External Media Storage" in GUIDE.md.
 - Importing from Discord now copies pictures and files into Haven, so they don't turn into dead links when Discord's links expire. It's a checkbox on the import screen, on by default (#5811).
 - Right-click a forum topic and choose "Move to forum…" to move it, replies and all, to another forum, blog mode forums included. It keeps the tags the new forum also has (#5809).

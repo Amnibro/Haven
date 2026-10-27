@@ -1,6 +1,6 @@
 /**
- * @name AutoMod Quarantine
- * @description Automatically quarantines links, scans content via AI (this Haven server's local model, Gemini, Claude, Grok, Codex/OpenAI, OpenCode, Ollama, AGY, Meta Muse Spark, OpenRouter, Mistral, DeepSeek, Custom) or a Bearer token, and source trust, releases safe links, blocks threats, and issues moderation warnings.
+ * @name AutoMod Quarantine (Experimental)
+ * @description Experimental. Holds links until they are checked. Only the link is sent to the AI, never the message. Quarantines links, scans them via AI (this Haven server's local model, Gemini, Claude, Grok, Codex/OpenAI, OpenCode, Ollama, AGY, Meta Muse Spark, OpenRouter, Mistral, DeepSeek, Custom) or a Bearer token, and source trust, releases safe links, blocks threats, and issues moderation warnings.
  * @author Amnibro
  * @version 1.4.0
  */
@@ -55,7 +55,7 @@ class AutoModQuarantine {
         type: 'openai',
         needsKey: true,
         placeholder: 'OpenCode Zen key (sk-…)',
-        ssoPlaceholder: 'OpenCode Go key (oc_sk_…) — endpoint …/zen/go/v1/chat/completions'
+        ssoPlaceholder: 'OpenCode Go key (oc_sk_…), endpoint …/zen/go/v1/chat/completions'
       },
       haven: {
         id: 'haven',
@@ -112,7 +112,9 @@ class AutoModQuarantine {
     return {
       enabled: true,
       autoReleaseSafe: true,
-      autoWarnUsers: true,
+      // Off by default: a warning is posted in the moderator's name, so a
+      // person should decide to send it.
+      autoWarnUsers: false,
       maxStrikes: 3,
       aiScanEnabled: true,
       aiProvider: 'gemini',
@@ -250,6 +252,15 @@ class AutoModQuarantine {
         font-weight: 600;
         text-decoration: none;
         margin-left: 2px;
+      }
+      .hq-unchecked {
+        font-size: 0.68em;
+        color: var(--text-muted, #94a3b8);
+        border: 1px dashed var(--border, rgba(148, 163, 184, 0.4));
+        border-radius: 4px;
+        padding: 0 4px;
+        margin-left: 4px;
+        text-decoration: none;
       }
 
       /* Blocked Card */
@@ -453,7 +464,10 @@ class AutoModQuarantine {
     this._started = true;
 
     this._loadConfig();
-    this._detecting = this._autoDetectLocalAi(false).catch(() => null);
+    this._detecting = this._autoDetectLocalAi(false).catch(e => {
+      console.warn('[AutoMod Quarantine] Local AI detection failed:', e);
+      return null;
+    });
     this._injectStyles();
     this._patchMessageFormatting();
     this._setupDomObserver();
@@ -470,6 +484,10 @@ class AutoModQuarantine {
     if (this._observer) {
       this._observer.disconnect();
       this._observer = null;
+    }
+    if (this._clickHandler) {
+      document.removeEventListener('click', this._clickHandler);
+      this._clickHandler = null;
     }
 
     if (typeof HavenApi !== 'undefined' && HavenApi.Patcher) {
@@ -508,14 +526,23 @@ class AutoModQuarantine {
     if (typeof fetch === 'undefined' || typeof localStorage === 'undefined') return null;
     const legacy = this._settings.aiProvider === 'ollama' && this._isLocalUrl(this._settings.aiEndpoint || AutoModQuarantine.PROVIDERS.ollama.defaultEndpoint);
     if (!force && this._hasSavedSettings && !legacy) return null;
-    const d = await fetch('/api/automod/local-status', { headers: this._havenAuth() }).then(r => r.ok ? r.json() : null).catch(() => null);
+    // A 404 means the admin has not turned on AI link checks on this server.
+    const d = await fetch('/api/automod/local-status', { headers: this._havenAuth() }).then(r => r.ok ? r.json() : null).catch(e => {
+      console.warn('[AutoMod Quarantine] Could not ask the server about local AI:', e.message);
+      return null;
+    });
     if (d?.available) {
       force || Object.assign(this._settings, { aiProvider: 'haven', aiModel: '', aiEndpoint: '' }, d.rules ? { serverRules: d.rules } : {});
       return { provider: 'haven', model: d.model, endpoint: '', models: [d.model], rules: d.rules || '', source: 'server' };
     }
     if (!force) return null;
+    // No Ollama on this device is the normal case, so a refused request is expected.
     const lr = await fetch('http://localhost:11434/api/tags').catch(() => null);
-    const models = lr?.ok ? ((await lr.json().catch(() => null))?.models || []).map(m => m.name).filter(Boolean) : [];
+    const tags = lr?.ok ? await lr.json().catch(e => {
+      console.warn('[AutoMod Quarantine] Ollama sent an unreadable model list:', e.message);
+      return null;
+    }) : null;
+    const models = (tags?.models || []).map(m => m.name).filter(Boolean);
     return models.length ? { provider: 'ollama', model: models[0], endpoint: AutoModQuarantine.PROVIDERS.ollama.defaultEndpoint, models, source: 'local', reason: d?.reason || '' } : (d ? { provider: null, reason: d.reason } : null);
   }
 
@@ -584,8 +611,19 @@ class AutoModQuarantine {
   }
   async _claimWarn(key) {
     if (typeof fetch === 'undefined' || typeof localStorage === 'undefined') return true;
-    const r = await fetch('/api/automod/claim-warn', { method: 'POST', headers: { 'Content-Type': 'application/json', ...this._havenAuth() }, body: JSON.stringify({ key }) }).catch(() => null);
-    return !r || r.status === 404 || (r.ok && (await r.json().catch(() => ({}))).claimed !== false);
+    const r = await fetch('/api/automod/claim-warn', { method: 'POST', headers: { 'Content-Type': 'application/json', ...this._havenAuth() }, body: JSON.stringify({ key }) }).catch(e => {
+      console.warn('[AutoMod Quarantine] Could not claim the warning:', e.message);
+      return null;
+    });
+    // Without a server to share the claim (unreachable, or AI checks off),
+    // nobody else can be told, so warn rather than stay silent.
+    if (!r || r.status === 404) return true;
+    if (!r.ok) return false;
+    const d = await r.json().catch(e => {
+      console.warn('[AutoMod Quarantine] Unreadable claim answer:', e.message);
+      return null;
+    });
+    return d?.claimed === true;
   }
   _isLocalUrl(url) {
     try { return /^(localhost|127\.|0\.0\.0\.0$|\[::1\]$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|\.local$/.test(new URL(url).hostname); } catch { return false; }
@@ -596,11 +634,13 @@ class AutoModQuarantine {
       try { return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) }); } catch (e) { if (this._isLocalUrl(url) || typeof localStorage === 'undefined') throw e; relayed.add(host); }
     }
     const r = await fetch('/api/automod/relay', { method: 'POST', headers: { 'Content-Type': 'application/json', ...this._havenAuth() }, body: JSON.stringify({ url, headers, body }) });
+    // A non-JSON reply still gets reported below through its status code.
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(r.status === 404 ? `${host} blocks browser requests and this Haven server has no AI relay` : (d.error || `Relay status ${r.status}`));
     return { ok: d.status >= 200 && d.status < 300, status: d.status, text: async () => d.body || '', json: async () => JSON.parse(d.body || '{}') };
   }
   async _fail(name, resp) {
+    // The status alone still makes a useful error when the body is unreadable.
     const t = await resp.text().catch(() => '');
     const m = (() => { try { const j = JSON.parse(t); return j.error?.message || j.error || j.message || ''; } catch { return t; } })();
     throw new Error(`${name} status ${resp.status}${m ? `: ${String(typeof m === 'string' ? m : JSON.stringify(m)).slice(0, 160)}` : ''}`);
@@ -655,7 +695,9 @@ class AutoModQuarantine {
           seen.add(url);
           urls.push({ url, raw: rawUrl, label: m[1] || url, isMarkdown: true });
         }
-      } catch {}
+      } catch {
+        // Not a URL after all (e.g. "[x](not a link)"): leave it as text.
+      }
     }
 
     const withoutMd = text.replace(mdRegex, ' ');
@@ -671,7 +713,9 @@ class AutoModQuarantine {
           seen.add(url);
           urls.push({ url, raw: rawUrl, label: rawUrl, isMarkdown: false });
         }
-      } catch {}
+      } catch {
+        // Looked like a link but does not parse: leave it as text.
+      }
     }
 
     return urls;
@@ -869,23 +913,27 @@ class AutoModQuarantine {
     }
   }
 
-  _scanPrompts(url, contextText) {
+  // Only the link goes to the AI. The message around it can be a private
+  // channel or a decrypted DM, and it never leaves this browser; the keyword
+  // checks in _scanWithLocalHeuristicAI still read it locally.
+  _scanPrompts(url) {
     return [`You are an automated security and content moderation analyzer for a community chat server.
-Evaluate this link and message context for security threats (phishing, malware, exploits, token loggers, credential theft) and server rule violations (hate speech, severe harassment, NSFW/illicit, fraud).
+Evaluate this link for security threats (phishing, malware, exploits, token loggers, credential theft) and server rule violations (hate speech, severe harassment, NSFW/illicit, fraud).
 Server Rules: "${this._settings.serverRules}"
-Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "reason": string, "confidence": number}`, `Context message: "${(contextText || '').slice(0, 500)}"\nTarget URL: "${url}"\nDomain: "${this.getHost(url)}"`];
+Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "reason": string, "confidence": number}`, `Target URL: "${url}"\nDomain: "${this.getHost(url)}"`];
   }
 
   async _dispatchAiScan(url, contextText, config, strict = false) {
-    const [systemPrompt, userPrompt] = this._scanPrompts(url, contextText);
+    const [systemPrompt, userPrompt] = this._scanPrompts(url);
 
     try {
       if (config.type === 'haven') {
-        const r = await fetch('/api/automod/scan', { method: 'POST', headers: { 'Content-Type': 'application/json', ...this._havenAuth() }, body: JSON.stringify({ url, context: (contextText || '').slice(0, 500) }) });
+        const r = await fetch('/api/automod/scan', { method: 'POST', headers: { 'Content-Type': 'application/json', ...this._havenAuth() }, body: JSON.stringify({ url }) });
         if (r.status === 202) throw new Error('Only moderators can start new scans on the Haven server AI');
         if (!r.ok) await this._fail('Haven server AI', r);
         const v = await r.json();
-        return { safe: v.safe !== false, reason: v.reason || 'Checked by the Haven server AI', source: 'haven_ai' };
+        if (typeof v.safe !== 'boolean') throw new Error('The Haven server AI gave no verdict');
+        return { safe: v.safe, reason: v.reason || 'Checked by the Haven server AI', source: 'haven_ai' };
       }
       if (!this._token(config) && AutoModQuarantine.PROVIDERS[config.providerId]?.needsKey) {
         if (strict) throw new Error('No API key or token entered');
@@ -952,29 +1000,29 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
       });
       this._ollamaLoaded = false;
       return true;
-    } catch {
+    } catch (e) {
+      console.warn('[AutoMod Quarantine] Could not unload the local model:', e.message);
       return false;
     }
   }
 
+  // A missing or garbled answer is never read as safe: it throws, and the
+  // caller falls back to the keyword checks, which do not earn the AI badge.
   _parseAiResponse(rawText, sourceLabel) {
     if (!rawText) throw new Error('The AI returned an empty answer');
+    const clean = rawText.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim();
+    let parsed;
     try {
-      // Clean JSON fences if present
-      const clean = rawText.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim();
-      const parsed = JSON.parse(clean);
-      return {
-        safe: parsed.safe !== false,
-        reason: parsed.reason || (parsed.safe ? 'AI verified safe' : 'AI flagged security risk'),
-        source: sourceLabel
-      };
-    } catch (e) {
-      return {
-        safe: !/unsafe|threat|phishing|malware|scam/i.test(rawText),
-        reason: 'AI classification output parsed via content analysis',
-        source: sourceLabel
-      };
+      parsed = JSON.parse(clean);
+    } catch {
+      throw new Error('The AI answer was not valid JSON');
     }
+    if (typeof parsed?.safe !== 'boolean') throw new Error('The AI answer had no safe/unsafe verdict');
+    return {
+      safe: parsed.safe,
+      reason: parsed.reason || (parsed.safe ? 'AI found nothing wrong' : 'AI flagged a security risk'),
+      source: sourceLabel
+    };
   }
 
   async testAiConnection() {
@@ -1037,9 +1085,37 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
 
     return {
       safe: true,
-      reason: 'Heuristic security verification cleared content and destination structure',
+      reason: 'Only the basic keyword checks ran; no AI looked at this link',
       source: 'heuristic_ai'
     };
+  }
+
+  // The shield badge means an AI, the trusted list or a moderator vouched for
+  // the link. Passing the keyword checks alone is not that.
+  _safeBadge(verdict) {
+    if (verdict.source === 'heuristic_ai') {
+      return `<span class="hq-unchecked" title="${this._escapeHtml(verdict.reason)}">not AI-checked</span>`;
+    }
+    return '<span class="hq-verified-check" title="Checked by AutoMod">🛡️✓</span>';
+  }
+
+  _blockedCardHtml(url, verdict) {
+    // Only moderators can warn; everyone else can still choose to reveal the link.
+    const warn = this._isMod() ? `<button class="hab-btn warn hq-warn-btn" data-url="${this._escapeHtml(url)}" data-reason="${this._escapeHtml(verdict.reason)}">⚠️ Warn User</button>` : '';
+    return `
+          <div class="hab-header">
+            <span class="hq-icon">🚫</span>
+            <span>Link Blocked by AutoMod</span>
+          </div>
+          <div class="hab-details">
+            <strong>Violation:</strong> ${this._escapeHtml(verdict.reason)}
+          </div>
+          <div class="hab-url"><code>${this._escapeHtml(url)}</code></div>
+          <div class="hab-actions">
+            ${warn}
+            <button class="hab-btn release hq-override-btn" data-url="${this._escapeHtml(url)}">🔓 ${this._isMod() ? 'Override &amp; Release' : 'Show link anyway'}</button>
+          </div>
+        `;
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1127,7 +1203,9 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
           code: channelCode,
           content: `${summary} Action may be taken by server moderators.`
         });
-      } catch {}
+      } catch (e) {
+        console.warn('[AutoMod] Failed to post the escalation notice:', e);
+      }
     }
   }
 
@@ -1178,25 +1256,10 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
 
       if (verdict && verdict.status === 'safe') {
         modified = modified.replace(linkPattern, (match, text) => {
-          return `<a href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow" class="haven-automod-released" title="Verified by AutoMod">${text}<span class="hq-verified-check" title="Verified Safe by AutoMod">🛡️✓</span></a>`;
+          return `<a href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow" class="haven-automod-released">${text}${this._safeBadge(verdict)}</a>`;
         });
       } else if (verdict && verdict.status === 'blocked') {
-        const blockedCard = `
-          <div class="haven-automod-blocked-card" data-hq-url="${this._escapeHtml(url)}">
-            <div class="hab-header">
-              <span class="hq-icon">🚫</span>
-              <span>Link Blocked by AutoMod</span>
-            </div>
-            <div class="hab-details">
-              <strong>Violation:</strong> ${this._escapeHtml(verdict.reason)}
-            </div>
-            <div class="hab-url"><code>${this._escapeHtml(url)}</code></div>
-            <div class="hab-actions">
-              <button class="hab-btn warn hq-warn-btn" data-url="${this._escapeHtml(url)}" data-reason="${this._escapeHtml(verdict.reason)}">⚠️ Warn User</button>
-              <button class="hab-btn release hq-override-btn" data-url="${this._escapeHtml(url)}">🔓 Override & Release</button>
-            </div>
-          </div>
-        `;
+        const blockedCard = `<div class="haven-automod-blocked-card" data-hq-url="${this._escapeHtml(url)}">${this._blockedCardHtml(url, verdict)}</div>`;
         modified = modified.replace(linkPattern, blockedCard);
       } else {
         const quarantineCapsule = `
@@ -1302,26 +1365,13 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
         linkEl.target = '_blank';
         linkEl.rel = 'noopener noreferrer nofollow';
         linkEl.className = 'haven-automod-released';
-        linkEl.innerHTML = `${this._escapeHtml(label)}<span class="hq-verified-check" title="Verified Safe by AutoMod">🛡️✓</span>`;
+        linkEl.innerHTML = `${this._escapeHtml(label)}${this._safeBadge(verdict)}`;
         capsule.replaceWith(linkEl);
       } else {
         const blockedEl = document.createElement('div');
         blockedEl.className = 'haven-automod-blocked-card';
         blockedEl.setAttribute('data-hq-url', url);
-        blockedEl.innerHTML = `
-          <div class="hab-header">
-            <span class="hq-icon">🚫</span>
-            <span>Link Blocked by AutoMod</span>
-          </div>
-          <div class="hab-details">
-            <strong>Violation:</strong> ${this._escapeHtml(verdict.reason)}
-          </div>
-          <div class="hab-url"><code>${this._escapeHtml(url)}</code></div>
-          <div class="hab-actions">
-            <button class="hab-btn warn hq-warn-btn" data-url="${this._escapeHtml(url)}" data-reason="${this._escapeHtml(verdict.reason)}">⚠️ Warn User</button>
-            <button class="hab-btn release hq-override-btn" data-url="${this._escapeHtml(url)}">🔓 Override & Release</button>
-          </div>
-        `;
+        blockedEl.innerHTML = this._blockedCardHtml(url, verdict);
         capsule.replaceWith(blockedEl);
       }
     }
@@ -1356,7 +1406,7 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
   _attachModActionHandlers() {
     if (typeof document === 'undefined') return;
 
-    document.addEventListener('click', (event) => {
+    this._clickHandler = (event) => {
       const target = event.target;
       if (!target) return;
 
@@ -1395,7 +1445,8 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
           }
         }
       }
-    });
+    };
+    document.addEventListener('click', this._clickHandler);
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1520,7 +1571,7 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
         <div class="hq-form-group">
           <label class="hq-toggle-label">
             <input type="checkbox" id="hq-auto-warn" ${this._settings.autoWarnUsers ? 'checked' : ''}>
-            <span>Automatically issue channel warnings on violations</span>
+            <span>Automatically post a warning in the channel when a link is blocked (sent under your name)</span>
           </label>
         </div>
 
@@ -1569,7 +1620,7 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
         const merged = Array.from(new Set([...found.models, ...presetModels]));
         datalistEl.innerHTML = merged.map(m => `<option value="${this._escapeHtml(m)}"></option>`).join('');
       }
-    })().catch(() => {});
+    })().catch(e => console.warn('[AutoMod Quarantine] Could not list local models:', e));
 
     // Auto-detect local AI button
     modal.querySelector('#hq-detect-local-btn')?.addEventListener('click', async () => {
@@ -1641,7 +1692,7 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
       this._settings.unloadModelAfterQueue = modal.querySelector('#hq-unload-after-queue').checked;
 
       this._saveConfig();
-      this._settings.aiProvider === 'haven' && typeof HavenApi !== 'undefined' && HavenApi.currentUser?.isAdmin && fetch('/api/automod/rules', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...this._havenAuth() }, body: JSON.stringify({ rules: this._settings.serverRules }) }).catch(() => {});
+      this._settings.aiProvider === 'haven' && typeof HavenApi !== 'undefined' && HavenApi.currentUser?.isAdmin && fetch('/api/automod/rules', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...this._havenAuth() }, body: JSON.stringify({ rules: this._settings.serverRules }) }).catch(e => console.warn('[AutoMod Quarantine] Could not save the rules on the server:', e));
       if (typeof HavenApi !== 'undefined' && HavenApi.UI) {
         HavenApi.UI.showToast('AutoMod settings saved successfully!', 'info');
       }

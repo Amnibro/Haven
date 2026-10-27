@@ -1,4 +1,11 @@
-# AutoMod Quarantine
+# AutoMod Quarantine (experimental)
+
+> **Experimental.** Everything below is off by default. Members turn the plugin
+> on for themselves in **Settings › Plugins & Themes**, and the server side
+> (local AI, the shared verdicts and the cloud relay) only runs after an admin
+> turns on **Settings › Safety › Auto-Mod › AI link checks**. With that switch
+> off, every `/api/automod/*` endpoint answers 404 and the server never
+> contacts Ollama or a cloud AI host.
 
 AutoMod Quarantine is a plugin that holds every unverified link in a chat
 message behind a non-clickable capsule until it has been checked. Safe links
@@ -35,14 +42,15 @@ argument sets up a Haven install somewhere else.
 | Tier | Hardware | Model |
 |---|---|---|
 | `gpu-ultra-moe` | 20 GB+ VRAM | `qwen3.6:35b-a3b` (MoE, 3B active) |
-| `gpu-high` | 10–19 GB VRAM | `granite4.2:8b` |
-| `gpu-mid-moe` | 5.5–9.9 GB VRAM | `granite4:7b-a1b-h` (MoE, 1B active) |
-| `gpu-entry` | 2.5–5.4 GB VRAM | `granite4.2:3b` |
+| `gpu-high` | 10 to 19 GB VRAM | `granite4.2:8b` |
+| `gpu-mid-moe` | 5.5 to 9.9 GB VRAM | `granite4:7b-a1b-h` (MoE, 1B active) |
+| `gpu-entry` | 2.5 to 5.4 GB VRAM | `granite4.2:3b` |
 | `cpu-server-moe` | CPU only, 48 GB+ RAM, 8+ cores | `qwen3.6:35b-a3b` |
-| `cpu-moe` | CPU only, 8–47 GB RAM | `granite4:7b-a1b-h` |
+| `cpu-moe` | CPU only, 8 to 47 GB RAM | `granite4:7b-a1b-h` |
 | `cpu-light` | under 8 GB RAM | `qwen3.5:0.8b` |
 
-Then turn the plugin on in **Settings › Plugins & Themes**. On startup it asks
+Then turn on **AI link checks** in **Settings › Safety › Auto-Mod**, and turn
+the plugin on in **Settings › Plugins & Themes**. On startup it asks
 the server whether local AI is set up and, if it is, switches to **This Haven
 Server (Local AI)**. Moderators on any device, phones included, use the
 server's model; nobody needs a key or an open port.
@@ -56,22 +64,26 @@ server's model; nobody needs a key or an open port.
    are blocked at once. Neither case reaches the AI.
 3. **Server sweep.** When a message is sent, edited or posted in a thread, the
    server queues its other links for the local model straight away. The model
-   sees the link and up to 500 characters of the message, and judges both
-   against the server rules.
+   only ever sees the link, never the message around it, so no message text
+   (private channels and DMs included) reaches any AI, local or cloud. The
+   plugin's keyword checks still read the message, inside the browser.
 4. **Verdict.** The plugin shows the result. A link the AI blocks also puts
    its domain on that moderator's block list, so the rest of a spam burst is
    blocked without another AI call. Keyword fallbacks never block a whole
    domain.
 
 The server keeps one queue for everybody, so only one link reaches the model at
-a time however many people are online. Each verdict is cached for a day and
+a time however many people are online. A member's posted links can take at
+most 10 places a minute and never more than 50 of the 77, and a moderator's own
+scan goes to the front, so link spam cannot lock moderators out. Each verdict is cached for a day and
 shared, so a link is checked once, not once per viewer. While links are queued
 the model stays loaded; when the queue empties the server tells Ollama to
 unload it, which frees the GPU between scans.
 
 Thinking models are asked for a direct answer. An empty or malformed answer is
 never treated as safe: the server reports the AI as unavailable and the plugin
-falls back to its keyword checks.
+falls back to its keyword checks. A link that only passed the keyword checks
+is released with a grey "not AI-checked" tag instead of the shield.
 
 ## Who can do what
 
@@ -111,7 +123,18 @@ or the token of your own proxy in front of a provider.
 
 ## Moderator controls
 
+- **Automatic warnings** are off by default. Turned on, a moderator's browser
+  posts the warning template in the channel under that moderator's name.
 - **Warn User** records a strike and posts the warning template in the channel.
   At the strike limit (3 by default) moderators are alerted.
 - **Override & Release** marks a blocked link safe and takes its domain off the
   block list.
+
+## Known limits (why it is experimental)
+
+- Strikes, the block list the plugin learns, and manual releases are kept in
+  each moderator's own browser, not on the server, so two moderators can see
+  different counts.
+- The plugin only changes what people who turned it on see. Everyone else gets
+  ordinary links. Haven's built-in Auto-Mod (domain policy, words, escalation)
+  is what actually stops a message from being posted.

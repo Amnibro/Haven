@@ -9,7 +9,7 @@ test('AutoModQuarantine initializes with valid default settings', () => {
   assert.equal(plugin._started, false);
   assert.equal(plugin._settings.enabled, true);
   assert.equal(plugin._settings.autoReleaseSafe, true);
-  assert.equal(plugin._settings.autoWarnUsers, true);
+  assert.equal(plugin._settings.autoWarnUsers, false, 'warnings post in the moderator name, so they start off');
   assert.equal(plugin._settings.maxStrikes, 3);
   assert.equal(plugin._settings.aiProvider, 'gemini');
   assert.ok(plugin._settings.trustedDomains.includes('github.com'));
@@ -117,9 +117,10 @@ test('_parseAiResponse cleanly parses structured JSON or fallbacks', () => {
   assert.equal(res2.safe, false);
   assert.equal(res2.reason, 'Phishing token grabber');
 
-  // Fallback text classification
-  const res3 = plugin._parseAiResponse('This link is dangerous and appears to be a phishing threat.', 'test');
-  assert.equal(res3.safe, false);
+  // Prose or a missing verdict is never guessed at: the caller falls back to
+  // the keyword checks, which do not earn the AI badge.
+  assert.throws(() => plugin._parseAiResponse('This link looks fine to me.', 'test'), /not valid JSON/);
+  assert.throws(() => plugin._parseAiResponse('{"reason": "ran out of tokens"}', 'test'), /no safe\/unsafe verdict/);
 });
 
 test('extractUrls extracts both raw URLs and markdown links', () => {
@@ -378,7 +379,7 @@ test('Haven server AI scans go through the server with the session token', async
   assert.deepEqual(v, { safe: false, reason: 'Phishing', source: 'haven_ai' });
   assert.equal(calls[0].url, '/api/automod/scan');
   assert.equal(calls[0].init.headers.Authorization, 'Bearer haven-session');
-  assert.deepEqual(JSON.parse(calls[0].init.body), { url: 'https://scam-gift.org/login', context: 'free gift' });
+  assert.deepEqual(JSON.parse(calls[0].init.body), { url: 'https://scam-gift.org/login' }, 'only the link leaves the browser');
   status = 202;
   assert.equal((await plugin._dispatchAiScan('https://new.org/', '', plugin.getEffectiveAiConfig())).source, 'heuristic_ai');
   await assert.rejects(plugin._dispatchAiScan('https://new.org/', '', plugin.getEffectiveAiConfig(), true), /Only moderators/);
@@ -394,6 +395,7 @@ test('Heuristic fallback verdicts never blacklist a whole domain', async (t) => 
 test('Auto-warnings need a moderator and a server claim, so only one moderator posts each', async (t) => {
   const plugin = new AutoModQuarantine();
   plugin._settings.aiProvider = 'haven';
+  plugin._settings.autoWarnUsers = true;
   globalThis.localStorage = { getItem: () => 'tok' };
   globalThis.HavenApi = { currentUser: { isAdmin: false }, currentChannel: 'abcd1234' };
   globalThis.window = { app: { _hasPerm: p => p === 'delete_message', _canModerate: () => false } };

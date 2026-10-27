@@ -3477,6 +3477,13 @@
             <div id="automod-top-hosts" style="margin-top:8px"></div>
             <div id="automod-log-list" class="whitelist-list" style="margin-top:8px"></div>
           </div>
+
+          <small class="settings-group-label" style="margin-top:14px;display:block">🧪 <span data-i18n="settings.admin.automod_ai_group">AI link checks (experimental)</span></small>
+          <label class="toggle-row" style="margin-top:6px">
+            <span data-i18n="settings.admin.automod_ai_enabled">Let the AutoMod Quarantine plugin use this server</span>
+            <input type="checkbox" id="automod-ai-enabled">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.automod_ai_hint">Experimental. Off by default. Turns on the server side of the AutoMod Quarantine plugin: checking links with an AI model running on this server (set up with scripts/setup-automod-ai.sh), and passing moderators' requests on to cloud AI services that refuse browsers. Only the link is ever sent to an AI, never the message. Members still choose whether to turn the plugin on in Plugins &amp; Themes.</small>
         </div>
 
         <!-- Whitelist -->
@@ -5492,7 +5499,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.27.27"></script>
-  <script type="module" src="/js/app.js?v=4.27.31"></script>
+  <script type="module" src="/js/app.js?v=4.27.32"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
