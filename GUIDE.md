@@ -1418,7 +1418,7 @@ the timestamp generators people already use work here too.
 
 | Key | Action |
 |-----|--------|
-| `Shift+Enter` | New line |
+| `Shift+Enter` | New line (on a phone or tablet, plain `Enter` is a new line and the Send button sends) |
 | `Ctrl+F` | Search messages |
 | `@` | Mention autocomplete |
 | `:` | Emoji autocomplete (type 2+ characters) |

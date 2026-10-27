@@ -50,6 +50,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
+- On a phone or tablet browser, Enter now starts a new line in the message box, thread replies, DM pop-outs and message edits, and the Send button sends, as in the mobile apps. Shift+Enter and Ctrl+Enter still work, and with a keyboard on a desktop or laptop Enter still sends. Turn on Hide the Send button and Enter sends everywhere.
 - An unread count on the channel you had open could stay stuck after you scrolled back down to the newest messages, until the window lost and regained focus. Reaching the bottom, or clicking or typing there, now clears it.
 - Bot (webhook) posts sent no push notifications, so phones, and browsers with push turned on, heard nothing when a bot posted.
 - Text typed in the message box followed you into the next channel or DM. Each one now keeps its own unsent message, also after a reload.
