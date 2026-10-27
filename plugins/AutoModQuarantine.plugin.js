@@ -122,6 +122,7 @@ class AutoModQuarantine {
       aiApiKey: '',
       aiEndpoint: '',
       aiModel: '',
+      trustVersion: 2,
       trustedDomains: [
         'github.com',
         'google.com',
@@ -137,8 +138,7 @@ class AutoModQuarantine {
         'w3.org',
         'npm.im',
         'npmjs.com',
-        'haven.amni-scient.com',
-        'amniscient.com',
+        'amni-scient.com',
         'steampowered.com',
         'steamcommunity.com',
         'discord.com',
@@ -519,11 +519,23 @@ class AutoModQuarantine {
           this._strikes.set(Number(k) || k, v);
         }
       }
+      saved && typeof saved === 'object' && this._migrateTrust(saved.trustVersion || 1);
     } catch (e) {
       console.warn('[AutoMod Quarantine] Failed to load config:', e);
     }
   }
 
+  _migrateTrust(from) {
+    if (from >= 2) return;
+    const s = this._settings, near = h => this.isSubdomainOf(h, 'amni-scient.com') || this.isSubdomainOf('amni-scient.com', h);
+    s.trustedDomains = [...new Set([...(s.trustedDomains || []).map(t => this.normalizeHost(t)).filter(t => t && t !== 'amniscient.com' && !near(t)), 'amni-scient.com'])];
+    s.blockedDomains = (s.blockedDomains || []).filter(b => !near(this.normalizeHost(b)));
+    s.trustVersion = 2;
+    this._saveConfig();
+  }
+  _ownHost() {
+    return typeof location !== 'undefined' && location.hostname ? this.normalizeHost(location.hostname) : '';
+  }
   async _autoDetectLocalAi(force = false) {
     if (typeof fetch === 'undefined' || typeof localStorage === 'undefined') return null;
     const legacy = this._settings.aiProvider === 'ollama' && this._isLocalUrl(this._settings.aiEndpoint || AutoModQuarantine.PROVIDERS.ollama.defaultEndpoint);
@@ -815,6 +827,7 @@ class AutoModQuarantine {
     }
 
     // 6. Trusted Domain whitelist match
+    if (host === this._ownHost()) return { ok: true, trusted: true, reason: 'Link to this Haven server' };
     for (const t of this._settings.trustedDomains || []) {
       const normT = this.normalizeHost(t);
       if (normT && this.isSubdomainOf(host, normT)) {
@@ -895,8 +908,9 @@ class AutoModQuarantine {
     if (!norm) return;
     for (const t of this._settings.trustedDomains || []) {
       const normT = this.normalizeHost(t);
-      if (normT && this.isSubdomainOf(norm, normT)) return;
+      if (normT && (this.isSubdomainOf(norm, normT) || this.isSubdomainOf(normT, norm))) return;
     }
+    if (this.isSubdomainOf(this._ownHost(), norm)) return;
     this._settings.blockedDomains ||= [];
     const exists = this._settings.blockedDomains.some(b => this.normalizeHost(b) === norm);
     if (!exists) {
@@ -921,6 +935,7 @@ class AutoModQuarantine {
   _scanPrompts(url) {
     return [`You are an automated security and content moderation analyzer for a community chat server.
 Evaluate this link for security threats (phishing, malware, exploits, token loggers, credential theft) and server rule violations (hate speech, severe harassment, NSFW/illicit, fraud).
+Flag a link only for a concrete red flag in the URL: a look-alike of a known brand or service, credential, payment or wallet bait, a malware or token-logger pattern, or content that breaks the rules. A domain that is unfamiliar, small, personal or unverifiable is not a red flag by itself, so a link with no concrete red flag is safe.
 Server Rules: "${this._settings.serverRules}"
 Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "reason": string, "confidence": number}`, `Target URL: "${url}"\nDomain: "${this.getHost(url)}"`];
   }

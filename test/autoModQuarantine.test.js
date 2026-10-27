@@ -521,3 +521,36 @@ test('Scans wait for startup detection so early links use the Haven server AI', 
   release();
   assert.equal((await pending).source, 'haven_ai');
 });
+test('Amni-Scient is trusted, the unrelated amniscient.com is not, and the scan prompt does not flag unfamiliar domains', () => {
+  const plugin = new AutoModQuarantine();
+  for (const u of ['https://amni-scient.com/symphony.html', 'https://haven.amni-scient.com/', 'https://git.amni-scient.com/x']) assert.equal(plugin.checkSourceTrust(u).trusted, true, u);
+  assert.equal(plugin.checkSourceTrust('https://amniscient.com/').trusted, false);
+  assert.match(plugin._scanPrompts('https://a.org/', '')[0], /unfamiliar, small, personal or unverifiable is not a red flag/);
+});
+test('Saved settings from before trust v2 drop amniscient.com and un-blacklist Amni-Scient hosts, keeping strikes', (t) => {
+  const store = { AutoModQuarantine: { settings: { trustedDomains: ['github.com', 'haven.amni-scient.com', 'amniscient.com', 'my.site'], blockedDomains: ['grabify.link', 'amni-scient.com', 'git.amni-scient.com', 'scam-drop.org'] }, strikes: { 7: { count: 2, infractions: [] } } } };
+  globalThis.HavenApi = { Data: { load: (p, k, f) => store[p]?.[k] ?? f, save: (p, k, v) => { store[p][k] = JSON.parse(JSON.stringify(v)); } } };
+  t.after(() => { delete globalThis.HavenApi; });
+  const plugin = new AutoModQuarantine();
+  plugin._loadConfig();
+  const s = store.AutoModQuarantine.settings;
+  assert.deepEqual(s.trustedDomains, ['github.com', 'my.site', 'amni-scient.com']);
+  assert.deepEqual(s.blockedDomains, ['grabify.link', 'scam-drop.org']);
+  assert.equal(s.trustVersion, 2);
+  assert.equal(store.AutoModQuarantine.strikes[7].count, 2);
+  assert.equal(plugin.checkSourceTrust('https://amni-scient.com/symphony.html').trusted, true);
+  s.trustedDomains.push('amniscient.com');
+  new AutoModQuarantine()._loadConfig();
+  assert.ok(store.AutoModQuarantine.settings.trustedDomains.includes('amniscient.com'), 'migration runs once, later admin edits stay');
+});
+test('AI verdicts never blacklist this Haven server or a parent of a trusted domain', async (t) => {
+  globalThis.location = { hostname: 'chat.example.net' };
+  t.after(() => { delete globalThis.location; });
+  const plugin = new AutoModQuarantine();
+  plugin._settings.trustedDomains = ['docs.example.org'];
+  assert.equal(plugin.checkSourceTrust('https://chat.example.net/invite/x').trusted, true);
+  t.mock.method(plugin, '_dispatchAiScan', async () => ({ safe: false, reason: 'Suspicious name', source: 'haven_ai' }));
+  for (const u of ['https://example.org/', 'https://example.net/', 'https://bad-site.org/']) await plugin.scanContentAndLink(u, '');
+  assert.deepEqual(plugin._settings.blockedDomains.slice(-1), ['bad-site.org']);
+  assert.ok(!plugin._settings.blockedDomains.includes('example.org') && !plugin._settings.blockedDomains.includes('example.net'));
+});
