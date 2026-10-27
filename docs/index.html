@@ -660,7 +660,9 @@
     '.steps li', 'figcaption', '.facts dt', '.dl-row h3', '.dl-row p', '.dl-links a', '.try', '.status-text',
     'footer nav a', 'footer .wrap > span',
   ].join(', ');
-  const norm = (h) => h.replace(/\s+/g, ' ').trim();
+  // The browser writes an icon's <path/> back as <path></path>; the
+  // translation files use the short form.
+  const norm = (h) => h.replace(/><\/path>/g, '/>').replace(/\s+/g, ' ').trim();
   const english = new WeakMap();
   let dict = { html: {}, js: {} };
   let resolveReady;
