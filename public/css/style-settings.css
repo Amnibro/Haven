@@ -1088,7 +1088,7 @@
 .sp-tip-btn:hover, .sp-tip-btn:focus-visible, .sp-tip-btn[aria-expanded="true"] { color: var(--accent); opacity: 1; }
 #settings-modal.sp-search .sp-tip-btn { display: none; }
 .dm-receipt{font-size:.7rem;opacity:.7;text-align:right;padding:2px 8px 0;color:var(--text-muted)}
-.sp-body .btn-sm.btn-accent, .sp-body .btn-sm.btn-danger { font-size: 0.75rem; padding: 0.4375rem 0.75rem; line-height: normal; }
+.sp-body .btn-sm.btn-accent, .sp-body .btn-sm.btn-danger, .modal .btn-sm.btn-accent, .modal .btn-sm.btn-danger { font-size: 0.75rem; padding: 0.4375rem 0.75rem; line-height: normal; }
 .sp-body .select-row > select { min-width: 0; max-width: 100%; }
 @media (max-width: 480px) {
   .settings-layout:has(> .settings-nav.sp-nav) { flex-direction: column; }
