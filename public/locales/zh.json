@@ -1060,6 +1060,7 @@
     "uploads_disabled": "此频道已禁用媒体上传",
     "soundboard_disabled": "此频道已关闭音效板",
     "file_too_large": "文件过大（最大 {{maxMb}} MB）",
+    "file_type_blocked": "此服务器不允许上传 .{{ext}} 文件",
     "image_too_large": "图片过大（最大 {{maxMb}} MB）",
     "max_images": "一次最多 5 张图片",
     "max_files": "一次最多 5 个文件",
@@ -1586,7 +1587,26 @@
       "backup": "备份",
       "template": "服务器模板",
       "audit_log": "审计日志",
-      "badges": "徽章"
+      "badges": "徽章",
+      "whats_new": "新功能"
+    },
+    "pages": {
+      "look": "外观",
+      "chat": "聊天与媒体",
+      "alerts": "通知",
+      "profile": "个人资料与动态",
+      "security": "账户与安全",
+      "language": "语言",
+      "access": "无障碍",
+      "advanced": "插件与高级",
+      "server": "服务器",
+      "people": "成员与角色",
+      "safety": "安全",
+      "content": "内容",
+      "network": "网络与规模",
+      "tools": "机器人与数据",
+      "more": "更多",
+      "more_info": "更多信息"
     },
     "localization_section": {
       "title": "本地化"
@@ -2729,6 +2749,9 @@
       "max_avatar_hint": "某人可上传的最大头像、边框或人设图片（1 到 10 MB，默认 2）。动态 GIF 通常超过 2 MB，但每张图片都会在其所有者发送的每条消息旁加载，因此请尽量保持较低。",
       "max_emoji_hint": "最大自定义表情上传大小（64-1024 KB，默认 256）",
       "max_poll_hint": "每个投票的最大选项数（2-25，默认 10）",
+      "blocked_upload_types": "禁止的文件类型",
+      "blocked_upload_types_hint": "任何人都不能上传这些类型的文件。用逗号分隔。常见的危险类型：exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar。留空则允许所有类型。",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "每条消息、帖子或私信的最大字符数（200-100000，默认 2000）",
       "max_invite_uses": "邀请链接最大使用次数",
       "max_invite_uses_hint": "邀请链接可设置的最大使用次数。管理员和管理服务器权限不受此限制。（0 = 不限）",
@@ -3124,7 +3147,17 @@
       "blur": "NSFW 话题点击前模糊",
       "blur_hint": "标记 🔞 的话题图片和预览会像剧透一样模糊显示。关闭后可直接查看。"
     },
-    "search_placeholder": "搜索设置（Ctrl+F）"
+    "search_placeholder": "搜索设置（Ctrl+F）",
+    "whats_new": {
+      "title": "新功能",
+      "show_label": "何时显示新内容",
+      "all": "每次更新",
+      "minor": "新功能",
+      "major": "仅重大更新",
+      "off": "从不",
+      "hint": "版本号分三部分：重大更新改变第一部分，新功能改变第二部分，修复改变第三部分。带下划线的部分变化时，会弹出更新说明。保存在此设备上。",
+      "show_now": "查看此版本的新内容"
+    }
   },
   "modals": {
     "timezone": {
@@ -4820,5 +4853,10 @@
     "label": "{{count}} 个附件",
     "more": "还有 {{count}} 个",
     "play_video": "播放视频"
+  },
+  "whats_new": {
+    "title": "Haven {{version}} 的新内容",
+    "settings_hint": "可在 设置 > 新功能 中选择何时显示。",
+    "unavailable": "此服务器上没有可用的更新说明。"
   }
 }

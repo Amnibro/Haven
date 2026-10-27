@@ -196,7 +196,7 @@ _initDesktopAppBanner() {
     if (ua.includes('win')) platform = t('platform.desktop.windows_installer');
     else if (ua.includes('linux')) platform = t('platform.desktop.linux_installer');
     else if (ua.includes('mac')) platform = t('platform.desktop.macos_installer');
-    meta.textContent = `${platform} \u2022 v1.0.0`;
+    meta.textContent = platform;
   }
 
   const laterBtn = document.getElementById('desktop-promo-later');

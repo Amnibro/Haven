@@ -858,6 +858,7 @@
     "select_channel_first": "Zuerst einen Kanal auswählen",
     "uploads_disabled": "Medien-Uploads sind in diesem Kanal deaktiviert",
     "file_too_large": "Datei zu groß (max. {{maxMb}} MB)",
+    "file_type_blocked": ".{{ext}}-Dateien können auf diesem Server nicht hochgeladen werden",
     "server_banner_alt": "Serverbanner",
     "server_icon_alt": "Serversymbol",
     "open_fullscreen": "Im Vollbild öffnen",
@@ -1165,7 +1166,26 @@
       "group_advanced": "Erweitert",
       "debug": "Debug",
       "backup": "Sicherung",
-      "audit_log": "Prüfprotokoll"
+      "audit_log": "Prüfprotokoll",
+      "whats_new": "Neuigkeiten"
+    },
+    "pages": {
+      "look": "Darstellung",
+      "chat": "Chat & Medien",
+      "alerts": "Benachrichtigungen",
+      "profile": "Profil & Aktivität",
+      "security": "Konto & Sicherheit",
+      "language": "Sprache",
+      "access": "Barrierefreiheit",
+      "advanced": "Plugins & Erweitert",
+      "server": "Server",
+      "people": "Personen & Rollen",
+      "safety": "Sicherheit",
+      "content": "Inhalte",
+      "network": "Netzwerk & Skalierung",
+      "tools": "Bots & Daten",
+      "more": "Mehr",
+      "more_info": "Mehr Infos"
     },
     "language_section": {
       "title": "Sprache",
@@ -1497,6 +1517,9 @@
       "max_sound_hint": "Max. Soundboard-Upload-Größe (256–10240 KB, Standard 1024 / 1 MB)",
       "max_emoji_hint": "Max. benutzerdefinierte Emoji-Upload-Größe (64–1024 KB, Standard 256)",
       "max_poll_hint": "Maximale Antwortmöglichkeiten pro Umfrage (2–25, Standard 10)",
+      "blocked_upload_types": "Gesperrte Dateitypen",
+      "blocked_upload_types_hint": "Dateien dieser Typen kann niemand hochladen. Mit Kommas trennen. Häufig riskant: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar. Leer lassen, um alle Typen zu erlauben.",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_invite_uses": "Maximale Anzahl der Einladungslink-Nutzungen",
       "max_invite_uses_hint": "Die maximale Anzahl von Nutzungen, auf die ein Einladungslink festgelegt werden kann. Administratoren und Benutzer mit der Berechtigung zur Serververwaltung ignorieren dieses Limit. (0 = unbegrenzt)",
       "sounds_hint": "Audiodateien für benutzerdefinierte Benachrichtigungstöne hochladen",
@@ -2525,6 +2548,16 @@
         "twemoji": "Twemoji",
         "hint": "Twemoji zeichnet Emoji auf jedem Gerät gleich, mit einer Schrift, die Haven selbst bereitstellt."
       }
+    },
+    "whats_new": {
+      "title": "Neuigkeiten",
+      "show_label": "Neuigkeiten zeigen nach",
+      "all": "Jedem Update",
+      "minor": "Neuen Funktionen",
+      "major": "Nur großen Updates",
+      "off": "Nie",
+      "hint": "Eine Versionsnummer hat drei Teile: ein großes Update ändert den ersten, neue Funktionen den zweiten, Fehlerbehebungen den dritten. Ändert sich ein unterstrichener Teil, erscheinen die Versionshinweise. Auf diesem Gerät gespeichert.",
+      "show_now": "Neuigkeiten dieser Version ansehen"
     }
   },
   "modals": {
@@ -4250,5 +4283,10 @@
   "groups": {
     "no_key": "🔒 Wartet darauf, dass ein anderes Gruppenmitglied Haven öffnet und den Schlüssel teilt",
     "before_join": "🔒 Gesendet, bevor du beigetreten bist (oder bevor deine Schlüssel zurückgesetzt wurden), kann hier nicht geöffnet werden"
+  },
+  "whats_new": {
+    "title": "Neu in Haven {{version}}",
+    "settings_hint": "Unter Einstellungen > Neuigkeiten wählst du, wann das erscheint.",
+    "unavailable": "Die Versionshinweise sind auf diesem Server nicht verfügbar."
   }
 }

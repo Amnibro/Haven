@@ -4,6 +4,10 @@
 
 export default {
 
+_enterSends(e) {
+  return e.ctrlKey || e.metaKey || document.documentElement.hasAttribute('data-hide-send-btn') || !window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+},
+
 _bindComposer() {
   const msgInput = document.getElementById('message-input');
 
@@ -122,16 +126,7 @@ _bindComposer() {
     // Lists: Shift+Enter continues one, Tab nests (app-composer-lists.js).
     if (this._composerListKey(e, msgInput)) return;
 
-    // Ctrl + Enter opens scheduled send modal
-    // Just Enter sends the message
-    if (e.key === 'Enter' && !e.shiftKey) {
-      if (e.ctrlKey) {
-        this._openScheduleModal();
-      } else {
-        e.preventDefault();
-        this._sendMessage();
-      }
-    }
+    if (e.key === 'Enter' && !e.shiftKey && this._enterSends(e)) e.ctrlKey ? this._openScheduleModal() : (e.preventDefault(), this._sendMessage());
 
     // Up arrow on empty input → edit last own message (toggleable)
     if (e.key === 'ArrowUp' && !msgInput.value && localStorage.getItem('haven_up_arrow_edit') !== 'false') {

@@ -23,6 +23,8 @@ _setupUI() {
   this._bindSettings();
   this._bindAdminControls();
   this._bindMemberSearch();
+  this._initDrafts();
+  this._initWhatsNewSettings();
 },
 
 _bindSearchAndPins() {
@@ -900,6 +902,7 @@ _uploadGeneralFile(file, targetCode, { prefix = '', ferryDiscordUserId = null } 
  */
 async _maybeUploadEncryptedDmFile(file, code, ch) {
   if (!ch || !ch.is_dm || !(ch.dm_target || ch.is_group)) return false;
+  if (this._refuseBlockedUploadType(file)) return true;
   const gate = await this._dmSendGate(code);
   if (!gate) return true;
   const partner = gate.partner;

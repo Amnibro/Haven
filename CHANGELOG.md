@@ -28,11 +28,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Replies cross the Ferry bridge to Discord. A Discord reply to a message from Haven shows up in Haven as a reply, and the person it answers is notified. A Haven reply shows on Discord with a small line naming the message it answers and a link to it (and pings its Discord author when Ferry's "Allow mentions" is on).
 - Create Channel has a More options section: topic, read only, slow mode, uploads and voice.
 - Send later takes files: attach them in the Send later window, and files already waiting in the message box come along.
+- Blocked file types under Settings > Admin > Content > Uploads & Limits (#5833): list types such as exe, bat or dll, and nobody can upload files of those types. Empty by default.
+- Listen Together plays Spotify playlists and albums: sharing one queues its songs in order, found on YouTube like single Spotify songs. It used to play one song named after the playlist.
+- What's new after an update: a popup with the release notes since the version you last saw. Settings > What's New picks which updates bring it up (every update, new features, big updates only, or never), with the parts of the version number that count underlined. The notes come from the server's own changelog.
 - French is now fully translated.
 - Server templates keep a channel's setting for disconnecting idle people from voice.
 - A 🧹 Remove messages button on the banned users list deletes everything a banned member wrote in the server's channels, for a ban made without "Scrub messages". Protected messages and DMs stay.
 
 ### Changed
+- Login session length moved from Uploads & Limits to Settings > Admin > Safety > Security, where people look for it (#5834).
 - Clicking a video plays or pauses it, right-clicking gives the browser's own video menu (with Loop), and tall, narrow videos get enough room for their controls (#5808).
 - Forwarded Discord messages now come through, quoted under "Forwarded", and escaped text like `3\.1K` reads the way Discord shows it. This covers the importer and the live Ferry bridge (#5811).
 - Emoji suggestions list names that start with what you typed first.
@@ -48,6 +52,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
+- On a phone or tablet browser, Enter now starts a new line in the message box, thread replies, DM pop-outs and message edits, and the Send button sends, as in the mobile apps. Shift+Enter and Ctrl+Enter still work, and with a keyboard on a desktop or laptop Enter still sends. Turn on Hide the Send button and Enter sends everywhere.
+- An unread count on the channel you had open could stay stuck after you scrolled back down to the newest messages, until the window lost and regained focus. Reaching the bottom, or clicking or typing there, now clears it.
+- Bot (webhook) posts sent no push notifications, so phones, and browsers with push turned on, heard nothing when a bot posted.
+- Text typed in the message box followed you into the next channel or DM. Each one now keeps its own unsent message, also after a reload.
 - A temporary channel lasted until the server's date changed instead of the hours it was set for, so a 1 hour channel could stay up most of a day. Mutes made through the bot or HTTP API had the same problem.
 - Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
 - More options in Create Channel was cut off at the bottom (thanks KamdenB, #5814).
