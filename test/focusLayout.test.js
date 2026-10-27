@@ -109,3 +109,21 @@ test('classic style answers without auto-aiming or moving on', () => {
   f._style = 'classic';
   assert.equal(f._owner(), 'FocusClassicLayout');
 });
+test('the dock Voice button joins the call or opens the call panel, never the voice-message recorder', () => {
+  const f = setup(), clicks = [], attrs = new Set();
+  const btn = (id) => ({ click: () => clicks.push(id) });
+  global.document = { ...global.document, getElementById: (id) => btn(id), querySelector: (sel) => btn(sel), querySelectorAll: () => [], documentElement: { toggleAttribute: (a, on) => on ? attrs.add(a) : attrs.delete(a), setAttribute: (a) => attrs.add(a), removeAttribute: (a) => attrs.delete(a) } };
+  f._render = () => {};
+  assert.equal(FocusLayout.DOCK.find(d => d[0] === 'voice')[4], undefined);
+  assert.ok(!FocusLayout.CALL.some(c => c[1] === '#voice-btn'));
+  f._call();
+  assert.deepEqual(clicks, ['voice-join-btn']);
+  window.app.voice = { inVoice: true, screenSharers: new Set() };
+  f._call();
+  assert.equal(f._pop, 'voice');
+  f._callSync();
+  assert.ok(attrs.has('data-fc-voice'));
+  window.app.voice.inVoice = false;
+  f._callSync();
+  assert.ok(!attrs.has('data-fc-voice'));
+});

@@ -2,7 +2,7 @@
  * @name Focus Layout
  * @description Focus view, picked in Settings, Layout. Focus is the carousel and Focus Classic is the original rail with one list beside the chat. The conversation that needs you sits in the middle, the one you just cleared fades on the left and the next one waits on the right. Menus live in a dock along the bottom. Replies aim at a person's message, and sending moves you to the next thing to answer. Press the ? button for shortcuts.
  * @author Amni-Scient
- * @version 2.1.0
+ * @version 2.2.0
  */
 class FocusLayout {
   start() {
@@ -14,7 +14,7 @@ class FocusLayout {
     this._on(document, 'haven:layout-owner-change', (e) => e.detail?.owner !== this._owner() && this._sync());
     this._on(document, 'keydown', (e) => this._key(e), true);
     this._on(window, 'resize', () => this._railSoon());
-    this._wire = setInterval(() => this._attach(), 1000);
+    this._wire = setInterval(() => { this._attach(); this._callSync(); }, 1000);
     this._attach();
     HavenApi.Data.load('FocusLayout', 'layoutOn', '1') !== '0' ? this._engage(false) : HavenApi.Data.load('FocusClassicLayout', 'layoutOn', '0') === '1' && this._engage(false, 'classic');
   }
@@ -85,9 +85,10 @@ class FocusLayout {
       b.setAttribute('aria-label', b.dataset.tip);
       b.append(el('b', 'fc-badge'));
       row.append(b);
+      id === 'voice' && row.append(this._callBar(el, svg));
     });
     dock.append(row);
-    const panes = { activity: el('div', 'fc-pane fc-activity'), dms: el('div', 'fc-pane'), channels: el('div', 'fc-pane'), people: el('div', 'fc-pane'), you: el('div', 'fc-pane fc-you'), help: el('div', 'fc-pane fc-help') };
+    const panes = { activity: el('div', 'fc-pane fc-activity'), dms: el('div', 'fc-pane'), channels: el('div', 'fc-pane'), people: el('div', 'fc-pane'), voice: el('div', 'fc-pane fc-voice'), you: el('div', 'fc-pane fc-you'), help: el('div', 'fc-pane fc-help') };
     panes.activity.append(el('div', 'fa-head', this._t('users.activity', 'Activity')), el('div', 'fa-chips'), el('div', 'fa-list'));
     Object.entries(panes).forEach(([k, p]) => { p.dataset.pane = k; pop.append(p); });
     this._panes = panes;
@@ -109,6 +110,7 @@ class FocusLayout {
     this._move(bar, servers, null);
     this._move(dms, panes.dms, null);
     [R('join-channel'), R('create-channel'), chans].filter(Boolean).forEach(n => this._move(n, panes.channels, null));
+    ['voice-roster', 'voice-controls', 'voice-settings'].map(R).filter(Boolean).forEach(n => this._move(n, panes.voice, null));
     ctx && this._move(ctx, panes.people, null);
     this._move(account, panes.you, null);
     FocusLayout.YOU.forEach(([sel, key, label]) => q(sel) && panes.you.append(Object.assign(el('button', 'fy-row', this._t(key, label)), { type: 'button', onclick: () => { this._toggle(null); q(sel)?.click(); } })));
@@ -125,15 +127,42 @@ class FocusLayout {
   _move(node, parent, before) { this._placed.push([node, node.parentNode, node.nextSibling]); parent.insertBefore(node, before); }
   _restore() {
     const root = document.documentElement;
-    ['data-focus-desktop', 'data-fc-flash', 'data-fc-enter', 'data-fc-leave', 'data-fc-pop', 'data-focus-tab', 'data-focus-pane-hidden', 'data-focus-add'].forEach(a => root.removeAttribute(a));
+    ['data-focus-desktop', 'data-fc-flash', 'data-fc-enter', 'data-fc-leave', 'data-fc-pop', 'data-focus-tab', 'data-focus-pane-hidden', 'data-focus-add', 'data-focus-people'].forEach(a => root.removeAttribute(a));
     this._placed.reverse().forEach(([node, parent, next]) => parent.insertBefore(node, next?.parentNode === parent ? next : null));
     this._built.forEach(n => n.remove());
     this._aim && window.app?._clearReply?.();
     document.querySelectorAll('.fc-aimed').forEach(n => n.classList.remove('fc-aimed'));
-    Object.assign(this, { _placed: [], _built: [], _dock: null, _popEl: null, _panes: null, _left: null, _right: null, _flashEl: null, _railEl: null, _prog: null, _banner: null, _pop: null, _aim: null, _cRail: null, _cHead: null, _cAct: null, _cYou: null });
+    Object.assign(this, { _placed: [], _built: [], _dock: null, _popEl: null, _panes: null, _left: null, _right: null, _flashEl: null, _railEl: null, _prog: null, _banner: null, _pop: null, _aim: null, _cRail: null, _cHead: null, _cAct: null, _cYou: null, _callEl: null });
     ['FocusLayout', 'FocusClassicLayout'].forEach(o => HavenApi.Layout?.release(o));
   }
-  _dockAct(id, act) { act ? document.querySelector(act)?.click() : this._toggle(id); }
+  _dockAct(id, act) { act ? document.querySelector(act)?.click() : id === 'voice' ? this._call() : this._toggle(id); }
+  _inCall() { return !!window.app?.voice?.inVoice; }
+  _call() { this._inCall() ? this._toggle('voice') : document.getElementById('voice-join-btn')?.click(); setTimeout(() => this._callSync(), 400); }
+  _callBar(el, svg) {
+    const bar = this._callEl = el('span', 'fc-call'), live = el('button', 'fc-live');
+    FocusLayout.CALL.forEach(([id, sel, key, label, path]) => {
+      const b = Object.assign(el('button', 'fc-di fc-tip fc-cb'), { type: 'button', innerHTML: svg(path, 18), onclick: () => { document.querySelector(sel)?.click(); setTimeout(() => this._callSync(), 150); } });
+      Object.assign(b.dataset, { call: id, tip: this._t(key, label) });
+      b.setAttribute('aria-label', b.dataset.tip);
+      bar.append(b);
+    });
+    live.type = 'button';
+    live.onclick = () => { const id = +live.dataset.user; id && window.app?._watchStream?.(id); setTimeout(() => this._callSync(), 400); };
+    bar.prepend(live);
+    return bar;
+  }
+  _callSync() {
+    const root = document.documentElement, v = window.app?.voice, on = this._inCall(), me = window.app?.user?.id;
+    root.toggleAttribute('data-fc-voice', on);
+    const bar = this._callEl;
+    if (!bar) return;
+    const st = { mute: v?.isMuted, deafen: v?.isDeafened, screen: v?.isScreenSharing, cam: v?.isWebcamActive };
+    bar.querySelectorAll('[data-call]').forEach(b => { b.classList.toggle('on', !!st[b.dataset.call]); b.setAttribute('aria-pressed', String(!!st[b.dataset.call])); });
+    const unseen = on ? [...(v?.screenSharers || [])].filter(id => id !== me && !document.querySelector(`#screen-tile-${id}:not([data-hidden="true"])`)) : [], live = bar.querySelector('.fc-live');
+    live.hidden = !unseen.length;
+    live.dataset.user = unseen[0] || '';
+    live.textContent = unseen.length ? `● ${this._t('focus.watch', 'Watch')} ${v?.peerName?.(unseen[0]) || ''}`.trim() : '';
+  }
   _toggle(id) {
     this._pop = id && id !== this._pop ? id : null;
     const root = document.documentElement;
@@ -154,7 +183,7 @@ class FocusLayout {
     n ? go(() => this._dock.querySelectorAll('.server-icon')[n[1] - 1]?.click())
       : k === 'ArrowRight' ? go(() => this._next()) : k === 'ArrowLeft' ? go(() => this._back())
       : k === 'BracketLeft' || k === 'BracketRight' ? go(() => this._step(k === 'BracketLeft' ? -1 : 1))
-      : k === 'KeyL' ? go(() => this._like()) : k === 'KeyJ' ? go(() => document.getElementById('voice-btn')?.click())
+      : k === 'KeyL' ? go(() => this._like()) : k === 'KeyJ' ? go(() => document.getElementById(this._inCall() ? 'voice-leave-sidebar-btn' : 'voice-join-btn')?.click())
       : k === 'KeyK' ? go(() => this._toggle('channels')) : k === 'KeyD' ? go(() => this._toggle('dms')) : k === 'KeyA' ? go(() => this._toggle('activity')) : k === 'Slash' ? go(() => this._toggle('help')) : null;
   }
   _soon() { clearTimeout(this._pending); this._pending = setTimeout(() => this._dock ? (this._render(), this._rail()) : this._cRail && this._cRender(), 120); }
@@ -341,12 +370,13 @@ class FocusLayout {
     });
     const me = this._dock.querySelector('.fc-me'), u = window.app?.user;
     me && (me.textContent = (u?.displayName || u?.username || '?').charAt(0).toUpperCase());
-    root.toggleAttribute('data-fc-voice', !!document.querySelector('#voice-btn.active, #voice-btn.in-voice, #voice-bar:not([style*="none"])'));
+    this._callSync();
     const q = this._queue(), cl = this._cleared(), last = cl[cl.length - 1], next = q[0], cur = window.app?.currentChannel;
     this._sideCard(this._left, last && last.code !== cur ? { name: this._name(last.code), tag: `✓ ${last.how === 'liked' ? this._t('focus.liked', 'Liked') : this._t('focus.replied_to', 'Replied to') + (last.who ? ' ' + last.who : '')}`, lines: last.lines || [], key: '⇧Tab' } : null);
     this._sideCard(this._right, next ? { name: this._name(next.code), tag: this._t('focus.up_next', 'Up next') + (q.length > 1 ? ` · +${q.length - 1}` : ''), sub: this._label(next), lines: next.text ? [[next.who, next.text]] : [], key: 'Tab' } : null);
     const done = Math.min(cl.length, 12), total = done + (cur ? 1 : 0) + Math.min(q.length, 12);
     this._prog.replaceChildren(Object.assign(this._el('div', 'fc-pips'), {}), this._el('span', 'fc-count', q.length || done ? `${done} ${this._t('focus.cleared_of', 'cleared')} · ${q.length} ${this._t('focus.waiting', 'waiting')}` : this._t('focus.all_clear', 'All clear')));
+    this._prog.classList.toggle('idle', !q.length && !done);
     this._prog.firstChild.append(...Array.from({ length: total }, (_, i) => this._el('span', i < done ? 'done' : i === done && cur ? 'now' : '')));
     this._pop === 'activity' && this._renderActivity();
   }
@@ -416,7 +446,10 @@ class FocusLayout {
     side.insertBefore(head, content);
     side.insertBefore(act, content);
     side.insertBefore(you, content);
-    this._built = [rail, head, act, you];
+    const call = el('div', 'focus-call'), bottom = side.querySelector(':scope > .sidebar-bottom');
+    side.insertBefore(call, bottom);
+    ['voice-roster', 'voice-controls', 'voice-settings'].map(r => q(`[data-haven-region="${r}"]`)).filter(Boolean).forEach(n => this._move(n, call, null));
+    this._built = [rail, head, act, you, call];
     this._move(account, card, null);
     FocusLayout.CYOU.forEach(([sel, key, label]) => {
       const target = q(sel);
@@ -462,7 +495,8 @@ class FocusLayout {
   _cActions(tab) {
     const mk = (label, title, fn, pressed) => { const b = Object.assign(document.createElement('button'), { type: 'button', className: 'fh-btn', textContent: label, title }); pressed != null && b.setAttribute('aria-pressed', String(pressed)); b.addEventListener('click', fn); return b; };
     const root = document.documentElement;
-    return tab === 'server' ? [mk('+', `${this._t('app.sidebar.join_channel', 'Join a Channel')} / ${this._t('app.sidebar.create_channel', 'Create Channel')}`, () => { root.toggleAttribute('data-focus-add'); this._cRender(); }, root.hasAttribute('data-focus-add'))]
+    const people = mk(this._t('app.sidebar.people', 'People'), this._t('app.sidebar.people', 'People'), () => { root.toggleAttribute('data-focus-people'); this._cRender(); }, root.hasAttribute('data-focus-people'));
+    return tab === 'server' ? [mk('+', `${this._t('app.sidebar.join_channel', 'Join a Channel')} / ${this._t('app.sidebar.create_channel', 'Create Channel')}`, () => { root.toggleAttribute('data-focus-add'); this._cRender(); }, root.hasAttribute('data-focus-add')), people]
       : tab === 'activity' ? [mk(this._t('forum.mark_all_read', 'Mark all read'), this._t('forum.mark_all_read', 'Mark all read'), () => this._markAll())] : [];
   }
   async _jump(x) {
@@ -478,12 +512,19 @@ FocusLayout.DOCK = Object.freeze([
   ['dms', 'app.sidebar.direct_messages', 'Direct Messages', '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>'],
   ['channels', 'focus.channels', 'Channels', '<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>'],
   ['people', 'settings.nav.members', 'Members', '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'],
-  ['voice', 'focus.voice', 'Voice', '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>', '#voice-btn'],
+  ['voice', 'focus.voice', 'Voice', '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>'],
   ['search', 'ui_search', 'Search', '<circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.3-4.3"/>', '#search-toggle-btn'],
   ['|'],
   ['themes', 'settings.plugins_section.themes_label', 'Themes', '<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.13-.29-.29-.44-.65-.44-1.13a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.56-2.5 5.56-5.55C21.97 6.01 17.46 2 12 2z"/>', '#theme-popup-toggle'],
   ['settings', 'settings.title', 'Settings', '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/>', '#open-settings-btn'],
   ['you', 'voice_runtime.you', 'You', '']
+]);
+FocusLayout.CALL = Object.freeze([
+  ['mute', '#voice-mute-btn-header', 'voice.mute', 'Mute', '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>'],
+  ['deafen', '#voice-deafen-btn-header', 'voice.deafen', 'Deafen', '<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>'],
+  ['screen', '#screen-share-btn', 'voice.screen_share', 'Share Screen', '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>'],
+  ['cam', '#voice-cam-btn', 'voice.panel.camera', 'Camera', '<path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/>'],
+  ['leave', '#voice-leave-sidebar-btn', 'voice.leave', 'Leave Voice', '<path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6A2 2 0 0 1 22 16.7v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.7"/><path d="m22 2-20 20"/>']
 ]);
 FocusLayout.KEYS = Object.freeze([['Enter', 'focus.k_send', 'Send, then the next thing to answer'], ['⇧Enter', 'focus.k_line', 'New line'], ['Tab', 'focus.k_skip', 'Skip (empty message box)'], ['⇧Tab', 'focus.k_back', 'Bring back the last one'], ['Alt →  Alt ←', 'focus.k_arrows', 'Next or back from anywhere'], ['Alt [  Alt ]', 'focus.k_aim', 'Aim at another message'], ['Alt L', 'focus.k_like', 'Like and clear'], ['Alt J', 'focus.k_voice', 'Join or leave voice'], ['Alt K', 'focus.k_channels', 'Channels'], ['Alt D', 'focus.k_dms', 'Direct messages'], ['Alt A', 'focus.k_activity', 'Activity'], ['Alt 1–9', 'focus.k_servers', 'Switch server'], ['Esc', 'focus.k_close', 'Close a menu']]);
 FocusLayout.CHIPS = Object.freeze([['all', 'modals.all_members.filter_all', 'All'], ['mention', 'focus.mentions', 'Mentions'], ['reply', 'settings.sounds_section.replies', 'Replies'], ['dm', 'focus.dms', 'DMs'], ['unread', 'focus.unread', 'Unread']]);
@@ -512,6 +553,12 @@ html[data-focus-desktop="classic"] .fr-badge:empty:not(.dot) { display: none; }
 html[data-focus-desktop="classic"] .fr-badge.dot { min-width: 9px; width: 9px; height: 9px; padding: 0; top: 7px; right: 17px; }
 html[data-focus-desktop="classic"] [data-haven-region="navigation-sidebar"] { display: flex; flex-direction: column; }
 html[data-focus-desktop="classic"] .sidebar-header { display: none !important; }
+html[data-focus-desktop="classic"]:not([data-focus-people]) [data-haven-region="context-sidebar"]:not(:has(> [data-haven-region="search-results"][style*="flex"])) { display: none !important; }
+html[data-focus-desktop="classic"] .focus-call { flex: 0 0 auto; max-height: 55%; overflow-y: auto; margin: 0 10px; padding: 8px 0 4px; border-top: 1px solid var(--border); }
+html[data-focus-desktop="classic"]:not([data-fc-voice]) .focus-call { display: none; }
+html[data-focus-desktop="classic"] .focus-call [data-haven-region] { position: static !important; width: auto !important; max-width: none !important; margin: 0 !important; border: 0 !important; background: none !important; box-shadow: none !important; }
+html[data-focus-desktop="classic"] .focus-call [data-haven-region="voice-controls"] { flex-wrap: wrap; gap: 6px; padding: 8px 0 4px !important; }
+html[data-focus-desktop="classic"] .focus-call [data-haven-region="voice-settings"] { padding: 8px 0 !important; border-top: 1px solid var(--border) !important; }
 html[data-focus-desktop="classic"] .focus-head { display: flex; align-items: center; gap: 8px; padding: 18px 16px 12px; flex: 0 0 auto; }
 html[data-focus-desktop="classic"] .fh-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html[data-focus-desktop="classic"] .fh-btn { flex: 0 0 auto; min-width: 32px; height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -599,6 +646,25 @@ html[data-focus-desktop="1"] .fc-count { flex: 0 0 auto; font-size: 12px; color:
 .fc-sep::before { display: none; }
 .fc-sep:hover { transform: none; }
 html[data-fc-voice] .fc-di[data-id="voice"] { color: var(--success, var(--accent)); }
+.fc-call { display: none; align-items: flex-end; gap: 6px; padding-inline-start: 2px; }
+html[data-fc-voice] .fc-call { display: flex; }
+.fc-cb.on { color: var(--success, var(--accent)); background: color-mix(in srgb, var(--success, var(--accent)) 16%, transparent); }
+.fc-cb:is([data-call="mute"], [data-call="deafen"]).on { color: var(--danger, #e5484d); background: color-mix(in srgb, var(--danger, #e5484d) 16%, transparent); }
+.fc-cb[data-call="leave"] { color: var(--danger, #e5484d); }
+.fc-cb[data-call="leave"]:hover { background: color-mix(in srgb, var(--danger, #e5484d) 16%, transparent); }
+.fc-live { align-self: center; height: 28px; margin: 0 2px 6px; padding: 0 11px; border: 0; border-radius: 14px; background: var(--danger, #e5484d); color: #fff; font: 700 12px/28px var(--font-main, inherit); white-space: nowrap; cursor: pointer; animation: fc-live 1.7s ease-in-out infinite; }
+.fc-live[hidden] { display: none; }
+.fc-live:hover, .fc-live:focus-visible { animation: none; filter: brightness(1.1); }
+@keyframes fc-live { 50% { opacity: .72; } }
+.fc-voice [data-haven-region="voice-controls"] { flex-wrap: wrap; justify-content: center; gap: 6px; padding: 10px 4px 4px !important; }
+.fc-voice [data-haven-region="voice-settings"] { margin-top: 8px; padding: 10px 4px 0 !important; border-top: 1px solid var(--border) !important; }
+html[data-focus-desktop="1"] .fc-servers:not(:hover):not(:focus-within) :is(#add-server-btn, #manage-servers-btn, #sync-servers-btn) { display: none !important; }
+html[data-focus-desktop="1"] .fc-progress.idle { display: none; }
+html[data-focus-desktop] :is(#desktop-app-banner, #android-beta-banner) { display: none !important; }
+html[data-focus-desktop] #channel-topic-bar[style*="--text-muted"] { display: none !important; }
+html[data-focus-desktop] #header-actions-box:not(:has(#thread-mentions-pill:not([style*="none"]))) { opacity: 0; transition: opacity .15s; }
+html[data-focus-desktop] [data-haven-region="channel-header"]:hover #header-actions-box, html[data-focus-desktop] #header-actions-box:focus-within { opacity: 1; }
+html[data-focus-desktop="classic"]:not([data-focus-people]) #sidebar-toggle-btn { display: none !important; }
 .fc-badge { position: absolute; top: -2px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: var(--accent); color: var(--accent-text, #fff); font: 700 10px/16px var(--font-main, inherit); text-align: center; pointer-events: none; }
 .fc-badge:empty:not(.dot) { display: none; }
 .fc-badge.dot { min-width: 8px; width: 8px; height: 8px; padding: 0; top: 2px; right: 2px; }
@@ -620,8 +686,9 @@ html[data-fc-pop] .fc-pop { display: flex; animation: fc-pop .32s var(--fc-ease,
 html[data-fc-pop="help"] .fc-pop { left: auto; right: 20px; bottom: 72px; width: 300px; transform: none; }
 @keyframes fc-pop { from { opacity: 0; translate: 0 10px; } }
 .fc-pane { display: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px; }
-html[data-fc-pop="activity"] .fc-pane[data-pane="activity"], html[data-fc-pop="dms"] .fc-pane[data-pane="dms"], html[data-fc-pop="channels"] .fc-pane[data-pane="channels"], html[data-fc-pop="people"] .fc-pane[data-pane="people"], html[data-fc-pop="you"] .fc-pane[data-pane="you"], html[data-fc-pop="help"] .fc-pane[data-pane="help"] { display: block; }
-.fc-pane [data-haven-region] { position: static !important; width: auto !important; max-width: none !important; height: auto !important; max-height: none !important; flex: none !important; display: block !important; border: 0 !important; background: none !important; transform: none !important; }
+html[data-fc-pop="activity"] .fc-pane[data-pane="activity"], html[data-fc-pop="dms"] .fc-pane[data-pane="dms"], html[data-fc-pop="channels"] .fc-pane[data-pane="channels"], html[data-fc-pop="people"] .fc-pane[data-pane="people"], html[data-fc-pop="voice"] .fc-pane[data-pane="voice"], html[data-fc-pop="you"] .fc-pane[data-pane="you"], html[data-fc-pop="help"] .fc-pane[data-pane="help"] { display: block; }
+.fc-pane :is([data-haven-region="search-results"], [data-haven-region="voice-settings"], [data-haven-region="voice-controls"]) { position: static !important; width: auto !important; max-width: none !important; height: auto !important; max-height: none !important; flex: none !important; border: 0 !important; background: none !important; transform: none !important; }
+.fc-pane [data-haven-region]:not([data-haven-region="search-results"], [data-haven-region="voice-settings"], [data-haven-region="voice-controls"]) { position: static !important; width: auto !important; max-width: none !important; height: auto !important; max-height: none !important; flex: none !important; display: block !important; border: 0 !important; background: none !important; transform: none !important; }
 .fc-pane [data-haven-region="context-sidebar"] { min-height: 200px; }
 .fc-help .fc-key { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 4px; font-size: 13px; color: var(--text-secondary, var(--text-primary)); }
 .fa-head { padding: 4px 6px 10px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
