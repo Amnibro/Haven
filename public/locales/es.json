@@ -1601,7 +1601,8 @@
       "debug": "Depuración",
       "backup": "Copia de seguridad",
       "template": "Plantilla del servidor",
-      "audit_log": "Registro de auditoría"
+      "audit_log": "Registro de auditoría",
+      "whats_new": "Novedades"
     },
     "localization_section": {
       "title": "Localización"
@@ -3150,7 +3151,17 @@
       "blur": "Difuminar temas y mensajes NSFW hasta hacer clic",
       "blur_hint": "Los temas y mensajes marcados con 🔞 quedan tras un difuminado, como un spoiler. Desactiva esto para verlos con claridad."
     },
-    "search_placeholder": "Buscar en configuración (Ctrl+F)"
+    "search_placeholder": "Buscar en configuración (Ctrl+F)",
+    "whats_new": {
+      "title": "Novedades",
+      "show_label": "Mostrar novedades tras",
+      "all": "Cada actualización",
+      "minor": "Funciones nuevas",
+      "major": "Solo grandes actualizaciones",
+      "off": "Nunca",
+      "hint": "Un número de versión tiene tres partes: una gran actualización cambia la primera, las funciones nuevas la segunda y los arreglos la tercera. Cuando cambia una parte subrayada, ves las notas de la versión. Se guarda en este dispositivo.",
+      "show_now": "Ver las novedades de esta versión"
+    }
   },
   "modals": {
     "timezone": {
@@ -3492,7 +3503,9 @@
       "not_here": "Enviar más tarde no está disponible en mensajes directos",
       "scheduled": "Programado para {{when}}",
       "updated": "Actualizado, se enviará a las {{when}}",
-      "sent": "Tu mensaje programado se envió en #{{channel}}"
+      "sent": "Tu mensaje programado se envió en #{{channel}}",
+      "attach": "📎 Adjuntar archivos",
+      "remove_file": "Quitar"
     },
     "self_destruct": {
       "title": "Mensaje autodestructivo",
@@ -4837,5 +4850,10 @@
       "none": "Aún no hay insignias otorgadas a mano. Crea una en Ajustes, Admin, Insignias.",
       "switched_off": "desactivada"
     }
+  },
+  "whats_new": {
+    "title": "Novedades de Haven {{version}}",
+    "settings_hint": "En Ajustes > Novedades eliges cuándo aparece.",
+    "unavailable": "Las notas de la versión no están disponibles en este servidor."
   }
 }

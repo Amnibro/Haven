@@ -1982,11 +1982,15 @@ function setupSocketHandlers(io, db, opts = {}) {
     }
   }, 30 * 1000);
 
-  // Temporary channel cleanup (every 60s)
+  // Temporary channel cleanup (every 60s). expires_at is stored as an ISO
+  // time ("2026-10-25T03:44:00.000Z"), which compared as text with
+  // datetime('now') ("2026-10-25 02:44:00") only ran out once the date
+  // changed, so a 1 hour channel lived until the next day. datetime() reads
+  // both the same way.
   setInterval(() => {
     try {
       const expired = db.prepare(
-        "SELECT id, code, auto_delete_mode, auto_delete_interval_hours FROM channels WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')"
+        "SELECT id, code, auto_delete_mode, auto_delete_interval_hours FROM channels WHERE expires_at IS NOT NULL AND datetime(expires_at) <= datetime('now')"
       ).all();
       for (const ch of expired) {
         if (ch.auto_delete_mode === 'clear') {

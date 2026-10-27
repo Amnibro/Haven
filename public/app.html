@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.27.23">
+  <link rel="stylesheet" href="/css/style.css?v=4.27.25">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.27.19"></script>
 </head>
@@ -1545,6 +1545,7 @@
 
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_chat">Chat</div>
           <div class="settings-nav-item" data-target="section-chat-behavior">💬 <span data-i18n="settings.nav.chat_behavior">Chat Behavior</span></div>
+          <div class="settings-nav-item" data-target="section-whats-new">🆕 <span data-i18n="settings.nav.whats_new">What's New</span></div>
           <div class="settings-nav-item" data-target="section-soundboard-mode">🎛️ <span data-i18n="settings.nav.soundboard">Soundboard</span></div>
           <div class="settings-nav-item" data-target="section-sounds">🔔 <span data-i18n="settings.nav.sounds">Sounds</span></div>
           <div class="settings-nav-item" data-target="section-push">📲 <span data-i18n="settings.nav.push">Push</span></div>
@@ -2088,6 +2089,23 @@
           </label>
           <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.official_mode_hint">Every message you send where you can post as your role goes out official, until you turn this off. The megaphone then sends just the next message plain. Saved to your account, so it follows you to every device.</small>
         </div>
+      </div>
+
+      <!-- What's new after an update (app-whats-new.js) -->
+      <div class="settings-section" id="section-whats-new" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🆕 <span data-i18n="settings.whats_new.title">What's New</span></h5>
+        <div class="whats-new-version" id="whats-new-version"></div>
+        <label class="select-row">
+          <span data-i18n="settings.whats_new.show_label">Show what's new after</span>
+          <select id="whats-new-select" style="max-width:180px">
+            <option value="all" data-i18n="settings.whats_new.all">Every update</option>
+            <option value="minor" data-i18n="settings.whats_new.minor">New features</option>
+            <option value="major" data-i18n="settings.whats_new.major">Big updates only</option>
+            <option value="off" data-i18n="settings.whats_new.off">Never</option>
+          </select>
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.whats_new.hint">A version number has three parts: a big update changes the first, new features the second, and fixes the third. When an underlined part changes, you get a popup with the release notes. Saved on this device.</small>
+        <button type="button" class="btn-sm" id="whats-new-show-btn" data-i18n="settings.whats_new.show_now">See what's new in this version</button>
       </div>
 
       <!-- Soundboard Sidebar Setting -->
@@ -4922,6 +4940,11 @@
       <div class="form-group">
         <label data-i18n="modals.schedule.message_label">Message</label>
         <textarea id="schedule-text" class="settings-text-input" rows="4" maxlength="2000"></textarea>
+        <div id="schedule-attach-row" class="schedule-attach-row">
+          <button type="button" class="btn-sm" id="schedule-attach-btn" data-i18n="modals.schedule.attach">📎 Attach files</button>
+          <input type="file" id="schedule-file-input" multiple style="display:none">
+          <div id="schedule-file-list" class="schedule-file-list"></div>
+        </div>
       </div>
       <div class="form-group" style="margin-top:8px">
         <label data-i18n="modals.schedule.when_label">Send at</label>
@@ -5305,7 +5328,7 @@
         <li><span class="promo-check">✓</span> <span data-i18n="modals.desktop_promo.feature_audio">Per-app audio routing</span></li>
         <li><span class="promo-check">✓</span> <span data-i18n="modals.desktop_promo.feature_launcher">Built-in server launcher</span></li>
       </ul>
-      <p class="desktop-promo-meta" id="desktop-promo-meta">Windows Installer • v1.0.0</p>
+      <p class="desktop-promo-meta" id="desktop-promo-meta">Windows Installer</p>
       <div class="desktop-promo-actions">
         <a id="desktop-promo-install" class="btn btn-accent desktop-promo-install" href="https://haven-app.com/#download" target="_blank" rel="noopener">⬇ <span data-i18n="modals.desktop_promo.install_btn">Install Haven</span></a>
         <button id="desktop-promo-later" class="btn desktop-promo-later" data-i18n="modals.desktop_promo.later_btn">Maybe later</button>
@@ -5462,8 +5485,8 @@
   <script src="/js/e2e.js?v=4.21.0"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
-  <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.27.23"></script>
+  <script src="/js/automod-rules.js?v=4.27.27"></script>
+  <script type="module" src="/js/app.js?v=4.27.28"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

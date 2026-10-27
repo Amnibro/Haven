@@ -4,11 +4,14 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.26.5';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
+import SocketMethods   from './modules/app-socket.js?v=4.27.25';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.27.26';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14';
-import UIBindMethods   from './modules/app-ui.js?v=4.27.21';
-import ComposerMethods from './modules/app-composer.js?v=4.25.27';
+import UIBindMethods   from './modules/app-ui.js?v=4.27.25';
+import ComposerMethods from './modules/app-composer.js?v=4.27.28';
+import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
+import DraftMethods from './modules/app-drafts.js?v=4.27.25';
+import WhatsNewMethods from './modules/app-whats-new.js?v=4.27.25';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.26.5';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.22';
@@ -34,10 +37,10 @@ import SoundMethods from './modules/app-sounds.js?v=4.25.21';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.23.9';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
-import ChannelMethods  from './modules/app-channels.js?v=4.25.8';
+import ChannelMethods  from './modules/app-channels.js?v=4.27.25';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.25.22';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.25.11';
-import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.32';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.27.26';
 import MessageMethods  from './modules/app-messages.js?v=4.27.7';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.26.9';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
@@ -66,7 +69,7 @@ import DiscordImportMethods from './modules/app-discord-import.js?v=4.26.15';
 import RoleMethods from './modules/app-roles.js?v=4.27.14';
 import RoleAssignMethods from './modules/app-role-assign.js?v=4.26.16';
 import ModerationMethods from './modules/app-moderation.js?v=4.27.9';
-import PlatformMethods from './modules/app-platform.js?v=4.27.16';
+import PlatformMethods from './modules/app-platform.js?v=4.27.26';
 import SearchMethods   from './modules/app-search.js?v=4.24.32';
 import FerryMethods    from './modules/app-ferry.js?v=4.24.10';
 import ForumMethods    from './modules/app-forum.js?v=4.27.13';
@@ -98,6 +101,7 @@ import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
+import SettingsPageMethods from './modules/app-settings-pages.js?v=1';
 
 class HavenApp {
   constructor() {
@@ -475,6 +479,7 @@ class HavenApp {
     document.getElementById('messages')?.addEventListener('error', avatarErrorHandler, true);
     document.getElementById('online-users')?.addEventListener('error', avatarErrorHandler, true);
     this._setupHeldUploadNotes();
+    this._setupSettingsPages();
 
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
@@ -595,6 +600,9 @@ Object.assign(HavenApp.prototype,
   StreamTileMethods,
   MusicMethods,
   MusicFileMethods,
+  ScheduleFileMethods,
+  DraftMethods,
+  WhatsNewMethods,
   MusicKeyMethods,
   UtilityMethods,
   MessageContentMethods,
@@ -646,6 +654,7 @@ Object.assign(HavenApp.prototype,
   BadgeMethods,
   ThemePickerMethods,
   SilentMethods,
+  SettingsPageMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────
