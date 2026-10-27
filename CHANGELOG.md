@@ -35,6 +35,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - A 🧹 Remove messages button on the banned users list deletes everything a banned member wrote in the server's channels, for a ban made without "Scrub messages". Protected messages and DMs stay.
 
 ### Changed
+- Login session length moved from Uploads & Limits to Settings > Admin > Safety > Security, where people look for it (#5834).
 - Clicking a video plays or pauses it, right-clicking gives the browser's own video menu (with Loop), and tall, narrow videos get enough room for their controls (#5808).
 - Forwarded Discord messages now come through, quoted under "Forwarded", and escaped text like `3\.1K` reads the way Discord shows it. This covers the importer and the live Ferry bridge (#5811).
 - Emoji suggestions list names that start with what you typed first.
