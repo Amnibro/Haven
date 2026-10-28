@@ -866,7 +866,14 @@ _replyPreviewText(content) {
 _renderReplyBanner(replyCtx) {
   const text = this._replyPreviewText(replyCtx.content);
   const previewText = text.length > 80 ? text.substring(0, 80) + '…' : text;
-  const color = this._getUserColor(replyCtx.username);
+  // The same color the name has on the message itself: the role's color in
+  // "colored name" mode, otherwise the color made from the username.
+  let color = this._getUserColor(replyCtx.username);
+  const ownName = !replyCtx.is_webhook && !replyCtx.imported_from && !replyCtx.persona_username;
+  const member = ownName ? this._memberById?.(replyCtx.user_id) : null;
+  if ((localStorage.getItem('haven-role-display') || 'colored-name') === 'colored-name' && member?.role?.color) {
+    color = this._safeColor(member.role.color, color);
+  }
   return `
     <div class="reply-banner" data-reply-msg-id="${replyCtx.id}">
       <span class="reply-line" style="background:${color}"></span>

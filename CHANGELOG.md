@@ -54,6 +54,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
+- A name in a reply preview had a different color from the same name on the message itself. It now uses the role color too.
 - A file name in brackets, like [720p], no longer counts as posting a link (thanks Amnibro, #5832).
 - In a blog post's thread, the author's reply box said the wrong thing while answering a comment (thanks Amnibro, #5831).
 - Opening a bot's webhook link in a browser said only "Not found", which looked like a broken webhook. It now explains that webhooks take POST requests and points to the bot guide.
