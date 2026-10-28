@@ -20,6 +20,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Login session length moved from Uploads & Limits to Settings > Admin > Safety > Security, where people look for it (#5834).
 
 ### Fixed
+- Skipping or replacing an uploaded file playing in Listen Together could pause the next track for everyone.
 - The check of the uploads folder after a start, and once a day, paused the whole server until it had looked at every file. On a big or slow disk that could freeze it for seconds. It now lets other work run as it goes.
 - A name in a reply preview had a different color from the same name on the message itself. It now uses the role color too.
 - A link inside `single backticks` still turned into a clickable link. Text in backticks now stays exactly as typed, which is the way to post a URL as plain text.
