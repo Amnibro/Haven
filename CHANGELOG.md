@@ -55,6 +55,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Fixed
 - A name in a reply preview had a different color from the same name on the message itself. It now uses the role color too.
+- A link inside `single backticks` still turned into a clickable link. Text in backticks now stays exactly as typed, which is the way to post a URL as plain text.
 - A file name in brackets, like [720p], no longer counts as posting a link (thanks Amnibro, #5832).
 - In a blog post's thread, the author's reply box said the wrong thing while answering a comment (thanks Amnibro, #5831).
 - Opening a bot's webhook link in a browser said only "Not found", which looked like a broken webhook. It now explains that webhooks take POST requests and points to the bot guide.

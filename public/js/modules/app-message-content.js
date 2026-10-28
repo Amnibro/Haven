@@ -227,12 +227,21 @@ _formatContent(str) {
     codeBlocks.push({ lang: lang || '', code });
     return ph('CODEBLOCK', idx);
   });
+  // `inline code` is set aside too, so nothing inside it turns into a link,
+  // a mention, an emoji or formatting: backticks are how to post a URL as
+  // plain text.
+  const inlineCode = [];
+  const withInlineCode = withPlaceholders.replace(/`([^`]+)`/g, (_, code) => {
+    const idx = inlineCode.length;
+    inlineCode.push(code);
+    return ph('INLINECODE', idx);
+  });
 
   // ── Timestamps: <t:1780853820> / <t:1780853820:R> ──
   // Extracted before escaping (the token has angle brackets) and after the
   // code fences above, so a token inside ``` stays literal.
   const timestamps = [];
-  const withTimestamps = withPlaceholders.replace(/<t:(-?\d{1,15})(?::([tTdDfFR]))?>/g, (full, secs, style) => {
+  const withTimestamps = withInlineCode.replace(/<t:(-?\d{1,15})(?::([tTdDfFR]))?>/g, (full, secs, style) => {
     const rendered = this._formatTimestampToken(Number(secs), style || 'f');
     if (!rendered) return full;
     const idx = timestamps.length;
@@ -503,9 +512,6 @@ _formatContent(str) {
   // Render ==highlight==
   html = html.replace(/==(.+?)==/g, '<mark class="chat-highlight">$1</mark>');
 
-  // Render `inline code`
-  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-
   // Render grouped > blockquotes and preserve attribution lines inside the quote.
   // A line quotes only when the > is followed by a space, another >, or
   // nothing at all: ">implying" and ">.<" stay as typed (#5654).
@@ -667,6 +673,9 @@ _formatContent(str) {
     const langLabel = block.lang ? `<span class="code-block-lang">${this._escapeHtml(block.lang)}</span>` : '';
     const rendered = `<div class="code-block"${langAttr}>${langLabel}<pre><code>${escaped}</code></pre></div>`;
     html = html.replace(ph('CODEBLOCK', idx), () => rendered);
+  });
+  inlineCode.forEach((code, idx) => {
+    html = html.replace(ph('INLINECODE', idx), () => `<code class="inline-code">${this._escapeHtml(code)}</code>`);
   });
 
   // ── Restore markdown links/images ──
