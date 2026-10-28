@@ -54,6 +54,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
 
 ### Fixed
+- The check of the uploads folder after a start, and once a day, paused the whole server until it had looked at every file. On a big or slow disk that could freeze it for seconds. It now lets other work run as it goes.
 - A name in a reply preview had a different color from the same name on the message itself. It now uses the role color too.
 - A link inside `single backticks` still turned into a clickable link. Text in backticks now stays exactly as typed, which is the way to post a URL as plain text.
 - A file name in brackets, like [720p], no longer counts as posting a link (thanks Amnibro, #5832).
