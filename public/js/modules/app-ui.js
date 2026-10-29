@@ -214,7 +214,8 @@ _bindAppChrome() {
     // Type-to-focus: start typing anywhere and the message box takes over.
     // No preventDefault, so the browser inserts the keystroke into the newly
     // focused textarea. Nothing is dropped.
-    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing) {
+    const pasteKey = (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'v';
+    if ((pasteKey || e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) && !e.isComposing) {
       const ae = document.activeElement;
       const tag = ae?.tagName;
       const editing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae?.isContentEditable;
