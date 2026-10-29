@@ -169,7 +169,11 @@ test('BotAudioManager queues, advances, isolates controls, and expires capabilit
   assert.equal(manager.getCurrent('1234abcd').playbackId, 'third');
   assert.equal(events.filter(item => item.event === 'bot-audio-play').length, 2);
   assert.deepEqual(manager.stop('1234abcd', 2), { stopped: true, removed: 1 });
-  await new Promise(resolve => setImmediate(resolve));
+  // The files are removed asynchronously, and on Windows that can take more
+  // than one turn of the event loop.
+  for (let i = 0; i < 50 && [first, second, third].some(e => fs.existsSync(e.filePath)); i++) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
   assert.equal(fs.existsSync(first.filePath), false);
   assert.equal(fs.existsSync(second.filePath), false);
   assert.equal(fs.existsSync(third.filePath), false);
