@@ -2633,6 +2633,9 @@ class VoiceManager {
     this.webcamStream.getTracks().forEach(t => t.stop());
     this.webcamStream = newStream;
     if (this.onWebcamStream) this.onWebcamStream(this.localUserId, newStream);
+    // People who join from now on receive the new stream, so announce its ID
+    // or their camera tile waits for the old one forever.
+    if (this.currentChannel) this.socket.emit('webcam-started', { code: this.currentChannel, streamId: newStream.id });
 
     // Re-hook ended
     newTrack.onended = () => this.stopWebcam();
@@ -3343,10 +3346,15 @@ class VoiceManager {
         // Use the stream ID carried by SDP to distinguish camera and display
         // when both are active; status flags are a fallback only when there is
         // no stream identity and the peer has exactly one active video source.
+        // An app that does not send stream IDs (the mobile apps, or a page
+        // loaded before the server updated) gets the flags alone, as before.
+        const peerSendsIds = !!(knownScreenId || knownWebcamId);
         const isScreenTrack = !!settings.displaySurface ||
           (!!streamId && streamId === knownScreenId) ||
+          (!peerSendsIds && this.screenSharers.has(userId)) ||
           (!streamId && this.screenSharers.has(userId) && !this.webcamUsers.has(userId));
         const isWebcamTrack = (!!streamId && streamId === knownWebcamId) ||
+          (!peerSendsIds && this.webcamUsers.has(userId)) ||
           (!streamId && this.webcamUsers.has(userId) && !this.screenSharers.has(userId));
 
         if (isWebcamTrack && !isScreenTrack) {

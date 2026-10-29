@@ -145,3 +145,24 @@ test('webcam-started claims only the matching early camera track', async () => {
   assert.equal(voice.webcamResults[0].stream, cameraStream);
   assert.equal(voice.screenResults.length, 0);
 });
+
+test('an app that sends no stream IDs still gets its camera and screen shown', async () => {
+  const { voice, connection, socketHandlers } = await createViewer();
+  socketHandlers.get('webcam-started')({ userId: 7, channelCode: voice.currentChannel });
+  const camera = remoteVideoTrack('camera-track');
+  const cameraStream = new FakeMediaStream([camera]);
+  cameraStream.id = 'camera-stream';
+
+  connection.ontrack({ track: camera, streams: [cameraStream] });
+  assert.equal(voice.webcamResults.length, 1, 'the camera shows on the old flags');
+  assert.equal(voice.webcamResults[0].stream, cameraStream);
+
+  const other = await createViewer();
+  other.socketHandlers.get('screen-share-started')({ userId: 7, channelCode: other.voice.currentChannel });
+  const screen = remoteVideoTrack('screen-track');
+  const screenStream = new FakeMediaStream([screen]);
+  screenStream.id = 'screen-stream';
+  other.connection.ontrack({ track: screen, streams: [screenStream] });
+  assert.equal(other.voice.screenResults.length, 1, 'the screen share shows on the old flags');
+  assert.equal(other.voice.webcamResults.length, 0);
+});
