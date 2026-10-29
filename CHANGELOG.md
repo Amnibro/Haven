@@ -20,6 +20,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Login session length moved from Uploads & Limits to Settings > Admin > Safety > Security, where people look for it (#5834).
 
 ### Fixed
+- Every YouTube playlist shared in Listen Together failed with "Could not fetch playlist or it is empty". YouTube changed how it lists a playlist's videos; both the new and the old way are read now (thanks iJordRob, #5840).
 - Buttons labelled with a symbol, like the + for Add Server, the × that closes a window, or ‹ and ›, showed it a little below the middle. Fonts draw these symbols low, by a different amount in each font and theme, so they are now drawn as icons that sit exactly in the middle.
 - An app could delete a whole DM, for both people, from a plain "close" without asking first. The server now deletes a DM only when the app confirms the person agreed to it. The web and desktop apps already ask, so nothing changes there; other apps show an error until they are updated.
 - Skipping or replacing an uploaded file playing in Listen Together could pause the next track for everyone.
