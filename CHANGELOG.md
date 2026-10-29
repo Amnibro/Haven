@@ -20,6 +20,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Login session length moved from Uploads & Limits to Settings > Admin > Safety > Security, where people look for it (#5834).
 
 ### Fixed
+- Buttons labelled with a symbol, like the + for Add Server, the × that closes a window, or ‹ and ›, showed it a little below the middle. Fonts draw these symbols low, by a different amount in each font and theme, so they are now drawn as icons that sit exactly in the middle.
+- An app could delete a whole DM, for both people, from a plain "close" without asking first. The server now deletes a DM only when the app confirms the person agreed to it. The web and desktop apps already ask, so nothing changes there; other apps show an error until they are updated.
 - Skipping or replacing an uploaded file playing in Listen Together could pause the next track for everyone.
 - The check of the uploads folder after a start, and once a day, paused the whole server until it had looked at every file. On a big or slow disk that could freeze it for seconds. It now lets other work run as it goes.
 - A name in a reply preview had a different color from the same name on the message itself. It now uses the role color too.

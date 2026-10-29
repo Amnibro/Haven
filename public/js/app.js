@@ -7,7 +7,7 @@
 import SocketMethods   from './modules/app-socket.js?v=4.27.25';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.27.26';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14';
-import UIBindMethods   from './modules/app-ui.js?v=4.27.35';
+import UIBindMethods   from './modules/app-ui.js?v=4.27.37';
 import ComposerMethods from './modules/app-composer.js?v=4.27.28';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
 import DraftMethods from './modules/app-drafts.js?v=4.27.25';
@@ -38,7 +38,7 @@ import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.23.9';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
 import ChannelMethods  from './modules/app-channels.js?v=4.27.25';
-import ChannelContextMethods from './modules/app-channel-context.js?v=4.25.22';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.27.35';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.25.11';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.27.26';
 import MessageMethods  from './modules/app-messages.js?v=4.27.7';
@@ -102,6 +102,7 @@ import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
 import SettingsPageMethods from './modules/app-settings-pages.js?v=4.27.29';
+import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
 
 class HavenApp {
   constructor() {
@@ -357,6 +358,7 @@ class HavenApp {
   // ── Initialization ────────────────────────────────────
 
   _init() {
+    startGlyphIcons();
     // Kick this off before anything can render a message. Until it resolves,
     // _imgSrcAttr parks remote images in data-mp-src rather than emitting a
     // raw external src, so there is no window in which an image leaks. (v3.43.0)
