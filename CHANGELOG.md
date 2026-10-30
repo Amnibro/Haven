@@ -23,9 +23,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - With a camera and a screen share on at the same time, the camera could show up as the screen share or the other way round, and people could disagree about which was which. Each one is now told apart by its own stream (thanks Roolk, #5841).
 - Changing camera quality left your own camera preview blank (thanks Roolk, #5842). People who join after the change also see the new camera now.
 - Ctrl+V with nothing focused (after clicking a message or the channel list) dropped the pasted picture. It now goes into the message box (thanks Amnibro, #5839).
-- Every YouTube playlist shared in Listen Together failed with "Could not fetch playlist or it is empty". YouTube changed how it lists a playlist's videos; both the new and the old way are read now (thanks iJordRob, #5840).
 - Buttons labelled with a symbol, like the + for Add Server, the × that closes a window, or ‹ and ›, showed it a little below the middle. Fonts draw these symbols low, by a different amount in each font and theme, so they are now drawn as icons that sit exactly in the middle.
-- An app could delete a whole DM, for both people, from a plain "close" without asking first. The server now deletes a DM only when the app confirms the person agreed to it. The web and desktop apps already ask, so nothing changes there; other apps show an error until they are updated.
 - Skipping or replacing an uploaded file playing in Listen Together could pause the next track for everyone.
 - The check of the uploads folder after a start, and once a day, paused the whole server until it had looked at every file. On a big or slow disk that could freeze it for seconds. It now lets other work run as it goes.
 - A name in a reply preview had a different color from the same name on the message itself. It now uses the role color too.
@@ -41,6 +39,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Security
 - Updated multer and body-parser, which read uploads and requests, for two advisories that let one bad request slow the server down.
+
+## [4.27.1] - 2026-10-29
+
+### Fixed
+- An app could delete a whole DM, for both people, from a plain "close" without asking first. The server now deletes a DM only when the app confirms the person agreed to it. The web and desktop apps already ask, so nothing changes there; other apps show an error until they are updated.
+- Every YouTube playlist shared in Listen Together failed with "Could not fetch playlist or it is empty". YouTube changed how it lists a playlist's videos; both the new and the old way are read now (thanks iJordRob, #5840).
 
 ## [4.27.0] - 2026-10-28
 
