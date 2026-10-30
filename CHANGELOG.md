@@ -17,6 +17,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - What's new after an update: a popup with the release notes since the version you last saw. Settings > What's New picks which updates bring it up (every update, new features, big updates only, or never), with the parts of the version number that count underlined. The notes come from the server's own changelog.
 
 ### Changed
+- One click on a voice-only channel joins its voice, like on Discord. A channel is voice-only when Channel Functions has text and media switched off and voice on; other channels still join on a double-click (thanks Keagan for the idea).
 - Login session length moved from Uploads & Limits to Settings > Admin > Safety > Security, where people look for it (#5834).
 
 ### Fixed
