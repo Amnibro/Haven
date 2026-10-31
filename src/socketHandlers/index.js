@@ -10,7 +10,7 @@ const { sendFcm, isFcmEnabled } = require('../fcm');
 const { DATA_DIR } = require('../paths');
 const HAVEN_VERSION = require('../../package.json').version;
 
-const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline, toReplyContext } = require('./helpers');
+const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
 const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
@@ -1337,6 +1337,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (parsed && parsed.v && parsed.ct) displayContent = 'Sent a message';
       } catch { /* not JSON, use as-is */ }
 
+      displayContent = maskSpoilers(displayContent);
       const body = displayContent.length > 120 ? displayContent.slice(0, 117) + '...' : displayContent;
       const title = `${senderUsername} in #${channelName}`;
       const payload = JSON.stringify({

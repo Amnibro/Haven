@@ -894,9 +894,19 @@ _updateMessageReactions(messageId, reactions) {
 // label, not the address they are stored under (an encrypted picture's
 // "e2e-img:image/png:/uploads/..." used to show as it was).
 // Several pictures in a row read as one count, not a label each (#5799).
+// A spoiler stays hidden wherever a message is shown as plain text. The same
+// pattern the renderer uses, which also leaves `||` inside code alone.
+_maskSpoilers(text) {
+  return String(text ?? '').replace(/(```[\s\S]*?```|`[^`\n]+`)|\|\|.+?\|\|/g, (m, code) => code || '▒▒▒');
+},
+
 _replyPreviewText(content) {
   const isPicture = (l) => this._isImageUrl(l) || /^\/uploads\/\S+$/i.test(l);
-  const lines = String(content || '').split('\n').map(l => l.trim()).filter(Boolean);
+  let text = this._maskSpoilers(content || '');
+  // A reply can carry only the start of a long message, which may cut off the
+  // bars that close a spoiler.
+  if (String(content || '').length >= 200) text = text.replace(/\|\|[^\n]*$/, '▒▒▒');
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   return lines.map((l, i) => {
     if (isPicture(l)) {
       if (i > 0 && isPicture(lines[i - 1])) return null;
@@ -968,7 +978,7 @@ _setReply(msgEl, msgId) {
     }
   }
   author = author || t('voice.someone');
-  const content = msgEl.querySelector('.message-content')?.textContent || '';
+  const content = this._replyPreviewText(msgEl.dataset.rawContent || msgEl.querySelector('.message-content')?.textContent || '');
   const preview = content.length > 60 ? content.substring(0, 60) + '…' : content;
 
   this.replyingTo = { id: msgId, username: author, content };
