@@ -24,6 +24,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Fixed
 - Changing camera quality or device several times quickly could leave an older camera running or showing, and stopping the camera during a change could leave it on (thanks Roolk, #5843).
+- Installing the voice relay failed in Docker and Podman on a host with Linux kernel 7, such as a current Fedora, with "npm error command failed" (#5845). The relay's build for that kernel needs newer system libraries than the image has, so the install now falls back to the kernel 6 build, which runs fine there.
 - In a narrow window, the Get the Desktop App and Android App pills pushed the Join Voice button off the edge. They now shrink to their icons, then hide.
 - With a camera and a screen share on at the same time, the camera could show up as the screen share or the other way round, and people could disagree about which was which. Each one is now told apart by its own stream (thanks Roolk, #5841).
 - Changing camera quality left your own camera preview blank (thanks Roolk, #5842). People who join after the change also see the new camera now.
