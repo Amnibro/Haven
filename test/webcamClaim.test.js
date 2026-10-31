@@ -100,6 +100,26 @@ test('switchCamera updates the local preview to the replacement stream', async (
   assert.deepEqual(voice.shown, [{ userId: 42, stream: newStream }], 'local preview is rebound to the replacement stream');
 });
 
+test('leaving voice stops the camera right away, with no await first', () => {
+  const VoiceManager = loadVoiceManager();
+  const track = { kind: 'video', stopped: false, stop() { this.stopped = true; } };
+  const voice = viewer(VoiceManager, {});
+  voice.peers = new Map();
+  voice.isWebcamActive = true;
+  voice.webcamStream = { getTracks: () => [track] };
+  voice.localUserId = 42;
+  const emitted = [];
+  voice.socket = { emit: (ev) => emitted.push(ev) };
+  voice.currentChannel = '11111111';
+
+  voice.stopWebcam({ teardown: true });
+
+  assert.equal(track.stopped, true, 'stopped before the caller goes on to close the peers');
+  assert.equal(voice.isWebcamActive, false);
+  assert.deepEqual(emitted, ['webcam-stopped']);
+  assert.equal(voice.shown.at(-1).stream, null, 'the preview tile goes');
+});
+
 test('switchCamera keeps the newest selection when captures resolve out of order', async () => {
   const requests = [];
   const qualities = ['720', '1080'];

@@ -2558,15 +2558,24 @@ class VoiceManager {
   }
 
   async stopWebcam({ teardown = false } = {}) {
-    if (!this.isWebcamActive || !this.webcamStream || this._webcamStopping) return;
+    if (!this.isWebcamActive || !this.webcamStream || (this._webcamStopping && !teardown)) return;
     this._webcamStopping = true;
     this._cameraSwitchGeneration = (this._cameraSwitchGeneration || 0) + 1;
-    // Wait for any replacement already changing peer/relay tracks. Pending
-    // getUserMedia captures are invalidated and will stop themselves on return.
-    await (this._cameraSwitchQueue || Promise.resolve()).catch(() => {});
-    if (!this.isWebcamActive || !this.webcamStream) {
+    try {
+      await this._stopWebcamNow(teardown);
+    } finally {
       this._webcamStopping = false;
-      return;
+    }
+  }
+
+  async _stopWebcamNow(teardown) {
+    // Leaving voice does not wait for this and closes the peers right after,
+    // so that path stays synchronous up to the track stop. Otherwise, wait for
+    // any replacement already changing peer/relay tracks. Pending getUserMedia
+    // captures are invalidated and will stop themselves on return.
+    if (!teardown) {
+      await (this._cameraSwitchQueue || Promise.resolve()).catch(err => console.warn('[Voice] camera switch failed before stop:', err));
+      if (!this.isWebcamActive || !this.webcamStream) return;
     }
     if (this._relay) await this._relay.unpublish('webcam').catch(() => { /* unpublish logs its own failures */ });
 
@@ -2577,7 +2586,6 @@ class VoiceManager {
       tracks.forEach(t => t.stop());
       this.webcamStream = null;
       this.isWebcamActive = false;
-      this._webcamStopping = false;
       this.socket.emit('webcam-stopped', { code: this.currentChannel });
       if (this.onWebcamStream) this.onWebcamStream(this.localUserId, null);
       return;
@@ -2606,7 +2614,6 @@ class VoiceManager {
 
     this.webcamStream = null;
     this.isWebcamActive = false;
-    this._webcamStopping = false;
 
     this.socket.emit('webcam-stopped', { code: this.currentChannel });
     if (this.onWebcamStream) this.onWebcamStream(this.localUserId, null);
@@ -2651,6 +2658,12 @@ class VoiceManager {
       }
       await Promise.all(swaps);
       if (this._relay) await this._relay.replace('webcam', newTrack).catch(e => console.warn('[Relay] Camera swap failed:', e.message));
+
+      // Left voice during the swap: nothing wants this camera any more.
+      if (!this.isWebcamActive) {
+        newStream.getTracks().forEach(t => t.stop());
+        return;
+      }
 
       // Stop old tracks and update stream reference
       oldStream.getTracks().forEach(t => t.stop());
