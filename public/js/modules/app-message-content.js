@@ -881,6 +881,7 @@ _updateMessageReactions(messageId, reactions) {
     if (!html) return;
     const content = msgEl.querySelector('.message-content, .thread-msg-content');
     if (content) content.insertAdjacentHTML('afterend', html);
+    if (msgEl.matches(':hover')) this._placeMessageToolbar?.(msgEl);
   });
 
   if (wasAtBottom) this._scrollToBottom(true);
