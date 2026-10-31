@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.29.0] - Unreleased
 
 ### Fixed
+- Clicking the ... button on a voice-only channel also joined its voice. It only opens the menu now (thanks dlmorgan999, #5846).
 - A spoiler's text showed in the places a message is previewed as plain text: reply previews, the Replying to bar, the Threads list, forum post titles and snippets, pop-up notifications and phone notifications. It's hidden in all of them now (thanks birdycrazy).
 
 ### Changed
