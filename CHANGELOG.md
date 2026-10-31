@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.29.0] - Unreleased
+
+### Changed
+- Groundwork for optional PostgreSQL support (thanks Slyke, #5827). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
+
 ## [4.28.0] - Unreleased
 
 ### Added
