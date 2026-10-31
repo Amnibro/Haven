@@ -14,21 +14,21 @@
   font-style: normal;
   font-weight: 400;
   font-display: block;
-  src: url('/fonts/haven-icons-glyphs.woff2?v=4.22.15') format('woff2');
+  src: url('/fonts/haven-icons-glyphs.woff2?v=4.22.15-a950ef234') format('woff2');
 }
 @font-face {
   font-family: 'HavenIconsLine';
   font-style: normal;
   font-weight: 400;
   font-display: block;
-  src: url('/fonts/haven-icons-line.woff2?v=4.22.15') format('woff2');
+  src: url('/fonts/haven-icons-line.woff2?v=4.22.15-a6d61990d') format('woff2');
 }
 @font-face {
   font-family: 'HavenIconsNative';
   font-style: normal;
   font-weight: 400;
   font-display: block;
-  src: url('/fonts/haven-icons-native.woff2?v=4.22.15') format('woff2');
+  src: url('/fonts/haven-icons-native.woff2?v=4.22.15-a4867f026') format('woff2');
 }
 
 .haven-icon {

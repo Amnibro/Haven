@@ -2,33 +2,33 @@
    HAVEN: Multi-Theme Stylesheet
    Themes: Haven (default), Discord, Matrix, Tron, HALO, LoTR
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-@import url('/css/voice.css?v=4.24.5');
+@import url('/css/voice.css?v=4.24.5-a5cfb6eb5');
 @import url('/css/music.css?v=4.27.17');
 @import url('/css/style-themes.css?v=4.27.19');
 @import url('/css/style-themes-win95-light.css?v=4.24.16');
 @import url('/css/style-forms.css?v=4.27.36');
-@import url('/css/style-status-effects.css?v=4.27.24');
+@import url('/css/style-status-effects.css?v=4.27.24-a9556eafa');
 @import url('/css/style-theme-picker.css?v=4.27.12');
-@import url('/css/style-sidebar.css?v=4.25.8');
-@import url('/css/style-messages.css?v=4.27.14');
+@import url('/css/style-sidebar.css?v=4.25.8-ab3ba8948');
+@import url('/css/style-messages.css?v=4.27.14-a563a25b5');
 @import url('/css/style-profile-servers-modals.css?v=4.27.29');
 @import url('/css/style-image-zoom.css?v=4.23.12');
-@import url('/css/style-emoji-reactions-threads.css?v=4.25.1');
+@import url('/css/style-emoji-reactions-threads.css?v=4.25.1-aca1a89e5');
 @import url('/css/style-thread-unread.css?v=4.26.8');
 @import url('/css/style-tags-uploads-search.css?v=4.26.12');
 @import url('/css/style-e2e-spoilers.css?v=4.26.17');
-@import url('/css/style-settings.css?v=4.27.29');
+@import url('/css/style-settings.css?v=4.27.29-a304c8e66');
 @import url('/css/style-mobile.css?v=4.26.10');
 @import url('/css/style-streams-markdown.css?v=4.27.17');
 @import url('/css/style-presence-connections.css?v=4.27.23');
-@import url('/css/style-roles-layout-polls.css?v=4.22.12');
+@import url('/css/style-roles-layout-polls.css?v=4.22.12-ad86a4958');
 @import url('/css/style-admin-panels.css?v=4.27.9');
 @import url('/css/style-channel-types.css?v=4.27.42');
-@import url('/css/style-gallery-ferry-forums.css?v=4.27.11');
+@import url('/css/style-gallery-ferry-forums.css?v=4.27.11-a7f7d5153');
 @import url('/css/style-move-thread.css?v=4.24.29');
 @import url('/css/style-badges.css?v=4.24.15');
 @import url('/css/style-media-grid.css?v=4.24.34');
-@import url('/css/style-icon-packs.css?v=4.22.15');
+@import url('/css/style-icon-packs.css?v=4.22.15-a4faff710');
 @import url('/css/style-accessibility.css?v=4.22.13');
 
 /* The rules themselves live in the files imported above, in this order. Later
