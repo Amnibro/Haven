@@ -11,13 +11,13 @@ _copyCodeBlock(button) {
   const label = button.dataset.copyLabel || t('common.copy');
   const showCopied = () => {
     const copiedLabel = t('common.copied');
-    button.textContent = `✓ ${copiedLabel}`;
+    button.dataset.label = `✓ ${copiedLabel}`;
     button.setAttribute?.('aria-label', copiedLabel);
     button.title = copiedLabel;
     clearTimeout(button._copyResetTimer);
     button._copyResetTimer = setTimeout(() => {
       if (!button.isConnected) return;
-      button.textContent = label;
+      button.dataset.label = label;
       button.setAttribute?.('aria-label', label);
       button.title = label;
       button._copyResetTimer = null;
@@ -711,7 +711,9 @@ _formatContent(str) {
     const langAttr = block.lang ? ` data-lang="${this._escapeHtml(block.lang)}"` : '';
     const langLabel = block.lang ? `<span class="code-block-lang">${this._escapeHtml(block.lang)}</span>` : '';
     const copyLabel = this._escapeHtml(t('common.copy'));
-    const copyButton = `<button type="button" class="code-block-copy" data-copy-label="${copyLabel}" aria-label="${copyLabel}" title="${copyLabel}">${copyLabel}</button>`;
+    // The word is drawn by CSS from data-label, so it stays out of the message's
+    // text: reply previews read textContent, and selecting a message copies it.
+    const copyButton = `<button type="button" class="code-block-copy" data-copy-label="${copyLabel}" data-label="${copyLabel}" aria-label="${copyLabel}" title="${copyLabel}"></button>`;
     const rendered = `<div class="code-block"${langAttr}>${langLabel}${copyButton}<pre><code>${escaped}</code></pre></div>`;
     html = html.replace(ph('CODEBLOCK', idx), () => rendered);
   });

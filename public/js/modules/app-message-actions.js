@@ -13,7 +13,7 @@ _bindCodeBlockCopy() {
     e.preventDefault();
     e.stopPropagation();
     void this._copyCodeBlock(button);
-  });
+  }, true); // capture: a card or message under the button must not get the click too
 
   // The message toolbar shares the code block's top-right corner. Reposition
   // only the copy buttons that it actually covers while the message is hovered.

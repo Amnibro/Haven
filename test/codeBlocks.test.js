@@ -88,7 +88,7 @@ test('a block that starts on the next line has no language and no leading blank 
 test('fenced blocks render an accessible copy button', () => {
   const app = loadApp();
   const html = app._formatContent('```js\nconst answer = 42;\n```');
-  assert.match(html, /<button type="button" class="code-block-copy"[^>]*aria-label="common\.copy"[^>]*>common\.copy<\/button>/);
+  assert.match(html, /<button type="button" class="code-block-copy"[^>]*data-label="common\.copy"[^>]*aria-label="common\.copy"[^>]*><\/button>/, 'labelled, with no text of its own to leak into the message');
 });
 
 test('copying a code block writes the exact code text and shows copied feedback', async () => {
@@ -97,8 +97,7 @@ test('copying a code block writes the exact code text and shows copied feedback'
   const codeText = 'const answer = 42;\nnextLine();';
   const codeBlock = { querySelector: () => ({ textContent: codeText }) };
   const button = {
-    dataset: { copyLabel: 'common.copy' },
-    textContent: 'common.copy',
+    dataset: { copyLabel: 'common.copy', label: 'common.copy' },
     closest: selector => selector === '.code-block' ? codeBlock : null,
     isConnected: false,
   };
@@ -106,7 +105,7 @@ test('copying a code block writes the exact code text and shows copied feedback'
   await app._copyCodeBlock(button);
 
   assert.deepEqual(copied, [codeText]);
-  assert.equal(button.textContent, '✓ common.copied');
+  assert.equal(button.dataset.label, '✓ common.copied');
 });
 
 test('delegated clicks on code-copy buttons invoke copying and stop the click', () => {
