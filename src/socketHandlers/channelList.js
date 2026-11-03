@@ -169,8 +169,9 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
             // to no account, and NULL != ? is never true, so they never
             // counted (#5771). A group DM's "joined" / "left" lines are not
             // new messages.
-            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' LIMIT 1000)"
-          ).get(ch.id, lastRead, userId);
+            // Messages from people this member blocked do not count either.
+            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' AND (user_id IS NULL OR user_id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = ?)) LIMIT 1000)"
+          ).get(ch.id, lastRead, userId, userId);
           ch.unreadCount = countRow ? countRow.cnt : 0;
         } else {
           ch.unreadCount = 0;
@@ -466,8 +467,9 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
             // to no account, and NULL != ? is never true, so they never
             // counted (#5771). A group DM's "joined" / "left" lines are not
             // new messages.
-            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' LIMIT 1000)"
-          ).get(ch.id, lastRead, userId);
+            // Messages from people this member blocked do not count either.
+            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' AND (user_id IS NULL OR user_id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = ?)) LIMIT 1000)"
+          ).get(ch.id, lastRead, userId, userId);
           ch.unreadCount = countRow ? countRow.cnt : 0;
         } else {
           ch.unreadCount = 0;
