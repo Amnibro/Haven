@@ -818,9 +818,9 @@ module.exports = function register(socket, ctx) {
       // 'stacked'. No row follows the server's media_group_layout.
       'media_group_layout',
       'emoji_favorites',
+      'read_receipts', 'dms_first',
       // DMs pinned to the top of your own DM list (src/pinnedDms.js).
       'pinned_dms',
-      'read_receipts', 'dms_first',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
     // A theme is saved as file:<file name>, and a community theme's file name
