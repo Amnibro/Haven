@@ -52,9 +52,9 @@ test('refuses names that are not login names', () => {
 });
 test('lists unread mentions and replies after the read position, newest kept', () => {
   const db = new Database(':memory:');
-  db.exec("CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER, user_id INTEGER, content TEXT, reply_to INTEGER, thread_id INTEGER, type TEXT)");
+  db.exec("CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER, user_id INTEGER, content TEXT, reply_to INTEGER, thread_id INTEGER, type TEXT); CREATE TABLE user_blocks (blocker_id INTEGER, blocked_id INTEGER); INSERT INTO user_blocks VALUES (1, 4)");
   const ins = db.prepare('INSERT INTO messages (id, channel_id, user_id, content, reply_to, thread_id, type) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  [[1, 7, 1, 'my question', null, null, null], [2, 7, 2, 'hey @bob', null, null, null], [3, 7, 2, 'an answer', 1, null, null], [4, 7, 2, 'hey @bobby or x@bob.com', null, null, null], [5, 7, 2, 'in a thread @bob', null, 9, null], [7, 7, 1, 'note to self @bob', null, null, null], [8, 8, 2, '@bob elsewhere', null, null, null], [9, 7, null, '@BOB, imported', null, null, null], [10, 7, 2, '@bob joined', null, null, 'notice']].forEach(r => ins.run(...r));
+  [[1, 7, 1, 'my question', null, null, null], [2, 7, 2, 'hey @bob', null, null, null], [3, 7, 2, 'an answer', 1, null, null], [4, 7, 2, 'hey @bobby or x@bob.com', null, null, null], [5, 7, 2, 'in a thread @bob', null, 9, null], [6, 7, 4, 'blocked @bob', null, null, null], [7, 7, 1, 'note to self @bob', null, null, null], [8, 8, 2, '@bob elsewhere', null, null, null], [9, 7, null, '@BOB, imported', null, null, null], [10, 7, 2, '@bob joined', null, null, 'notice']].forEach(r => ins.run(...r));
   const q = unreadMentionsQuery(1, 'Bob');
   const ids = after => q.pick(db.prepare(q.sql).all(...q.params(7, after)));
   assert.deepEqual(ids(0), [2, 3, 9]);
