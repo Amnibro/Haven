@@ -752,6 +752,10 @@ module.exports = function register(socket, ctx) {
       'dm_sort',
       'dm_order',
       'read_receipts', 'dms_first',
+      // How your DM list is sorted on every device (app-dm-sort.js):
+      // 'recent', 'alpha' or 'manual', and the order you arranged it in.
+      'dm_sort',
+      'dm_order',
       // DMs pinned to the top of your own DM list (src/pinnedDms.js).
       'pinned_dms',
     ];
@@ -781,6 +785,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'media_group_layout' && !MEDIA_GROUP_LAYOUTS.includes(value)) return;
     if (key === 'dm_sort' && !DM_SORT_MODES.includes(value)) return;
     if ((key === 'read_receipts' || key === 'dms_first') && value !== 'on' && value !== 'off') return;
+    if (key === 'dm_sort' && !DM_SORT_MODES.includes(value)) return;
     // Members pick from Haven's own themes and the published theme files. A
     // refusal is quiet: the picker only offers allowed themes, so this is a
     // stale list or a crafted request, and the client falls back on its own.
