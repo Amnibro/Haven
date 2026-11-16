@@ -7,6 +7,7 @@ export default {
 
 async switchChannel(code) {
   if (this.currentChannel === code) return;
+  const _leaving = this.currentChannel;
 
   // Clear any pending image queue from previous channel
   this._clearImageQueue();
@@ -192,7 +193,10 @@ async switchChannel(code) {
   if (_dividers[2]) _dividers[2].style.display = _textOff ? 'none' : '';
 
   const messagesEl = document.getElementById('messages');
+  // Keep what was on screen so it can be read offline (app-offline.js).
+  this._offlineStash?.(_leaving, messagesEl);
   messagesEl.innerHTML = '';
+  this._offlineRestore?.(code, messagesEl);
   document.getElementById('message-area').style.display = 'flex';
   document.getElementById('no-channel-msg').style.display = 'none';
 

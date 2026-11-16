@@ -927,6 +927,13 @@ Voice chat is **peer-to-peer** by default: audio goes directly between you and o
 
 > Voice needs a secure connection. On the server itself, `http://localhost:3000` or `https://localhost:3000` both work. From any other device, use `https://YOUR_IP:3000`.
 
+### Offline and LAN-only use
+
+Haven runs on a home network with no internet at all: the web client loads nothing from outside the server, and text, files, reactions, DMs and voice/video/screen share between people on the same network keep working. A few extras need the internet and simply stay unavailable without it: GIF search, link previews, music lookups, Steam/Spotify activity, mobile push (FCM), update checks and DDNS.
+
+- **Voice on a LAN with no internet:** set `STUN_URLS=none` in `.env` (or tick the option that turns STUN/TURN off in **Settings → Admin → 📡 Voice & Connectivity**). Calls then use direct LAN addresses only and never wait on public STUN servers they cannot reach.
+- **Losing the server:** if the connection drops (laptop leaves the Wi-Fi, server restarts) the app stays open, shows that it is offline and reconnects by itself. Channels you were reading stay readable, and messages you write are shown as waiting and sent in order once the connection is back. Reloading while the server is down opens the app from the browser's cache instead of an error page (needs HTTPS or `localhost`, like push notifications). Queued messages live only in that tab, so closing it while offline drops them.
+
 ### TURN Server (Voice Over the Internet)
 
 By default, voice/screen sharing uses STUN servers, which work when both users are on the same network or behind simple NATs. For connections across different networks (especially mobile data / 5G), you need a **TURN server** to relay traffic.

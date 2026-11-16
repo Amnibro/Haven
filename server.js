@@ -999,7 +999,9 @@ app.get('/api/ice-servers', (req, res) => {
   const stunUrls = adminStun
     ? adminStun.split(/[\n,]/).map(u => u.trim()).filter(Boolean)
     : process.env.STUN_URLS
-      ? process.env.STUN_URLS.split(',').map(u => u.trim()).filter(Boolean)
+      // STUN_URLS=none: no public STUN at all (air-gapped LAN). Peers use
+      // direct host candidates, plus any TURN configured below.
+      ? (/^(none|off)$/i.test(process.env.STUN_URLS.trim()) ? [] : process.env.STUN_URLS.split(',').map(u => u.trim()).filter(Boolean))
       : [
           'stun:stun.cloudflare.com:3478',
           'stun:stun.relay.metered.ca:80',

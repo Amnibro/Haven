@@ -20,7 +20,9 @@ async _sendMessage() {
   const imageReplyTo = this.replyingTo ? this.replyingTo.id : null;
   if (!content && !hasImages && !hasFiles) return;
   if (!this.currentChannel) return;
-  if (!this.socket.connected) {
+  // Offline, plain text waits in the outbox (app-offline.js) and goes out on
+  // reconnect. Uploads and slash commands need the server there and then.
+  if (!this.socket.connected && (hasImages || hasFiles || content.startsWith('/'))) {
     this._showToast(t('toasts.message_not_connected'), 'error');
     return;
   }
@@ -369,7 +371,7 @@ async _sendMessage() {
       }
     }
     if (combine) groupPartner = partner;
-    else { this.socket.emit('send-message', payload); this.notifications.play('sent'); }
+    else if (!this._sendOrQueue('send-message', payload, content)) this.notifications.play('sent');
   }
 
   // Upload queued images. Mark as bundled when text was also sent so

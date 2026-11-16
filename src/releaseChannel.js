@@ -51,11 +51,11 @@ function compareVersions(a, b) {
 // The release to update to: GitHub's release object.
 async function latestRelease({ early = false, headers = {} } = {}) {
   if (!early) {
-    const r = await fetch(`${API}/latest`, { headers });
+    const r = await fetch(`${API}/latest`, { headers, signal: AbortSignal.timeout(15000) });
     if (!r.ok) throw new Error(`GitHub HTTP ${r.status}`);
     return r.json();
   }
-  const r = await fetch(`${API}?per_page=20`, { headers });
+  const r = await fetch(`${API}?per_page=20`, { headers, signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error(`GitHub HTTP ${r.status}`);
   const list = (await r.json()).filter(rel => rel && !rel.draft && parseVersion(rel.tag_name));
   if (!list.length) throw new Error('GitHub lists no releases');

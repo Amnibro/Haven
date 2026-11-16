@@ -11,6 +11,7 @@ import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
 import ComposerMethods from './modules/app-composer.js?v=4.29.11';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
 import DraftMethods from './modules/app-drafts.js?v=4.29.11';
+import OfflineMethods from './modules/app-offline.js?v=4.30.0';
 import WhatsNewMethods from './modules/app-whats-new.js?v=4.27.25';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.29.66';
@@ -418,6 +419,7 @@ class HavenApp {
     this._setupAvatarUpload();
 
     this._setupSocketListeners();
+    this._setupOffline();
     this._setupChannelTypes();
     this._initLinkPolicy?.();
     this._setupUI();
@@ -649,6 +651,7 @@ Object.assign(HavenApp.prototype,
   MusicFileMethods,
   ScheduleFileMethods,
   DraftMethods,
+  OfflineMethods,
   WhatsNewMethods,
   MusicKeyMethods,
   UtilityMethods,

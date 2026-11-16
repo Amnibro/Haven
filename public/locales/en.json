@@ -312,6 +312,12 @@
       "disconnected": "Disconnected",
       "error": "Error"
     },
+    "offline": {
+      "banner": "Offline: reconnecting to the server...",
+      "queued": "{{count}} message(s) will send when it is back.",
+      "pending": "Waiting to send",
+      "outbox_full": "Too many messages are waiting to send. Wait for the connection to come back."
+    },
     "messages": {
       "edited": "(edited)",
       "edited_at": "Edited at {{date}}",

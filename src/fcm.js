@@ -26,6 +26,7 @@ let adminEnabled = true;
 
 const FCM_SCOPES = 'https://www.googleapis.com/auth/firebase.messaging';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const FETCH_TIMEOUT_MS = 10000;
 const DEFAULT_RELAY = 'https://us-central1-amni-haven.cloudfunctions.net/sendPush';
 const DEFAULT_KEY = 'firebase-notifications-007';
 
@@ -113,6 +114,8 @@ async function getAccessToken() {
 
   const resp = await fetch(TOKEN_URL, {
     method: 'POST',
+    // A server on a LAN with no internet must not hold pushes open for minutes.
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${assertion}`,
   });
@@ -141,6 +144,7 @@ async function sendDirect(tokens, title, body, dataPayload) {
     try {
       const resp = await fetch(url, {
         method: 'POST',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
@@ -189,6 +193,7 @@ async function sendViaRelay(tokens, title, body, dataPayload) {
   try {
     const resp = await fetch(relayUrl, {
       method: 'POST',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       headers: {
         'Content-Type': 'application/json',
         'x-push-key': relayKey,
