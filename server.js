@@ -718,7 +718,11 @@ if (process.env.BIRCH_PROXY_URL) {
         : (rest.startsWith('/games/') ? rest : '/games' + (rest === '/' ? '/index.html' : rest));
       const dest = new URL(birchTarget + upstreamPath);
       const headers = { ...req.headers, host: dest.host };
-      delete headers['content-length'];
+      // Keep content-length: the Helium bot's HTTP parser does not
+      // accept chunked POST bodies, which Node would send if this
+      // header is stripped.
+      delete headers['connection'];
+      delete headers['transfer-encoding'];
       const preq = http.request({
         protocol: dest.protocol,
         hostname: dest.hostname,
