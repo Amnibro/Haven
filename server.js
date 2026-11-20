@@ -703,6 +703,44 @@ if (RUFFLE_DIR) {
 // below still serve.
 app.use('/games/roms', express.static(GAMES_ROMS_DIR, { dotfiles: 'deny', maxAge: 0 }));
 
+
+// Local Birch test proxy. Only active when BIRCH_PROXY_URL is set
+// (the test Haven on :3012). Production must not set this.
+if (process.env.BIRCH_PROXY_URL) {
+  const { URL } = require('url');
+  const http = require('http');
+  const birchTarget = process.env.BIRCH_PROXY_URL.replace(/\/$/, '');
+  app.use('/birch', (req, res) => {
+    try {
+      const rest = req.url || '/';
+      const upstreamPath = rest.startsWith('/api/')
+        ? rest
+        : (rest.startsWith('/games/') ? rest : '/games' + (rest === '/' ? '/index.html' : rest));
+      const dest = new URL(birchTarget + upstreamPath);
+      const headers = { ...req.headers, host: dest.host };
+      delete headers['content-length'];
+      const preq = http.request({
+        protocol: dest.protocol,
+        hostname: dest.hostname,
+        port: dest.port,
+        path: dest.pathname + dest.search,
+        method: req.method,
+        headers,
+      }, (pres) => {
+        const hop = { ...pres.headers };
+        // Keep the game framed by this same-origin test Haven.
+        delete hop['cross-origin-opener-policy'];
+        res.writeHead(pres.statusCode || 502, hop);
+        pres.pipe(res);
+      });
+      preq.on('error', () => { if (!res.headersSent) res.status(502).json({ error: 'Birch is not running' }); });
+      req.pipe(preq);
+    } catch (e) {
+      if (!res.headersSent) res.status(502).json({ error: 'Birch proxy failed' });
+    }
+  });
+}
+
 // ── Static files with caching ────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {
   dotfiles: 'deny',       // block .env, .git, etc.
