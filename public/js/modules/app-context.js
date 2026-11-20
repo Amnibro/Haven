@@ -1094,7 +1094,8 @@ _launchGame(game) {
   this._currentGame = game;
   // Default: pop out into a new window
   const tok = localStorage.getItem('haven_token') || '';
-  const url = game.path + '#token=' + encodeURIComponent(tok);
+  const base = game.url || game.path;
+  const url = base + (String(base).includes('#') ? '&token=' : '#token=') + encodeURIComponent(tok);
   this._gameWindow = window.open(url, '_blank', 'width=800,height=900');
 
   // If popup was blocked, fall back to inline iframe
@@ -1149,7 +1150,8 @@ _setGameActivity(gameId) {
 _popoutGame() {
   if (!this._currentGame) return;
   const tok = localStorage.getItem('haven_token') || '';
-  const url = this._currentGame.path + '#token=' + encodeURIComponent(tok);
+  const base = this._currentGame.url || this._currentGame.path;
+  const url = base + (String(base).includes('#') ? '&token=' : '#token=') + encodeURIComponent(tok);
   const win = window.open(url, '_blank', 'width=740,height=860');
   // Only close the inline iframe if the popup actually opened
   if (win && !win.closed) {

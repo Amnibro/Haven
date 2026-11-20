@@ -11,7 +11,7 @@ const MAX_SCORE_BY_GAME = {
 // The games that report scores: the Activities games (src/activity.js,
 // HAVEN_GAMES). Any other id would only add rows nobody can see.
 const KNOWN_GAMES = new Set([
-  'flappy', 'flight', 'learn-to-fly-3', 'bubble-tanks-3', 'tanks', 'super-smash-flash-2', 'io-games',
+  'flappy', 'flight', 'learn-to-fly-3', 'bubble-tanks-3', 'tanks', 'super-smash-flash-2', 'io-games', 'willowmere',
 ]);
 function isKnownGame(game) {
   return typeof game === 'string' && KNOWN_GAMES.has(game);
