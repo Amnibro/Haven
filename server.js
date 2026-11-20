@@ -718,11 +718,19 @@ if (process.env.BIRCH_PROXY_URL) {
         : (rest.startsWith('/games/') ? rest : '/games' + (rest === '/' ? '/index.html' : rest));
       const dest = new URL(birchTarget + upstreamPath);
       const headers = { ...req.headers, host: dest.host };
-      // Keep content-length: the Helium bot's HTTP parser does not
-      // accept chunked POST bodies, which Node would send if this
-      // header is stripped.
       delete headers['connection'];
       delete headers['transfer-encoding'];
+      // express.json() has already run, so req is consumed. Replay the
+      // parsed body with a Content-Length the Helium bot can parse
+      // (it does not handle chunked transfer encoding).
+      let payload = null;
+      if (req.body != null && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
+        if (Buffer.isBuffer(req.body)) payload = req.body;
+        else if (typeof req.body === 'string') payload = Buffer.from(req.body);
+        else payload = Buffer.from(JSON.stringify(req.body));
+        headers['content-type'] = headers['content-type'] || 'application/json';
+        headers['content-length'] = String(payload.length);
+      }
       const preq = http.request({
         protocol: dest.protocol,
         hostname: dest.hostname,
@@ -732,13 +740,15 @@ if (process.env.BIRCH_PROXY_URL) {
         headers,
       }, (pres) => {
         const hop = { ...pres.headers };
-        // Keep the game framed by this same-origin test Haven.
+        // Keep the game framed by this same-origin Haven.
         delete hop['cross-origin-opener-policy'];
         res.writeHead(pres.statusCode || 502, hop);
         pres.pipe(res);
       });
       preq.on('error', () => { if (!res.headersSent) res.status(502).json({ error: 'Birch is not running' }); });
-      req.pipe(preq);
+      if (payload) preq.end(payload);
+      else if (req.readable && !req.readableEnded) req.pipe(preq);
+      else preq.end();
     } catch (e) {
       if (!res.headersSent) res.status(502).json({ error: 'Birch proxy failed' });
     }
