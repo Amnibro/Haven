@@ -644,7 +644,7 @@ app.use(helmet({
 
 // Additional security headers helmet doesn't cover
 app.use((req, res, next) => {
-  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), payment=()');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), payment=(), gpu=(self), webgpu=(self)');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', currentReferrerPolicy); // admin-configurable (Settings → Security)
   next();
@@ -754,6 +754,18 @@ if (process.env.BIRCH_PROXY_URL) {
     }
   });
 }
+
+// Keep /js/app.js and module graph fresh in long-lived WebKit (Tauri) webviews.
+// Origin already used maxAge: 0, but a cache in front (or WebKit) was still
+// serving a pre-Birch Activities list. Do not cache these modules.
+app.use((req, res, next) => {
+  const p = req.path || '';
+  if (p === '/app.html' || p === '/js/app.js' || p.startsWith('/js/modules/')) {
+    res.setHeader('Cache-Control', 'private, no-cache, must-revalidate, max-age=0, s-maxage=0');
+    res.setHeader('Pragma', 'no-cache');
+  }
+  next();
+});
 
 // ── Static files with caching ────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -1229,7 +1241,7 @@ app.get('/app', (req, res) => {
   // assets are never served stale after an update (especially in Electron).
   const ver = require('./package.json').version;
   let html = fs.readFileSync(path.join(__dirname, 'public', 'app.html'), 'utf8');
-  html = html.replace(/(\?v=)[^"']*/g, `$1${ver}`);
+  html = html.replace(/(\?v=)[^"']*/g, `$1${ver}-birch20`);
   res.type('html').send(html);
 });
 
