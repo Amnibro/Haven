@@ -1,6 +1,5 @@
 'use strict';
 const CATALOG = Object.freeze([
-  ['carousel', 'Carousel', 'The conversation that needs you sits in the middle, the one you cleared on the left, the next one on the right.', 'FocusLayout'],
   ['focus-classic', 'Focus Classic', 'A rail with Server, DMs, Activity and You shows one list at a time beside the chat.', 'FocusClassicLayout'],
   ['tethers', 'Floating threads', 'Messages float above a centered message box, tethered to it. Click one to aim your reply at that person.', ''],
   ['queue', 'Queue', 'The next thing to answer is already aimed. Send, and the one after it lines up.', ''],

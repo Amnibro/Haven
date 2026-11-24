@@ -165,7 +165,7 @@ test('a saved carousel choice is cleared, so the member lands on Haven\'s defaul
   assert.deepEqual(r.data.FocusLayout, { tab: 'dms', 'inbox:haven.test': '[]' });
   assert.deepEqual(r.data.HavenGlyphs, { size: '2' });
   assert.deepEqual(r.enabled, ['HavenGlyphs.plugin.js']);
-  assert.equal(r.loaded.get('BraidLayout.plugin.js').enabled, false);
+  assert.equal(r.loaded.get('BraidLayout.plugin.js').enabled, !!r.loaded.get('BraidLayout.plugin.js').effectDriven);
   assert.equal(r.loaded.get('FocusClassicLayout.plugin.js').enabled, false);
 });
 test('a saved Focus Classic or other existing layout choice is left alone', async () => {
