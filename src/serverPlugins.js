@@ -21,7 +21,7 @@ const path = require('path');
 
 // sha256 of the file with line endings as LF.
 const SERVER_LOADED = Object.freeze({
-  'AutoModQuarantine.plugin.js': '9e935df454cfa19459e92657b84cea012f67dbb3047ed5526d0445adfe95f03c',
+  'AutoModQuarantine.plugin.js': '27704f64e1616eeb0607432bf0ddd11f1fa9cb7abd24c27dc9405be222bfe705',
 });
 
 function isServerLoaded(file) {
