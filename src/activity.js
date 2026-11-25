@@ -170,6 +170,7 @@ const HAVEN_GAMES = {
   willowmere: 'Birch',
   'arcade-pool': 'Pool',
   'arcade-minigolf': 'Minigolf',
+  earthborne: 'Earthborne',
 };
 
 function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }) {

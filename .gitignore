@@ -47,3 +47,6 @@ checklist-*.md
 config/
 # Local tool settings can hold commands with passwords; never commit them
 .claude/
+
+# Earthborne web build: a local link to the game's web folder, not shipped with Haven
+public/games/earthborne
