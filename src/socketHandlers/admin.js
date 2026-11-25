@@ -16,7 +16,7 @@ const memberDefaults = require('../memberDefaults');
 const { MEDIA_GROUP_LAYOUTS } = require('../mediaGroup');
 const { reachableChannel } = require('./channelAccess');
 const { cleanWebhookName, cleanWebhookAvatarUrl } = require('../webhookFields');
-const readAuditLog = require('../db/auditLog');
+const { hideChannelCodes } = require('../auditStream');
 
 const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
 
@@ -179,6 +179,7 @@ module.exports = function register(socket, ctx) {
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
       'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
       'fcm_hide_content',
+      'bots_see_message_text', // the admin's call: bots get the text of deleted and edited messages (src/messageLog.js)
       'unicode_emoji_auto_update', // monthly refresh of the built-in emoji set from unicode.org, opt-in
       'birch_cross_server_presence' // Birch cross-server presence, off by default
     ];
@@ -205,6 +206,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'media_proxy_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'fcm_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'fcm_hide_content' && !['true', 'false'].includes(value)) return;
+    if (key === 'bots_see_message_text' && !['true', 'false'].includes(value)) return;
     if (key === 'unicode_emoji_auto_update' && !['true', 'false'].includes(value)) return;
     if (key === 'automod_link_mode' && !['off', 'allowlist', 'blocklist'].includes(value)) return;
     if (key === 'automod_link_exempt_level') {
@@ -238,6 +240,7 @@ module.exports = function register(socket, ctx) {
     // and say why rather than silently breaking voice for the whole server.
     // The relay opens network ports on the host, so it is the admin's alone.
     if (key.startsWith('voice_relay_') && !socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can change the voice relay.');
+    if (key === 'bots_see_message_text' && !socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can let bots see message text.');
     if (key === 'voice_relay_mode' && !state.voiceRelay?.MODES.includes(value)) return;
     if (key === 'voice_relay_port') {
       const n = parseInt(value, 10);
@@ -1514,7 +1517,45 @@ module.exports = function register(socket, ctx) {
     const canView = isAdmin || userHasPermission(socket.user.id, 'view_audit_log');
     if (!canView) return cb({ error: 'Permission denied' });
     try {
-      cb(await readAuditLog(db.async || db, opts, isAdmin));
+      const limit = Math.max(1, Math.min(200, parseInt(opts?.limit, 10) || 50));
+      const beforeId = parseInt(opts?.beforeId, 10) || 0;
+      // afterId pages forward instead, oldest first: a bot following the log
+      // live catches up from the last row it saw (src/auditStream.js).
+      const afterId = parseInt(opts?.afterId, 10) || 0;
+      const action = typeof opts?.action === 'string' && opts.action ? opts.action : null;
+      const actorUsername = typeof opts?.actorUsername === 'string' && opts.actorUsername
+        ? opts.actorUsername.trim().toLowerCase().slice(0, 40) : null;
+
+      const where = [];
+      const params = [];
+      if (beforeId > 0) { where.push('id < ?'); params.push(beforeId); }
+      if (afterId > 0) { where.push('id > ?'); params.push(afterId); }
+      if (action) { where.push('action = ?'); params.push(action); }
+      if (actorUsername) { where.push('LOWER(actor_username) LIKE ?'); params.push('%' + actorUsername + '%'); }
+      // Notes are for staff, never for the member they are about, even one
+      // who can read this log: their own history leaves notes out too. That
+      // covers the note and the row for taking one back. Filtered here, not
+      // after, so a page still holds `limit` rows. The live stream does the
+      // same with isNoteAbout (src/auditStream.js).
+      where.push(`NOT (target_id IS ? AND (action = 'user_note' OR (action = 'mod_case_revoke'
+        AND COALESCE(CASE WHEN json_valid(details) THEN json_extract(details, '$.type') END, '') = 'note')))`);
+      params.push(socket.user.id);
+      const whereSql = where.length ? ('WHERE ' + where.join(' AND ')) : '';
+
+      const driver = db.async || db;
+      const [found, actions] = await Promise.all([
+        driver.prepare(
+          'SELECT id, created_at, actor_id, actor_username, action, target_type, target_id, target_name, details ' +
+          'FROM audit_log ' + whereSql + ` ORDER BY id ${afterId > 0 ? 'ASC' : 'DESC'} LIMIT ?`
+        ).all(...params, limit),
+        driver.prepare('SELECT DISTINCT action FROM audit_log ORDER BY action ASC').all(),
+      ]);
+      // Times go out as UTC with a Z, as audit-entry sends them. Channel
+      // codes are invites (a code is enough to join), so only the admin sees
+      // them in the log.
+      for (const r of found) r.created_at = utcStamp(r.created_at);
+      const rows = isAdmin ? found : found.map(hideChannelCodes);
+      cb({ rows, actions: actions.map(r => r.action), hasMore: rows.length === limit });
     } catch (err) {
       console.error('get-audit-log error:', err);
       cb({ error: 'Failed to load audit log' });
