@@ -652,6 +652,8 @@ app.use((req, res, next) => {
 
 // Disable Express version disclosure
 app.disable('x-powered-by');
+const birch = require('./src/birch').createBirch({ url: process.env.BIRCH_PROXY_URL, secret: process.env.JWT_SECRET });
+app.use('/birch', birch.proxy);
 
 // ── Body Parsing with size limits ────────────────────────
 // Global limit bumped to 128kb so legit large-but-bounded payloads like the
@@ -703,57 +705,6 @@ if (RUFFLE_DIR) {
 // below still serve.
 app.use('/games/roms', express.static(GAMES_ROMS_DIR, { dotfiles: 'deny', maxAge: 0 }));
 
-
-// Local Birch test proxy. Only active when BIRCH_PROXY_URL is set
-// (the test Haven on :3012). Production must not set this.
-if (process.env.BIRCH_PROXY_URL) {
-  const { URL } = require('url');
-  const http = require('http');
-  const birchTarget = process.env.BIRCH_PROXY_URL.replace(/\/$/, '');
-  app.use('/birch', (req, res) => {
-    try {
-      const rest = req.url || '/';
-      const upstreamPath = rest.startsWith('/api/')
-        ? rest
-        : (rest.startsWith('/games/') ? rest : '/games' + (rest === '/' ? '/index.html' : rest));
-      const dest = new URL(birchTarget + upstreamPath);
-      const headers = { ...req.headers, host: dest.host };
-      delete headers['connection'];
-      delete headers['transfer-encoding'];
-      // express.json() has already run, so req is consumed. Replay the
-      // parsed body with a Content-Length the Helium bot can parse
-      // (it does not handle chunked transfer encoding).
-      let payload = null;
-      if (req.body != null && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
-        if (Buffer.isBuffer(req.body)) payload = req.body;
-        else if (typeof req.body === 'string') payload = Buffer.from(req.body);
-        else payload = Buffer.from(JSON.stringify(req.body));
-        headers['content-type'] = headers['content-type'] || 'application/json';
-        headers['content-length'] = String(payload.length);
-      }
-      const preq = http.request({
-        protocol: dest.protocol,
-        hostname: dest.hostname,
-        port: dest.port,
-        path: dest.pathname + dest.search,
-        method: req.method,
-        headers,
-      }, (pres) => {
-        const hop = { ...pres.headers };
-        // Keep the game framed by this same-origin Haven.
-        delete hop['cross-origin-opener-policy'];
-        res.writeHead(pres.statusCode || 502, hop);
-        pres.pipe(res);
-      });
-      preq.on('error', () => { if (!res.headersSent) res.status(502).json({ error: 'Birch is not running' }); });
-      if (payload) preq.end(payload);
-      else if (req.readable && !req.readableEnded) req.pipe(preq);
-      else preq.end();
-    } catch (e) {
-      if (!res.headersSent) res.status(502).json({ error: 'Birch proxy failed' });
-    }
-  });
-}
 
 // Keep /js/app.js and module graph fresh in long-lived WebKit (Tauri) webviews.
 // Origin already used maxAge: 0, but a cache in front (or WebKit) was still
@@ -1682,8 +1633,19 @@ require('./src/routes/link-preview')({ app });
 
 // ── Release notes for the "What's new" popup: src/routes/changelog.js ──
 require('./src/routes/changelog')({ app, verifyToken });
+require('./src/routes/birch')({ app, verifyToken, birch });
 
 // ── Games list endpoint: discover available games ──
+app.get('/api/birch-presence', (req, res) => {
+  try {
+    const { getDb } = require('./src/database');
+    const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'birch_cross_server_presence'").get();
+    res.json({ enabled: row?.value === 'true', name: 'Birch cross-server presence' });
+  } catch {
+    res.json({ enabled: false, name: 'Birch cross-server presence' });
+  }
+});
+
 app.get('/api/games', (req, res) => {
   const gamesDir = path.join(__dirname, 'public', 'games');
   const fs2 = require('fs');
