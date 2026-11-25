@@ -211,3 +211,35 @@ test('a bot that stops answering gives 502 and takes the card away at once', asy
     assert.deepEqual(await birch.status(), { available: false, reason: 'unreachable' });
   });
 });
+test('a big file still arrives when the player\'s connection stalls longer than the proxy timeout', async () => {
+  const big = Buffer.alloc(7 * 1024 * 1024, 7);
+  const up = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': big.length }); res.end(big); });
+  const upPort = await listen(up);
+  try {
+    await withApp(`http://127.0.0.1:${upPort}`, ({ port }) => new Promise((resolve, reject) => {
+      const stop = setTimeout(() => reject(new Error('download hung')), 7000);
+      http.get({ host: '127.0.0.1', port, path: '/birch/assets/big.bin' }, (res) => {
+        let got = 0;
+        res.pause();
+        setTimeout(() => res.resume(), 700);
+        res.on('data', (c) => { got += c.length; });
+        res.on('end', () => { clearTimeout(stop); assert.equal(got, big.length); resolve(); });
+        res.on('error', (e) => { clearTimeout(stop); reject(e); });
+      }).on('error', reject);
+    }), { proxyMs: 200 });
+  } finally { await close(up); }
+});
+test('a file the bot stops sending halfway fails fast instead of hanging the loader', async () => {
+  const up = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': 70000 }); res.write(Buffer.alloc(7000)); setTimeout(() => res.socket.destroy(), 70); });
+  const upPort = await listen(up);
+  try {
+    await withApp(`http://127.0.0.1:${upPort}`, ({ port }) => new Promise((resolve, reject) => {
+      const stop = setTimeout(() => reject(new Error('download hung')), 4000);
+      http.get({ host: '127.0.0.1', port, path: '/birch/assets/half.bin' }, (res) => {
+        res.resume();
+        res.on('end', () => { clearTimeout(stop); reject(new Error('a cut-off file looked complete')); });
+        res.on('close', () => { clearTimeout(stop); resolve(); });
+      }).on('error', () => { clearTimeout(stop); resolve(); });
+    }));
+  } finally { await close(up); }
+});

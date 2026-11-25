@@ -63,7 +63,7 @@ function getJson(target, path, headers) {
     req.end();
   });
 }
-function createBirch({ url, secret, now = Date.now, log = console } = {}) {
+function createBirch({ url, secret, now = Date.now, log = console, proxyMs = PROXY_MS } = {}) {
   const target = parseTarget(url);
   let cached = null;
   let pending = null;
@@ -91,12 +91,14 @@ function createBirch({ url, secret, now = Date.now, log = console } = {}) {
     if (!path) return res.status(404).json({ error: 'Not found' });
     const headers = Object.fromEntries(Object.entries(req.headers).filter(([k]) => !DROP_IN.has(k)));
     const out = target.client.request({ hostname: target.hostname, port: target.port, path: target.base + path, method: req.method, headers, agent: false }, (up) => {
+      out.setTimeout(0);
       const kept = {};
       for (const [k, v] of Object.entries(up.headers)) DROP_OUT.has(k) || (kept[k] = v);
       res.writeHead(up.statusCode || 502, kept);
+      up.on('close', () => up.complete || res.destroy());
       up.pipe(res);
     });
-    out.setTimeout(PROXY_MS, () => out.destroy());
+    out.setTimeout(proxyMs, () => out.destroy());
     out.on('error', () => {
       record('unreachable');
       res.headersSent ? res.destroy() : res.status(502).json({ error: 'Birch is not running' });
