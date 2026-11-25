@@ -376,21 +376,7 @@ _bindAppChrome() {
     { id: 'tanks', name: 'Tanks', icon: '🪖', path: '/games/flash.html?swf=/games/roms/tanks.swf&title=Tanks', description: t('activities_registry.tanks'), type: 'flash' },
     { id: 'super-smash-flash-2', name: 'Super Smash Flash 2', icon: '⚔️', path: '/games/flash.html?swf=/games/roms/SuperSmash.swf&title=Super%20Smash%20Flash%202', description: t('activities_registry.super_smash'), type: 'flash' },
     { id: 'io-games', name: '.io Games', icon: '🌐', path: '/games/io-games.html', description: t('activities_registry.io_games'), type: 'browser' },
-    { id: 'willowmere', name: 'Birch', icon: '🌳', path: '/birch/index.html', description: t('activities_registry.willowmere') },
   ];
-  // Sketch: extra Activity URLs from localStorage.haven_custom_activities
-  // (JSON array of {id,name,icon,path,description}). Not an upstream admin setting.
-  try {
-    const extra = JSON.parse(localStorage.getItem('haven_custom_activities') || '[]');
-    if (Array.isArray(extra)) {
-      for (const g of extra) {
-        if (g && typeof g.id === 'string' && typeof g.path === 'string' && /^[a-z0-9_-]{1,32}$/.test(g.id)) {
-          if (!this._gamesRegistry.some((x) => x.id === g.id)) this._gamesRegistry.push(g);
-        }
-      }
-    }
-  } catch { /* ignore bad local sketches */ }
-
 
   // Generic postMessage bridge for any game (scores + leaderboard)
   if (!this._gameScoreListenerAdded) {

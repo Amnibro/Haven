@@ -6,7 +6,6 @@ const { clearChannelRuntimeState } = require('../channelRotation');
 const { ipBanRefusal } = require('../ipBanGuard');
 const { deletableSql } = require('../protectedMessages');
 const { scrubUserMessages } = require('../scrubMessages');
-const { revokeSessions } = require('../auth');
 
 // A scrub or purge leaves protected messages, and thread heads holding one,
 // as they are (src/protectedMessages.js).
@@ -324,7 +323,7 @@ module.exports = function register(socket, ctx) {
     const r = sessionsTarget(data);
     if (r.error) return cb({ error: r.error });
     const open = ctx.listUserSessions(r.target.id, null).length;
-    revokeSessions(r.target.id);
+    require('../auth').revokeSessions(r.target.id);
     for (const [, s] of io.sockets.sockets) if (s.user && s.user.id === r.target.id) { s.emit('force-logout', { reason: 'sessions_revoked' }); s.disconnect(true); }
     _audit({ actor: socket.user, action: 'user_sessions_revoke', target_type: 'user', target_id: r.target.id, target_name: r.target.name, details: { sessions: open } });
     cb({ ok: true, closed: open });
