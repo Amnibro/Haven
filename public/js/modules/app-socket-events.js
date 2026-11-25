@@ -8,6 +8,9 @@ export default {
 _listenFeatureEvents() {
   this._listenForumVotes?.();
   this._listenCalendar?.();
+  this._listenOverview?.();
+  this._listenBrackets?.();
+  this._listenDocs?.();
   this._listenForumBlog?.();
   // ── Read receipts across this account's devices ─────
   // Another connected device (or this same tab, harmlessly) marked a

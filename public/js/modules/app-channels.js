@@ -16,9 +16,10 @@ _updateComposerVisibility(channel) {
   // override in one channel used to reveal the composer in all of them, and the
   // send was then refused. (#5468)
   const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
-  // A calendar is added to through its own dialog, not the composer.
-  const _isCalendar = !!(channel && channel.is_calendar && !channel.is_dm);
-  if (msgInputArea) msgInputArea.style.display = (_isReadOnly || _isCalendar || (_textOff && _mediaOff)) ? 'none' : '';
+  // A calendar is added to through its own dialog, and an overview only
+  // shows what is posted elsewhere, so neither has a composer.
+  const _ownView = !!(channel && (channel.is_calendar || channel.is_overview || channel.is_bracket || channel.is_docs) && !channel.is_dm);
+  if (msgInputArea) msgInputArea.style.display = (_isReadOnly || _ownView || (_textOff && _mediaOff)) ? 'none' : '';
   // A media-only channel has no text box to press Enter in, so the send
   // button is the only way to post an attachment: it stays, even for
   // someone who chose to hide it (#5880).
@@ -72,6 +73,7 @@ async switchChannel(code) {
   const jumpBtn = document.getElementById('jump-to-bottom');
   if (jumpBtn) jumpBtn.classList.remove('visible');
   const channel = this.channels.find(c => c.code === code);
+  this._subserverFollow?.(channel);
   const isDm = channel && channel.is_dm;
   const displayName = isDm && channel.is_group ? `👥 ${this._groupName(channel)}` : isDm && channel.dm_target
     ? `@ ${this._getNickname(channel.dm_target.id, channel.dm_target.username)}`
@@ -446,8 +448,10 @@ _renderChannels() {
   // out from under us until we navigate away). Hiding a parent hides its
   // sub-channels too, since they're orphaned once the parent isn't rendered.
   const _hiddenChannels = this._getHiddenChannels();
+  // Sub-servers: the sidebar shows the picked one's channels (app-subservers.js).
+  this._renderSubserverBar?.();
   const regularChannels = this.channels.filter(c =>
-    !c.is_dm && (!_hiddenChannels.includes(c.code) || c.code === this.currentChannel));
+    !c.is_dm && (!_hiddenChannels.includes(c.code) || c.code === this.currentChannel) && this._subserverShows?.(c) !== false);
   const dmChannels = this.channels.filter(c => c.is_dm);
 
   // Build parent → sub-channel tree
@@ -598,7 +602,7 @@ _renderChannels() {
     const isAnnouncement = ch.notification_type === 'announcement';
     const isTemporary = !!ch.expires_at;
     const isTempVoice = !!ch.is_temp_voice;
-    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_calendar ? '📅' : ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : '#')))));
+    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_overview ? '🏠' : ch.is_calendar ? '📅' : ch.is_bracket ? '🏆' : ch.is_docs ? '📄' : ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : '#')))));
     // NSFW channels stay out of sight when the user asked for that (phone in
     // public), except the one they are actually in.
     if (ch.is_nsfw && this._hideNsfw && this._hideNsfw() && ch.code !== this.currentChannel) el.style.display = 'none';

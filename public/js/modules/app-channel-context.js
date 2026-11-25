@@ -41,6 +41,8 @@ _openChannelCtxMenu(code, btnEl) {
   });
   const cfnCtxBtn = menu.querySelector('[data-action="channel-functions"]');
   if (cfnCtxBtn) cfnCtxBtn.style.display = canManageSettings ? '' : 'none';
+  const subCtxBtn = menu.querySelector('[data-action="move-to-subserver"]');
+  if (subCtxBtn) subCtxBtn.style.display = this._subserverManage && ch && !ch.is_dm && !ch.parent_channel_id ? '' : 'none';
   const typeCtxBtn = menu.querySelector('[data-action="channel-type"]');
   if (typeCtxBtn) {
     typeCtxBtn.style.display = canManageSettings ? '' : 'none';
@@ -374,6 +376,12 @@ _updateChannelFunctionsPanel(ch) {
   this._setCfnBadge('forum', isForum, t(isForum ? 'channel_functions.on' : 'channel_functions.off'));
   const isCalendar = ch.is_calendar === 1;
   this._setCfnBadge('calendar', isCalendar, t(isCalendar ? 'channel_functions.on' : 'channel_functions.off'));
+  const isOverview = ch.is_overview === 1;
+  this._setCfnBadge('overview', isOverview, t(isOverview ? 'channel_functions.on' : 'channel_functions.off'));
+  const isBracket = ch.is_bracket === 1;
+  this._setCfnBadge('bracket', isBracket, t(isBracket ? 'channel_functions.on' : 'channel_functions.off'));
+  const isDocs = ch.is_docs === 1;
+  this._setCfnBadge('docs', isDocs, t(isDocs ? 'channel_functions.on' : 'channel_functions.off'));
   const isPrivate = !!ch.is_private;
   {
     const _cfnPanel = document.getElementById('channel-functions-panel'); const nsfwRow = _cfnPanel?.querySelector('.cfn-row[data-fn="nsfw"] .cfn-badge');

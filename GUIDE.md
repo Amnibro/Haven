@@ -223,7 +223,37 @@ Turn any channel into a forum from **Channel Functions → Forum**, or tick **Fo
 
 Turn any channel into a calendar from **Channel Functions → Calendar**, or tick **Calendar** when creating it. A calendar channel shows a month of events instead of messages, with the month's events listed under the grid. Anyone who can post in the channel adds an event with **Add event** or by clicking a day: give it a title, a start and end (or make it all day), and optionally a place, details and a color. Everyone who can read the channel opens an event to see who is coming and answers **Going**, **Maybe** or **Can't go**; press your answer again to take it back. Changes show up for everyone right away.
 
-Times show in each member's own time zone. An all-day event is a date, so it lands on the same day for everyone. An event's creator can edit or delete it, and so can anyone with **Delete Messages** in the channel. Make the calendar **Read Only** to keep event planning to the people with the read-only override while everyone else can still answer. A channel is a forum or a calendar, not both, and switching a calendar off keeps its events for when it is switched back on.
+Times show in each member's own time zone. An all-day event is a date, so it lands on the same day for everyone. An event's creator can edit or delete it, and so can anyone with **Delete Messages** in the channel. Make the calendar **Read Only** to keep event planning to the people with the read-only override while everyone else can still answer. A channel shows one view at most (forum, calendar, overview, brackets or docs), and switching a calendar off keeps its events for when it is switched back on.
+
+### Overview Channels 🏠
+
+Turn a channel into a front page for your server from **Channel Functions → Overview**, or tick **Overview** when creating it. Under the server banner, icon and name, an overview shows three cards: the **upcoming events** from calendar channels, the **latest announcements** from announcement channels, and the most active **forum topics**. The channel topic stays in the bar above, so it works well as a welcome line.
+
+Each member sees only what comes from channels they belong to and can read, so private and role-gated channels stay private. NSFW channels are left out unless the overview channel is itself marked NSFW. Self-destructing messages are never shown. The page refreshes when something changes in one of its channels. Click an event to open it in its calendar, an announcement to jump to it in its channel, or a topic to open its thread.
+
+### Bracket Channels 🏆
+
+Run single-elimination tournaments from **Channel Functions → Brackets**, or tick **Brackets** when creating a channel. A bracket channel shows its tournament trees instead of messages, with a picker at the top when it holds more than one. Anyone who can post there starts one with **New bracket**: give it a name, optional details, and the entrants, one per line with the top seed first (2 to 64). **Shuffle** mixes the order for a random draw.
+
+Seeds pair the usual way, so the top two seeds can only meet in the final. When the field is not a power of two, the top seeds get byes and go straight to the next round. Click a match to pick its winner and add a short note on how it ended, such as "Pinfall, 14:32". The winner moves on, and the final crowns the champion. A result can be changed or cleared until the match it leads to has a result of its own. Renaming entrants keeps the results; changing how many there are needs the results cleared first.
+
+A bracket's creator runs it, and so does anyone with **Delete Messages** in the channel. Make the channel **Read Only** to keep starting brackets to the people with the read-only override. Changes show up for everyone right away, and switching brackets off keeps them for when the channel is switched back on.
+
+### Docs Channels 📄
+
+Keep longer writing (stories, guides, rules, notes) in a docs channel: turn one on from **Channel Functions → Docs**, or tick **Docs** when creating a channel. A docs channel shows its documents instead of messages, with the list on the left (most recently changed first) and the open document beside it. On a phone the list and the document take turns, with **← Documents** to go back.
+
+Anyone who can post there starts one with **New document**. Documents use the same formatting as messages (headings, bold, italics, lists, quotes and code), which the toolbar or Ctrl+B and Ctrl+I add for you, and **Preview** shows how it will look. Ctrl+S saves. Changes you have not saved yet are kept on your device, so closing the tab or reloading brings them back. A document can be up to 50,000 characters.
+
+A document belongs to the person who wrote it. Tick **Let everyone who can post here edit it** to share it; only its author and anyone with **Delete Messages** in the channel change that or delete the document. If someone else saves while you are still writing, Haven tells you and lets you choose: **Save mine over it**, or **Discard mine and read theirs**. Nothing is overwritten without someone choosing it. Changes show for everyone live. Make the channel **Read Only** to keep writing to the people with the read-only override.
+
+### Sub-servers 🗂️
+
+Split one server into groups of channels, such as a main chat area and an 18+ area, instead of running two servers. Right-click a top-level channel, choose **Move to sub-server…**, and pick **New sub-server** to make the first one. Once a server has sub-servers, a row of pills above the channel list picks which one the sidebar shows; **Main** holds the channels outside any sub-server. A dot on a pill means one of its channels has unread messages, and opening a channel from a link or a mention brings its sub-server up. New channels are made in the sub-server you are looking at, and sub-channels always stay with their parent.
+
+A sub-server can need roles. In its editor (the ⚙ next to the pills, or **＋** for a new one), tick **Required roles** and choose whether members need any or all of them. Members without those roles do not see the sub-server or any channel in it, and the sub-server opens for them as soon as they get the role. Every channel in the sub-server takes these roles as its own required roles, so they cannot be set per channel while it is there. Untick every role to open the sub-server to everyone again.
+
+Making, editing, reordering and deleting sub-servers, and moving channels between them, needs **Manage Server**. Only the admin can move a private channel into a sub-server with required roles. Moving a channel out of a sub-server keeps the roles it had there, and so does deleting the sub-server, which sends its channels to **Main**; change them afterwards in **Channel Functions → Required roles**.
 
 ### Creating Sub-Channels
 
