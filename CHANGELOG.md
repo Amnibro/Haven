@@ -12,6 +12,7 @@ Data & privacy: delete your messages older than a chosen age, delete them
 automatically, download your data, and block people.
 
 ### Added
+- Activities: Pool (eight-ball against the computer or a friend, three strengths, practice) and Minigolf (nine holes from meadow to volcano, solo, against the computer or a friend), both in 3D, with server leaderboards. Shippy Container is now 3D too, with the same rules and leaderboard. All three run from one web page (`/games/arcade/`), so Android and iOS show them when the server has it. They use WebGPU and fall back to WebGL2.
 - Settings, Data & privacy, with the same four items on the web, Android and iOS:
   - Delete my messages: all of them, or only those older than 1 day, 7 days, 30 days, 90 days or 1 year. Messages a moderator protected stay. Shown when the server allows members to delete their own messages, as before.
   - Auto-delete my messages: Off, 1 day, 7 days, 30 days, 90 days or 1 year. Your messages are deleted once they pass that age, checked every 15 minutes. Turning it on asks for your password; it pauses, without forgetting your choice, while the server does not allow self-deletion.
