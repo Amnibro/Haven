@@ -17,9 +17,7 @@ const OFFICIAL_STYLES = ['badge', 'text', 'off'];
 export default {
 
 _setupMessageHighlights() {
-  document.getElementById('highlight-btn')?.addEventListener('click', () => {
-    this._setHighlightArmed(!this._highlightArmed);
-  });
+  document.getElementById('highlight-btn')?.addEventListener('click', () => this._pressHighlight());
   this.socket.on('message-highlight', (data) => {
     if (!data || data.channelCode !== this.currentChannel) return;
     document.querySelectorAll(`#messages [data-msg-id="${Number(data.messageId)}"]`)
@@ -80,6 +78,9 @@ _updateHighlightButton(isDm) {
   this._setHighlightArmed(this._highlightDefault());
 },
 
+_pressHighlight() {
+  this.user?.officialMode ? (this._setOfficialMode(false), this._showToast?.(t('app.input_bar.official_mode_off_toast'), 'info')) : this._setHighlightArmed(!this._highlightArmed);
+},
 // Where the button rests: armed while official mode is kept on, otherwise
 // off. After a message goes out the button comes back here.
 _highlightDefault() {
@@ -88,6 +89,8 @@ _highlightDefault() {
 
 _setHighlightArmed(on) {
   this._highlightArmed = !!on;
+  const area = typeof document === 'undefined' ? null : document.getElementById('message-input-area');
+  area && (area.classList.toggle('official-armed', this._highlightArmed), area.dataset.officialLabel = t('app.input_bar.official_label'));
   const btn = document.getElementById('highlight-btn');
   if (!btn) return;
   btn.classList.toggle('active', this._highlightArmed);

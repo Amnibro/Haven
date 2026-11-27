@@ -167,3 +167,26 @@ test('the composer and the menus are wired to the settings', () => {
   const css = read('public/css/style-messages.css');
   assert.match(css, /:root\[data-official-style\] \.msg-highlight-badge \{ display: none; \}/);
 });
+test('with official mode kept on, the megaphone turns the mode off for good instead of skipping one message', () => {
+  const calls = [];
+  const app = Object.assign(Object.create(M), { user: { officialMode: true }, _highlightArmed: true, _setOfficialMode: (on) => calls.push(['mode', on]), _setHighlightArmed: (on) => calls.push(['arm', on]), _showToast: (m) => calls.push(['toast', m]) });
+  const prevT = global.t;
+  global.t = (k) => k;
+  try {
+    app._pressHighlight();
+    assert.deepEqual(calls, [['mode', false], ['toast', 'app.input_bar.official_mode_off_toast']]);
+    calls.length = 0;
+    app.user.officialMode = false;
+    app._highlightArmed = false;
+    app._pressHighlight();
+    assert.deepEqual(calls, [['arm', true]], 'off: one message per press, as before');
+  } finally { global.t = prevT; }
+});
+test('the message box shows an Official cue while the next message is official', () => {
+  const css = read('public/css/style-messages.css');
+  assert.match(css, /\.message-input-area\.official-armed::before \{ content: attr\(data-official-label\);/);
+  const src = read('public/js/modules/app-message-highlights.js');
+  assert.match(src, /area\.classList\.toggle\('official-armed', this\._highlightArmed\)/);
+  const en = JSON.parse(read('public/locales/en.json'));
+  assert.ok(en.app.input_bar.official_label && en.app.input_bar.official_mode_off_toast);
+});

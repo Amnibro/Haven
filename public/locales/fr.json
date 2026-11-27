@@ -384,7 +384,6 @@
       "self_destruct_btn": "Message autodestructeur",
       "highlight_btn": "Message officiel : poster le prochain message avec votre rôle",
       "highlight_btn_armed": "Le message officiel est activé pour le prochain message",
-      "highlight_btn_mode_on": "Le mode officiel est activé : ce message part avec votre rôle. Cliquez pour envoyer celui-ci en simple message",
       "highlight_btn_mode_skip": "Le mode officiel est activé, mais ce message part en simple message. Cliquez pour le poster avec votre rôle",
       "self_destruct_btn_armed": "Autodestruction activée : votre prochain message se supprime tout seul",
       "silent_btn": "Message silencieux : envoyer sans son, notification ni push pour personne (ou le commencer par @silent)",
@@ -1886,8 +1885,7 @@
       "official_style_text": "Texte coloré",
       "official_style_off": "Désactivé",
       "official_style_hint": "Comment les messages publiés au nom d'un rôle s'affichent pour vous. Badge : le nom du rôle à côté du message. Texte coloré : le texte dans la couleur du rôle, et une série de messages se lit comme un seul bloc. Désactivé : ils ressemblent à n'importe quel autre message. Enregistré sur cet appareil.",
-      "official_mode": "Garder le mode officiel activé",
-      "official_mode_hint": "Chaque message que vous envoyez là où vous pouvez publier au nom de votre rôle part en officiel, jusqu'à ce que vous le désactiviez. Le mégaphone envoie alors uniquement le prochain message en normal. Enregistré sur votre compte, donc il vous suit sur tous vos appareils."
+      "official_mode": "Garder le mode officiel activé"
     },
     "status_bar_section": {
       "title": "Barre d'état",

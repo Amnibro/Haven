@@ -364,7 +364,6 @@
       "self_destruct_btn": "自毁消息",
       "highlight_btn": "官方消息：以下一条消息以你的身份组发布",
       "highlight_btn_armed": "下一条消息将标记为官方",
-      "highlight_btn_mode_on": "官方模式开启：此消息将以你的身份组发出。点击则本条以普通方式发送",
       "highlight_btn_mode_skip": "官方模式开启，但本条将普通发出。点击则以你的身份组发布",
       "self_destruct_btn_armed": "自毁已开启：你的下一条消息将自行删除",
       "silent_btn": "静默消息：不向任何人发出声音、弹窗或推送（也可用 @silent 开启）",
@@ -1860,8 +1859,7 @@
       "official_style_text": "彩色文字",
       "official_style_off": "关闭",
       "official_style_hint": "以身份组发布的消息在你这边的显示方式。徽章：消息旁显示身份组名称。彩色文字：文字使用身份组颜色，连续消息读作一块。关闭：看起来与普通消息相同。保存在此设备。",
-      "official_mode": "保持官方模式开启",
-      "official_mode_hint": "在你能以身份组发言的地方，你发送的每条消息都会以官方方式发出，直到你关闭此选项。扩音器按钮则只让下一条以普通方式发送。保存到你的账号，会跟随你在所有设备上生效。"
+      "official_mode": "保持官方模式开启"
     },
     "status_bar_section": {
       "title": "状态栏",

@@ -373,7 +373,6 @@
       "self_destruct_btn": "Mensaje autodestructivo",
       "highlight_btn": "Mensaje oficial: publica el próximo mensaje como tu rol",
       "highlight_btn_armed": "El mensaje oficial está activado para el próximo mensaje",
-      "highlight_btn_mode_on": "El modo oficial está activado: este mensaje se envía como tu rol. Haz clic para enviar solo este como normal",
       "highlight_btn_mode_skip": "El modo oficial está activado, pero este mensaje se envía como normal. Haz clic para publicarlo como tu rol",
       "self_destruct_btn_armed": "Autodestrucción activada: tu próximo mensaje se elimina solo",
       "silent_btn": "Mensaje silencioso: se envía sin sonido, ventana emergente ni notificación push para nadie (o empieza con @silent)",
@@ -1875,8 +1874,7 @@
       "official_style_text": "Texto de color",
       "official_style_off": "Desactivado",
       "official_style_hint": "Cómo ves los mensajes publicados como un rol. Insignia: el nombre del rol junto al mensaje. Texto de color: el texto con el color del rol, y una serie de ellos se lee como un solo bloque. Desactivado: se ven como cualquier otro mensaje. Se guarda en este dispositivo.",
-      "official_mode": "Mantener activado el modo oficial",
-      "official_mode_hint": "Cada mensaje que envíes donde puedas publicar como tu rol saldrá como oficial, hasta que lo desactives. El megáfono entonces envía solo el siguiente mensaje de forma normal. Se guarda en tu cuenta, así que te acompaña en todos tus dispositivos."
+      "official_mode": "Mantener activado el modo oficial"
     },
     "status_bar_section": {
       "title": "Barra de estado",

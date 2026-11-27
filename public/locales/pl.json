@@ -373,7 +373,6 @@
       "self_destruct_btn": "Wiadomość samousuwająca się",
       "highlight_btn": "Wiadomość oficjalna: wyślij następną wiadomość jako swoją rolę",
       "highlight_btn_armed": "Wiadomość oficjalna jest włączona dla następnej wiadomości",
-      "highlight_btn_mode_on": "Tryb oficjalny jest włączony: ta wiadomość zostanie wysłana jako twoja rola. Kliknij, aby wysłać tę jedną zwyczajnie",
       "highlight_btn_mode_skip": "Tryb oficjalny jest włączony, ale ta wiadomość zostanie wysłana zwyczajnie. Kliknij, aby wysłać ją jako swoją rolę",
       "self_destruct_btn_armed": "Samousuwanie jest włączone: twoja następna wiadomość usunie się sama",
       "silent_btn": "Cicha wiadomość: wyślij bez dźwięku, wyskakującego okienka i powiadomienia push dla nikogo (lub zacznij ją od @silent)",
@@ -1875,8 +1874,7 @@
       "official_style_text": "Kolorowy tekst",
       "official_style_off": "Wyłączone",
       "official_style_hint": "Jak dla Ciebie wyglądają wiadomości publikowane jako rola. Odznaka: nazwa roli obok wiadomości. Kolorowy tekst: tekst w kolorze roli, a ich seria wygląda jak jeden blok. Wyłączone: wyglądają jak każda inna wiadomość. Zapisywane na tym urządzeniu.",
-      "official_mode": "Utrzymuj tryb oficjalny",
-      "official_mode_hint": "Każda wiadomość wysłana tam, gdzie możesz pisać jako Twoja rola, jest wysyłana jako oficjalna, dopóki tego nie wyłączysz. Megafon wysyła wtedy tylko następną wiadomość zwyczajnie. Zapisywane na Twoim koncie, więc działa na każdym urządzeniu."
+      "official_mode": "Utrzymuj tryb oficjalny"
     },
     "status_bar_section": {
       "title": "Pasek stanu",

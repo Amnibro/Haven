@@ -416,7 +416,9 @@
       "self_destruct_btn": "Self-destructing message",
       "highlight_btn": "Official message: post the next message as your role",
       "highlight_btn_armed": "Official message is on for the next message",
-      "highlight_btn_mode_on": "Official mode is on: this message goes out as your role. Click to send just this one plain",
+      "highlight_btn_mode_on": "Official mode is on: your messages go out as your role. Click to turn it off",
+      "official_label": "📣 Official: this message goes out as your role",
+      "official_mode_off_toast": "Official mode is off. Turn it back on in Settings › Chat",
       "highlight_btn_mode_skip": "Official mode is on, but this message goes out plain. Click to post it as your role",
       "self_destruct_btn_armed": "Self-destruct is on: your next message deletes itself",
       "silent_btn": "Silent message: send without a sound, pop-up or push for anyone (or start it with @silent)",
@@ -2026,7 +2028,7 @@
       "official_style_off": "Off",
       "official_style_hint": "How messages posted as a role look to you. Badge: the role's name next to the message. Colored text: the text in the role's color, and a run of them reads as one block. Off: they look like any other message. Saved on this device.",
       "official_mode": "Keep official mode on",
-      "official_mode_hint": "Every message you send where you can post as your role goes out official, until you turn this off. The megaphone then sends just the next message plain. Saved to your account, so it follows you to every device."
+      "official_mode_hint": "Every message you send where you can post as your role goes out official, until you turn this off. The message box says Official while it is on, and pressing the megaphone turns it off. Saved to your account, so it follows you to every device."
     },
     "status_bar_section": {
       "title": "Status Bar",
